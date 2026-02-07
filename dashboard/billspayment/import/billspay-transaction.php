@@ -347,6 +347,21 @@ if (isset($_SESSION['user_type'])) {
         <center><h3>Import Transaction</h3></center>
         <div class="container-fluid border border-danger rounded mt-3 p-4">
             <div class="container-fluid">
+                <!-- Mode Toggle (Auto / Manual) -->
+                <div class="mb-3 d-flex align-items-center" style="gap:12px;">
+                    <label class="form-label me-2 mb-0">Import Mode:</label>
+                    <div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="importMode" id="modeAuto" value="auto" checked>
+                            <label class="form-check-label" for="modeAuto">Auto</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="importMode" id="modeManual" value="manual">
+                            <label class="form-check-label" for="modeManual">Manual</label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Drag and Drop Upload Area -->
                 <div class="file-upload-area" id="fileUploadArea">
                     <div class="file-upload-icon">
@@ -356,6 +371,37 @@ if (isset($_SESSION['user_type'])) {
                     <p class="text-muted">or click to browse</p>
                     <p class="text-muted"><small>Supports multiple Excel files (.xls, .xlsx)</small></p>
                     <input type="file" id="fileInput" accept=".xls,.xlsx" multiple style="display: none;">
+                </div>
+
+                <!-- Manual Import Area (hidden by default) -->
+                <div id="manualArea" style="display:none;">
+                    <form id="manualUploadForm" action="../../../models/saved/saved_billspaymentImportFile.php" method="post" enctype="multipart/form-data">
+                        <div class="row mt-3">
+                            <div class="col-md-5 mb-3">
+                                <div class="d-flex align-items-center">
+                                    <label class="form-label me-2 mb-0">Partners Name:</label>
+                                    <select id="manualCompanyDropdown" class="form-select select2" aria-label="Select Company" name="company" required>
+                                        <option value="">Select Company</option>
+                                        <option value="All">All</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="d-flex align-items-center">
+                                    <label for="manualFileType" class="form-label me-2 mb-0">Source File Type:</label>
+                                    <select id="manualFileType" class="form-select" name="fileType" required>
+                                        <option value="">Select Source File Type</option>
+                                        <option value="KPX">KPX</option>
+                                        <option value="KP7">KP7</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3 d-flex">
+                                <input type="file" name="import_file" accept=".xls,.xlsx" class="form-control me-2" required />
+                                <input type="submit" class="btn btn-danger" id="manualProceed" value="Proceed">
+                            </div>
+                        </div>
+                    </form>
                 </div>
 
                 <!-- Files Container -->
@@ -659,6 +705,94 @@ if (isset($_SESSION['user_type'])) {
                     }
                 });
             });
+        });
+    </script>
+    <script>
+        // Mode toggle: show/hide Auto (drag-drop) vs Manual form
+        $(function() {
+            function setMode(mode) {
+                if (mode === 'manual') {
+                    $('#fileUploadArea').hide();
+                    $('#filesContainer').hide();
+                    $('#proceedContainer').hide();
+                    $('#manualArea').show();
+                    // initialize manual partners dropdown
+                    initManualSelect2();
+                    loadManualPartners();
+                } else {
+                    $('#manualArea').hide();
+                    $('#fileUploadArea').show();
+                    $('#filesContainer').show();
+                    if (uploadedFiles.length) $('#proceedContainer').show();
+                }
+            }
+
+            $('input[name="importMode"]').on('change', function() {
+                setMode($(this).val());
+            });
+
+            function initManualSelect2() {
+                if ($('#manualCompanyDropdown').length && typeof $ !== 'undefined' && $.fn.select2) {
+                    $('#manualCompanyDropdown').select2({
+                        placeholder: 'Search or select a company...',
+                        allowClear: true,
+                        width: '100%',
+                        dropdownParent: $('#manualCompanyDropdown').parent(),
+                        minimumResultsForSearch: 0
+                    });
+                }
+            }
+
+            function loadManualPartners() {
+                var $select = $('#manualCompanyDropdown');
+                if ($select.length === 0) return;
+                $select.empty();
+                $select.append($('<option>', { value: '', text: 'Select Company' }));
+                $select.append($('<option>', { value: 'All', text: 'All' }));
+
+                $.ajax({
+                    url: '../../../fetch/get_partners.php',
+                    method: 'GET',
+                    dataType: 'json',
+                    success: function(response) {
+                        if (!response) return;
+                        if (response.success === false) return;
+                        var list = Array.isArray(response.data) ? response.data : response;
+                        list.forEach(function(p) {
+                            var name = p.partner_name || '';
+                            if (name) {
+                                $select.append($('<option>', { value: name, text: name }));
+                            }
+                        });
+                        $select.val('');
+                        if ($.fn.select2) $select.trigger('change.select2');
+                    },
+                    error: function() {
+                        // ignore error, keep defaults
+                    }
+                });
+            }
+
+            // Manual form validation
+            $('#manualUploadForm').on('submit', function(e) {
+                var selectedCompany = $('#manualCompanyDropdown').val();
+                var fileType = $('#manualFileType').val();
+                if (!fileType) {
+                    e.preventDefault();
+                    Swal.fire({ icon: 'warning', title: 'Missing File Type', text: 'Please select a source file type (KPX or KP7).', confirmButtonText: 'OK' });
+                    return false;
+                }
+                if (selectedCompany === 'All' && fileType === 'KPX') {
+                    e.preventDefault();
+                    Swal.fire({ icon: 'error', title: 'Invalid Combination', text: 'No All Partners Available for KPX. Please select a specific partner.', confirmButtonText: 'OK' });
+                    return false;
+                }
+                // show loading overlay and allow normal form submission to legacy endpoint
+                $('#loading-overlay').css('display', 'flex');
+            });
+
+            // Start in auto mode
+            setMode('auto');
         });
     </script>
 </body>
