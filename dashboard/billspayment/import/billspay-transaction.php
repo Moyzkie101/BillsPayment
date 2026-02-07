@@ -638,14 +638,14 @@ if (isset($_SESSION['user_type'])) {
 
                 // Send to checker page
                 $.ajax({
-                    url: '../../../models/saved/saved_billspayImportFile.php',
+                    url: '../../../models/saved/saved_billspayImportFile_NEW.php',
                     type: 'POST',
                     data: formData,
                     processData: false,
                     contentType: false,
                     success: function(response) {
                         // Redirect to validation page
-                        window.location.href = '../../../models/saved/saved_billspayImportFile.php';
+                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php';
                     },
                     error: function(xhr, status, error) {
                         $('#loading-overlay').hide();
