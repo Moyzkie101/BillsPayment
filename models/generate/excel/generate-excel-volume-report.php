@@ -26,12 +26,45 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
     $endDate = $_POST['endDate'];
 
     // Convert date formats based on filter type
-    if ($filterType === 'monthly') {
-        $startDate = $startDate . '-01';
-        $endDate = date('Y-m-t', strtotime($endDate . '-01'));
-    } elseif ($filterType === 'yearly') {
-        $startDate = $startDate . '-01-01';
-        $endDate = $endDate . '-12-31';
+    if ($filterType === 'daily') {
+        // Daily: single date or date range if endDate provided
+        $filterType1 = 'Daily';
+        if (!empty($endDate) && $endDate !== $startDate) {
+            // treat as date range
+            $dateOBJ = date('F d, Y', strtotime($startDate)) . ' to ' . date('F d, Y', strtotime($endDate));
+            $sqlDATE = "(
+                        DATE(bt.datetime) BETWEEN '$startDate' AND '$endDate'
+                        OR DATE(bt.cancellation_date) BETWEEN '$startDate' AND '$endDate'
+                    )";
+        } else {
+            // single day
+            $dateOBJ = date('F d, Y', strtotime($startDate));
+            $sqlDATE = "(
+                        DATE(bt.datetime) = '$startDate'
+                        OR DATE(bt.cancellation_date) = '$startDate'
+                    )";
+        }
+    } else {
+        if ($filterType === 'monthly') {
+            $filterType1 = 'Monthly';
+            $startDate = $startDate . '-01';
+            $endDate = date('Y-m-t', strtotime($endDate . '-01'));
+            $dateOBJ = date('F Y', strtotime($startDate)) . ' to ' . date('F Y', strtotime($endDate));
+        } elseif ($filterType === 'yearly') {
+            $filterType1 = 'Yearly';
+            $startDate = $startDate . '-01-01';
+            $endDate = $endDate . '-12-31';
+            $dateOBJ = date('Y', strtotime($startDate)) . ' to ' . date('Y', strtotime($endDate));
+        } else {
+            // fallback
+            $filterType1 = ucfirst($filterType);
+            $dateOBJ = date('F d, Y', strtotime($startDate));
+        }
+
+        $sqlDATE = "(
+                        DATE(bt.datetime) BETWEEN '$startDate' AND '$endDate'
+                        OR DATE(bt.cancellation_date) BETWEEN '$startDate' AND '$endDate'
+                    )";
     }
 
     // Same query as in volume-report.php
@@ -45,10 +78,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
                 FROM
                     mldb.billspayment_transaction AS bt 
                 WHERE
-                    (
-                        DATE(bt.datetime) BETWEEN '$startDate' AND '$endDate'
-                        OR DATE(bt.cancellation_date) BETWEEN '$startDate' AND '$endDate'
-                    )
+                    $sqlDATE
                     AND bt.status IS NULL 
                 GROUP BY
                     bt.partner_id,
@@ -64,10 +94,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             FROM
                 mldb.billspayment_transaction AS bt 
             WHERE
-                (
-                    DATE(bt.datetime) BETWEEN '$startDate' AND '$endDate'
-                    OR DATE(bt.cancellation_date) BETWEEN '$startDate' AND '$endDate'
-                )
+                $sqlDATE
                 AND bt.status = '*' 
             GROUP BY
                 bt.partner_id,
@@ -136,13 +163,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             $sheet->setCellValue('A1', 'BILLS PAYMENT DEPARTMENT');
             // $sheet->mergeCells('A1:M1');
 
-            if($filterType === 'weekly'){
+            if ($filterType === 'weekly') {
                 $filterType1 = 'Daily';
                 $dateOBJ = date('F d, Y', strtotime($startDate)) . ' to ' . date('F d, Y', strtotime($endDate));
-            } elseif($filterType === 'monthly'){
+            } elseif ($filterType === 'monthly') {
                 $filterType1 = 'Monthly';
                 $dateOBJ = date('F Y', strtotime($startDate)) . ' to ' . date('F Y', strtotime($endDate));
-            } elseif($filterType === 'yearly'){
+            } elseif ($filterType === 'yearly') {
                 $filterType1 = 'Yearly';
                 $dateOBJ = date('Y', strtotime($startDate)) . ' to ' . date('Y', strtotime($endDate));
             }

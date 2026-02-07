@@ -195,14 +195,14 @@ if (isset($_POST['perform_import']) && isset($_SESSION['uploaded_files'])) {
             }).then((result) => {
                 if (result.isDenied) {
                     const detailList = errorDetails
-                        .map((item, index) => `<li><strong>No. ${index + 1}:</strong> ${item}</li>`)
+                        .map((item, index) => '<li><strong>No. ' + (index + 1) + ':</strong> ' + item + '</li>')
                         .join('');
 
-                    const detailHtml = `
-                        <div style=\"text-align:left; max-height: 60vh; overflow-y:auto;\">
-                            <p class=\"text-muted\">Below are the detailed errors found during import.</p>
-                            <ul>${detailList}</ul>
-                        </div>`;
+                    const detailHtml =
+                        '<div style=\'text-align:left; max-height: 60vh; overflow-y:auto;\'>' +
+                            '<p class=\'text-muted\'>Below are the detailed errors found during import.</p>' +
+                            '<ul>' + detailList + '</ul>' +
+                        '</div>';
 
                     Swal.fire({
                         icon: 'info',
