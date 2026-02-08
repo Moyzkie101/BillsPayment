@@ -558,6 +558,25 @@ if(isset($_POST['posted'])) {
         </div>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
+        <?php
+            // Determine if POST button should be shown initially (after a previous Proceed)
+            $showPostButton = false;
+            if (!empty($_SESSION['startdate']) && !empty($_SESSION['enddate'])) {
+                $psql = "SELECT COUNT(*) as cnt FROM mldb.billspayment_transaction WHERE post_transaction = 'unposted' AND (datetime BETWEEN ? AND ? OR cancellation_date BETWEEN ? AND ? )";
+                $pstmt = $conn->prepare($psql);
+                if ($pstmt) {
+                    $pstmt->bind_param('ssss', $_SESSION['startdate'], $_SESSION['enddate'], $_SESSION['startdate'], $_SESSION['enddate']);
+                    $pstmt->execute();
+                    $cres = $pstmt->get_result();
+                    $crow = $cres->fetch_assoc();
+                    $unpostedCount = intval($crow['cnt'] ?? 0);
+                    if ($unpostedCount > 0) {
+                        $showPostButton = true;
+                    }
+                    $pstmt->close();
+                }
+            }
+        ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
@@ -575,9 +594,12 @@ if(isset($_POST['posted'])) {
                             </div>
                         </div>
 
-                        <!-- Proceed Button -->
-                        <div class="col-md-3 mb-3 d-flex" style="flex: 0 0 auto;">
+                        <!-- Proceed and Post Buttons -->
+                        <div class="col-md-3 mb-3 d-flex" style="flex: 0 0 auto; gap:8px;">
                             <input type="submit" class="btn btn-danger" name="proceed" value="Proceed">
+                            <button type="button" id="postInlineButton" class="btn btn-success" <?php echo $showPostButton ? '' : 'style="display:none;"'; ?>>
+                                <i class="fas fa-check me-1"></i>POST
+                            </button>
                         </div>
                     </div>
                 </form>
@@ -605,6 +627,19 @@ if(isset($_POST['posted'])) {
                             </div>
                         </div>
                         
+                        <!-- Rows per page selector -->
+                        <div class="d-flex justify-content-end align-items-center mb-2">
+                            <label for="rowsPerPage" class="me-2 mb-0">Rows:</label>
+                            <select id="rowsPerPage" class="form-select form-select-sm" style="width:120px;">
+                                <option value="10" selected>10</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                                <option value="500">500</option>
+                                <option value="1000">1000</option>
+                                <option value="all">All</option>
+                            </select>
+                        </div>
+
                         <!-- Data Table -->
                         <div class="table-responsive">
                             <table class="table table-striped table-bordered table-hover">
@@ -619,56 +654,19 @@ if(isset($_POST['posted'])) {
                                         <th scope="col" class="text-nowrap">Charge to Customer</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <!-- Sample data rows -->
-                                    <?php 
-                                    if (empty($transactions)) :
-                                        echo '<tr><td colspan="7" class="text-center">No transactions found for the selected date.</td></tr>';
-                                    else:
-                                        $hasPendingTransactions = false;
-                                        // Check if there are any pending transactions
-                                        foreach ($transactions as $transaction) {
-                                            if ($transaction['post_transaction'] === 'unposted') {
-                                                $hasPendingTransactions = true;
-                                                break;
-                                            }
-                                        }
-
-                                        if ($hasPendingTransactions) :
-                                            // Loop through transactions and display them
-                                            foreach ($transactions as $transaction): 
-                                            ?>
-                                                <tr>
-                                                    <td class="text-center"><?php echo htmlspecialchars($transaction['branch_id']); ?></td>
-                                                    <td class="text-nowrap"><?php echo htmlspecialchars($transaction['outlet']); ?></td>
-                                                    <td class="text-nowrap"><?php echo htmlspecialchars($transaction['region']); ?></td>
-                                                    <td class="text-nowrap"><?php echo htmlspecialchars($transaction['reference_no']); ?></td>
-                                                    <td class="text-end"><?php echo number_format($transaction['amount_paid'], 2); ?></td>
-                                                    <td class="text-end"><?php echo number_format($transaction['charge_to_partner'], 2); ?></td>
-                                                    <td class="text-end"><?php echo number_format($transaction['charge_to_customer'], 2); ?></td>
-                                                </tr>
-                                            <?php 
-                                            endforeach;
-                                        else:
-                                            foreach ($transactions as $transaction): 
-                                                ?>
-                                                <tr>
-                                                    <td class="text-center"><?php echo htmlspecialchars($transaction['branch_id']); ?></td>
-                                                    <td class="text-nowrap"><?php echo htmlspecialchars($transaction['outlet']); ?></td>
-                                                    <td class="text-nowrap"><?php echo htmlspecialchars($transaction['region']); ?></td>
-                                                    <td class="text-nowrap"><?php echo htmlspecialchars($transaction['reference_no']); ?></td>
-                                                    <td class="text-end"><?php echo number_format($transaction['amount_paid'], 2); ?></td>
-                                                    <td class="text-end"><?php echo number_format($transaction['charge_to_partner'], 2); ?></td>
-                                                    <td class="text-end"><?php echo number_format($transaction['charge_to_customer'], 2); ?></td>
-                                                </tr>
-                                                <?php
-                                            endforeach;
-                                            // echo '<tr><td colspan="7" class="text-center">No pending transactions found for the selected date.</td></tr>';
-                                        endif;
-                                    endif;
-                                    ?>
+                                <tbody id="transactionsBody">
+                                    <tr><td colspan="7" class="text-center">Loading transactions...</td></tr>
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- Pagination controls -->
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <div id="pageInfo" class="text-muted">&nbsp;</div>
+                            <div>
+                                <button id="prevPage" class="btn btn-sm btn-outline-secondary me-1">Prev</button>
+                                <button id="nextPage" class="btn btn-sm btn-outline-secondary">Next</button>
+                            </div>
                         </div>
                         
                         <!-- Error Summary -->
@@ -732,6 +730,7 @@ if(isset($_POST['posted'])) {
                                                     <td>:</td>
                                                     <td><?php echo number_format($totalChargeToCustomer, 2); ?></td>
                                                 </tr>
+                                                
                                             <?php else: ?>
                                                 <tr>
                                                     <td><strong>Total Number of Transaction</strong></td>
@@ -762,26 +761,7 @@ if(isset($_POST['posted'])) {
                     </div>
                     
                     <!-- Action Buttons in Card Footer -->
-                    <?php 
-                            // Check if there are any pending transactions
-                            $hasPendingTransactions = false;
-                            if (!empty($transactions)) {
-                                foreach ($transactions as $transaction) {
-                                    if ($transaction['post_transaction'] === 'unposted') {
-                                        $hasPendingTransactions = true;
-                                        break;
-                                    }
-                                }
-                            }
-                    if($hasPendingTransactions) : ?>
-                        <div class="card-footer bg-light">
-                            <div class="d-flex flex-wrap justify-content-center gap-2">
-                                <button type="button" name="posted" class="btn btn-success btn-md">
-                                    <i class="fas fa-check me-1"></i> POST
-                                </button>
-                            </div>
-                        </div>
-                    <?php endif; ?>
+                    <!-- Footer actions moved inline next to Proceed. Footer intentionally left empty. -->
                 </div>
             </div>
         <?php endif; ?>
@@ -828,11 +808,11 @@ if(isset($_POST['posted'])) {
                     });
                 }
                 
-                // Handle "POST" button click
-                if (postButton) {
-                    postButton.addEventListener('click', function(e) {
+                // Handle inline POST button click (calls lightweight endpoint to avoid session locking)
+                const postInlineButton = document.getElementById('postInlineButton');
+                if (postInlineButton) {
+                    postInlineButton.addEventListener('click', function(e) {
                         e.preventDefault();
-                        
                         Swal.fire({
                             title: 'Confirm Posting',
                             text: 'Are you sure you want to post these transactions? This action cannot be undone.',
@@ -845,53 +825,41 @@ if(isset($_POST['posted'])) {
                         }).then((result) => {
                             if (result.isConfirmed) {
                                 showLoading('Posting transactions to database...');
-                                
-                                // Create form data for POST request
-                                const formData = new FormData();
-                                formData.append('posted', 'true'); // Changed from 'post_transactions' to 'posted'
-                                formData.append('startingDate', startingDateInput.value);
-                                
-                                // Send AJAX request to post transactions
-                                fetch(window.location.href, {
+
+                                // Call lightweight endpoint which DOES NOT use PHP session to avoid session lock delays
+                                $.ajax({
+                                    url: 'post_transactions_ajax.php',
                                     method: 'POST',
-                                    body: formData
-                                })
-                                .then(response => response.text())
-                                .then(data => {
-                                    hideLoading();
-                                    
-                                    // Set session variable to indicate successful posting
-                                    sessionStorage.setItem('posted', 'true');
-                                    
-                                    Swal.fire({
-                                        icon: 'success',
-                                        title: 'Success!',
-                                        text: 'Transactions have been posted successfully.',
-                                        confirmButtonColor: '#28a745'
-                                    }).then(() => {
-                                        // Refresh the page to show updated data
-                                        // window.location.reload();
-                                        window.location.href = window.location.pathname;
-                                    });
-                                })
-                                .catch(error => {
-                                    hideLoading();
-                                    console.error('Error:', error);
-                                    Swal.fire({
-                                        icon: 'error',
-                                        title: 'Network Error',
-                                        text: 'A network error occurred. Please check your connection and try again.',
-                                        confirmButtonColor: '#dc3545'
-                                    }).then(() => {
-                                        // Refresh the page to show updated data
-                                        // window.location.reload();
-                                        window.location.href = window.location.pathname;
-                                    });
+                                    data: {
+                                        startDate: '<?php echo $_SESSION['startdate'] ?? ''; ?>',
+                                        endDate: '<?php echo $_SESSION['enddate'] ?? ''; ?>'
+                                    },
+                                    dataType: 'json',
+                                    success: function(resp) {
+                                        hideLoading();
+                                        if (resp.success) {
+                                            Swal.fire({
+                                                icon: 'success',
+                                                title: 'Success!',
+                                                text: resp.message || 'Transactions posted',
+                                                confirmButtonColor: '#28a745'
+                                            }).then(() => {
+                                                // Reload page to refresh UI
+                                                window.location.href = window.location.pathname;
+                                            });
+                                        } else {
+                                            showError(resp.message || 'Failed to post transactions');
+                                        }
+                                    },
+                                    error: function(xhr, status, err) {
+                                        hideLoading();
+                                        console.error('Error posting:', err);
+                                        showError('Network or server error while posting');
+                                    }
                                 });
+
                             }
                         });
-
-                        
                     });
                 }
                 
@@ -951,6 +919,127 @@ if(isset($_POST['posted'])) {
                 
                 // Set initial display
                 updateDateDisplay();
+
+                // Rows-per-page control to limit rendered rows and reduce UI lag
+                const rowsPerPageSelect = document.getElementById('rowsPerPage');
+                function applyRowLimit() {
+                    const tbody = document.querySelector('.table tbody');
+                    if (!tbody) return;
+                    const rows = Array.from(tbody.querySelectorAll('tr'));
+                    const val = rowsPerPageSelect ? rowsPerPageSelect.value : '10';
+                    if (val === 'all') {
+                        rows.forEach(r => r.style.display = '');
+                    } else {
+                        const limit = parseInt(val, 10) || 10;
+                        rows.forEach((r, idx) => {
+                            // Keep header-like no-data rows visible
+                            if (r.querySelector('td') && r.querySelector('td').getAttribute('colspan')) {
+                                r.style.display = '';
+                                return;
+                            }
+                            r.style.display = (idx < limit) ? '' : 'none';
+                        });
+                    }
+                }
+
+                if (rowsPerPageSelect) {
+                    rowsPerPageSelect.addEventListener('change', applyRowLimit);
+                    // Apply initial limit after small timeout to ensure table rows exist
+                    setTimeout(applyRowLimit, 50);
+                }
+
+                // --- AJAX paged fetch implementation ---
+                let currentPage = 1;
+                let totalRows = 0;
+
+                const prevBtn = document.getElementById('prevPage');
+                const nextBtn = document.getElementById('nextPage');
+                const pageInfo = document.getElementById('pageInfo');
+
+                function renderRows(rows) {
+                    const tbody = document.getElementById('transactionsBody');
+                    if (!tbody) return;
+                    if (!rows || rows.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" class="text-center">No transactions found for the selected date.</td></tr>';
+                        return;
+                    }
+                    let html = '';
+                    rows.forEach(function(tx) {
+                        html += '<tr>' +
+                            '<td class="text-center">' + (tx.branch_id !== null ? escapeHtml(tx.branch_id) : '') + '</td>' +
+                            '<td class="text-nowrap">' + (tx.outlet !== null ? escapeHtml(tx.outlet) : '') + '</td>' +
+                            '<td class="text-nowrap">' + (tx.region !== null ? escapeHtml(tx.region) : '') + '</td>' +
+                            '<td class="text-nowrap">' + (tx.reference_no !== null ? escapeHtml(tx.reference_no) : '') + '</td>' +
+                            '<td class="text-end">' + (tx.amount_paid !== null ? numberWithCommas(parseFloat(tx.amount_paid).toFixed(2)) : '0.00') + '</td>' +
+                            '<td class="text-end">' + (tx.charge_to_partner !== null ? numberWithCommas(parseFloat(tx.charge_to_partner).toFixed(2)) : '0.00') + '</td>' +
+                            '<td class="text-end">' + (tx.charge_to_customer !== null ? numberWithCommas(parseFloat(tx.charge_to_customer).toFixed(2)) : '0.00') + '</td>' +
+                        '</tr>';
+                    });
+                    tbody.innerHTML = html;
+                }
+
+                function updatePaginationControls(page, limit) {
+                    const total = totalRows || 0;
+                    const lim = (limit === 'all') ? total : parseInt(limit, 10) || 10;
+                    const totalPages = (lim === 0) ? 1 : Math.max(1, Math.ceil(total / lim));
+                    currentPage = Math.min(Math.max(1, page), totalPages);
+                    pageInfo.textContent = 'Page ' + currentPage + ' of ' + totalPages + ' — Showing ' + ((total===0)?0:((currentPage-1)*lim+1)) + ' to ' + Math.min(currentPage*lim, total) + ' of ' + total + ' rows';
+                    prevBtn.disabled = (currentPage <= 1);
+                    nextBtn.disabled = (currentPage >= totalPages);
+                }
+
+                function fetchTransactions(page = 1) {
+                    const sm = startingDateInput.value || '';
+                    if (!sm) return;
+                    const rpp = rowsPerPageSelect ? rowsPerPageSelect.value : '10';
+                    const limit = (rpp === 'all') ? 'all' : parseInt(rpp, 10) || 10;
+                    const offset = (page - 1) * (limit === 'all' ? 0 : limit);
+                    showLoading('Loading transactions...');
+                    $.ajax({
+                        url: 'fetch_transactions_ajax.php',
+                        method: 'POST',
+                        data: { startingMonth: sm, limit: limit, offset: offset },
+                        dataType: 'json',
+                        success: function(resp) {
+                            hideLoading();
+                            if (resp && resp.success) {
+                                totalRows = parseInt(resp.total || 0, 10);
+                                renderRows(resp.rows || []);
+                                updatePaginationControls(page, rpp);
+                            } else {
+                                renderRows([]);
+                                showError(resp.message || 'Unable to load transactions');
+                            }
+                        },
+                        error: function() {
+                            hideLoading();
+                            showError('Network error while fetching transactions');
+                        }
+                    });
+                }
+
+                // Prev/Next handlers
+                if (prevBtn) prevBtn.addEventListener('click', function() { fetchTransactions(currentPage - 1); });
+                if (nextBtn) nextBtn.addEventListener('click', function() { fetchTransactions(currentPage + 1); });
+
+                // When rows-per-page changes, fetch page 1
+                if (rowsPerPageSelect) rowsPerPageSelect.addEventListener('change', function() { fetchTransactions(1); });
+
+                // helper functions
+                function escapeHtml(text) {
+                    if (typeof text !== 'string') return text;
+                    return text.replace(/[&"'<>]/g, function (a) { return {'&':'&amp;','"':'&quot;',"'":"&#39;","<":"&lt;",">":"&gt;"}[a]; });
+                }
+
+                function numberWithCommas(x) {
+                    if (x === undefined || x === null) return '0.00';
+                    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                }
+
+                // If the user had proceeded server-side, initialize the AJAX fetch
+                <?php if (isset($_POST['proceed'])): ?>
+                    setTimeout(function() { fetchTransactions(1); }, 50);
+                <?php endif; ?>
                 
                 // Handle browser back/forward navigation
                 window.addEventListener('pageshow', function(event) {

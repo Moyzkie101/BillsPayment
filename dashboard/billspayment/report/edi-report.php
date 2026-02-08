@@ -460,9 +460,8 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
     $exportQuery = "SELECT
                         mrm.zone_code,
                         mbp.ml_matic_region,
-                        pmf.partner_name,
-                        mbp.area,
-                        mbp.kp_code
+                        mbp.kp_code,
+                        (SUM(bt.charge_to_partner) + SUM(bt.charge_to_customer)) AS charges
                     FROM
                         mldb.billspayment_transaction AS bt
                     JOIN
@@ -472,14 +471,9 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
                     JOIN
                         masterdata.branch_profile AS mbp
                         ON bt.branch_id = mbp.branch_id
-                    LEFT JOIN
-                        masterdata.partner_masterfile AS pmf
-                        ON bt.partner_id = pmf.partner_id OR bt.partner_id_kpx = pmf.partner_id_kpx
                     WHERE " . implode(' AND ', $whereConditions) . "
-                    GROUP BY mrm.zone_code, mbp.ml_matic_region, pmf.partner_name, mbp.area, mbp.kp_code
-                    ORDER BY pmf.partner_name, mbp.area, mbp.ml_matic_region, mbp.kp_code";
-    
-    $result = $conn->query($exportQuery);
+                    GROUP BY mrm.zone_code, mbp.ml_matic_region, mbp.kp_code
+                    ORDER BY mbp.ml_matic_region, mbp.kp_code";
     
     $partnerDisplayLabel = 'All Partners';
     if ($partner !== 'ALL') {
@@ -503,14 +497,126 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
     if ($sanitizedPartnerLabel === '') {
         $sanitizedPartnerLabel = 'Partner';
     }
+    // If all mainzone/zone/region/area are ALL, create a separate sheet per zone
+    if ($mainzone === 'ALL' && $zone === 'ALL' && $region === 'ALL' && $area === 'ALL') {
+        $zones = ['LZN', 'MIN', 'NCR', 'VIS', 'SHOWROOM'];
+        $spreadsheet = new Spreadsheet();
+
+        $sheetIndex = 0;
+        foreach ($zones as $z) {
+            // Prepare zone-specific WHERE conditions
+            $zoneWhere = $whereConditions; // copy base conditions
+            if (strtoupper($z) === 'SHOWROOM') {
+                // showroom zone codes
+                $showroomCodes = ['LZNS', 'NCRS', 'VISS', 'MINS'];
+                $zoneWhere[] = "mrm.zone_code IN ('" . implode("','", $showroomCodes) . "')";
+                $sheetName = 'SHOWROOM';
+            } else {
+                $zoneWhere[] = "mrm.zone_code = '$z'";
+                $sheetName = strtoupper($z);
+            }
+
+            $zoneQuery = "SELECT
+                        mrm.zone_code,
+                        mbp.ml_matic_region,
+                        mbp.kp_code,
+                        (SUM(bt.charge_to_partner) + SUM(bt.charge_to_customer)) AS charges
+                    FROM
+                        mldb.billspayment_transaction AS bt
+                    JOIN
+                        masterdata.region_masterfile as mrm
+                        ON bt.region_code = mrm.region_code
+                        AND mrm.zone_code NOT IN ('HO','JEW','VISMIN-MANCOMM','LNCR-MANCOMM','VISMIN-SUPPORT','LNCR-SUPPORT')
+                    JOIN
+                        masterdata.branch_profile AS mbp
+                        ON bt.branch_id = mbp.branch_id
+                    WHERE " . implode(' AND ', $zoneWhere) . "
+                    GROUP BY mrm.zone_code, mbp.ml_matic_region, mbp.kp_code
+                    ORDER BY mbp.ml_matic_region, mbp.kp_code";
+
+            $zResult = $conn->query($zoneQuery);
+
+            if ($sheetIndex === 0) {
+                $sheet = $spreadsheet->getActiveSheet();
+                $sheet->setTitle($sheetName);
+            } else {
+                $sheet = $spreadsheet->createSheet();
+                $sheet->setTitle($sheetName);
+            }
+
+            // Set headers for this sheet
+            $headers = ['Zone', 'Region Name', 'KP Code', 'Charges'];
+            $col = 'A';
+            foreach ($headers as $header) {
+                $sheet->setCellValue($col . '1', $header);
+                $sheet->getStyle($col . '1')->getFont()->setBold(true);
+                $sheet->getStyle($col . '1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('dc3545');
+                $sheet->getStyle($col . '1')->getFont()->getColor()->setRGB('FFFFFF');
+                $sheet->getStyle($col . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $col++;
+            }
+
+            // Add data rows
+            $r = 2;
+            $zoneTotal = 0;
+            while ($d = $zResult->fetch_assoc()) {
+                $sheet->setCellValue('A' . $r, $d['zone_code']);
+                $sheet->setCellValue('B' . $r, $d['ml_matic_region']);
+                $sheet->setCellValue('C' . $r, $d['kp_code']);
+                $sheet->setCellValue('D' . $r, floatval($d['charges']));
+                $sheet->getStyle('D' . $r)->getNumberFormat()->setFormatCode('#,##0.00');
+                $zoneTotal += floatval($d['charges']);
+                $r++;
+            }
+
+            // Insert blank row and total
+            $blank = $r;
+            $r++;
+            $sheet->setCellValue('C' . $r, 'Total:');
+            $sheet->setCellValue('D' . $r, $zoneTotal);
+            $sheet->getStyle('C' . $r . ':D' . $r)->getFont()->setBold(true);
+            $sheet->getStyle('D' . $r)->getNumberFormat()->setFormatCode('#,##0.00');
+            $sheet->getStyle('C' . $r . ':D' . $r)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('343a40');
+            $sheet->getStyle('C' . $r . ':D' . $r)->getFont()->getColor()->setRGB('FFFFFF');
+
+            // Auto-size and borders
+            foreach (range('A', 'D') as $cc) {
+                $sheet->getColumnDimension($cc)->setAutoSize(true);
+            }
+            $styleArray = [
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                    ],
+                ],
+            ];
+            $last = max($r, 1);
+            $sheet->getStyle('A1:D' . $last)->applyFromArray($styleArray);
+
+            $sheetIndex++;
+        }
+
+        // Output file
+        $filename = $sanitizedPartnerLabel . '_EDI-Report.xlsx';
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="' . $filename . '"');
+        header('Cache-Control: max-age=0');
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save('php://output');
+        exit;
+    }
     
+    // Otherwise (not full ALL), generate single sheet as before
+    $result = $conn->query($exportQuery);
+
     // Create new spreadsheet
     $spreadsheet = new Spreadsheet();
     $sheet = $spreadsheet->getActiveSheet();
     $sheet->setTitle('EDI Report');
     
     // Set headers
-    $headers = ['Zone', 'Region Name', 'Partner Name', 'Area', 'KP Code'];
+    $headers = ['Zone', 'Region Name', 'KP Code', 'Charges'];
     $col = 'A';
     foreach ($headers as $header) {
         $sheet->setCellValue($col . '1', $header);
@@ -523,20 +629,34 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
     
     // Add data
     $row = 2;
+    $totalCharges = 0;
     while ($data = $result->fetch_assoc()) {
         $sheet->setCellValue('A' . $row, $data['zone_code']);
         $sheet->setCellValue('B' . $row, $data['ml_matic_region']);
-        $sheet->setCellValue('C' . $row, $data['partner_name'] ?? '-');
-        $sheet->setCellValue('D' . $row, $data['area'] ?? '-');
-        $sheet->setCellValue('E' . $row, $data['kp_code']);
+        $sheet->setCellValue('C' . $row, $data['kp_code']);
+        $sheet->setCellValue('D' . $row, floatval($data['charges']));
+        $sheet->getStyle('D' . $row)->getNumberFormat()->setFormatCode('#,##0.00');
+        $totalCharges += floatval($data['charges']);
         $row++;
     }
-    
+
+    // Insert one blank row before total
+    $blankRow = $row;
+    $row++; // total will be at this row
+
+    // Add total row (label in column C, value in D)
+    $sheet->setCellValue('C' . $row, 'Total:');
+    $sheet->setCellValue('D' . $row, $totalCharges);
+    $sheet->getStyle('C' . $row . ':D' . $row)->getFont()->setBold(true);
+    $sheet->getStyle('D' . $row)->getNumberFormat()->setFormatCode('#,##0.00');
+    $sheet->getStyle('C' . $row . ':D' . $row)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('343a40');
+    $sheet->getStyle('C' . $row . ':D' . $row)->getFont()->getColor()->setRGB('FFFFFF');
+
     // Auto-size columns
-    foreach (range('A', 'E') as $col) {
+    foreach (range('A', 'D') as $col) {
         $sheet->getColumnDimension($col)->setAutoSize(true);
     }
-    
+
     // Set borders
     $styleArray = [
         'borders' => [
@@ -545,15 +665,15 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             ],
         ],
     ];
-    $lastRow = max($row - 1, 1);
-    $sheet->getStyle('A1:E' . $lastRow)->applyFromArray($styleArray);
-    
+    $lastRow = max($row, 1);
+    $sheet->getStyle('A1:D' . $lastRow)->applyFromArray($styleArray);
+
     // Output file
     $filename = $sanitizedPartnerLabel . '_EDI-Report.xlsx';
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     header('Content-Disposition: attachment;filename="' . $filename . '"');
     header('Cache-Control: max-age=0');
-    
+
     $writer = new Xlsx($spreadsheet);
     $writer->save('php://output');
     exit;

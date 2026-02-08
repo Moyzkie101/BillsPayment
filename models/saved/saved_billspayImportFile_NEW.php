@@ -35,9 +35,10 @@ if (isset($_SESSION['user_type'])) {
     }
 }
 
-// Increase memory and execution time for large batches (may be overridden by caching below)
-ini_set('memory_limit', '1024M');
-ini_set('max_execution_time', 900);
+// Increase memory and execution time for large batches (short-term mitigation).
+// Recommended: implement chunked reads for robust long-term handling.
+ini_set('memory_limit', '2048M');
+set_time_limit(0);
 
 // Configure PhpSpreadsheet cell caching to reduce memory usage for large files
 // Use a disk-based cache (discISAM) or php temp dir. This helps prevent exhausting RAM.
@@ -100,6 +101,8 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                 $totalRows = 0;
                 $duplicateRows = 0;
                 $newRows = 0;
+                $postedRows = 0;
+                $unpostedRows = 0;
                 
                 // Process rows starting from row 10 (data rows)
                 for ($row = 10; $row <= $highestRow; $row++) {
@@ -148,31 +151,46 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                         continue;
                     }
                     
-                    // Check for duplicates (posted or unposted)
-                    $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
+                    // Check for duplicates (posted or unposted) and count by post_transaction
+                    $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
                             WHERE reference_no = ? 
                             AND (`datetime` = ? OR cancellation_date = ?)";
-
                     if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
                         if (strtoupper($sourceType) === 'KP7') {
                             $sql .= " AND partner_id = ?";
+                            $sql .= " GROUP BY post_transaction";
                             $stmt = $conn->prepare($sql);
                             $stmt->bind_param("ssss", $reference_number, $datetime, $datetime, $partnerId);
                         } else {
                             $sql .= " AND partner_id_kpx = ?";
+                            $sql .= " GROUP BY post_transaction";
                             $stmt = $conn->prepare($sql);
                             $stmt->bind_param("ssss", $reference_number, $datetime, $datetime, $partnerId);
                         }
                     } else {
+                        $sql .= " GROUP BY post_transaction";
                         $stmt = $conn->prepare($sql);
                         $stmt->bind_param("sss", $reference_number, $datetime, $datetime);
                     }
                     $stmt->execute();
                     $result = $stmt->get_result();
-                    $row_data = $result->fetch_assoc();
+                    $row_count_total = 0;
+                    if ($result) {
+                        while ($r = $result->fetch_assoc()) {
+                            $cnt = intval($r['cnt']);
+                            $row_count_total += $cnt;
+                            $status = isset($r['post_transaction']) ? strtolower(trim($r['post_transaction'])) : '';
+                            if ($status === 'posted') {
+                                $postedRows += $cnt;
+                            } else {
+                                // treat any non-'posted' as unposted
+                                $unpostedRows += $cnt;
+                            }
+                        }
+                    }
                     $stmt->close();
-                    
-                    if ($row_data && $row_data['count'] > 0) {
+
+                    if ($row_count_total > 0) {
                         $duplicateRows++;
                     } else {
                         $newRows++;
@@ -193,6 +211,8 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                     'totalRows' => $totalRows,
                     'duplicateRows' => $duplicateRows,
                     'newRows' => $newRows,
+                    'postedRows' => $postedRows,
+                    'unpostedRows' => $unpostedRows,
                     'hasDuplicates' => $duplicateRows > 0
                 ];
                 
@@ -233,6 +253,8 @@ if (isset($_POST['check_single_duplicate']) && isset($_FILES['import_file'])) {
             $totalRows = 0;
             $duplicateRows = 0;
             $newRows = 0;
+            $postedRows = 0;
+            $unpostedRows = 0;
             
             // Process rows starting from row 10 (data rows)
             for ($row = 10; $row <= $highestRow; $row++) {
@@ -273,26 +295,38 @@ if (isset($_POST['check_single_duplicate']) && isset($_FILES['import_file'])) {
                 
                 // Check for duplicates (posted or unposted) with partner filter
                 if ($sourceType === 'KP7') {
-                    $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
+                    $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
                             WHERE reference_no = ? 
                             AND partner_id = ?
-                            AND (`datetime` = ? OR cancellation_date = ?) LIMIT 1";
+                            AND (`datetime` = ? OR cancellation_date = ?) GROUP BY post_transaction";
                     $stmt = $conn->prepare($sql);
                     $stmt->bind_param("ssss", $reference_number, $partnerId, $datetime, $datetime);
                 } else { // KPX
-                    $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
+                    $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
                             WHERE reference_no = ? 
                             AND partner_id_kpx = ?
-                            AND (`datetime` = ? OR cancellation_date = ?) LIMIT 1";
+                            AND (`datetime` = ? OR cancellation_date = ?) GROUP BY post_transaction";
                     $stmt = $conn->prepare($sql);
                     $stmt->bind_param("ssss", $reference_number, $partnerId, $datetime, $datetime);
                 }
                 $stmt->execute();
                 $result = $stmt->get_result();
-                $row_data = $result->fetch_assoc();
+                $row_count_total = 0;
+                if ($result) {
+                    while ($r = $result->fetch_assoc()) {
+                        $cnt = intval($r['cnt']);
+                        $row_count_total += $cnt;
+                        $status = isset($r['post_transaction']) ? strtolower(trim($r['post_transaction'])) : '';
+                        if ($status === 'posted') {
+                            $postedRows += $cnt;
+                        } else {
+                            $unpostedRows += $cnt;
+                        }
+                    }
+                }
                 $stmt->close();
-                
-                if ($row_data && $row_data['count'] > 0) {
+
+                if ($row_count_total > 0) {
                     $duplicateRows++;
                 } else {
                     $newRows++;
@@ -314,6 +348,8 @@ if (isset($_POST['check_single_duplicate']) && isset($_FILES['import_file'])) {
                 'totalRows' => $totalRows,
                 'duplicateRows' => $duplicateRows,
                 'newRows' => $newRows,
+                'postedRows' => $postedRows,
+                'unpostedRows' => $unpostedRows,
                 'hasDuplicates' => $duplicateRows > 0
             ]);
             
@@ -409,7 +445,8 @@ if (isset($_POST['upload']) && isset($_POST['company']) && isset($_FILES['import
         
         // Generate unique ID for temp storage
         $fileId = uniqid('file_', true);
-        $tempPath = "../../admin/temporary/" . $fileId . "_" . basename($fileName);
+        $tempRel = "/../../admin/temporary/" . $fileId . "_" . basename($fileName);
+        $tempPath = __DIR__ . $tempRel;
         
         // Move uploaded file to temp directory
         if (move_uploaded_file($tmpPath, $tempPath)) {
@@ -457,7 +494,8 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
             
             // Generate unique ID for temp storage
             $fileId = uniqid('file_', true);
-            $tempPath = "../../admin/temporary/" . $fileId . "_" . basename($fileName);
+            $tempRel = "/../../admin/temporary/" . $fileId . "_" . basename($fileName);
+            $tempPath = __DIR__ . $tempRel;
             
             // Move uploaded file to temp directory
             if (move_uploaded_file($tmpPath, $tempPath)) {
@@ -497,7 +535,27 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
     // Run full validation on all files to get transaction summaries and previews
     foreach ($_SESSION['uploaded_files'] as &$file) {
         if ($file['status'] === 'pending') {
-            $validationResult = validateFile($conn, $file['path'], $file['source_type'], $file['partner_id']);
+            // Ensure stored path exists; attempt to resolve using helper
+            $resolved = resolve_uploaded_path($file['path']);
+            if ($resolved === null) {
+                error_log("[IMPORT ERROR] File not found for validation: {$file['path']}");
+                $validationResult = [
+                    'valid' => false,
+                    'row_count' => 0,
+                    'errors' => [[ 'row' => 'N/A', 'type' => 'critical', 'message' => "File does not exist: {$file['path']}", 'value' => '' ]],
+                    'warnings' => [],
+                    'preview_data' => [],
+                    'source_type' => $file['source_type'],
+                    'partner_data' => null,
+                    'transaction_date' => null,
+                    'transaction_summary' => null
+                ];
+            } else {
+                // update stored path and session
+                $file['path'] = $resolved;
+                $_SESSION['uploaded_files'] = $_SESSION['uploaded_files'];
+                $validationResult = validateFile($conn, $file['path'], $file['source_type'], $file['partner_id']);
+            }
             $file['validation_result'] = $validationResult;
             $file['status'] = $validationResult['valid'] ? 'valid' : 'invalid';
         }
@@ -724,6 +782,46 @@ function getPartnerName($conn, $partnerId) {
         return $row['partner_name'];
     }
     return 'Unknown Partner';
+}
+
+/**
+ * Resolve an uploaded file path to an existing file on disk.
+ * Tries multiple candidate locations and returns the first existing absolute path, or null.
+ */
+function resolve_uploaded_path($storedPath) {
+    // Already absolute and exists
+    if (file_exists($storedPath)) return $storedPath;
+
+    // Try realpath (handles relative segments)
+    $rp = realpath($storedPath);
+    if ($rp && file_exists($rp)) return $rp;
+
+    // If storedPath begins with ../ or contains ../ try relative to this script dir
+    $candidate = __DIR__ . DIRECTORY_SEPARATOR . $storedPath;
+    $candidate = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $candidate);
+    if (file_exists($candidate)) return $candidate;
+
+    // Try admin temporary with basename
+    $basename = basename($storedPath);
+    $tmpDir = __DIR__ . '/../../admin/temporary/';
+    if (is_dir($tmpDir)) {
+        // direct candidate
+        $cand = $tmpDir . $basename;
+        if (file_exists($cand)) return $cand;
+
+        // glob search for any file containing the basename (covers prefixed unique ids)
+        $matches = glob($tmpDir . '*' . $basename);
+        if (!empty($matches)) return $matches[0];
+    }
+
+    // Try document root + billspayment path
+    if (!empty($_SERVER['DOCUMENT_ROOT'])) {
+        $docCand = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\') . '/billspayment/admin/temporary/' . $basename;
+        if (file_exists($docCand)) return $docCand;
+    }
+
+    // Not found
+    return null;
 }
 
 function loadSpreadsheet($filePath, $readDataOnly = true) {
