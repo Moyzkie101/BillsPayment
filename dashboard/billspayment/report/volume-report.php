@@ -1595,34 +1595,16 @@ $(document).ready(function() {
                 // });
 
                 document.getElementById('exportPDF').addEventListener('click', function() {
-                    Swal.fire({
-                        title: 'PDF Export - Under Construction',
-                        text: 'This feature is currently under development and will be available soon.',
-                        icon: 'info',
-                        confirmButtonText: 'OK',
-                        confirmButtonColor: '#dc3545',
-                        allowOutsideClick: true,
-                        allowEscapeKey: true
-                    });
+                    // Close chooser and start PDF export which will open in a new tab
+                    Swal.close();
+                    exportToPDF();
                 });
-                
+
                 // Handle XLS export
                 document.getElementById('exportXLS').addEventListener('click', function() {
-                    Swal.fire({
-                        title: 'Exporting to Excel...',
-                        text: 'Please wait while we generate your Excel report.',
-                        icon: 'info',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false,
-                        showConfirmButton: false,
-                        didOpen: () => {
-                            Swal.showLoading();
-                            // Add your XLS export logic here
-                            setTimeout(() => {
-                                exportToXLS();
-                            }, 1000);
-                        }
-                    });
+                    // Close chooser and start Excel export (downloads file)
+                    Swal.close();
+                    exportToXLS();
                 });
             }
         });
@@ -1630,62 +1612,112 @@ $(document).ready(function() {
 
     // Export functions
     function exportToPDF() {
-        // Add your PDF export logic here
-        console.log('Exporting to PDF...');
-        
-        // Simulate export process
+        // Use effective dates (respect active Filter-by-Day/Month/Year)
+        const params = getEffectiveExportParams();
+
+        // Create a form to request PDF generation from server (opens in new tab)
+        const form = $('<form>', {
+            'method': 'POST',
+            'action': '../../../models/generate/pdf/generate-pdf-volume-report.php',
+            'target': '_blank'
+        });
+
+        form.append($('<input>', {'type': 'hidden', 'name': 'action', 'value': 'export_pdf'}));
+        form.append($('<input>', {'type': 'hidden', 'name': 'partner', 'value': params.partner}));
+        form.append($('<input>', {'type': 'hidden', 'name': 'filterType', 'value': params.filterType}));
+        form.append($('<input>', {'type': 'hidden', 'name': 'startDate', 'value': params.startDate}));
+        form.append($('<input>', {'type': 'hidden', 'name': 'endDate', 'value': params.endDate}));
+
+        $('body').append(form);
+        form.submit();
+        form.remove();
+
+        // Provide a brief success toast after submission
         setTimeout(() => {
             Swal.fire({
-                title: 'Success!',
-                text: 'PDF report has been generated successfully.',
-                icon: 'success',
-                allowOutsideClick: false,
-                allowEscapeKey: false,
-                allowEnterKey: false,
+                title: 'Export started',
+                text: 'PDF generation has started. The file will open in a new tab when ready.',
+                icon: 'info',
                 confirmButtonText: 'OK',
                 confirmButtonColor: '#dc3545'
             });
-        }, 2000);
+        }, 700);
     }
 
     function exportToXLS() {
-        const partner = $('#partnerlistDropdown').val();
-        const filterType = $('select[name="filterType"]').val();
-        const startDate = $('input[name="startDate"]').val();
-        const endDate = $('input[name="endDate"]').val();
-        
+        // Use effective dates (respect active Filter-by-Day/Month/Year)
+        const params = getEffectiveExportParams();
+
         // Create a form to submit the export request
         const form = $('<form>', {
             'method': 'POST',
             'action': '../../../models/generate/excel/generate-excel-volume-report.php',
             'target': '_blank'
         });
-        
+
         // Add hidden fields
         form.append($('<input>', {'type': 'hidden', 'name': 'action', 'value': 'export_excel'}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'partner', 'value': partner}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'filterType', 'value': filterType}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'startDate', 'value': startDate}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'endDate', 'value': endDate}));
-        
+        form.append($('<input>', {'type': 'hidden', 'name': 'partner', 'value': params.partner}));
+        form.append($('<input>', {'type': 'hidden', 'name': 'filterType', 'value': params.filterType}));
+        form.append($('<input>', {'type': 'hidden', 'name': 'startDate', 'value': params.startDate}));
+        form.append($('<input>', {'type': 'hidden', 'name': 'endDate', 'value': params.endDate}));
+
         // Append to body and submit
         $('body').append(form);
         form.submit();
         form.remove();
-        
-        // Close the loading dialog after a delay
+
+        // Inform user
         setTimeout(() => {
             Swal.fire({
-                title: 'Success!',
-                text: 'Excel report has been generated and downloaded successfully.',
-                icon: 'success',
-                allowOutsideClick: false,
-                allowEscapeKey: false,
-                allowEnterKey: false,
+                title: 'Export started',
+                text: 'Excel generation has started. The file will download shortly.',
+                icon: 'info',
                 confirmButtonText: 'OK',
                 confirmButtonColor: '#dc3545'
             });
-        }, 2000);
+        }, 700);
+    }
+
+    // Helper to determine the effective dates to send for export
+    function getEffectiveExportParams() {
+        const partner = $('#partnerlistDropdown').val();
+        const filterType = $('select[name="filterType"]').val();
+
+        // Default to current input values
+        let startDate = $('input[name="startDate"]').val();
+        let endDate = $('input[name="endDate"]').val();
+
+        // Find any active filter button (day/month/year) that is not the "All" button
+        const activeBtn = $('.day-shortcut-container').find('.day-button-active').not('.day-button-all').first();
+
+        if (activeBtn && activeBtn.length) {
+            const container = activeBtn.closest('.day-shortcut-container');
+            const idx = $('.day-shortcut-container').index(container);
+            const dataDate = activeBtn.data('date');
+
+            if (idx === 0) {
+                // Day buttons: data-date is YYYY-MM-DD
+                if (dataDate && dataDate.toString().includes('-')) {
+                    startDate = dataDate;
+                    endDate = dataDate;
+                }
+            } else if (idx === 1) {
+                // Month buttons: data-date is YYYY-MM
+                if (dataDate) {
+                    startDate = dataDate;
+                    endDate = dataDate;
+                }
+            } else if (idx === 2) {
+                // Year buttons: data-date is YYYY
+                if (dataDate) {
+                    startDate = dataDate;
+                    endDate = dataDate;
+                }
+            }
+        }
+
+        return { partner: partner, filterType: filterType, startDate: startDate, endDate: endDate };
     }
 
     // Update the existing "All" button click handlers

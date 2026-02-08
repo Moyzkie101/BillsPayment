@@ -35,9 +35,302 @@ if (isset($_SESSION['user_type'])) {
     }
 }
 
-// Increase memory and execution time for large batches
-ini_set('memory_limit', '512M');
+// Increase memory and execution time for large batches (may be overridden by caching below)
+ini_set('memory_limit', '1024M');
 ini_set('max_execution_time', 900);
+
+// Configure PhpSpreadsheet cell caching to reduce memory usage for large files
+// Use a disk-based cache (discISAM) or php temp dir. This helps prevent exhausting RAM.
+try {
+    // Some PhpSpreadsheet versions expose caching APIs differently.
+    // Use string class names to avoid static analysis errors on missing classes.
+    $cacheFactoryClass = 'PhpOffice\\PhpSpreadsheet\\CachedObjectStorageFactory';
+    $settingsClass = 'PhpOffice\\PhpSpreadsheet\\Settings';
+
+    if (class_exists($cacheFactoryClass) && class_exists($settingsClass)) {
+        $cacheSettings = ['dir' => sys_get_temp_dir()];
+        $cacheConst = $cacheFactoryClass . '::cache_to_discISAM';
+
+        if (method_exists($settingsClass, 'setCacheStorageMethod') && defined($cacheConst)) {
+            $cacheMethod = constant($cacheConst);
+            $settingsClass::setCacheStorageMethod($cacheMethod, $cacheSettings);
+        } elseif (method_exists($cacheFactoryClass, 'initialize') && defined($cacheConst)) {
+            // Fallback for versions exposing an initialize() helper
+            $cacheFactoryClass::initialize(constant($cacheConst), $cacheSettings);
+        }
+    } else {
+        error_log('[IMPORT INFO] PhpSpreadsheet caching classes not available; skipping cache configuration.');
+    }
+} catch (Exception $e) {
+    // If cache setting fails, log and continue — we'll rely on increased memory limit
+    error_log('[IMPORT WARNING] PhpSpreadsheet cache configuration failed: ' . $e->getMessage());
+}
+
+// ============================================================================
+// AJAX Endpoint: Check for Duplicate Records
+// ============================================================================
+if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
+    header('Content-Type: application/json');
+    
+    $results = [];
+    $fileCount = count($_FILES['files']['name']);
+    
+    for ($i = 0; $i < $fileCount; $i++) {
+        if ($_FILES['files']['error'][$i] === UPLOAD_ERR_OK) {
+            $tmpPath = $_FILES['files']['tmp_name'][$i];
+            $fileName = $_FILES['files']['name'][$i];
+            $partnerId = $_POST['partner_ids'][$i] ?? '';
+            $sourceType = $_POST['source_types'][$i] ?? '';
+            
+            try {
+                // Load and parse Excel file
+                $spreadsheet = loadSpreadsheet($tmpPath, true);
+                $worksheet = $spreadsheet->getActiveSheet();
+                $highestRow = $worksheet->getHighestRow();
+                $highestColumn = $worksheet->getHighestColumn();
+                $columnLabels = [];
+
+                // Read row 9 to determine column layout for KPX
+                $rowIterator = $worksheet->getRowIterator(9, 9)->current();
+                $cellIterator = $rowIterator->getCellIterator('A', $highestColumn);
+                foreach ($cellIterator as $cell) {
+                    $columnLabels[] = trim(strval($cell->getValue()));
+                }
+                
+                $totalRows = 0;
+                $duplicateRows = 0;
+                $newRows = 0;
+                
+                // Process rows starting from row 10 (data rows)
+                for ($row = 10; $row <= $highestRow; $row++) {
+                    $cellA = trim(strval($worksheet->getCell('A' . $row)->getValue()));
+                    $cellB = trim(strval($worksheet->getCell('B' . $row)->getValue()));
+                    $cellC = trim(strval($worksheet->getCell('C' . $row)->getValue()));
+                    $cellD = trim(strval($worksheet->getCell('D' . $row)->getValue()));
+                    $cellE = trim(strval($worksheet->getCell('E' . $row)->getValue()));
+                    $cellF = trim(strval($worksheet->getCell('F' . $row)->getValue()));
+                    
+                    // Skip empty rows
+                    if (empty($cellA) && empty($cellB) && empty($cellC) && empty($cellD) && empty($cellE)) {
+                        break;
+                    }
+                    
+                    $totalRows++;
+                    
+                    // Extract reference number and datetime
+                    $reference_number = '';
+                    $datetime = null;
+                    
+                    if ($sourceType === 'KP7') {
+                        $reference_number = $cellE;
+                        $datetimeValue = $cellC;
+                    } else { // KPX
+                        if (isset($columnLabels[1]) && $columnLabels[1] === 'Date / Time') {
+                            $reference_number = $cellD;
+                            $datetimeValue = $cellB;
+                        } elseif (isset($columnLabels[2]) && $columnLabels[2] === 'Date / Time') {
+                            $reference_number = $cellE;
+                            $datetimeValue = $cellC;
+                        } else {
+                            $reference_number = $cellF;
+                            $datetimeValue = trim($cellD . (empty($cellE) ? '' : (' ' . $cellE)));
+                        }
+                    }
+
+                    if (is_numeric($datetimeValue)) {
+                        $datetime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($datetimeValue)->format('Y-m-d H:i:s');
+                    } elseif (!empty($datetimeValue)) {
+                        $datetime = date('Y-m-d H:i:s', strtotime($datetimeValue));
+                    }
+
+                    if (empty($reference_number) || empty($datetime)) {
+                        $newRows++;
+                        continue;
+                    }
+                    
+                    // Check for duplicates (posted or unposted)
+                    $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
+                            WHERE reference_no = ? 
+                            AND (`datetime` = ? OR cancellation_date = ?)";
+
+                    if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
+                        if (strtoupper($sourceType) === 'KP7') {
+                            $sql .= " AND partner_id = ?";
+                            $stmt = $conn->prepare($sql);
+                            $stmt->bind_param("ssss", $reference_number, $datetime, $datetime, $partnerId);
+                        } else {
+                            $sql .= " AND partner_id_kpx = ?";
+                            $stmt = $conn->prepare($sql);
+                            $stmt->bind_param("ssss", $reference_number, $datetime, $datetime, $partnerId);
+                        }
+                    } else {
+                        $stmt = $conn->prepare($sql);
+                        $stmt->bind_param("sss", $reference_number, $datetime, $datetime);
+                    }
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    $row_data = $result->fetch_assoc();
+                    $stmt->close();
+                    
+                    if ($row_data && $row_data['count'] > 0) {
+                        $duplicateRows++;
+                    } else {
+                        $newRows++;
+                    }
+                }
+
+                // Free spreadsheet resources for this file to reduce memory usage
+                if (isset($spreadsheet) && is_object($spreadsheet)) {
+                    try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+                    unset($worksheet, $spreadsheet);
+                    if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+                }
+
+                $results[] = [
+                    'fileName' => $fileName,
+                    'partnerId' => $partnerId,
+                    'sourceType' => $sourceType,
+                    'totalRows' => $totalRows,
+                    'duplicateRows' => $duplicateRows,
+                    'newRows' => $newRows,
+                    'hasDuplicates' => $duplicateRows > 0
+                ];
+                
+            } catch (Exception $e) {
+                $results[] = [
+                    'fileName' => $fileName,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+    }
+    
+    echo json_encode([
+        'success' => true,
+        'files' => $results
+    ]);
+    exit;
+}
+
+// ============================================================================
+// AJAX Endpoint: Check Single File for Duplicates (Manual Mode)
+// ============================================================================
+if (isset($_POST['check_single_duplicate']) && isset($_FILES['import_file'])) {
+    header('Content-Type: application/json');
+    
+    if ($_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
+        $tmpPath = $_FILES['import_file']['tmp_name'];
+        $fileName = $_FILES['import_file']['name'];
+        $partnerId = $_POST['partner_id'] ?? '';
+        $sourceType = $_POST['source_type'] ?? '';
+        
+        try {
+            // Load and parse Excel file
+            $spreadsheet = loadSpreadsheet($tmpPath, true);
+            $worksheet = $spreadsheet->getActiveSheet();
+            $highestRow = $worksheet->getHighestRow();
+            
+            $totalRows = 0;
+            $duplicateRows = 0;
+            $newRows = 0;
+            
+            // Process rows starting from row 10 (data rows)
+            for ($row = 10; $row <= $highestRow; $row++) {
+                $cellA = trim(strval($worksheet->getCell('A' . $row)->getValue()));
+                $cellB = trim(strval($worksheet->getCell('B' . $row)->getValue()));
+                $cellC = trim(strval($worksheet->getCell('C' . $row)->getValue()));
+                $cellD = trim(strval($worksheet->getCell('D' . $row)->getValue()));
+                $cellE = trim(strval($worksheet->getCell('E' . $row)->getValue()));
+                
+                // Skip empty rows
+                if (empty($cellA) && empty($cellB) && empty($cellC) && empty($cellD) && empty($cellE)) {
+                    break;
+                }
+                
+                $totalRows++;
+                
+                // Extract reference number and datetime
+                $reference_number = '';
+                $datetime = null;
+                
+                if ($sourceType === 'KP7') {
+                    $reference_number = $cellD;
+                    $datetimeValue = $cellC;
+                    if (is_numeric($datetimeValue)) {
+                        $datetime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($datetimeValue)->format('Y-m-d H:i:s');
+                    } else {
+                        $datetime = date('Y-m-d H:i:s', strtotime($datetimeValue));
+                    }
+                } else { // KPX
+                    $reference_number = $cellC;
+                    $datetimeValue = $cellB;
+                    if (is_numeric($datetimeValue)) {
+                        $datetime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($datetimeValue)->format('Y-m-d H:i:s');
+                    } else {
+                        $datetime = date('Y-m-d H:i:s', strtotime($datetimeValue));
+                    }
+                }
+                
+                // Check for duplicates (posted or unposted) with partner filter
+                if ($sourceType === 'KP7') {
+                    $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
+                            WHERE reference_no = ? 
+                            AND partner_id = ?
+                            AND (`datetime` = ? OR cancellation_date = ?) LIMIT 1";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("ssss", $reference_number, $partnerId, $datetime, $datetime);
+                } else { // KPX
+                    $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
+                            WHERE reference_no = ? 
+                            AND partner_id_kpx = ?
+                            AND (`datetime` = ? OR cancellation_date = ?) LIMIT 1";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("ssss", $reference_number, $partnerId, $datetime, $datetime);
+                }
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $row_data = $result->fetch_assoc();
+                $stmt->close();
+                
+                if ($row_data && $row_data['count'] > 0) {
+                    $duplicateRows++;
+                } else {
+                    $newRows++;
+                }
+            }
+
+            // Free spreadsheet resources for this single-file check
+            if (isset($spreadsheet) && is_object($spreadsheet)) {
+                try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+                unset($worksheet, $spreadsheet);
+                if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+            }
+
+            echo json_encode([
+                'success' => true,
+                'fileName' => $fileName,
+                'partnerId' => $partnerId,
+                'sourceType' => $sourceType,
+                'totalRows' => $totalRows,
+                'duplicateRows' => $duplicateRows,
+                'newRows' => $newRows,
+                'hasDuplicates' => $duplicateRows > 0
+            ]);
+            
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    } else {
+        echo json_encode([
+            'success' => false,
+            'error' => 'File upload error'
+        ]);
+    }
+    exit;
+}
 
 // Progress polling endpoint (returns JSON for a given token)
 if (isset($_GET['get_progress']) && !empty($_GET['token'])) {
@@ -68,6 +361,7 @@ if (isset($_GET['cancel']) && $_GET['cancel'] == '1') {
     // Clear session
     unset($_SESSION['uploaded_files']);
     unset($_SESSION['batch_upload']);
+    unset($_SESSION['user_decision']);
     
     echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>';
     echo "<script>
@@ -86,11 +380,73 @@ if (isset($_GET['cancel']) && $_GET['cancel'] == '1') {
 }
 
 // ============================================================================
+// Handle Manual Mode Upload (single file with company name)
+// ============================================================================
+if (isset($_POST['upload']) && isset($_POST['company']) && isset($_FILES['import_file'])) {
+    $userDecision = $_POST['user_decision'] ?? 'skip';
+    $company = $_POST['company'];
+    $fileType = $_POST['fileType'];
+    
+    if ($_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
+        $tmpPath = $_FILES['import_file']['tmp_name'];
+        $fileName = $_FILES['import_file']['name'];
+        
+        // Get partner ID from company name
+        $partnerId = '';
+        if ($company !== 'All') {
+            $stmt = $conn->prepare("SELECT partner_id FROM masterdata.partner_masterfile WHERE partner_name = ? LIMIT 1");
+            $stmt->bind_param("s", $company);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result && $result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                $partnerId = $row['partner_id'];
+            }
+            $stmt->close();
+        } else {
+            $partnerId = 'ALL';
+        }
+        
+        // Generate unique ID for temp storage
+        $fileId = uniqid('file_', true);
+        $tempPath = "../../admin/temporary/" . $fileId . "_" . basename($fileName);
+        
+        // Move uploaded file to temp directory
+        if (move_uploaded_file($tmpPath, $tempPath)) {
+            $partnerName = ($company === 'All') ? 'All' : $company;
+            
+            $uploadedFiles[] = [
+                'id' => $fileId,
+                'name' => $fileName,
+                'path' => $tempPath,
+                'partner_id' => $partnerId,
+                'partner_name' => $partnerName,
+                'source_type' => $fileType,
+                'status' => 'pending',
+                'validation_result' => null,
+                'uploaded_by' => $current_user_email,
+                'uploaded_date' => date('Y-m-d H:i:s')
+            ];
+            
+            // Store in session
+            $_SESSION['uploaded_files'] = $uploadedFiles;
+            $_SESSION['batch_upload'] = true;
+            $_SESSION['user_decision'] = $userDecision;
+            
+            // Redirect to validation page (self)
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit();
+        }
+    }
+}
+
+// ============================================================================
 // STEP 1: Handle File Upload and Store in Session
 // ============================================================================
 if (isset($_POST['upload']) && isset($_FILES['files'])) {
     $uploadedFiles = [];
     $fileCount = count($_FILES['files']['name']);
+    $userDecision = $_POST['user_decision'] ?? 'skip'; // Get user decision (override/skip/cancel)
     
     for ($i = 0; $i < $fileCount; $i++) {
         if ($_FILES['files']['error'][$i] === UPLOAD_ERR_OK) {
@@ -124,9 +480,10 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
         }
     }
     
-    // Store in session
+    // Store in session along with user decision
     $_SESSION['uploaded_files'] = $uploadedFiles;
     $_SESSION['batch_upload'] = true;
+    $_SESSION['user_decision'] = $userDecision; // Store user decision in session
     
     // Redirect to validation page (self)
     header("Location: " . $_SERVER['PHP_SELF']);
@@ -145,10 +502,7 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
             $file['status'] = $validationResult['valid'] ? 'valid' : 'invalid';
         }
     }
-    unset($file);
-    
-    // Update session
-    $_SESSION['uploaded_files'] = $_SESSION['uploaded_files'];
+    unset($file); // Clear the reference
 }
 
 // ============================================================================
@@ -181,8 +535,11 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
     foreach ($_SESSION['uploaded_files'] as $file) {
         if ($file['status'] === 'valid') {
             try {
-                // Import file directly (no cached data)
-                $result = importFileData($conn, $file['path'], $file['source_type'], $file['partner_id'], $current_user_email, null, null);
+                // Get user decision from session (default to 'skip' if not set)
+                $userDecision = $_SESSION['user_decision'] ?? 'skip';
+                
+                // Import file with user decision
+                $result = importFileData($conn, $file['path'], $file['source_type'], $file['partner_id'], $current_user_email, null, null, $userDecision);
                 
                 if ($result['success']) {
                     $imported++;
@@ -234,6 +591,7 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
     // Clear session
     unset($_SESSION['uploaded_files']);
     unset($_SESSION['batch_upload']);
+    unset($_SESSION['user_decision']);
     
     if ($isAjax) {
         // Calculate aggregate debug stats
@@ -368,10 +726,24 @@ function getPartnerName($conn, $partnerId) {
     return 'Unknown Partner';
 }
 
+function loadSpreadsheet($filePath, $readDataOnly = true) {
+    $reader = IOFactory::createReaderForFile($filePath);
+    if ($readDataOnly && method_exists($reader, 'setReadDataOnly')) {
+        $reader->setReadDataOnly(true);
+    }
+    if (method_exists($reader, 'setReadEmptyCells')) {
+        $reader->setReadEmptyCells(false);
+    }
+
+    return $reader->load($filePath);
+}
+
 function validateFileFast($conn, $filePath, $sourceType, $partnerId) {
     // FAST validation - just check file is readable and partner exists
     // Don't parse the entire Excel file - that's slow!
     $errors = [];
+    $spreadsheet = null;
+    $worksheet = null;
     
     try {
         // Quick file check
@@ -419,7 +791,7 @@ function validateFileFast($conn, $filePath, $sourceType, $partnerId) {
         }
         
         // Quick Excel check - just load to verify it's valid
-        $spreadsheet = IOFactory::load($filePath);
+        $spreadsheet = loadSpreadsheet($filePath, true);
         $worksheet = $spreadsheet->getActiveSheet();
         $highestRow = $worksheet->getHighestRow();
         
@@ -464,6 +836,12 @@ function validateFileFast($conn, $filePath, $sourceType, $partnerId) {
             'transaction_date' => null,
             'transaction_summary' => null
         ];
+    } finally {
+        if (isset($spreadsheet) && is_object($spreadsheet)) {
+            try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+            unset($worksheet, $spreadsheet);
+            if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+        }
     }
 }
 
@@ -574,9 +952,11 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     $transactionStartDate = null;
     $transactionEndDate = null;
     $cachedData = []; // Cache full data for import to avoid re-parsing Excel
+    $spreadsheet = null;
+    $worksheet = null;
     
     try {
-        $spreadsheet = IOFactory::load($filePath);
+        $spreadsheet = loadSpreadsheet($filePath, true);
         $worksheet = $spreadsheet->getActiveSheet();
         $highestRow = $worksheet->getHighestRow();
         $highestColumn = $worksheet->getHighestColumn();
@@ -854,6 +1234,12 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
             'message' => 'File loading error: ' . $e->getMessage(),
             'value' => ''
         ];
+    } finally {
+        if (isset($spreadsheet) && is_object($spreadsheet)) {
+            try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+            unset($worksheet, $spreadsheet);
+            if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+        }
     }
     
     // Calculate summaries (match original logic)
@@ -877,10 +1263,10 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     ];
 }
 
-function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserEmail, $progressToken = null, $cachedData = null) {
+function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserEmail, $progressToken = null, $cachedData = null, $userDecision = 'skip') {
     try {
         // Always parse Excel (simple and reliable like old code)
-        $spreadsheet = IOFactory::load($filePath);
+        $spreadsheet = loadSpreadsheet($filePath, true);
         $worksheet = $spreadsheet->getActiveSheet();
         $highestRow = $worksheet->getHighestRow();
         $highestColumn = $worksheet->getHighestColumn();
@@ -1430,11 +1816,66 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 $datetime_value = $reference_datetime_map[$row['reference_number']];
             }
 
-            // Delete existing unposted records for same reference and datetime/cancellation_date to avoid duplicates
-            // IMPORTANT: Also match status so we don't delete regular transactions when inserting cancellations (or vice versa)
+            // Handle user decision: override vs skip
             $post_trans = $row['post_transaction'] ?? 'unposted';
-            $deleteSQL = "DELETE FROM mldb.billspayment_transaction WHERE post_transaction = ? AND reference_no = ? AND (`datetime` = ? OR cancellation_date = ? ) AND status <=> ?";
-            if (strtoupper($sourceType) === 'KP7') {
+            $deleteStmt = null;
+            
+            if ($userDecision === 'skip') {
+                // Skip mode: Check if record exists, and if it does, skip insertion
+                // First check if a matching record exists
+                $checkSQL = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction WHERE reference_no = ? AND (`datetime` = ? OR cancellation_date = ?) AND status <=> ?";
+                if (strtoupper($sourceType) === 'KP7') {
+                    $checkSQL .= " AND partner_id = ?";
+                    $checkStmt = $conn->prepare($checkSQL);
+                    if ($checkStmt) {
+                        $c_reference = $row['reference_number'];
+                        $c_datetime = $datetime_value ?? '';
+                        $c_cancellation = $cancellation_date ?? '';
+                        $c_status = $status;
+                        $c_partner = $row['partner_id'];
+                        $checkStmt->bind_param("sssss", $c_reference, $c_datetime, $c_cancellation, $c_status, $c_partner);
+                    }
+                } elseif (strtoupper($sourceType) === 'KPX') {
+                    $checkSQL .= " AND partner_id_kpx = ?";
+                    $checkStmt = $conn->prepare($checkSQL);
+                    if ($checkStmt) {
+                        $c_reference = $row['reference_number'];
+                        $c_datetime = $datetime_value ?? '';
+                        $c_cancellation = $cancellation_date ?? '';
+                        $c_status = $status;
+                        $c_partner_kpx = $row['PartnerID_KPX'];
+                        $checkStmt->bind_param("sssss", $c_reference, $c_datetime, $c_cancellation, $c_status, $c_partner_kpx);
+                    }
+                } else {
+                    $checkStmt = $conn->prepare($checkSQL);
+                    if ($checkStmt) {
+                        $c_reference = $row['reference_number'];
+                        $c_datetime = $datetime_value ?? '';
+                        $c_cancellation = $cancellation_date ?? '';
+                        $c_status = $status;
+                        $checkStmt->bind_param("ssss", $c_reference, $c_datetime, $c_cancellation, $c_status);
+                    }
+                }
+                
+                if (isset($checkStmt) && $checkStmt) {
+                    $checkStmt->execute();
+                    $checkResult = $checkStmt->get_result();
+                    $checkRow = $checkResult->fetch_assoc();
+                    $checkStmt->close();
+                    
+                    // If record exists, skip this row
+                    if ($checkRow && $checkRow['count'] > 0) {
+                        continue; // Skip insertion for this row
+                    }
+                }
+            } elseif ($userDecision === 'override') {
+                // Override mode: Delete existing records with same reference and datetime before inserting
+                // This allows updating existing records with new data
+                // Delete existing unposted records for same reference and datetime/cancellation_date to avoid duplicates
+                // IMPORTANT: Also match status so we don't delete regular transactions when inserting cancellations (or vice versa)
+                $deleteSQL = "DELETE FROM mldb.billspayment_transaction WHERE post_transaction = ? AND reference_no = ? AND (`datetime` = ? OR cancellation_date = ? ) AND status <=> ?";
+                
+                if (strtoupper($sourceType) === 'KP7') {
                 $deleteSQL .= " AND partner_id = ?";
                 $deleteStmt = $conn->prepare($deleteSQL);
                 if ($deleteStmt) {
@@ -1526,6 +1967,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 }
                 $deleteStmt->close();
             }
+            } // End of override mode
 
             $settle_unsettle = null;
             $claim_unclaim = null;
@@ -1644,6 +2086,13 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         error_log("[IMPORT COMPLETE] Rows deleted before insert: {$deleteCount}");
         error_log("[IMPORT COMPLETE] Transaction committed successfully");
 
+        // Free spreadsheet resources for this import to reduce memory usage
+        if (isset($spreadsheet) && is_object($spreadsheet)) {
+            try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+            unset($worksheet, $spreadsheet);
+            if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+        }
+
         return [
             'success' => true,
             'inserted' => $insertCount,
@@ -1667,6 +2116,13 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             error_log("[IMPORT ERROR] Stats before rollback - Attempts: {$insertAttempts}, Success: {$insertSuccess}, Failures: {$insertFailures}");
         }
         
+        // Attempt to free spreadsheet resources even on error
+        if (isset($spreadsheet) && is_object($spreadsheet)) {
+            try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e2) {}
+            unset($worksheet, $spreadsheet);
+            if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+        }
+
         return [
             'success' => false,
             'error' => $e->getMessage(),

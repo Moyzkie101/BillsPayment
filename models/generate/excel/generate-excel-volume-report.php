@@ -26,6 +26,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
     $endDate = $_POST['endDate'];
 
     // Convert date formats based on filter type
+    // Keep original inputs for display decisions
+    $origStartDate = $startDate;
+    $origEndDate = $endDate;
+
     if ($filterType === 'daily') {
         // Daily: single date or date range if endDate provided
         $filterType1 = 'Daily';
@@ -49,12 +53,18 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             $filterType1 = 'Monthly';
             $startDate = $startDate . '-01';
             $endDate = date('Y-m-t', strtotime($endDate . '-01'));
-            $dateOBJ = date('F Y', strtotime($startDate)) . ' to ' . date('F Y', strtotime($endDate));
+            // If the provided start and end month are the same, display single month
+            $startLabel = date('F Y', strtotime($startDate));
+            $endLabel = date('F Y', strtotime($endDate));
+            $dateOBJ = ($startLabel === $endLabel) ? $startLabel : ($startLabel . ' to ' . $endLabel);
         } elseif ($filterType === 'yearly') {
             $filterType1 = 'Yearly';
             $startDate = $startDate . '-01-01';
             $endDate = $endDate . '-12-31';
-            $dateOBJ = date('Y', strtotime($startDate)) . ' to ' . date('Y', strtotime($endDate));
+            // If the provided start and end year are the same, display single year
+            $startLabel = date('Y', strtotime($startDate));
+            $endLabel = date('Y', strtotime($endDate));
+            $dateOBJ = ($startLabel === $endLabel) ? $startLabel : ($startLabel . ' to ' . $endLabel);
         } else {
             // fallback
             $filterType1 = ucfirst($filterType);
@@ -165,13 +175,19 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
 
             if ($filterType === 'weekly') {
                 $filterType1 = 'Daily';
-                $dateOBJ = date('F d, Y', strtotime($startDate)) . ' to ' . date('F d, Y', strtotime($endDate));
+                $startLabel = date('F d, Y', strtotime($startDate));
+                $endLabel = date('F d, Y', strtotime($endDate));
+                $dateOBJ = ($startLabel === $endLabel) ? $startLabel : ($startLabel . ' to ' . $endLabel);
             } elseif ($filterType === 'monthly') {
                 $filterType1 = 'Monthly';
-                $dateOBJ = date('F Y', strtotime($startDate)) . ' to ' . date('F Y', strtotime($endDate));
+                $startLabel = date('F Y', strtotime($startDate));
+                $endLabel = date('F Y', strtotime($endDate));
+                $dateOBJ = ($startLabel === $endLabel) ? $startLabel : ($startLabel . ' to ' . $endLabel);
             } elseif ($filterType === 'yearly') {
                 $filterType1 = 'Yearly';
-                $dateOBJ = date('Y', strtotime($startDate)) . ' to ' . date('Y', strtotime($endDate));
+                $startLabel = date('Y', strtotime($startDate));
+                $endLabel = date('Y', strtotime($endDate));
+                $dateOBJ = ($startLabel === $endLabel) ? $startLabel : ($startLabel . ' to ' . $endLabel);
             }
 
             $sheet->setCellValue('A2', 'VOLUME REPORT - ' . strtoupper($filterType1));

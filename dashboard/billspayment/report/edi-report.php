@@ -2,6 +2,11 @@
 // Connect to the database
 include '../../../config/config.php';
 require '../../../vendor/autoload.php';
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 // Start the session
 session_start();
@@ -131,10 +136,41 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_regions'){
     echo $options2;
     exit;
 }
+elseif (isset($_POST['action']) && $_POST['action'] === 'get_partners') {
+    $partnerQuery = "SELECT partner_id, partner_name 
+                     FROM masterdata.partner_masterfile 
+                     ORDER BY partner_name ASC";
+    $result = $conn->query($partnerQuery);
+    
+    $options = '';
+    while ($row = $result->fetch_assoc()) {
+        $options .= '<option value="' . $row['partner_id'] . '">' . $row['partner_name'] . '</option>';
+    }
+    
+    echo $options;
+    exit;
+}
+elseif (isset($_POST['action']) && $_POST['action'] === 'get_areas') {
+    $areaQuery = "SELECT DISTINCT area 
+                  FROM masterdata.branch_profile 
+                  WHERE area IS NOT NULL AND area != '' 
+                  ORDER BY area ASC";
+    $result = $conn->query($areaQuery);
+    
+    $options = '';
+    while ($row = $result->fetch_assoc()) {
+        $options .= '<option value="' . $row['area'] . '">' . $row['area'] . '</option>';
+    }
+    
+    echo $options;
+    exit;
+}
 elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
     $mainzone = $_POST['mainzone'];
     $zone = $_POST['zone'];
     $region = $_POST['region'];
+    $partner = $_POST['partner'] ?? 'ALL';
+    $area = $_POST['area'] ?? 'ALL';
     $filterType = $_POST['filterType'];
     $startDate = $_POST['startDate'];
     $endDate = $_POST['endDate'];
@@ -232,9 +268,19 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
         }
     }
     
+    // Add partner and area filters
+    if ($partner !== 'ALL') {
+        $whereConditions[] = "(bt.partner_id = '$partner' OR bt.partner_id_kpx = '$partner')";
+    }
+    if ($area !== 'ALL') {
+        $whereConditions[] = "mbp.area = '$area'";
+    }
+    
     $dataQuery = "SELECT
                     mrm.zone_code,
                     mbp.ml_matic_region,
+                    pmf.partner_name,
+                    mbp.area,
                     mbp.kp_code,
                     mkbm.branch_name,
                     (SUM(bt.charge_to_partner) + SUM(bt.charge_to_customer)) AS charges
@@ -250,9 +296,12 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                 JOIN
                     masterdata.kpx_branch_masterfile AS mkbm
                     ON bt.branch_id = mkbm.branch_id
+                LEFT JOIN
+                    masterdata.partner_masterfile AS pmf
+                    ON bt.partner_id = pmf.partner_id OR bt.partner_id_kpx = pmf.partner_id_kpx
                 WHERE " . implode(' AND ', $whereConditions) . "
-                GROUP BY mrm.zone_code, mbp.ml_matic_region, mbp.kp_code, mkbm.branch_name
-                ORDER BY mbp.ml_matic_region, mbp.kp_code";
+                GROUP BY mrm.zone_code, mbp.ml_matic_region, pmf.partner_name, mbp.area, mbp.kp_code, mkbm.branch_name
+                ORDER BY pmf.partner_name, mbp.area, mbp.ml_matic_region, mbp.kp_code";
     
     try {
         $dataResult = $conn->query($dataQuery);
@@ -276,6 +325,8 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                     'mainzone' => $mainzone,
                     'zone' => $zone, 
                     'region' => $region,
+                    'partner' => $partner,
+                    'area' => $area,
                     'filterType' => $filterType,
                     'startDate' => $startDate,
                     'endDate' => $endDate
@@ -296,6 +347,8 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                 'mainzone' => $mainzone,
                 'zone' => $zone, 
                 'region' => $region,
+                'partner' => $partner,
+                'area' => $area,
                 'filterType' => $filterType,
                 'startDate' => $startDate,
                 'endDate' => $endDate
@@ -306,6 +359,203 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
         echo json_encode($response);
     }
     
+    exit;
+}
+elseif (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
+    $mainzone = $_POST['mainzone'] ?? 'ALL';
+    $zone = $_POST['zone'] ?? 'ALL';
+    $region = $_POST['region'] ?? 'ALL';
+    $partner = $_POST['partner'] ?? 'ALL';
+    $area = $_POST['area'] ?? 'ALL';
+    $filterType = $_POST['filterType'] ?? 'weekly';
+    $startDate = $_POST['startDate'] ?? date('Y-m-01');
+    $endDate = $_POST['endDate'] ?? date('Y-m-t');
+    
+    // Build date range
+    $dateCondition = "";
+    if ($filterType === 'weekly') {
+        $dateCondition = "DATE(bt.datetime) BETWEEN '$startDate' AND '$endDate'";
+    } elseif ($filterType === 'monthly') {
+        $startMonth = $startDate . '-01';
+        $endMonth = date('Y-m-t', strtotime($endDate . '-01'));
+        $dateCondition = "DATE(bt.datetime) BETWEEN '$startMonth' AND '$endMonth'";
+    } elseif ($filterType === 'yearly') {
+        $startYear = $startDate . '-01-01';
+        $endYear = $endDate . '-12-31';
+        $dateCondition = "DATE(bt.datetime) BETWEEN '$startYear' AND '$endYear'";
+    }
+    
+    // Build WHERE conditions (same as report query)
+    $whereConditions = [];
+    $whereConditions[] = "($dateCondition)";
+    $whereConditions[] = "bt.status IS NULL";
+    $whereConditions[] = "bt.post_transaction = 'unposted'";
+    
+    // Zone/Region filtering (copy from above)
+    if ($mainzone !== 'ALL') {
+        if ($zone !== 'ALL') {
+            if ($zone !== 'Showroom') {
+                $whereConditions[] = "mrm.zone_code = '$zone'";
+                if ($region !== 'ALL') {
+                    $whereConditions[] = "mrm.region_code = '$region'";
+                }
+            } else {
+                if ($region !== 'ALL') {
+                    if (strpos($region, 'Showroom') !== false) {
+                        $showroomZones = [];
+                        if ($region === $mainzone . ' Showroom') {
+                            if ($mainzone === 'LNCR') {
+                                $showroomZones = ['LZNS', 'NCRS'];
+                            } elseif ($mainzone === 'VISMIN') {
+                                $showroomZones = ['VISS', 'MINS'];
+                            }
+                        } else {
+                            $showroomZones = [$region];
+                        }
+                        if (!empty($showroomZones)) {
+                            $whereConditions[] = "mrm.zone_code IN ('" . implode("','", $showroomZones) . "')";
+                        }
+                    } else {
+                        $whereConditions[] = "mrm.zone_code = '$region'";
+                    }
+                }
+            }
+        } else {
+            $whereConditions[] = "mrm.zone_code IN (SELECT zone_code FROM masterdata.zone_masterfile mzm JOIN masterdata.main_zone_masterfile mmzm ON mzm.main_zone_code = mmzm.main_zone_code WHERE mmzm.main_zone_code = '$mainzone')";
+            if ($region !== 'ALL') {
+                $whereConditions[] = "mrm.region_code = '$region'";
+            }
+        }
+    } else {
+        if ($zone !== 'ALL') {
+            if ($zone !== 'Showroom') {
+                $whereConditions[] = "mrm.zone_code = '$zone'";
+                if ($region !== 'ALL') {
+                    $whereConditions[] = "mrm.region_code = '$region'";
+                }
+            } else {
+                if ($region !== 'ALL') {
+                    if (strpos($region, 'Showroom') !== false || strpos($region, 'NATIONWIDE') !== false) {
+                        $showroomZones = ['LZNS', 'NCRS', 'VISS', 'MINS'];
+                        $whereConditions[] = "mrm.zone_code IN ('" . implode("','", $showroomZones) . "')";
+                    } else {
+                        $whereConditions[] = "mrm.zone_code = '$region'";
+                    }
+                }
+            }
+        }
+        if ($region !== 'ALL' && $zone === 'ALL') {
+            $whereConditions[] = "mrm.region_code = '$region'";
+        }
+    }
+    
+    // Partner and Area filters
+    if ($partner !== 'ALL') {
+        $whereConditions[] = "(bt.partner_id = '$partner' OR bt.partner_id_kpx = '$partner')";
+    }
+    if ($area !== 'ALL') {
+        $whereConditions[] = "mbp.area = '$area'";
+    }
+    
+    $exportQuery = "SELECT
+                        mrm.zone_code,
+                        mbp.ml_matic_region,
+                        pmf.partner_name,
+                        mbp.area,
+                        mbp.kp_code
+                    FROM
+                        mldb.billspayment_transaction AS bt
+                    JOIN
+                        masterdata.region_masterfile as mrm
+                        ON bt.region_code = mrm.region_code
+                        AND mrm.zone_code NOT IN ('HO','JEW','VISMIN-MANCOMM','LNCR-MANCOMM','VISMIN-SUPPORT','LNCR-SUPPORT')
+                    JOIN
+                        masterdata.branch_profile AS mbp
+                        ON bt.branch_id = mbp.branch_id
+                    LEFT JOIN
+                        masterdata.partner_masterfile AS pmf
+                        ON bt.partner_id = pmf.partner_id OR bt.partner_id_kpx = pmf.partner_id_kpx
+                    WHERE " . implode(' AND ', $whereConditions) . "
+                    GROUP BY mrm.zone_code, mbp.ml_matic_region, pmf.partner_name, mbp.area, mbp.kp_code
+                    ORDER BY pmf.partner_name, mbp.area, mbp.ml_matic_region, mbp.kp_code";
+    
+    $result = $conn->query($exportQuery);
+    
+    $partnerDisplayLabel = 'All Partners';
+    if ($partner !== 'ALL') {
+        $partnerStmt = $conn->prepare("SELECT partner_name FROM masterdata.partner_masterfile WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1");
+        if ($partnerStmt) {
+            $partnerStmt->bind_param("ss", $partner, $partner);
+            $partnerStmt->execute();
+            $partnerResult = $partnerStmt->get_result();
+            if ($partnerRow = $partnerResult->fetch_assoc()) {
+                $partnerDisplayLabel = $partnerRow['partner_name'] ?: $partner;
+            } else {
+                $partnerDisplayLabel = $partner;
+            }
+            $partnerStmt->close();
+        } else {
+            $partnerDisplayLabel = $partner;
+        }
+    }
+    $partnerDisplayLabel = trim($partnerDisplayLabel);
+    $sanitizedPartnerLabel = preg_replace('/[^A-Za-z0-9]+/', '_', $partnerDisplayLabel);
+    if ($sanitizedPartnerLabel === '') {
+        $sanitizedPartnerLabel = 'Partner';
+    }
+    
+    // Create new spreadsheet
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setTitle('EDI Report');
+    
+    // Set headers
+    $headers = ['Zone', 'Region Name', 'Partner Name', 'Area', 'KP Code'];
+    $col = 'A';
+    foreach ($headers as $header) {
+        $sheet->setCellValue($col . '1', $header);
+        $sheet->getStyle($col . '1')->getFont()->setBold(true);
+        $sheet->getStyle($col . '1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('dc3545');
+        $sheet->getStyle($col . '1')->getFont()->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle($col . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $col++;
+    }
+    
+    // Add data
+    $row = 2;
+    while ($data = $result->fetch_assoc()) {
+        $sheet->setCellValue('A' . $row, $data['zone_code']);
+        $sheet->setCellValue('B' . $row, $data['ml_matic_region']);
+        $sheet->setCellValue('C' . $row, $data['partner_name'] ?? '-');
+        $sheet->setCellValue('D' . $row, $data['area'] ?? '-');
+        $sheet->setCellValue('E' . $row, $data['kp_code']);
+        $row++;
+    }
+    
+    // Auto-size columns
+    foreach (range('A', 'E') as $col) {
+        $sheet->getColumnDimension($col)->setAutoSize(true);
+    }
+    
+    // Set borders
+    $styleArray = [
+        'borders' => [
+            'allBorders' => [
+                'borderStyle' => Border::BORDER_THIN,
+            ],
+        ],
+    ];
+    $lastRow = max($row - 1, 1);
+    $sheet->getStyle('A1:E' . $lastRow)->applyFromArray($styleArray);
+    
+    // Output file
+    $filename = $sanitizedPartnerLabel . '_EDI-Report.xlsx';
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment;filename="' . $filename . '"');
+    header('Cache-Control: max-age=0');
+    
+    $writer = new Xlsx($spreadsheet);
+    $writer->save('php://output');
     exit;
 }
 
@@ -437,69 +687,96 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>EDI REPORT</h3></center>
+        <center><h3 class="mb-4">EDI REPORT</h3></center>
         <div class="container-fluid">
-            <div class="row g-3 align-items-end mb-4">
-                <!-- Main Zone Dropdown -->
-                <div class="col-md-2">
-                    <label class="form-label">Mainzone:</label>
-                    <select class="form-select form-select-sm" required>
-                        <option value="">Select Mainzone</option>
-                        <option value="ALL">ALL</option>
-                        <?php 
-                            while ($row = $mainzoneResult->fetch_assoc()) {
-                                echo '<option value="' . $row['main_zone_code'] . '">' . $row['main_zone_code'] . '</option>';
-                            }
-                        ?>
-                    </select>
+            <!-- Improved Responsive Filter Layout -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0"><i class="fa-solid fa-filter me-2"></i>Filter Options</h6>
                 </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <!-- Row 1: Location Filters -->
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <label class="form-label fw-bold">Mainzone</label>
+                            <select id="mainzoneSelect" class="form-select form-select-sm" required>
+                                <option value="">Select Mainzone</option>
+                                <option value="ALL">ALL</option>
+                                <?php 
+                                    while ($row = $mainzoneResult->fetch_assoc()) {
+                                        echo '<option value="' . $row['main_zone_code'] . '">' . $row['main_zone_code'] . '</option>';
+                                    }
+                                ?>
+                            </select>
+                        </div>
 
-                <!-- Zone Dropdown -->
-                <!-- <div class="col-md-2" style="display: none;"> -->
-                <div class="col-md-2">
-                    <label class="form-label">Zone:</label>
-                    <select class="form-select form-select-sm" required>
-                        <option value="">Select Zone</option>
-                        <!-- options will be populated by JS when Source File Type is selected -->
-                    </select>
-                </div>
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <label class="form-label fw-bold">Zone</label>
+                            <select id="zoneSelect" class="form-select form-select-sm" required>
+                                <option value="">Select Zone</option>
+                            </select>
+                        </div>
 
-                <!-- Region Dropdown -->
-                <!-- <div class="col-md-2" style="display: none;"> -->
-                <div class="col-md-2">
-                    <label class="form-label">Region:</label>
-                    <select class="form-select form-select-sm" required>
-                        <option value="">Select Region</option>
-                        <!-- options will be populated by JS when Source File Type is selected -->
-                    </select>
-                </div>
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <label class="form-label fw-bold">Region</label>
+                            <select id="regionSelect" class="form-select form-select-sm" required>
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
 
-                <!-- Filter Type Dropdown -->
-                <!-- <div class="col-md-2" style="display: none;"> -->
-                <div class="col-md-2">
-                    <label class="form-label">Filter Type:</label>
-                    <select class="form-select form-select-sm" required>
-                        <option value="">Select Filter Type</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                        <option value="yearly">Yearly</option>
-                    </select>
-                </div>
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <label class="form-label fw-bold">Filter Type</label>
+                            <select id="filterTypeSelect" class="form-select form-select-sm" required>
+                                <option value="">Select Type</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="yearly">Yearly</option>
+                            </select>
+                        </div>
 
-                <!-- Transaction Date (Weekly, Monthly and Yearly) -->
-                <div class="col-md-3" style="display: none;">
-                    <label class="form-label">Transaction Date:</label>
-                    <div class="d-flex gap-1 align-items-center">
-                        <span class="text-nowrap small" id="startDateLabel">From:</span>
-                        <input type="date" class="form-control form-control-sm" id="startDateInput" required>
-                        <span class="text-nowrap small" id="endDateLabel">To:</span>
-                        <input type="date" class="form-control form-control-sm" id="endDateInput" required>
+                        <!-- Row 2: Partner and Area Filters -->
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <label class="form-label fw-bold">Partner Name</label>
+                            <select id="partnerSelect" class="form-select form-select-sm">
+                                <option value="ALL">ALL</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <label class="form-label fw-bold">Area</label>
+                            <select id="areaSelect" class="form-select form-select-sm">
+                                <option value="ALL">ALL</option>
+                            </select>
+                        </div>
+
+                        <!-- Row 3: Date Range -->
+                        <div class="col-12 col-lg-6" id="transactionDateDiv" style="display: none;">
+                            <label class="form-label fw-bold">Transaction Date</label>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text" id="startDateLabel">From</span>
+                                        <input type="date" class="form-control" id="startDateInput" required>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text" id="endDateLabel">To</span>
+                                        <input type="date" class="form-control" id="endDateInput" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Proceed Button -->
+                        <div class="col-12">
+                            <div class="d-grid d-sm-flex justify-content-sm-end gap-2">
+                                <button type="button" class="btn btn-secondary" id="submitButton" disabled>
+                                    <i class="fa-solid fa-magnifying-glass me-2"></i>Generate Report
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-
-                <!-- Submit Button When final Dropdown is selected -->
-                <div class="col-md-1 d-flex align-items-end">
-                    <input type="submit" class="btn btn-secondary btn-sm w-100" name="upload" value="Proceed" disabled>
                 </div>
             </div>
 
@@ -534,7 +811,15 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                                         <div class="col-7"><span id="filterRegion" class="text-muted">-</span></div>
                                     </div>
                                     <div class="row mb-2">
-                                        <div class="col-5"><strong>Type:</strong></div>
+                                        <div class="col-5"><strong>Partner:</strong></div>
+                                        <div class="col-7"><span id="filterPartner" class="text-muted">-</span></div>
+                                    </div>
+                                    <div class="row mb-2">
+                                        <div class="col-5"><strong>Area:</strong></div>
+                                        <div class="col-7"><span id="filterArea" class="text-muted">-</span></div>
+                                    </div>
+                                    <div class="row mb-2">
+                                        <div class="col-5"><strong></strong>Type:</strong></div>
                                         <div class="col-7"><span id="filterType" class="text-muted">-</span></div>
                                     </div>
                                     <div class="row mb-2">
@@ -561,7 +846,7 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                     <div class="col-lg-9 col-md-8">
                         <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                             <table id="transactionReportTable" class="table table-bordered table-hover table-striped">
-                                <thead class="table-light  sticky-top">
+                                <thead class="table-light sticky-top">
                                     <tr>
                                         <th>Zone</th>
                                         <th>Region Name</th>
@@ -587,22 +872,51 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
 <?php include '../../../templates/footer.php'; ?>
 <script>
     $(document).ready(function() {
-        // Get the select elements
-        const mainzoneSelect = $('select').first();
-        const zoneSelect = $('.col-md-2').eq(1).find('select');
-        const regionSelect = $('.col-md-2').eq(2).find('select');
-        const filterTypeSelect = $('.col-md-2').eq(3).find('select');
-        const zoneDiv = $('.col-md-2').eq(1);
-        const regionDiv = $('.col-md-2').eq(2);
-        const filterTypeDiv = $('.col-md-2').eq(3);
-        const transactionDateDiv = $('.col-md-3').eq(0);
-        const submitButton = $('input[name="upload"]');
+        // Get the select elements with proper IDs
+        const mainzoneSelect = $('#mainzoneSelect');
+        const zoneSelect = $('#zoneSelect');
+        const regionSelect = $('#regionSelect');
+        const partnerSelect = $('#partnerSelect');
+        const areaSelect = $('#areaSelect');
+        const filterTypeSelect = $('#filterTypeSelect');
+        const transactionDateDiv = $('#transactionDateDiv');
+        const submitButton = $('#submitButton');
         
         // Get date input elements
         const startDateInput = $('#startDateInput');
         const endDateInput = $('#endDateInput');
         const startDateLabel = $('#startDateLabel');
         const endDateLabel = $('#endDateLabel');
+        
+        // Load partners and areas on page load
+        loadPartners();
+        loadAreas();
+        
+        function loadPartners() {
+            $.ajax({
+                type: 'POST',
+                data: { action: 'get_partners' },
+                success: function(response) {
+                    partnerSelect.html('<option value="ALL">ALL</option>' + response);
+                },
+                error: function() {
+                    partnerSelect.html('<option value="ALL">ALL</option>');
+                }
+            });
+        }
+        
+        function loadAreas() {
+            $.ajax({
+                type: 'POST',
+                data: { action: 'get_areas' },
+                success: function(response) {
+                    areaSelect.html('<option value="ALL">ALL</option>' + response);
+                },
+                error: function() {
+                    areaSelect.html('<option value="ALL">ALL</option>');
+                }
+            });
+        }
         
         // Function to check if all required fields are filled
         function checkFormValidity() {
@@ -840,22 +1154,22 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                 // Show date inputs for weekly
                 startDateInput.attr('type', 'date').removeAttr('min max placeholder');
                 endDateInput.attr('type', 'date').removeAttr('min max placeholder');
-                startDateLabel.text('From : ');
-                endDateLabel.text('To : ');
+                startDateLabel.text('From');
+                endDateLabel.text('To');
                 transactionDateDiv.show();
             } else if (selectedFilter === 'monthly') {
                 // Show month inputs for monthly
                 startDateInput.attr('type', 'month').removeAttr('min max placeholder');
                 endDateInput.attr('type', 'month').removeAttr('min max placeholder');
-                startDateLabel.text('From : ');
-                endDateLabel.text('To : ');
+                startDateLabel.text('From');
+                endDateLabel.text('To');
                 transactionDateDiv.show();
             } else if (selectedFilter === 'yearly') {
                 // Show year inputs for yearly
                 startDateInput.attr('type', 'number').attr('min', '2000').attr('max', '2099').attr('placeholder', 'YYYY');
                 endDateInput.attr('type', 'number').attr('min', '2000').attr('max', '2099').attr('placeholder', 'YYYY');
-                startDateLabel.text('From : ');
-                endDateLabel.text('To : ');
+                startDateLabel.text('From');
+                endDateLabel.text('To');
                 transactionDateDiv.show();
             } else {
                 // Hide div when no filter type selected
@@ -884,25 +1198,29 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
             const mainzoneValue = mainzoneSelect.val();
             const zoneValue = zoneSelect.val();
             const regionValue = regionSelect.val();
+            const partnerValue = partnerSelect.val();
+            const areaValue = areaSelect.val();
             const filterTypeValue = filterTypeSelect.val();
             const startDate = startDateInput.val();
             const endDate = endDateInput.val();
             
             // Update filter result card
-            updateFilterResultCard(mainzoneValue, zoneValue, regionValue, filterTypeValue, startDate, endDate);
+            updateFilterResultCard(mainzoneValue, zoneValue, regionValue, partnerValue, areaValue, filterTypeValue, startDate, endDate);
             
             // Fetch and display data
-            fetchReportData(mainzoneValue, zoneValue, regionValue, filterTypeValue, startDate, endDate);
+            fetchReportData(mainzoneValue, zoneValue, regionValue, partnerValue, areaValue, filterTypeValue, startDate, endDate);
         });
 
         // Function to fetch report data via AJAX
-        function fetchReportData(mainzone, zone, region, filterType, startDate, endDate) {
+        function fetchReportData(mainzone, zone, region, partner, area, filterType, startDate, endDate) {
             // Debug: Log the data being sent
             console.log('Sending data:', {
                 action: 'get_report_data',
                 mainzone: mainzone,
                 zone: zone,
                 region: region,
+                partner: partner,
+                area: area,
                 filterType: filterType,
                 startDate: startDate,
                 endDate: endDate
@@ -915,6 +1233,8 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                     mainzone: mainzone,
                     zone: zone,
                     region: region,
+                    partner: partner,
+                    area: area,
                     filterType: filterType,
                     startDate: startDate,
                     endDate: endDate
@@ -981,9 +1301,9 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                 `);
                 return;
             }
-            
+
             let totalCharges = 0;
-            
+
             records.forEach(function(record) {
                 const charges = parseFloat(record.charges) || 0;
                 totalCharges += charges;
@@ -1002,7 +1322,7 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                 `;
                 tableBody.append(row);
             });
-            
+
             // Add total row in footer if it doesn't exist
             let tableFooter = $('#transactionReportTable tfoot');
             if (tableFooter.length === 0) {
@@ -1022,7 +1342,7 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
         }
 
         // Function to update filter result card
-        function updateFilterResultCard(mainzone, zone, region, filterType, startDate, endDate) {
+        function updateFilterResultCard(mainzone, zone, region, partner, area, filterType, startDate, endDate) {
             // Update mainzone
             $('#filterMainzone').text(mainzone || '-');
             
@@ -1043,6 +1363,14 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                 regionText = region.replace(/([A-Z]+)/g, '$1 ').trim();
             }
             $('#filterRegion').text(regionText || '-');
+            
+            // Update partner
+            let partnerText = partner === 'ALL' ? 'ALL PARTNERS' : (partnerSelect.find('option:selected').text() || partner);
+            $('#filterPartner').text(partnerText || '-');
+            
+            // Update area
+            let areaText = area === 'ALL' ? 'ALL AREAS' : area;
+            $('#filterArea').text(areaText || '-');
             
             // Update filter type
             $('#filterType').text(filterType ? filterType.toUpperCase() : '-');
@@ -1086,40 +1414,34 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
 
         // Handle Export to Excel button
         $('#exportButton').on('click', function() {
-            // const mainzoneValue = mainzoneSelect.val();
-            // const zoneValue = zoneSelect.val();
-            // const regionValue = regionSelect.val();
-            // const filterTypeValue = filterTypeSelect.val();
-            // const startDate = startDateInput.val();
-            // const endDate = endDateInput.val();
+            const mainzoneValue = mainzoneSelect.val();
+            const zoneValue = zoneSelect.val();
+            const regionValue = regionSelect.val();
+            const partnerValue = partnerSelect.val();
+            const areaValue = areaSelect.val();
+            const filterTypeValue = filterTypeSelect.val();
+            const startDate = startDateInput.val();
+            const endDate = endDateInput.val();
             
-            // // Create a form and submit it to trigger download
-            // const form = $('<form>', {
-            //     'method': 'POST',
-            //     'action': window.location.href
-            // });
-            
-            // form.append($('<input>', { 'type': 'hidden', 'name': 'action', 'value': 'export_excel' }));
-            // form.append($('<input>', { 'type': 'hidden', 'name': 'mainzone', 'value': mainzoneValue }));
-            // form.append($('<input>', { 'type': 'hidden', 'name': 'zone', 'value': zoneValue }));
-            // form.append($('<input>', { 'type': 'hidden', 'name': 'region', 'value': regionValue }));
-            // form.append($('<input>', { 'type': 'hidden', 'name': 'filterType', 'value': filterTypeValue }));
-            // form.append($('<input>', { 'type': 'hidden', 'name': 'startDate', 'value': startDate }));
-            // form.append($('<input>', { 'type': 'hidden', 'name': 'endDate', 'value': endDate }));
-            
-            // $('body').append(form);
-            // form.submit();
-            // form.remove();
-
-            Swal.fire({
-                title: 'Excel Export - Under Construction',
-                text: 'This feature is currently under development and will be available soon.',
-                icon: 'info',
-                confirmButtonText: 'OK',
-                confirmButtonColor: '#dc3545',
-                allowOutsideClick: true,
-                allowEscapeKey: true
+            // Create a form and submit it to trigger download
+            const form = $('<form>', {
+                'method': 'POST',
+                'action': window.location.href
             });
+            
+            form.append($('<input>', { 'type': 'hidden', 'name': 'action', 'value': 'export_excel' }));
+            form.append($('<input>', { 'type': 'hidden', 'name': 'mainzone', 'value': mainzoneValue }));
+            form.append($('<input>', { 'type': 'hidden', 'name': 'zone', 'value': zoneValue }));
+            form.append($('<input>', { 'type': 'hidden', 'name': 'region', 'value': regionValue }));
+            form.append($('<input>', { 'type': 'hidden', 'name': 'partner', 'value': partnerValue }));
+            form.append($('<input>', { 'type': 'hidden', 'name': 'area', 'value': areaValue }));
+            form.append($('<input>', { 'type': 'hidden', 'name': 'filterType', 'value': filterTypeValue }));
+            form.append($('<input>', { 'type': 'hidden', 'name': 'startDate', 'value': startDate }));
+            form.append($('<input>', { 'type': 'hidden', 'name': 'endDate', 'value': endDate }));
+            
+            $('body').append(form);
+            form.submit();
+            form.remove();
         });
     });
 </script>
