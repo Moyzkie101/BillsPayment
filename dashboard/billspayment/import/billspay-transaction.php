@@ -256,10 +256,16 @@ if (isset($_SESSION['user_type'])) {
             opacity: 1;
         }
 
-        /* Proceed Button Container */
+        /* Proceed Button Container (top-right, sticky) */
         .proceed-container {
-            text-align: center;
-            margin-top: 30px;
+            margin-top: 0;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 12px;
+            position: sticky;
+            top: 12px;
+            z-index: 1050;
         }
 
         .btn-proceed {
@@ -347,18 +353,26 @@ if (isset($_SESSION['user_type'])) {
         <center><h3>Import Transaction</h3></center>
         <div class="container-fluid border border-danger rounded mt-3 p-4">
             <div class="container-fluid">
-                <!-- Mode Toggle (Auto / Manual) -->
-                <div class="mb-3 d-flex align-items-center" style="gap:12px;">
-                    <label class="form-label me-2 mb-0">Import Mode:</label>
-                    <div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="radio" name="importMode" id="modeAuto" value="auto" checked>
-                            <label class="form-check-label" for="modeAuto">Auto</label>
+                <!-- Mode Toggle (Auto / Manual) + Proceed (moved to top-right) -->
+                <div class="mb-3 d-flex align-items-center justify-content-between" style="gap:12px;">
+                    <div class="d-flex align-items-center" style="gap:12px;">
+                        <label class="form-label me-2 mb-0">Import Mode:</label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="importMode" id="modeAuto" value="auto" checked>
+                                <label class="form-check-label" for="modeAuto">Auto</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="importMode" id="modeManual" value="manual">
+                                <label class="form-check-label" for="modeManual">Manual</label>
+                            </div>
                         </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="radio" name="importMode" id="modeManual" value="manual">
-                            <label class="form-check-label" for="modeManual">Manual</label>
-                        </div>
+                    </div>
+
+                    <div id="proceedContainer" class="proceed-container" style="display: none;">
+                        <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
+                            Proceed <i class="fa-solid fa-arrow-right ms-2"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -407,12 +421,7 @@ if (isset($_SESSION['user_type'])) {
                 <!-- Files Container -->
                 <div id="filesContainer" class="files-container"></div>
 
-                <!-- Proceed Button -->
-                <div class="proceed-container" id="proceedContainer" style="display: none;">
-                    <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
-                        Proceed <i class="fa-solid fa-arrow-right ms-2"></i>
-                    </button>
-                </div>
+                <!-- Removed bottom Proceed button; top button used instead -->
             </div>
         </div>
     </div>
