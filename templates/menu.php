@@ -109,14 +109,14 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
     
                 <!-- Paramount Post Buttons -->
                 <div class="onetab-sub"  id="para-post-nav" style="display: none;">
-                    <div class="sub">
+                    <!-- <div class="sub">
                         <a href="#" id="post-transaction-link">Transaction</a>
-                    </div>
+                    </div> -->
 
                     <!-- recycle if needed -->
-                    <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/post/billspay-post-transaction.php'">
-                        <a href="<?php //echo $base_url; ?>billspayment/post/billspay-post-transaction.php">Transaction</a>
-                    </div> -->
+                    <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/post/billspay-post-transaction.php'">
+                        <a href="<?php echo $base_url; ?>billspayment/post/billspay-post-transaction.php">Transaction</a>
+                    </div>
 
                     <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billsFeedback.php'">
                         <a href="<?php //echo $base_url; ?>billsFeedback.php">Feedback</a>

@@ -35,9 +35,351 @@ if (isset($_SESSION['user_type'])) {
     }
 }
 
-// Increase memory and execution time for large batches
-ini_set('memory_limit', '512M');
-ini_set('max_execution_time', 900);
+// Increase memory and execution time for large batches (short-term mitigation).
+// Recommended: implement chunked reads for robust long-term handling.
+ini_set('memory_limit', '2048M');
+set_time_limit(0);
+
+// Configure PhpSpreadsheet cell caching to reduce memory usage for large files
+// Use a disk-based cache (discISAM) or php temp dir. This helps prevent exhausting RAM.
+try {
+    // Some PhpSpreadsheet versions expose caching APIs differently.
+    // Use string class names to avoid static analysis errors on missing classes.
+    $cacheFactoryClass = 'PhpOffice\\PhpSpreadsheet\\CachedObjectStorageFactory';
+    $settingsClass = 'PhpOffice\\PhpSpreadsheet\\Settings';
+
+    if (class_exists($cacheFactoryClass) && class_exists($settingsClass)) {
+        $cacheSettings = ['dir' => sys_get_temp_dir()];
+        $cacheConst = $cacheFactoryClass . '::cache_to_discISAM';
+
+        if (method_exists($settingsClass, 'setCacheStorageMethod') && defined($cacheConst)) {
+            $cacheMethod = constant($cacheConst);
+            $settingsClass::setCacheStorageMethod($cacheMethod, $cacheSettings);
+        } elseif (method_exists($cacheFactoryClass, 'initialize') && defined($cacheConst)) {
+            // Fallback for versions exposing an initialize() helper
+            $cacheFactoryClass::initialize(constant($cacheConst), $cacheSettings);
+        }
+    } else {
+        error_log('[IMPORT INFO] PhpSpreadsheet caching classes not available; skipping cache configuration.');
+    }
+} catch (Exception $e) {
+    // If cache setting fails, log and continue — we'll rely on increased memory limit
+    error_log('[IMPORT WARNING] PhpSpreadsheet cache configuration failed: ' . $e->getMessage());
+}
+
+// ============================================================================
+// AJAX Endpoint: Check for Duplicate Records
+// ============================================================================
+if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
+    header('Content-Type: application/json');
+    
+    $results = [];
+    $fileCount = count($_FILES['files']['name']);
+    
+    for ($i = 0; $i < $fileCount; $i++) {
+        if ($_FILES['files']['error'][$i] === UPLOAD_ERR_OK) {
+            $tmpPath = $_FILES['files']['tmp_name'][$i];
+            $fileName = $_FILES['files']['name'][$i];
+            $partnerId = $_POST['partner_ids'][$i] ?? '';
+            $sourceType = $_POST['source_types'][$i] ?? '';
+            
+            try {
+                // Load and parse Excel file
+                $spreadsheet = loadSpreadsheet($tmpPath, true);
+                $worksheet = $spreadsheet->getActiveSheet();
+                $highestRow = $worksheet->getHighestRow();
+                $highestColumn = $worksheet->getHighestColumn();
+                $columnLabels = [];
+
+                // Read row 9 to determine column layout for KPX
+                $rowIterator = $worksheet->getRowIterator(9, 9)->current();
+                $cellIterator = $rowIterator->getCellIterator('A', $highestColumn);
+                foreach ($cellIterator as $cell) {
+                    $columnLabels[] = trim(strval($cell->getValue()));
+                }
+                
+                $totalRows = 0;
+                $duplicateRows = 0;
+                $newRows = 0;
+                $postedRows = 0;
+                $unpostedRows = 0;
+                
+                // Process rows starting from row 10 (data rows)
+                for ($row = 10; $row <= $highestRow; $row++) {
+                    $cellA = trim(strval($worksheet->getCell('A' . $row)->getValue()));
+                    $cellB = trim(strval($worksheet->getCell('B' . $row)->getValue()));
+                    $cellC = trim(strval($worksheet->getCell('C' . $row)->getValue()));
+                    $cellD = trim(strval($worksheet->getCell('D' . $row)->getValue()));
+                    $cellE = trim(strval($worksheet->getCell('E' . $row)->getValue()));
+                    $cellF = trim(strval($worksheet->getCell('F' . $row)->getValue()));
+                    
+                    // Skip empty rows
+                    if (empty($cellA) && empty($cellB) && empty($cellC) && empty($cellD) && empty($cellE)) {
+                        break;
+                    }
+                    
+                    $totalRows++;
+                    
+                    // Extract reference number and datetime
+                    $reference_number = '';
+                    $datetime = null;
+                    
+                    if ($sourceType === 'KP7') {
+                        $reference_number = $cellE;
+                        $datetimeValue = $cellC;
+                    } else { // KPX
+                        if (isset($columnLabels[1]) && $columnLabels[1] === 'Date / Time') {
+                            $reference_number = $cellD;
+                            $datetimeValue = $cellB;
+                        } elseif (isset($columnLabels[2]) && $columnLabels[2] === 'Date / Time') {
+                            $reference_number = $cellE;
+                            $datetimeValue = $cellC;
+                        } else {
+                            $reference_number = $cellF;
+                            $datetimeValue = trim($cellD . (empty($cellE) ? '' : (' ' . $cellE)));
+                        }
+                    }
+
+                    if (is_numeric($datetimeValue)) {
+                        $datetime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($datetimeValue)->format('Y-m-d H:i:s');
+                    } elseif (!empty($datetimeValue)) {
+                        $datetime = date('Y-m-d H:i:s', strtotime($datetimeValue));
+                    }
+
+                    if (empty($reference_number) || empty($datetime)) {
+                        $newRows++;
+                        continue;
+                    }
+                    
+                    // Check for duplicates (posted or unposted) and count by post_transaction
+                    $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
+                            WHERE reference_no = ? 
+                            AND (`datetime` = ? OR cancellation_date = ?)";
+                    if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
+                        if (strtoupper($sourceType) === 'KP7') {
+                            $sql .= " AND partner_id = ?";
+                            $sql .= " GROUP BY post_transaction";
+                            $stmt = $conn->prepare($sql);
+                            $stmt->bind_param("ssss", $reference_number, $datetime, $datetime, $partnerId);
+                        } else {
+                            $sql .= " AND partner_id_kpx = ?";
+                            $sql .= " GROUP BY post_transaction";
+                            $stmt = $conn->prepare($sql);
+                            $stmt->bind_param("ssss", $reference_number, $datetime, $datetime, $partnerId);
+                        }
+                    } else {
+                        $sql .= " GROUP BY post_transaction";
+                        $stmt = $conn->prepare($sql);
+                        $stmt->bind_param("sss", $reference_number, $datetime, $datetime);
+                    }
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    $row_count_total = 0;
+                    if ($result) {
+                        while ($r = $result->fetch_assoc()) {
+                            $cnt = intval($r['cnt']);
+                            $row_count_total += $cnt;
+                            $status = isset($r['post_transaction']) ? strtolower(trim($r['post_transaction'])) : '';
+                            if ($status === 'posted') {
+                                $postedRows += $cnt;
+                            } else {
+                                // treat any non-'posted' as unposted
+                                $unpostedRows += $cnt;
+                            }
+                        }
+                    }
+                    $stmt->close();
+
+                    if ($row_count_total > 0) {
+                        $duplicateRows++;
+                    } else {
+                        $newRows++;
+                    }
+                }
+
+                // Free spreadsheet resources for this file to reduce memory usage
+                if (isset($spreadsheet) && is_object($spreadsheet)) {
+                    try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+                    unset($worksheet, $spreadsheet);
+                    if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+                }
+
+                $results[] = [
+                    'fileName' => $fileName,
+                    'partnerId' => $partnerId,
+                    'sourceType' => $sourceType,
+                    'totalRows' => $totalRows,
+                    'duplicateRows' => $duplicateRows,
+                    'newRows' => $newRows,
+                    'postedRows' => $postedRows,
+                    'unpostedRows' => $unpostedRows,
+                    'hasDuplicates' => $duplicateRows > 0
+                ];
+                
+            } catch (Exception $e) {
+                $results[] = [
+                    'fileName' => $fileName,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+    }
+    
+    echo json_encode([
+        'success' => true,
+        'files' => $results
+    ]);
+    exit;
+}
+
+// ============================================================================
+// AJAX Endpoint: Check Single File for Duplicates (Manual Mode)
+// ============================================================================
+if (isset($_POST['check_single_duplicate']) && isset($_FILES['import_file'])) {
+    header('Content-Type: application/json');
+    
+    if ($_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
+        $tmpPath = $_FILES['import_file']['tmp_name'];
+        $fileName = $_FILES['import_file']['name'];
+        $partnerId = $_POST['partner_id'] ?? '';
+        $sourceType = $_POST['source_type'] ?? '';
+        
+        try {
+            // Load and parse Excel file
+            $spreadsheet = loadSpreadsheet($tmpPath, true);
+            $worksheet = $spreadsheet->getActiveSheet();
+            $highestRow = $worksheet->getHighestRow();
+            
+            $totalRows = 0;
+            $duplicateRows = 0;
+            $newRows = 0;
+            $postedRows = 0;
+            $unpostedRows = 0;
+            
+            // Process rows starting from row 10 (data rows)
+            for ($row = 10; $row <= $highestRow; $row++) {
+                $cellA = trim(strval($worksheet->getCell('A' . $row)->getValue()));
+                $cellB = trim(strval($worksheet->getCell('B' . $row)->getValue()));
+                $cellC = trim(strval($worksheet->getCell('C' . $row)->getValue()));
+                $cellD = trim(strval($worksheet->getCell('D' . $row)->getValue()));
+                $cellE = trim(strval($worksheet->getCell('E' . $row)->getValue()));
+                
+                // Skip empty rows
+                if (empty($cellA) && empty($cellB) && empty($cellC) && empty($cellD) && empty($cellE)) {
+                    break;
+                }
+                
+                $totalRows++;
+                
+                // Extract reference number and datetime
+                $reference_number = '';
+                $datetime = null;
+                
+                if ($sourceType === 'KP7') {
+                    $reference_number = $cellD;
+                    $datetimeValue = $cellC;
+                    if (is_numeric($datetimeValue)) {
+                        $datetime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($datetimeValue)->format('Y-m-d H:i:s');
+                    } else {
+                        $datetime = date('Y-m-d H:i:s', strtotime($datetimeValue));
+                    }
+                } else { // KPX
+                    $reference_number = $cellC;
+                    $datetimeValue = $cellB;
+                    if (is_numeric($datetimeValue)) {
+                        $datetime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($datetimeValue)->format('Y-m-d H:i:s');
+                    } else {
+                        $datetime = date('Y-m-d H:i:s', strtotime($datetimeValue));
+                    }
+                }
+                
+                // Check for duplicates (posted or unposted) with partner filter
+                if ($sourceType === 'KP7') {
+                    $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
+                            WHERE reference_no = ? 
+                            AND partner_id = ?
+                            AND (`datetime` = ? OR cancellation_date = ?) GROUP BY post_transaction";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("ssss", $reference_number, $partnerId, $datetime, $datetime);
+                } else { // KPX
+                    $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
+                            WHERE reference_no = ? 
+                            AND partner_id_kpx = ?
+                            AND (`datetime` = ? OR cancellation_date = ?) GROUP BY post_transaction";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("ssss", $reference_number, $partnerId, $datetime, $datetime);
+                }
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $row_count_total = 0;
+                if ($result) {
+                    while ($r = $result->fetch_assoc()) {
+                        $cnt = intval($r['cnt']);
+                        $row_count_total += $cnt;
+                        $status = isset($r['post_transaction']) ? strtolower(trim($r['post_transaction'])) : '';
+                        if ($status === 'posted') {
+                            $postedRows += $cnt;
+                        } else {
+                            $unpostedRows += $cnt;
+                        }
+                    }
+                }
+                $stmt->close();
+
+                if ($row_count_total > 0) {
+                    $duplicateRows++;
+                } else {
+                    $newRows++;
+                }
+            }
+
+            // Free spreadsheet resources for this single-file check
+            if (isset($spreadsheet) && is_object($spreadsheet)) {
+                try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+                unset($worksheet, $spreadsheet);
+                if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+            }
+
+            echo json_encode([
+                'success' => true,
+                'fileName' => $fileName,
+                'partnerId' => $partnerId,
+                'sourceType' => $sourceType,
+                'totalRows' => $totalRows,
+                'duplicateRows' => $duplicateRows,
+                'newRows' => $newRows,
+                'postedRows' => $postedRows,
+                'unpostedRows' => $unpostedRows,
+                'hasDuplicates' => $duplicateRows > 0
+            ]);
+            
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    } else {
+        echo json_encode([
+            'success' => false,
+            'error' => 'File upload error'
+        ]);
+    }
+    exit;
+}
+
+// Progress polling endpoint (returns JSON for a given token)
+if (isset($_GET['get_progress']) && !empty($_GET['token'])) {
+    $token = basename($_GET['token']);
+    $progressFile = __DIR__ . "/../../admin/temporary/progress_" . $token . ".json";
+    header('Content-Type: application/json');
+    if (file_exists($progressFile)) {
+        echo file_get_contents($progressFile);
+    } else {
+        echo json_encode(['total' => 0, 'done' => 0]);
+    }
+    exit;
+}
 
 // ============================================================================
 // Handle Cancel Action - Clean up temp files
@@ -55,6 +397,7 @@ if (isset($_GET['cancel']) && $_GET['cancel'] == '1') {
     // Clear session
     unset($_SESSION['uploaded_files']);
     unset($_SESSION['batch_upload']);
+    unset($_SESSION['user_decision']);
     
     echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>';
     echo "<script>
@@ -65,11 +408,73 @@ if (isset($_GET['cancel']) && $_GET['cancel'] == '1') {
                 text: 'All uploaded files have been removed.',
                 confirmButtonText: 'OK'
             }).then(() => {
-                window.location.href = '../../dashboard/billspayment/import/billspay-transaction.php';
+                window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
             });
         });
     </script>";
     exit;
+}
+
+// ============================================================================
+// Handle Manual Mode Upload (single file with company name)
+// ============================================================================
+if (isset($_POST['upload']) && isset($_POST['company']) && isset($_FILES['import_file'])) {
+    $userDecision = $_POST['user_decision'] ?? 'skip';
+    $company = $_POST['company'];
+    $fileType = $_POST['fileType'];
+    
+    if ($_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
+        $tmpPath = $_FILES['import_file']['tmp_name'];
+        $fileName = $_FILES['import_file']['name'];
+        
+        // Get partner ID from company name
+        $partnerId = '';
+        if ($company !== 'All') {
+            $stmt = $conn->prepare("SELECT partner_id FROM masterdata.partner_masterfile WHERE partner_name = ? LIMIT 1");
+            $stmt->bind_param("s", $company);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result && $result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                $partnerId = $row['partner_id'];
+            }
+            $stmt->close();
+        } else {
+            $partnerId = 'ALL';
+        }
+        
+        // Generate unique ID for temp storage
+        $fileId = uniqid('file_', true);
+        $tempRel = "/../../admin/temporary/" . $fileId . "_" . basename($fileName);
+        $tempPath = __DIR__ . $tempRel;
+        
+        // Move uploaded file to temp directory
+        if (move_uploaded_file($tmpPath, $tempPath)) {
+            $partnerName = ($company === 'All') ? 'All' : $company;
+            
+            $uploadedFiles[] = [
+                'id' => $fileId,
+                'name' => $fileName,
+                'path' => $tempPath,
+                'partner_id' => $partnerId,
+                'partner_name' => $partnerName,
+                'source_type' => $fileType,
+                'status' => 'pending',
+                'validation_result' => null,
+                'uploaded_by' => $current_user_email,
+                'uploaded_date' => date('Y-m-d H:i:s')
+            ];
+            
+            // Store in session
+            $_SESSION['uploaded_files'] = $uploadedFiles;
+            $_SESSION['batch_upload'] = true;
+            $_SESSION['user_decision'] = $userDecision;
+            
+            // Redirect to validation page (self)
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit();
+        }
+    }
 }
 
 // ============================================================================
@@ -78,6 +483,7 @@ if (isset($_GET['cancel']) && $_GET['cancel'] == '1') {
 if (isset($_POST['upload']) && isset($_FILES['files'])) {
     $uploadedFiles = [];
     $fileCount = count($_FILES['files']['name']);
+    $userDecision = $_POST['user_decision'] ?? 'skip'; // Get user decision (override/skip/cancel)
     
     for ($i = 0; $i < $fileCount; $i++) {
         if ($_FILES['files']['error'][$i] === UPLOAD_ERR_OK) {
@@ -88,7 +494,8 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
             
             // Generate unique ID for temp storage
             $fileId = uniqid('file_', true);
-            $tempPath = "../../admin/temporary/" . $fileId . "_" . basename($fileName);
+            $tempRel = "/../../admin/temporary/" . $fileId . "_" . basename($fileName);
+            $tempPath = __DIR__ . $tempRel;
             
             // Move uploaded file to temp directory
             if (move_uploaded_file($tmpPath, $tempPath)) {
@@ -111,9 +518,10 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
         }
     }
     
-    // Store in session
+    // Store in session along with user decision
     $_SESSION['uploaded_files'] = $uploadedFiles;
     $_SESSION['batch_upload'] = true;
+    $_SESSION['user_decision'] = $userDecision; // Store user decision in session
     
     // Redirect to validation page (self)
     header("Location: " . $_SERVER['PHP_SELF']);
@@ -124,56 +532,181 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
 // STEP 2: Perform Validation on Stored Files
 // ============================================================================
 if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
-    // Run validation on all files
+    // Run full validation on all files to get transaction summaries and previews
     foreach ($_SESSION['uploaded_files'] as &$file) {
         if ($file['status'] === 'pending') {
-            $validationResult = validateFile($conn, $file['path'], $file['source_type'], $file['partner_id']);
+            // Ensure stored path exists; attempt to resolve using helper
+            $resolved = resolve_uploaded_path($file['path']);
+            if ($resolved === null) {
+                error_log("[IMPORT ERROR] File not found for validation: {$file['path']}");
+                $validationResult = [
+                    'valid' => false,
+                    'row_count' => 0,
+                    'errors' => [[ 'row' => 'N/A', 'type' => 'critical', 'message' => "File does not exist: {$file['path']}", 'value' => '' ]],
+                    'warnings' => [],
+                    'preview_data' => [],
+                    'source_type' => $file['source_type'],
+                    'partner_data' => null,
+                    'transaction_date' => null,
+                    'transaction_summary' => null
+                ];
+            } else {
+                // update stored path and session
+                $file['path'] = $resolved;
+                $_SESSION['uploaded_files'] = $_SESSION['uploaded_files'];
+                $validationResult = validateFile($conn, $file['path'], $file['source_type'], $file['partner_id']);
+            }
             $file['validation_result'] = $validationResult;
             $file['status'] = $validationResult['valid'] ? 'valid' : 'invalid';
         }
     }
-    unset($file);
-    
-    // Update session
-    $_SESSION['uploaded_files'] = $_SESSION['uploaded_files'];
+    unset($file); // Clear the reference
 }
 
 // ============================================================================
 // STEP 3: Handle Import Action
 // ============================================================================
-if (isset($_POST['perform_import']) && isset($_SESSION['uploaded_files'])) {
+    $isAjax = isset($_POST['is_ajax']) && $_POST['is_ajax'] == '1';
+    
+    if (isset($_POST['perform_import']) && isset($_SESSION['uploaded_files'])) {
     $imported = 0;
     $failed = 0;
     $errors = [];
+    $allDebugStats = []; // Collect debug stats from all files
     
+    // collect progress token if provided
+    $globalProgressToken = $_POST['progress_token'] ?? null;
+    
+    // Initialize progress file once for ALL files
+    $progressFile = null;
+    $validFiles = array_filter($_SESSION['uploaded_files'], function($f) { return $f['status'] === 'valid'; });
+    $totalFiles = count($validFiles);
+    
+    if (!empty($globalProgressToken) && $totalFiles > 0) {
+        $token = basename($globalProgressToken);
+        $progressFile = __DIR__ . "/../../admin/temporary/progress_" . $token . ".json";
+        @file_put_contents($progressFile, json_encode(['total' => $totalFiles, 'done' => 0]));
+        // Close session once to allow polling
+        @session_write_close();
+    }
+
     foreach ($_SESSION['uploaded_files'] as $file) {
         if ($file['status'] === 'valid') {
             try {
-                $result = importFileData($conn, $file['path'], $file['source_type'], $file['partner_id'], $current_user_email);
+                // Get user decision from session (default to 'skip' if not set)
+                $userDecision = $_SESSION['user_decision'] ?? 'skip';
+                
+                // Import file with user decision
+                $result = importFileData($conn, $file['path'], $file['source_type'], $file['partner_id'], $current_user_email, null, null, $userDecision);
                 
                 if ($result['success']) {
                     $imported++;
+                    // Collect debug stats
+                    if (isset($result['debug_stats'])) {
+                        $allDebugStats[] = array_merge(['file' => $file['name']], $result['debug_stats']);
+                    }
+                    // Update progress after each FILE completes
+                    if (!empty($progressFile) && file_exists($progressFile)) {
+                        @file_put_contents($progressFile, json_encode(['total' => $totalFiles, 'done' => $imported]));
+                    }
                     // Delete temp file after successful import
                     if (file_exists($file['path'])) {
                         unlink($file['path']);
                     }
+                    if (!empty($result['warnings'])) {
+                        foreach ($result['warnings'] as $warn) {
+                            $errors[] = "File: " . $file['name'] . " - " . $warn;
+                        }
+                    }
                 } else {
                     $failed++;
+                    // Collect debug stats even on failure
+                    if (isset($result['debug_stats'])) {
+                        $allDebugStats[] = array_merge(['file' => $file['name'], 'failed' => true], $result['debug_stats']);
+                    }
+                    // Update progress even on failure
+                    if (!empty($progressFile) && file_exists($progressFile)) {
+                        @file_put_contents($progressFile, json_encode(['total' => $totalFiles, 'done' => $imported + $failed]));
+                    }
                     $errors[] = "File: " . $file['name'] . " - " . $result['error'];
                 }
             } catch (Exception $e) {
                 $failed++;
+                // Update progress even on exception
+                if (!empty($progressFile) && file_exists($progressFile)) {
+                    @file_put_contents($progressFile, json_encode(['total' => $totalFiles, 'done' => $imported + $failed]));
+                }
                 $errors[] = "File: " . $file['name'] . " - " . $e->getMessage();
             }
         }
     }
     
+    // Clean up progress file
+    if (!empty($progressFile) && file_exists($progressFile)) {
+        @unlink($progressFile);
+    }
+    
     // Clear session
     unset($_SESSION['uploaded_files']);
     unset($_SESSION['batch_upload']);
+    unset($_SESSION['user_decision']);
+    
+    if ($isAjax) {
+        // Calculate aggregate debug stats
+        $aggregateStats = [
+            'total_attempts' => 0,
+            'total_success' => 0,
+            'total_failures' => 0,
+            'total_deleted' => 0,
+            'files_processed' => count($allDebugStats)
+        ];
+        
+        foreach ($allDebugStats as $stats) {
+            $aggregateStats['total_attempts'] += $stats['attempts'] ?? 0;
+            $aggregateStats['total_success'] += $stats['success'] ?? 0;
+            $aggregateStats['total_failures'] += $stats['failures'] ?? 0;
+            $aggregateStats['total_deleted'] += $stats['deleted'] ?? 0;
+        }
+        
+        // Return JSON response for AJAX
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => $imported > 0,
+            'imported' => $imported,
+            'failed' => $failed,
+            'errors' => $errors,
+            'debug_stats' => $aggregateStats,
+            'per_file_stats' => $allDebugStats
+        ]);
+        exit;
+    }
     
     // Show result and redirect
     $errorDetailsJson = json_encode($errors, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    // compute project base path dynamically so redirects work from any project folder name
+    $scriptPath = $_SERVER['SCRIPT_NAME'] ?? '';
+    $projectBase = '';
+
+    // Prefer explicit project folder if present
+    if (stripos($scriptPath, '/billspayment/') !== false) {
+        $pos = stripos($scriptPath, '/billspayment/');
+        $projectBase = substr($scriptPath, 0, $pos) . '/billspayment';
+    } elseif (stripos($scriptPath, '/dashboard/') !== false) {
+        // fallback: remove /dashboard/... part
+        $pos = stripos($scriptPath, '/dashboard/');
+        $projectBase = substr($scriptPath, 0, $pos);
+    } else {
+        // last-resort: go up three levels from script path
+        $projectBase = rtrim(dirname(dirname(dirname($scriptPath))), '/\\');
+    }
+
+    // ensure leading slash
+    if ($projectBase === '' || $projectBase[0] !== '/') {
+        $projectBase = '/' . ltrim($projectBase, '/\\');
+    }
+
+    // Use production upload page route explicitly
+    $returnUrl = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
     echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>';
     echo "<script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -211,14 +744,24 @@ if (isset($_POST['perform_import']) && isset($_SESSION['uploaded_files'])) {
                         width: '85%',
                         confirmButtonText: 'Close'
                     }).then(() => {
-                        window.location.href = '../../dashboard/billspayment/import/billspay-transaction.php';
+                        window.location.href = " . json_encode($returnUrl) . ";
                     });
                 } else {
-                    window.location.href = '../../dashboard/billspayment/import/billspay-transaction.php';
+                    window.location.href = " . json_encode($returnUrl) . ";
                 }
             });
         });
     </script>";
+    exit;
+} elseif ($isAjax) {
+    // AJAX request but no valid import conditions
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => false,
+        'imported' => 0,
+        'failed' => 0,
+        'errors' => ['No valid files to import or session expired.']
+    ]);
     exit;
 }
 
@@ -241,16 +784,277 @@ function getPartnerName($conn, $partnerId) {
     return 'Unknown Partner';
 }
 
+/**
+ * Resolve an uploaded file path to an existing file on disk.
+ * Tries multiple candidate locations and returns the first existing absolute path, or null.
+ */
+function resolve_uploaded_path($storedPath) {
+    // Already absolute and exists
+    if (file_exists($storedPath)) return $storedPath;
+
+    // Try realpath (handles relative segments)
+    $rp = realpath($storedPath);
+    if ($rp && file_exists($rp)) return $rp;
+
+    // If storedPath begins with ../ or contains ../ try relative to this script dir
+    $candidate = __DIR__ . DIRECTORY_SEPARATOR . $storedPath;
+    $candidate = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $candidate);
+    if (file_exists($candidate)) return $candidate;
+
+    // Try admin temporary with basename
+    $basename = basename($storedPath);
+    $tmpDir = __DIR__ . '/../../admin/temporary/';
+    if (is_dir($tmpDir)) {
+        // direct candidate
+        $cand = $tmpDir . $basename;
+        if (file_exists($cand)) return $cand;
+
+        // glob search for any file containing the basename (covers prefixed unique ids)
+        $matches = glob($tmpDir . '*' . $basename);
+        if (!empty($matches)) return $matches[0];
+    }
+
+    // Try document root + billspayment path
+    if (!empty($_SERVER['DOCUMENT_ROOT'])) {
+        $docCand = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\') . '/billspayment/admin/temporary/' . $basename;
+        if (file_exists($docCand)) return $docCand;
+    }
+
+    // Not found
+    return null;
+}
+
+function loadSpreadsheet($filePath, $readDataOnly = true) {
+    $reader = IOFactory::createReaderForFile($filePath);
+    if ($readDataOnly && method_exists($reader, 'setReadDataOnly')) {
+        $reader->setReadDataOnly(true);
+    }
+    if (method_exists($reader, 'setReadEmptyCells')) {
+        $reader->setReadEmptyCells(false);
+    }
+
+    return $reader->load($filePath);
+}
+
+function validateFileFast($conn, $filePath, $sourceType, $partnerId) {
+    // FAST validation - just check file is readable and partner exists
+    // Don't parse the entire Excel file - that's slow!
+    $errors = [];
+    $spreadsheet = null;
+    $worksheet = null;
+    
+    try {
+        // Quick file check
+        if (!file_exists($filePath) || !is_readable($filePath)) {
+            $errors[] = [
+                'row' => 'N/A',
+                'type' => 'file',
+                'message' => 'File not accessible',
+                'value' => ''
+            ];
+            return [
+                'valid' => false,
+                'row_count' => 0,
+                'errors' => $errors,
+                'warnings' => [],
+                'preview_data' => [],
+                'source_type' => $sourceType,
+                'partner_data' => null,
+                'transaction_date' => null,
+                'transaction_summary' => null
+            ];
+        }
+        
+        // Quick partner check
+        $partnerData = null;
+        if ($partnerId !== 'All') {
+            $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name 
+                           FROM masterdata.partner_masterfile 
+                           WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1";
+            $stmt = $conn->prepare($partnerQuery);
+            $stmt->bind_param("ss", $partnerId, $partnerId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result && $result->num_rows > 0) {
+                $partnerData = $result->fetch_assoc();
+            } else {
+                $errors[] = [
+                    '                row' => 'Header',
+                    'type' => 'partner',
+                    'message' => 'Partner ID not found in database',
+                    'value' => $partnerId
+                ];
+            }
+        }
+        
+        // Quick Excel check - just load to verify it's valid
+        $spreadsheet = loadSpreadsheet($filePath, true);
+        $worksheet = $spreadsheet->getActiveSheet();
+        $highestRow = $worksheet->getHighestRow();
+        
+        if ($highestRow < 10) {
+            $errors[] = [
+                'row' => 'N/A',
+                'type' => 'structure',
+                'message' => 'File has insufficient data rows',
+                'value' => ''
+            ];
+        }
+        
+        // Don't parse all rows - just return basic info
+        return [
+            'valid' => count($errors) === 0,
+            'row_count' => max(0, $highestRow - 9),  // Estimate
+            'errors' => $errors,
+            'warnings' => [],
+            'preview_data' => [],  // Will be populated on demand
+            'source_type' => $sourceType,
+            'partner_data' => $partnerData,
+            'transaction_date' => 'N/A',  // Will be read during import
+            'transaction_summary' => null  // Will be calculated during import
+        ];
+        
+    } catch (Exception $e) {
+        $errors[] = [
+            'row' => 'N/A',
+            'type' => 'critical',
+            'message' => 'File loading error: ' . $e->getMessage(),
+            'value' => ''
+        ];
+        
+        return [
+            'valid' => false,
+            'row_count' => 0,
+            'errors' => $errors,
+            'warnings' => [],
+            'preview_data' => [],
+            'source_type' => $sourceType,
+            'partner_data' => null,
+            'transaction_date' => null,
+            'transaction_summary' => null
+        ];
+    } finally {
+        if (isset($spreadsheet) && is_object($spreadsheet)) {
+            try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+            unset($worksheet, $spreadsheet);
+            if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+        }
+    }
+}
+
+function calculateTransactionSummary($matchedRows, $cancellationRows) {
+    $summaries = [
+        'net' => ['count' => 0, 'principal' => 0, 'charge_partner' => 0, 'charge_customer' => 0, 'total_charge' => 0, 'settlement' => 0],
+        'adjustment' => ['count' => 0, 'principal' => 0, 'charge_partner' => 0, 'charge_customer' => 0, 'total_charge' => 0, 'settlement' => 0],
+        'summary' => ['count' => 0, 'principal' => 0, 'charge_partner' => 0, 'charge_customer' => 0, 'total_charge' => 0, 'settlement' => 0]
+    ];
+
+    $cancellation_reference_numbers = [];
+    foreach ($matchedRows as $row) {
+        if (isset($row['numeric_number']) && $row['numeric_number'] === '*') {
+            $cancellation_reference_numbers[] = $row['reference_number'];
+        }
+    }
+
+    if (!empty($cancellationRows)) {
+        foreach ($cancellationRows as $cancellationGroup) {
+            if (is_array($cancellationGroup)) {
+                if (isset($cancellationGroup[0]) && is_array($cancellationGroup[0])) {
+                    foreach ($cancellationGroup as $rowArray) {
+                        foreach ($rowArray as $row) {
+                            if (isset($row['numeric_number']) && $row['numeric_number'] === '*') {
+                                $cancellation_reference_numbers[] = $row['reference_number'];
+                            }
+                        }
+                    }
+                } else {
+                    if (isset($cancellationGroup['numeric_number']) && $cancellationGroup['numeric_number'] === '*') {
+                        $cancellation_reference_numbers[] = $cancellationGroup['reference_number'];
+                    }
+                }
+            }
+        }
+    }
+
+    $cancellation_reference_numbers = array_unique($cancellation_reference_numbers);
+
+    foreach ($matchedRows as $row) {
+        if (!isset($row['numeric_number']) || $row['numeric_number'] !== '*') {
+            if (!in_array($row['reference_number'], $cancellation_reference_numbers)) {
+                $summaries['summary']['count']++;
+                $summaries['summary']['principal'] += abs(floatval($row['amount_paid'] ?? 0));
+                $summaries['summary']['charge_partner'] += abs(floatval($row['amount_charge_partner'] ?? 0));
+                $summaries['summary']['charge_customer'] += abs(floatval($row['amount_charge_customer'] ?? 0));
+            }
+        }
+    }
+
+    foreach ($matchedRows as $row) {
+        if (isset($row['numeric_number']) && $row['numeric_number'] === '*') {
+            $summaries['adjustment']['count']++;
+            $summaries['adjustment']['principal'] += abs(floatval($row['amount_paid'] ?? 0));
+            $summaries['adjustment']['charge_partner'] += abs(floatval($row['amount_charge_partner'] ?? 0));
+            $summaries['adjustment']['charge_customer'] += abs(floatval($row['amount_charge_customer'] ?? 0));
+        }
+    }
+
+    if (!empty($cancellationRows)) {
+        foreach ($cancellationRows as $cancellationGroup) {
+            if (is_array($cancellationGroup)) {
+                if (isset($cancellationGroup[0]) && is_array($cancellationGroup[0])) {
+                    foreach ($cancellationGroup as $rowArray) {
+                        foreach ($rowArray as $row) {
+                            if (isset($row['numeric_number']) && $row['numeric_number'] === '*') {
+                                $summaries['adjustment']['count']++;
+                                $summaries['adjustment']['principal'] += abs(floatval($row['amount_paid'] ?? 0));
+                                $summaries['adjustment']['charge_partner'] += abs(floatval($row['amount_charge_partner'] ?? 0));
+                                $summaries['adjustment']['charge_customer'] += abs(floatval($row['amount_charge_customer'] ?? 0));
+                            }
+                        }
+                    }
+                } else {
+                    if (isset($cancellationGroup['numeric_number']) && $cancellationGroup['numeric_number'] === '*') {
+                        $summaries['adjustment']['count']++;
+                        $summaries['adjustment']['principal'] += abs(floatval($cancellationGroup['amount_paid'] ?? 0));
+                        $summaries['adjustment']['charge_partner'] += abs(floatval($cancellationGroup['amount_charge_partner'] ?? 0));
+                        $summaries['adjustment']['charge_customer'] += abs(floatval($cancellationGroup['amount_charge_customer'] ?? 0));
+                    }
+                }
+            }
+        }
+    }
+
+    $summaries['net']['count'] = $summaries['summary']['count'] - $summaries['adjustment']['count'];
+    $summaries['net']['principal'] = $summaries['summary']['principal'] - $summaries['adjustment']['principal'];
+    $summaries['net']['charge_partner'] = $summaries['summary']['charge_partner'] - $summaries['adjustment']['charge_partner'];
+    $summaries['net']['charge_customer'] = $summaries['summary']['charge_customer'] - $summaries['adjustment']['charge_customer'];
+
+    foreach ($summaries as $key => &$summary) {
+        $summary['total_charge'] = $summary['charge_partner'] + $summary['charge_customer'];
+        $summary['settlement'] = $summary['principal'] - $summary['charge_partner'] - $summary['charge_customer'];
+    }
+    unset($summary);
+
+    return $summaries;
+}
+
 function validateFile($conn, $filePath, $sourceType, $partnerId) {
     $errors = [];
     $warnings = [];
     $rowCount = 0;
     $previewData = []; // Store sample rows for preview
-    $summaryRows = [];
+    $matchedRows = [];
+    $cancellationRows = [];
     $transactionDate = null;
+    $transactionStartDate = null;
+    $transactionEndDate = null;
+    $cachedData = []; // Cache full data for import to avoid re-parsing Excel
+    $spreadsheet = null;
+    $worksheet = null;
     
     try {
-        $spreadsheet = IOFactory::load($filePath);
+        $spreadsheet = loadSpreadsheet($filePath, true);
         $worksheet = $spreadsheet->getActiveSheet();
         $highestRow = $worksheet->getHighestRow();
         $highestColumn = $worksheet->getHighestColumn();
@@ -338,8 +1142,21 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
                 $amountChargePartner = floatval(str_replace(',', '', $worksheet->getCell('K' . $row)->getValue()));
                 $amountChargeCustomer = floatval(str_replace(',', '', $worksheet->getCell('L' . $row)->getValue()));
                 $referenceNumber = trim(strval($worksheet->getCell('E' . $row)->getValue()));
+
+                // detect cancellation marker in column A for KP7
+                $rawStatus = trim(strval($worksheet->getCell('A' . $row)->getValue()));
+                $isCancellation = strpos($rawStatus, '*') !== false;
+                $numericNumber = $isCancellation ? '*' : '';
                 
+                // Debug log first few rows to verify asterisk detection
+                static $kp7ValLogCount = 0;
+                if ($kp7ValLogCount < 3 && $rowCount <= 3) {
+                    error_log("Validation KP7 Row {$row} - Column A: '{$rawStatus}', Detected as: " . ($isCancellation ? 'CANCELLED' : 'ACTIVE'));
+                    $kp7ValLogCount++;
+                }
+
                 $rowData = [
+                    'numeric_number' => $isCancellation ? '*' : '',
                     'control_number' => trim(strval($worksheet->getCell('A' . $row)->getValue())),
                     'branch_id' => trim(strval($worksheet->getCell('B' . $row)->getValue())),
                     'transaction_date' => trim(strval($worksheet->getCell('C' . $row)->getValue())),
@@ -357,8 +1174,16 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
                 ];
             } elseif ($sourceType === 'KPX') {
                 // KPX format extraction (column positions vary)
-                $numericNumber = trim(strval($worksheet->getCell('A' . $row)->getValue()));
-                $isCancellation = ($numericNumber === '*');
+                $rawNumber = trim(strval($worksheet->getCell('A' . $row)->getValue()));
+                $isCancellation = strpos($rawNumber, '*') !== false;
+                $numericNumber = $isCancellation ? '*' : '';
+                
+                // Debug log first few rows to verify asterisk detection
+                static $kpxValLogCount = 0;
+                if ($kpxValLogCount < 3 && $rowCount <= 3) {
+                    error_log("Validation KPX Row {$row} - Column A: '{$rawNumber}', Detected as: " . ($isCancellation ? 'CANCELLED' : 'ACTIVE'));
+                    $kpxValLogCount++;
+                }
 
                 if (isset($columnLabels[1]) && $columnLabels[1] === 'Date / Time') {
                     // Date/Time is in column B
@@ -437,17 +1262,42 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
 
             // Store data for transaction summary
             if (!empty($referenceNumber)) {
-                $summaryRows[] = [
+                $summaryRow = [
                     'reference_number' => $referenceNumber,
                     'numeric_number' => $numericNumber,
                     'amount_paid' => $amountPaid,
                     'amount_charge_partner' => $amountChargePartner,
                     'amount_charge_customer' => $amountChargeCustomer
                 ];
+
+                if ($isCancellation) {
+                    $cancellationRows[] = $summaryRow;
+                } else {
+                    $matchedRows[] = $summaryRow;
+                }
             }
             
-            // Store preview data (first 10 rows only)
-            if ($rowCount <= 10) {
+            // compute min/max datetimes for start/end dates using preview row values
+            if (!empty($rowData) && isset($rowData['transaction_date'])) {
+                $dtStr = $rowData['transaction_date'];
+                if (!empty($rowData['transaction_time'])) {
+                    $dtStr = trim($dtStr . ' ' . $rowData['transaction_time']);
+                }
+                $dtTs = strtotime($dtStr);
+                if ($dtTs !== false) {
+                    $iso = date('Y-m-d H:i:s', $dtTs);
+                    if ($transactionStartDate === null || $iso < $transactionStartDate) {
+                        $transactionStartDate = $iso;
+                    }
+                    if ($transactionEndDate === null || $iso > $transactionEndDate) {
+                        $transactionEndDate = $iso;
+                    }
+                }
+            }
+
+            // Store preview data: first 10 rows + ALL cancelled transactions
+            // This ensures cancelled transactions always show in preview filter
+            if ($rowCount <= 10 || $isCancellation) {
                 $previewData[] = $rowData;
             }
             
@@ -482,56 +1332,22 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
             'message' => 'File loading error: ' . $e->getMessage(),
             'value' => ''
         ];
+    } finally {
+        if (isset($spreadsheet) && is_object($spreadsheet)) {
+            try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+            unset($worksheet, $spreadsheet);
+            if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+        }
     }
     
     // Calculate summaries (match original logic)
-    $summaries = [
-        'summary' => ['count' => 0, 'principal' => 0, 'charge_partner' => 0, 'charge_customer' => 0, 'total_charge' => 0, 'settlement' => 0],
-        'adjustment' => ['count' => 0, 'principal' => 0, 'charge_partner' => 0, 'charge_customer' => 0, 'total_charge' => 0, 'settlement' => 0],
-        'net' => ['count' => 0, 'principal' => 0, 'charge_partner' => 0, 'charge_customer' => 0, 'total_charge' => 0, 'settlement' => 0]
-    ];
-
-    $cancellationReferences = [];
-    foreach ($summaryRows as $row) {
-        if (isset($row['numeric_number']) && $row['numeric_number'] === '*') {
-            $cancellationReferences[] = $row['reference_number'];
-        }
-    }
-    $cancellationReferences = array_unique($cancellationReferences);
-
-    foreach ($summaryRows as $row) {
-        if (!isset($row['numeric_number']) || $row['numeric_number'] !== '*') {
-            if (!in_array($row['reference_number'], $cancellationReferences)) {
-                $summaries['summary']['count']++;
-                $summaries['summary']['principal'] += abs(floatval($row['amount_paid'] ?? 0));
-                $summaries['summary']['charge_partner'] += abs(floatval($row['amount_charge_partner'] ?? 0));
-                $summaries['summary']['charge_customer'] += abs(floatval($row['amount_charge_customer'] ?? 0));
-            }
-        }
-    }
-
-    foreach ($summaryRows as $row) {
-        if (isset($row['numeric_number']) && $row['numeric_number'] === '*') {
-            $summaries['adjustment']['count']++;
-            $summaries['adjustment']['principal'] += abs(floatval($row['amount_paid'] ?? 0));
-            $summaries['adjustment']['charge_partner'] += abs(floatval($row['amount_charge_partner'] ?? 0));
-            $summaries['adjustment']['charge_customer'] += abs(floatval($row['amount_charge_customer'] ?? 0));
-        }
-    }
-
-    $summaries['net']['count'] = $summaries['summary']['count'] - $summaries['adjustment']['count'];
-    $summaries['net']['principal'] = $summaries['summary']['principal'] - $summaries['adjustment']['principal'];
-    $summaries['net']['charge_partner'] = $summaries['summary']['charge_partner'] - $summaries['adjustment']['charge_partner'];
-    $summaries['net']['charge_customer'] = $summaries['summary']['charge_customer'] - $summaries['adjustment']['charge_customer'];
-
-    foreach ($summaries as $key => &$summary) {
-        $summary['total_charge'] = $summary['charge_partner'] + $summary['charge_customer'];
-        $summary['settlement'] = $summary['principal'] - $summary['charge_partner'] - $summary['charge_customer'];
-    }
-    unset($summary);
+    $summaries = calculateTransactionSummary($matchedRows, $cancellationRows);
+    
+    // Log validation detection results for debugging
+    error_log("Validation detection for {$filePath}: " . count($matchedRows) . " active, " . count($cancellationRows) . " cancelled (total {$rowCount} rows)");
     
     return [
-        'valid' => count($errors) === 0,
+        'valid' => count($errors) ===  0,
         'row_count' => $rowCount,
         'errors' => $errors,
         'warnings' => $warnings,
@@ -539,13 +1355,16 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
         'source_type' => $sourceType,
         'partner_data' => $partnerData,
         'transaction_date' => $transactionDate,
+        'transaction_start_date' => $transactionStartDate,
+        'transaction_end_date' => $transactionEndDate,
         'transaction_summary' => $summaries
     ];
 }
 
-function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserEmail) {
+function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserEmail, $progressToken = null, $cachedData = null, $userDecision = 'skip') {
     try {
-        $spreadsheet = IOFactory::load($filePath);
+        // Always parse Excel (simple and reliable like old code)
+        $spreadsheet = loadSpreadsheet($filePath, true);
         $worksheet = $spreadsheet->getActiveSheet();
         $highestRow = $worksheet->getHighestRow();
         $highestColumn = $worksheet->getHighestColumn();
@@ -627,6 +1446,19 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         $matchedData = [];
         $cancellationData = [];
 
+        // Read row 9 column headers
+        $getColumnLabels = [];
+        $columnIterator = $worksheet->getRowIterator(9, 9)->current()->getCellIterator('A', $highestColumn);
+        foreach ($columnIterator as $cell) {
+            $getColumnLabels[] = trim(strval($cell->getValue()));
+        }
+
+        // KP7 report date is stored in cell B3
+        $kp7ReportDate = null;
+        if ($sourceType === 'KP7') {
+            $kp7ReportDate = trim(strval($worksheet->getCell('B3')->getValue()));
+        }
+
         // Process each row
         for ($row = 10; $row <= $highestRow; ++$row) {
             $cellA = trim(strval($worksheet->getCell('A' . $row)->getValue()));
@@ -664,9 +1496,17 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $remote_operator = null;
             $report_date = $sourceType === 'KP7' ? $kp7ReportDate : null;
 
-            if ($getColumnLabels[0] === 'STATUS' && $sourceType === 'KP7') {
-                $isCancellation = strpos($worksheet->getCell('A' . $row)->getValue(), '*') !== false;
+            if ($getColumnLabels[0] === 'STATUS' && (strtoupper($sourceType) === 'KP7')) {
+                $cellAValue = $worksheet->getCell('A' . $row)->getValue();
+                $isCancellation = strpos($cellAValue, '*') !== false;
                 $cancellStatus = $isCancellation ? '*' : '';
+                
+                // Debug log first few rows to verify asterisk detection
+                static $kp7LogCount = 0;
+                if ($kp7LogCount < 5) {
+                    error_log("KP7 Row {$row} - Column A: '{$cellAValue}', Detected as: " . ($isCancellation ? 'CANCELLED' : 'ACTIVE'));
+                    $kp7LogCount++;
+                }
 
                 $datetime_raw = $worksheet->getCell('C' . $row)->getValue();
                 if ($datetime_raw) {
@@ -727,9 +1567,17 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 $region_description = $region_description_raw;
                 $person_operator = strval($worksheet->getCell('Q' . $row)->getValue());
 
-            } elseif ($getColumnLabels[0] === 'No' && $sourceType === 'KPX') {
-                $isCancellation = strpos($worksheet->getCell('A' . $row)->getValue(), '*') !== false;
+            } elseif ($getColumnLabels[0] === 'No' && (strtoupper($sourceType) === 'KPX')) {
+                $cellAValue = $worksheet->getCell('A' . $row)->getValue();
+                $isCancellation = strpos($cellAValue, '*') !== false;
                 $cancellStatus = $isCancellation ? '*' : '';
+                
+                // Debug log first few rows to verify asterisk detection
+                static $kpxLogCount = 0;
+                if ($kpxLogCount < 5) {
+                    error_log("KPX Row {$row} - Column A: '{$cellAValue}', Detected as: " . ($isCancellation ? 'CANCELLED' : 'ACTIVE'));
+                    $kpxLogCount++;
+                }
 
                 if (isset($getColumnLabels[1]) && $getColumnLabels[1] === 'Date / Time') {
                     $datetime_raw = $worksheet->getCell('B' . $row)->getValue();
@@ -859,21 +1707,26 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                     }
                 }
             } else {
-                continue;
+                // Log warning for unrecognized format but continue processing
+                $errors[] = "Warning: Row $row has unrecognized column format - attempting to process anyway";
             }
 
-            if (empty($reference_number) || empty($datetime)) {
-                continue;
+            // Log warnings for missing critical fields but don't skip - let insert/error handling deal with it
+            if (empty($reference_number)) {
+                $errors[] = "Warning: Row $row missing reference_number - may fail during insert";
+            }
+            if (empty($datetime)) {
+                $errors[] = "Warning: Row $row missing datetime - may fail during insert";
             }
 
+            // Check for duplicates and overrides but don't skip - just log warnings
+            // The delete-then-insert logic below will handle these cases
             if ($checkDuplicateData($reference_number, $datetime)) {
-                $errors[] = "Duplicate reference found: {$reference_number}";
-                continue;
+                $errors[] = "Warning: Duplicate found for reference {$reference_number} - will be handled by delete-then-insert";
             }
 
             if ($checkHasAlreadyDataReadyToOverride($reference_number, $datetime)) {
-                $errors[] = "Unposted data exists for reference: {$reference_number}";
-                continue;
+                $errors[] = "Warning: Unposted data exists for reference {$reference_number} - will be overridden";
             }
 
             $rowData = [
@@ -916,10 +1769,18 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             }
         }
 
-        if (!empty($errors)) {
+        // Log detection results for debugging
+        $totalRowsRead = $highestRow - 9;
+        $activeCount = count($matchedData);
+        $cancelledCount = count($cancellationData);
+        error_log("[IMPORT DEBUG] Excel parsing complete: {$totalRowsRead} rows read, {$activeCount} active, {$cancelledCount} cancelled");
+        error_log("[IMPORT DEBUG] File: {$filePath}");
+
+        if (empty($matchedData) && empty($cancellationData)) {
+            error_log("[IMPORT ERROR] No valid rows found in file: {$filePath}");
             return [
                 'success' => false,
-                'error' => implode('; ', array_slice($errors, 0, 5))
+                'error' => !empty($errors) ? implode('; ', array_slice($errors, 0, 5)) : 'No valid rows to import'
             ];
         }
 
@@ -928,9 +1789,9 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         $cancellation_refs = [];
         $regular_refs = [];
 
-        if ($sourceType === 'KP7') {
+        if ($sourceType === 'KP7' || strtoupper($sourceType) === 'KP7') {
             $processed_data = $raw_matched_data;
-        } elseif ($sourceType === 'KPX') {
+        } elseif ($sourceType === 'KPX' || strtoupper($sourceType) === 'KPX') {
             foreach ($raw_matched_data as $row) {
                 $is_cancellation = isset($row['numeric_number']) && $row['numeric_number'] === '*';
                 if ($is_cancellation) {
@@ -952,6 +1813,17 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
 
             foreach ($regular_refs as $regular_row) {
                 $processed_data[] = $regular_row;
+            }
+        }
+
+        // Log processed data count before insert
+        error_log("[IMPORT DEBUG] Processed data array prepared: " . count($processed_data) . " rows ready for insert");
+        
+        // Build reference datetime map for cancellations (helps match cancellations to regular transactions)
+        $reference_datetime_map = [];
+        foreach ($processed_data as $r) {
+            if (isset($r['numeric_number']) && $r['numeric_number'] !== '*' && !empty($r['datetime'])) {
+                $reference_datetime_map[$r['reference_number']] = $r['datetime'];
             }
         }
 
@@ -998,9 +1870,24 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         $insertStmt = $conn->prepare($insertSQL);
+        
+        // Track insert statistics
+        $insertAttempts = 0;
+        $insertSuccess = 0;
+        $insertFailures = 0;
+        $deleteCount = 0;
+        // Collect detailed info about rows deleted during delete-then-insert so we can return them to the client
+        $deleted_rows_details = [];
+        error_log("[IMPORT DEBUG] Starting insert loop for " . count($processed_data) . " rows");
 
-        foreach ($processed_data as $row) {
+        foreach ($processed_data as $idx => $row) {
+            $insertAttempts++;
             $is_cancellation = isset($row['numeric_number']) && $row['numeric_number'] === '*';
+            
+            // Log first 5 and last 5 insert attempts
+            if ($insertAttempts <= 5 || $insertAttempts > (count($processed_data) - 5)) {
+                error_log("[IMPORT DEBUG] Row {$insertAttempts}: Ref={$row['reference_number']}, Status=" . ($is_cancellation ? 'CANCELLED' : 'ACTIVE'));
+            }
             $status = $is_cancellation ? '*' : null;
 
             $datetime_value = null;
@@ -1010,10 +1897,10 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 $datetime_value = $row['regular_datetime'];
                 $cancellation_date = $row['datetime'];
             } elseif ($is_cancellation) {
-                if ($sourceType === 'KP7') {
+                if (strtoupper($sourceType) === 'KP7') {
                     $datetime_value = $row['datetime'];
                     $cancellation_date = $row['report_date'] ? date('Y-m-d H:i:s', strtotime($row['report_date'])) : null;
-                } elseif ($sourceType === 'KPX') {
+                } elseif (strtoupper($sourceType) === 'KPX') {
                     $cancellation_date = $row['datetime'];
                     $datetime_value = null;
                 }
@@ -1022,74 +1909,328 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 $cancellation_date = null;
             }
 
+            // If cancellation missing regular datetime, try to resolve from map
+            if ($is_cancellation && empty($datetime_value) && isset($reference_datetime_map[$row['reference_number']])) {
+                $datetime_value = $reference_datetime_map[$row['reference_number']];
+            }
+
+            // Handle user decision: override vs skip
+            $post_trans = $row['post_transaction'] ?? 'unposted';
+            $deleteStmt = null;
+            
+            if ($userDecision === 'skip') {
+                // Skip mode: Check if record exists, and if it does, skip insertion
+                // First check if a matching record exists
+                $checkSQL = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction WHERE reference_no = ? AND (`datetime` = ? OR cancellation_date = ?) AND status <=> ?";
+                if (strtoupper($sourceType) === 'KP7') {
+                    $checkSQL .= " AND partner_id = ?";
+                    $checkStmt = $conn->prepare($checkSQL);
+                    if ($checkStmt) {
+                        $c_reference = $row['reference_number'];
+                        $c_datetime = $datetime_value ?? '';
+                        $c_cancellation = $cancellation_date ?? '';
+                        $c_status = $status;
+                        $c_partner = $row['partner_id'];
+                        $checkStmt->bind_param("sssss", $c_reference, $c_datetime, $c_cancellation, $c_status, $c_partner);
+                    }
+                } elseif (strtoupper($sourceType) === 'KPX') {
+                    $checkSQL .= " AND partner_id_kpx = ?";
+                    $checkStmt = $conn->prepare($checkSQL);
+                    if ($checkStmt) {
+                        $c_reference = $row['reference_number'];
+                        $c_datetime = $datetime_value ?? '';
+                        $c_cancellation = $cancellation_date ?? '';
+                        $c_status = $status;
+                        $c_partner_kpx = $row['PartnerID_KPX'];
+                        $checkStmt->bind_param("sssss", $c_reference, $c_datetime, $c_cancellation, $c_status, $c_partner_kpx);
+                    }
+                } else {
+                    $checkStmt = $conn->prepare($checkSQL);
+                    if ($checkStmt) {
+                        $c_reference = $row['reference_number'];
+                        $c_datetime = $datetime_value ?? '';
+                        $c_cancellation = $cancellation_date ?? '';
+                        $c_status = $status;
+                        $checkStmt->bind_param("ssss", $c_reference, $c_datetime, $c_cancellation, $c_status);
+                    }
+                }
+                
+                if (isset($checkStmt) && $checkStmt) {
+                    $checkStmt->execute();
+                    $checkResult = $checkStmt->get_result();
+                    $checkRow = $checkResult->fetch_assoc();
+                    $checkStmt->close();
+                    
+                    // If record exists, skip this row
+                    if ($checkRow && $checkRow['count'] > 0) {
+                        continue; // Skip insertion for this row
+                    }
+                }
+            } elseif ($userDecision === 'override') {
+                // Override mode: Delete existing records with same reference and datetime before inserting
+                // This allows updating existing records with new data
+                // Delete existing unposted records for same reference and datetime/cancellation_date to avoid duplicates
+                // IMPORTANT: Also match status so we don't delete regular transactions when inserting cancellations (or vice versa)
+                $deleteSQL = "DELETE FROM mldb.billspayment_transaction WHERE post_transaction = ? AND reference_no = ? AND (`datetime` = ? OR cancellation_date = ? ) AND status <=> ?";
+                
+                if (strtoupper($sourceType) === 'KP7') {
+                $deleteSQL .= " AND partner_id = ?";
+                $deleteStmt = $conn->prepare($deleteSQL);
+                if ($deleteStmt) {
+                    $d_post_trans = $post_trans;
+                    $d_reference = $row['reference_number'];
+                    $d_datetime = $datetime_value ?? '';
+                    $d_cancellation = $cancellation_date ?? '';
+                    $d_status = $status;
+                    $d_partner = $row['partner_id'];
+                    $deleteStmt->bind_param("ssssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status, $d_partner);
+                }
+            } elseif (strtoupper($sourceType) === 'KPX') {
+                $deleteSQL .= " AND partner_id_kpx = ?";
+                $deleteStmt = $conn->prepare($deleteSQL);
+                if ($deleteStmt) {
+                    $d_post_trans = $post_trans;
+                    $d_reference = $row['reference_number'];
+                    $d_datetime = $datetime_value ?? '';
+                    $d_cancellation = $cancellation_date ?? '';
+                    $d_status = $status;
+                    $d_partner_kpx = $row['PartnerID_KPX'];
+                    $deleteStmt->bind_param("ssssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status, $d_partner_kpx);
+                }
+            } else {
+                $deleteStmt = $conn->prepare($deleteSQL);
+                if ($deleteStmt) {
+                    $d_post_trans = $post_trans;
+                    $d_reference = $row['reference_number'];
+                    $d_datetime = $datetime_value ?? '';
+                    $d_cancellation = $cancellation_date ?? '';
+                    $d_status = $status;
+                    $deleteStmt->bind_param("sssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status);
+                }
+            }
+
+            if (isset($deleteStmt) && $deleteStmt) {
+                // Debug: fetch and log existing rows that will be deleted so we can verify in DB
+                $selectSQL = "SELECT id, reference_no, status, `datetime`, cancellation_date, partner_id, partner_id_kpx, post_transaction FROM mldb.billspayment_transaction WHERE post_transaction = ? AND reference_no = ? AND (`datetime` = ? OR cancellation_date = ? ) AND status <=> ?";
+                if (strtoupper($sourceType) === 'KP7') {
+                    $selectSQL .= " AND partner_id = ?";
+                    $selectStmt = $conn->prepare($selectSQL);
+                    if ($selectStmt) {
+                        $selectStmt->bind_param("ssssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status, $d_partner);
+                    }
+                } elseif (strtoupper($sourceType) === 'KPX') {
+                    $selectSQL .= " AND partner_id_kpx = ?";
+                    $selectStmt = $conn->prepare($selectSQL);
+                    if ($selectStmt) {
+                        $selectStmt->bind_param("ssssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status, $d_partner_kpx);
+                    }
+                } else {
+                    $selectStmt = $conn->prepare($selectSQL);
+                    if ($selectStmt) {
+                        $selectStmt->bind_param("sssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status);
+                    }
+                }
+
+                if (isset($selectStmt) && $selectStmt) {
+                    $selectStmt->execute();
+                    $selRes = $selectStmt->get_result();
+                    if ($selRes && $selRes->num_rows > 0) {
+                        while ($r = $selRes->fetch_assoc()) {
+                            error_log("[IMPORT DEBUG] Will delete existing row id={$r['id']}, ref={$r['reference_no']}, status={$r['status']}, datetime={$r['datetime']}, cancellation_date={$r['cancellation_date']}, partner_id={$r['partner_id']}, partner_id_kpx={$r['partner_id_kpx']}, post_transaction={$r['post_transaction']}");
+                            $deleted_rows_details[] = [
+                                'id' => $r['id'],
+                                'reference_no' => $r['reference_no'],
+                                'status' => $r['status'],
+                                'datetime' => $r['datetime'],
+                                'cancellation_date' => $r['cancellation_date'],
+                                'partner_id' => $r['partner_id'],
+                                'partner_id_kpx' => $r['partner_id_kpx'],
+                                'post_transaction' => $r['post_transaction']
+                            ];
+                        }
+                    } else {
+                        error_log("[IMPORT DEBUG] No existing rows found to delete for ref: {$d_reference}");
+                    }
+                    $selectStmt->close();
+                }
+
+                // perform delete
+                $deleteStmt->execute();
+                $deletedRows = $deleteStmt->affected_rows;
+                if ($deletedRows > 0) {
+                    $deleteCount++;
+                    if ($deleteCount <= 5) {
+                        error_log("[IMPORT DEBUG] Deleted {$deletedRows} existing row(s) for reference: {$row['reference_number']}");
+                    }
+                }
+                $deleteStmt->close();
+            }
+            } // End of override mode
+
             $settle_unsettle = null;
             $claim_unclaim = null;
             $rfp_no = null;
             $cad_no = null;
             $hold_status = null;
 
+            // Prepare variables for bind_param (bind_param requires variables passed by reference)
+            $b_status = $status;
+            $b_datetime = $datetime_value;
+            $b_cancellation_date = $cancellation_date;
+            $b_sourceType = $sourceType;
+            $b_control_number = $row['control_number'] ?? null;
+            $b_reference_number = $row['reference_number'] ?? null;
+            $b_payor_name = $row['payor_name'] ?? null;
+            $b_payor_address = $row['payor_address'] ?? null;
+            $b_account_number = $row['account_number'] ?? null;
+            $b_account_name = $row['account_name'] ?? null;
+            $b_amount_paid = $row['amount_paid'] ?? 0;
+            $b_amount_charge_partner = $row['amount_charge_partner'] ?? 0;
+            $b_amount_charge_customer = $row['amount_charge_customer'] ?? 0;
+            $b_contact_number = $row['contact_number'] ?? null;
+            $b_other_details = $row['other_details'] ?? null;
+            $b_branch_id = $row['branch_id'] ?? null;
+            $b_branch_code = $row['branch_code'] ?? null;
+            $b_branch_outlet = $row['branch_outlet'] ?? null;
+            $b_zone_code = $row['zone_code'] ?? null;
+            $b_region_code = $row['region_code'] ?? null;
+            $b_region_description = $row['region_description'] ?? null;
+            $b_person_operator = $row['person_operator'] ?? null;
+            $b_partner_name = $row['partner_name'] ?? null;
+            $b_partner_id = $row['partner_id'] ?? null;
+            $b_partner_id_kpx = $row['PartnerID_KPX'] ?? null;
+            $b_gl_code = $row['GLCode'] ?? null;
+            $b_settle_unsettle = $settle_unsettle;
+            $b_claim_unclaim = $claim_unclaim;
+            $b_imported_by = $row['imported_by'] ?? null;
+            $b_date_uploaded = $row['date_uploaded'] ?? null;
+            $b_rfp_no = $rfp_no;
+            $b_cad_no = $cad_no;
+            $b_hold_status = $hold_status;
+            $b_remote_branch = $row['remote_branch'] ?? null;
+            $b_remote_operator = $row['remote_operator'] ?? null;
+            $b_post_transaction = $row['post_transaction'] ?? null;
+
             $insertStmt->bind_param(
                 "ssssssssssdddssissssssssssssssssssss",
-                $status,
-                $datetime_value,
-                $cancellation_date,
-                $sourceType,
-                $row['control_number'],
-                $row['reference_number'],
-                $row['payor_name'],
-                $row['payor_address'],
-                $row['account_number'],
-                $row['account_name'],
-                $row['amount_paid'],
-                $row['amount_charge_partner'],
-                $row['amount_charge_customer'],
-                $row['contact_number'],
-                $row['other_details'],
-                $row['branch_id'],
-                $row['branch_code'],
-                $row['branch_outlet'],
-                $row['zone_code'],
-                $row['region_code'],
-                $row['region_description'],
-                $row['person_operator'],
-                $row['partner_name'],
-                $row['partner_id'],
-                $row['PartnerID_KPX'],
-                $row['GLCode'],
-                $settle_unsettle,
-                $claim_unclaim,
-                $row['imported_by'],
-                $row['date_uploaded'],
-                $rfp_no,
-                $cad_no,
-                $hold_status,
-                $row['remote_branch'],
-                $row['remote_operator'],
-                $row['post_transaction']
+                $b_status,
+                $b_datetime,
+                $b_cancellation_date,
+                $b_sourceType,
+                $b_control_number,
+                $b_reference_number,
+                $b_payor_name,
+                $b_payor_address,
+                $b_account_number,
+                $b_account_name,
+                $b_amount_paid,
+                $b_amount_charge_partner,
+                $b_amount_charge_customer,
+                $b_contact_number,
+                $b_other_details,
+                $b_branch_id,
+                $b_branch_code,
+                $b_branch_outlet,
+                $b_zone_code,
+                $b_region_code,
+                $b_region_description,
+                $b_person_operator,
+                $b_partner_name,
+                $b_partner_id,
+                $b_partner_id_kpx,
+                $b_gl_code,
+                $b_settle_unsettle,
+                $b_claim_unclaim,
+                $b_imported_by,
+                $b_date_uploaded,
+                $b_rfp_no,
+                $b_cad_no,
+                $b_hold_status,
+                $b_remote_branch,
+                $b_remote_operator,
+                $b_post_transaction
             );
 
             if (!$insertStmt->execute()) {
-                throw new Exception("Insert failed for reference: {$row['reference_number']} - {$insertStmt->error}");
+                $insertFailures++;
+                $errorMsg = "Insert failed for reference: {$b_reference_number} - {$insertStmt->error}";
+                error_log("[IMPORT ERROR] {$errorMsg}");
+                
+                // Log first 10 failures in detail
+                if ($insertFailures <= 10) {
+                    error_log("[IMPORT ERROR] Failed row details: datetime={$b_datetime}, cancellation_date={$b_cancellation_date}, branch_id={$b_branch_id}");
+                }
+                
+                throw new Exception($errorMsg);
             }
 
             $insertCount++;
+            $insertSuccess++;
+            
+            // Log progress every 1000 rows
+            if ($insertSuccess % 1000 == 0) {
+                error_log("[IMPORT PROGRESS] Successfully inserted {$insertSuccess} of {$insertAttempts} rows");
+            }
         }
 
         $insertStmt->close();
         $conn->commit();
         $conn->autocommit(TRUE);
+        
+        // Log final statistics
+        error_log("[IMPORT COMPLETE] Total rows processed: {$insertAttempts}");
+        error_log("[IMPORT COMPLETE] Successfully inserted: {$insertSuccess}");
+        error_log("[IMPORT COMPLETE] Failed inserts: {$insertFailures}");
+        error_log("[IMPORT COMPLETE] Rows deleted before insert: {$deleteCount}");
+        error_log("[IMPORT COMPLETE] Transaction committed successfully");
+
+        // Free spreadsheet resources for this import to reduce memory usage
+        if (isset($spreadsheet) && is_object($spreadsheet)) {
+            try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+            unset($worksheet, $spreadsheet);
+            if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+        }
 
         return [
             'success' => true,
-            'inserted' => $insertCount
+            'inserted' => $insertCount,
+            'warnings' => $errors,
+            'debug_stats' => [
+                'attempts' => $insertAttempts,
+                'success' => $insertSuccess,
+                'failures' => $insertFailures,
+                'deleted' => $deleteCount,
+                'deleted_rows' => $deleted_rows_details
+            ]
         ];
 
     } catch (Exception $e) {
         $conn->rollback();
         $conn->autocommit(TRUE);
+        
+        // Log rollback details
+        error_log("[IMPORT ERROR] Transaction rolled back due to error: " . $e->getMessage());
+        if (isset($insertAttempts, $insertSuccess, $insertFailures)) {
+            error_log("[IMPORT ERROR] Stats before rollback - Attempts: {$insertAttempts}, Success: {$insertSuccess}, Failures: {$insertFailures}");
+        }
+        
+        // Attempt to free spreadsheet resources even on error
+        if (isset($spreadsheet) && is_object($spreadsheet)) {
+            try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e2) {}
+            unset($worksheet, $spreadsheet);
+            if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+        }
+
         return [
             'success' => false,
-            'error' => $e->getMessage()
+            'error' => $e->getMessage(),
+            'debug_stats' => [
+                'attempts' => $insertAttempts ?? 0,
+                'success' => $insertSuccess ?? 0,
+                'failures' => $insertFailures ?? 0,
+                'deleted' => $deleteCount ?? 0,
+                'deleted_rows' => $deleted_rows_details ?? []
+            ]
         ];
     }
 }
@@ -1290,7 +2431,32 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         <?php include '../../templates/sidebar.php'; ?>
         
         <div class="content-wrapper p-4">
-            <center><h2>File Validation & Import</h2></center>
+            <?php 
+                // Prepare counts and progress token early so header can show action buttons
+                $validFiles = isset($_SESSION['uploaded_files']) ? array_filter($_SESSION['uploaded_files'], function($f) { return $f['status'] === 'valid'; }) : [];
+                $validCount = count($validFiles);
+                $progressToken = uniqid('prg_', true);
+            ?>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="mb-0">File Validation & Import</h2>
+                <div>
+                    <?php if (isset($_SESSION['uploaded_files'])): ?>
+                        <?php if ($validCount > 0): ?>
+                            <form method="post" id="performImportForm" style="display: inline; margin-right:8px;">
+                                <input type="hidden" name="progress_token" value="<?php echo htmlspecialchars($progressToken); ?>">
+                                <input type="hidden" name="perform_import" value="1">
+                                <button type="submit" name="perform_import" class="btn btn-success btn-sm">
+                                    <i class="fa-solid fa-file-import me-1"></i>
+                                    <?php echo $validCount === 1 ? 'Import File' : 'Import All (' . $validCount . ')'; ?>
+                                </button>
+                            </form>
+                        <?php endif; ?>
+                        <button class="btn btn-secondary btn-sm" onclick="confirmCancel()">
+                            <i class="fa-solid fa-times me-1"></i> Cancel
+                        </button>
+                    <?php endif; ?>
+                </div>
+            </div>
             
             <?php if (isset($_SESSION['uploaded_files']) && count($_SESSION['uploaded_files']) > 0): ?>
                 
@@ -1363,46 +2529,34 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                     <?php endforeach; ?>
                 </div>
                 
-                <!-- Action Buttons -->
-                <div class="action-buttons">
-                    <?php 
-                    $validFiles = array_filter($_SESSION['uploaded_files'], function($f) {
-                        return $f['status'] === 'valid';
-                    });
-                    $validCount = count($validFiles);
-                    ?>
-                    
-                    <?php if ($validCount > 0): ?>
-                        <form method="post" style="display: inline;">
-                            <button type="submit" name="perform_import" class="btn btn-success btn-lg btn-import">
-                                <i class="fa-solid fa-file-import me-2"></i>
-                                <?php echo $validCount === 1 ? 'Import File' : 'Import All (' . $validCount . ')'; ?>
-                            </button>
-                        </form>
-                    <?php else: ?>
-                        <div class="alert alert-warning d-inline-block">
-                            <i class="fa-solid fa-exclamation-triangle me-2"></i>
-                            No valid files to import. Please fix errors and try again.
-                        </div>
-                    <?php endif; ?>
-                    
-                    <button class="btn btn-secondary btn-lg ms-3" onclick="confirmCancel()">
-                        <i class="fa-solid fa-times me-2"></i> Cancel
-                    </button>
-                </div>
+                <!-- Action Buttons moved to header -->
                 
             <?php else: ?>
                 <div class="alert alert-info text-center mt-5">
                     <h4>No files uploaded</h4>
                     <p>Please go back to the upload page and select files to import.</p>
-                    <a href="../../dashboard/billspayment/import/billspay-transaction.php" class="btn btn-primary">
+                    <a href="/billspayment/dashboard/billspayment/import/billspay-transaction.php" class="btn btn-primary">
                         Go to Upload Page
                     </a>
                 </div>
             <?php endif; ?>
         </div>
     </div>
-    
+
+    <!-- Import progress overlay -->
+    <div id="importOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:99999; align-items:center; justify-content:center;">
+        <div style="background:#fff; padding:20px; border-radius:8px; width:420px; max-width:90%; text-align:left;">
+            <h5 style="margin:0 0 10px 0;"><i class="fa-solid fa-spinner fa-spin"></i> Importing...</h5>
+            <div class="progress" style="height:18px; margin-bottom:10px;">
+                <div id="importProgressBar" class="progress-bar bg-success" role="progressbar" style="width:0%;">0%</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px;">
+                <div id="importProgressText">0/0</div>
+                <div><button id="importCancelBtn" class="btn btn-sm btn-secondary">Hide</button></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Store file data for JavaScript access
         const filesData = <?php echo json_encode($_SESSION['uploaded_files'] ?? []); ?>;
@@ -1456,7 +2610,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <tr><th>KPX Partner ID:</th><td>${partnerData.partner_id_kpx || 'N/A'}</td></tr>
                             <tr><th>GL Code:</th><td>${partnerData.gl_code || 'N/A'}</td></tr>
                             <tr><th>Source Type:</th><td><span class="badge badge-${(sourceType || 'unknown').toLowerCase()}">${sourceType}</span></td></tr>
-                            <tr><th>Transaction Date:</th><td>${transactionDate}</td></tr>
+                            <tr><th>Transaction Date:</th><td>${validation.transaction_start_date ? ('Start Date: ' + validation.transaction_start_date + (validation.transaction_end_date ? ' - End Date: ' + validation.transaction_end_date : '')) : transactionDate}</td></tr>
                             <tr><th>Total Rows:</th><td>${validation.row_count || 0}</td></tr>
                             <tr><th>Status:</th><td><span class="badge badge-${fileData.status || 'pending'}">${(fileData.status || 'pending').toUpperCase()}</span></td></tr>
                         </table>
@@ -1488,16 +2642,27 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 html += `</ul></div></div>`;
             }
             
-            // Show preview data
+            // Show preview data with filter control
             if (previewData.length > 0) {
                 html += `
                     <div class="mb-3">
-                        <h5><i class="fa-solid fa-table"></i> Data Preview (First 10 rows)</h5>
+                        <h5><i class="fa-solid fa-table"></i> Data Preview (First 10 rows + all cancelled)</h5>
+                        <div class="d-flex mb-2">
+                            <div style="flex:1"></div>
+                            <div style="min-width:220px; text-align:right;">
+                                <label for="previewFilter" style="margin-right:8px; font-weight:600;">Filter:</label>
+                                <select id="previewFilter" class="form-select form-select-sm" style="display:inline-block; width:140px;">
+                                    <option value="all">All</option>
+                                    <option value="active">Active</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                        </div>
                         <div style="overflow-x: auto; max-height: 400px;">
                             <table class="table table-sm table-striped table-bordered">
                                 <thead class="table-dark">
                                     <tr>`;
-                
+
                 // Dynamic headers based on source type
                 if (sourceType === 'KP7' || sourceType === 'kp7') {
                     html += `
@@ -1538,15 +2703,33 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                         <th>Column 9</th>
                                         <th>Column 10</th>`;
                 }
-                
+
                 html += `</tr></thead><tbody>`;
-                
+
                 // Data rows
+                let activeCount = 0;
+                let cancelledCount = 0;
+                
                 previewData.forEach(row => {
                     if (!row) return; // Skip null/undefined rows
+
+                    // Determine cancellation state robustly
+                    // KP7: asterisk in STATUS column (column A), stored in numeric_number or control_number
+                    // KPX: asterisk in No column as "1*", "2*" etc, stored in numeric_number
+                    const hasAsterisk = (val) => val && String(val).trim().includes('*');
+                    const isCancellation = hasAsterisk(row.numeric_number) || 
+                                          hasAsterisk(row.control_number) || 
+                                          hasAsterisk(row.reference_number) ||
+                                          hasAsterisk(row.transaction_date);
                     
-                    html += '<tr>';
-                    
+                    if (isCancellation) {
+                        cancelledCount++;
+                    } else {
+                        activeCount++;
+                    }
+
+                    html += `<tr class="preview-row" data-cancelled="${isCancellation ? '1' : '0'}">`;
+
                     if (sourceType === 'KP7' || sourceType === 'kp7') {
                         html += `
                             <td>${row.control_number || ''}</td>
@@ -1560,9 +2743,8 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <td>₱${parseFloat(row.service_charge || 0).toFixed(2)}</td>
                             <td>₱${parseFloat(row.total_amount || 0).toFixed(2)}</td>`;
                     } else if (sourceType === 'KPX' || sourceType === 'kpx') {
-                        const isCancellation = row.numeric_number === '*';
                         html += `
-                            <td>${isCancellation ? '<span class="badge bg-danger">CANCEL</span>' : '<span class="badge bg-success">REGULAR</span>'}</td>
+                            <td>${isCancellation ? '<span class="badge bg-danger">CANCEL</span>' : '<span class="badge bg-success">active</span>'}</td>
                             <td>${row.control_number || ''}</td>
                             <td>${row.branch_id || ''}</td>
                             <td>${row.transaction_date || ''}</td>
@@ -1584,8 +2766,15 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 html += `</tbody></table></div>`;
                 
                 if (validation.row_count > 10) {
-                    html += `<p class="text-muted"><small><i class="fa-solid fa-info-circle"></i> Showing first 10 of ${validation.row_count} total rows</small></p>`;
+                    const previewNote = cancelledCount > 0 
+                        ? `Showing first 10 rows + all ${cancelledCount} cancelled transaction(s) from ${validation.row_count} total rows`
+                        : `Showing first 10 of ${validation.row_count} total rows`;
+                    html += `<p class="text-muted"><small><i class="fa-solid fa-info-circle"></i> ${previewNote} (Preview: ${activeCount} active, ${cancelledCount} cancelled)</small></p>`;
+                } else {
+                    html += `<p class="text-muted"><small>Preview: ${activeCount} active, ${cancelledCount} cancelled</small></p>`;
                 }
+                
+                console.log('Preview data detection:', { activeCount, cancelledCount, totalPreview: previewData.length });
                 
                 html += `</div>`;
             } else {
@@ -1599,7 +2788,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             
             html += '</div>';
             
-            // Display the modal
+            // Display the modal with filter behavior attached on open
             Swal.fire({
                 title: '<strong>File Details: ' + fileData.name + '</strong>',
                 html: html,
@@ -1608,6 +2797,45 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 confirmButtonText: 'Close',
                 customClass: {
                     container: 'swal-wide'
+                },
+                didOpen: (modal) => {
+                    try {
+                        const container = Swal.getHtmlContainer();
+                        if (!container) return;
+                        const filter = container.querySelector('#previewFilter');
+                        if (!filter) return;
+                        
+                        // Log initial row states for debugging
+                        const rows = Array.from(container.querySelectorAll('.preview-row'));
+                        const cancelledRows = rows.filter(r => r.dataset.cancelled === '1');
+                        console.log('Preview filter initialized:', {
+                            totalRows: rows.length,
+                            cancelledRows: cancelledRows.length,
+                            activeRows: rows.length - cancelledRows.length
+                        });
+                        
+                        // Attach change handler to show/hide rows
+                        filter.addEventListener('change', (e) => {
+                            const val = e.target.value;
+                            let visibleCount = 0;
+                            rows.forEach(r => {
+                                const isCancel = r.dataset.cancelled === '1';
+                                if (val === 'all') {
+                                    r.style.display = '';
+                                    visibleCount++;
+                                } else if (val === 'active') {
+                                    r.style.display = isCancel ? 'none' : '';
+                                    if (!isCancel) visibleCount++;
+                                } else if (val === 'cancelled') {
+                                    r.style.display = isCancel ? '' : 'none';
+                                    if (isCancel) visibleCount++;
+                                }
+                            });
+                            console.log(`Filter changed to '${val}': showing ${visibleCount} rows`);
+                        });
+                    } catch (err) {
+                        console.error('Preview filter init error', err);
+                    }
                 }
             });
         }
@@ -1740,8 +2968,16 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                     <td><span class="badge badge-${sourceType.toLowerCase()}" style="font-size: 14px;">${sourceType} System</span></td>
                                 </tr>
                                 <tr>
+                                    <th style="background-color: #f8f9fa;"><i class="fa-solid fa-calendar-day" style="color: #0dcaf0;"></i> Start Date</th>
+                                    <td><strong>${validation.transaction_start_date || 'N/A'}</strong></td>
+                                </tr>
+                                <tr>
+                                    <th style="background-color: #f8f9fa;"><i class="fa-solid fa-calendar-day" style="color: #0dcaf0;"></i> End Date</th>
+                                    <td><strong>${validation.transaction_end_date || 'N/A'}</strong></td>
+                                </tr>
+                                <tr>
                                     <th style="background-color: #f8f9fa;"><i class="fa-solid fa-calendar-day" style="color: #0dcaf0;"></i> Transaction Date</th>
-                                    <td><strong>${transactionDate}</strong></td>
+                                    <td><strong>${validation.transaction_start_date ? ('Start Date: ' + validation.transaction_start_date + (validation.transaction_end_date ? ' - End Date: ' + validation.transaction_end_date : '')) : transactionDate}</strong></td>
                                 </tr>
                                 <tr>
                                     <th style="background-color: #f8f9fa;"><i class="fa-solid fa-calendar" style="color: #0dcaf0;"></i> Uploaded Date</th>
@@ -1782,10 +3018,175 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             }).then((result) => {
                 if (result.isConfirmed) {
                     // Clean up session and temp files
-                    window.location.href = '../../dashboard/billspayment/import/billspay-transaction.php?cancel=1';
+                    window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php?cancel=1';
                 }
             });
         }
+
+        // Import form handling with progress polling
+        (function() {
+            const form = document.getElementById('performImportForm');
+            if (!form) return;
+
+            const overlay = document.getElementById('importOverlay');
+            const progressBar = document.getElementById('importProgressBar');
+            const progressText = document.getElementById('importProgressText');
+            const hideBtn = document.getElementById('importCancelBtn');
+
+            let pollInterval = null;
+
+            function showOverlay() {
+                if (overlay) overlay.style.display = 'flex';
+            }
+            function hideOverlay() {
+                if (overlay) overlay.style.display = 'none';
+            }
+
+            function startPolling(token) {
+                if (!token) return;
+                pollInterval = setInterval(async () => {
+                    try {
+                        const res = await fetch(window.location.pathname + '?get_progress=1&token=' + encodeURIComponent(token), { cache: 'no-store' });
+                        const data = await res.json();
+                        const total = parseInt(data.total || 0, 10);
+                        const done = parseInt(data.done || 0, 10);
+                        if (total > 0) {
+                            const pct = Math.min(100, Math.round((done / total) * 100));
+                            if (progressBar) progressBar.style.width = pct + '%';
+                            if (progressBar) progressBar.textContent = pct + '%';
+                            if (progressText) progressText.textContent = done + '/' + total;
+                        } else {
+                            if (progressBar) { progressBar.style.width = '100%'; progressBar.textContent = 'Processing'; }
+                            if (progressText) progressText.textContent = '0/0';
+                        }
+                        if (total > 0 && done >= total) {
+                            clearInterval(pollInterval);
+                            pollInterval = null;
+                        }
+                    } catch (err) {
+                        // ignore polling errors
+                    }
+                }, 600);
+            }
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const fd = new FormData(form);
+                const token = fd.get('progress_token');
+                fd.append('is_ajax', '1'); // Indicate this is an AJAX request
+                
+                console.log('[IMPORT DEBUG] Import started with progress token:', token);
+                console.log('[IMPORT DEBUG] Form data prepared for submission');
+                
+                showOverlay();
+                startPolling(token);
+
+                // submit via fetch and handle JSON response
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'same-origin'
+                }).then(resp => {
+                    console.log('[IMPORT DEBUG] Server response received, status:', resp.status);
+                    return resp.json();
+                }).then(data => {
+                    // Stop polling
+                    if (pollInterval) clearInterval(pollInterval);
+                    pollInterval = null;
+                    hideOverlay();
+
+                    console.log('[IMPORT DEBUG] Import response data:', data);
+                    
+                    // Log debug statistics if available
+                    if (data.debug_stats) {
+                        console.log('[IMPORT DEBUG] Aggregate statistics:');
+                        console.log('  - Total files processed:', data.debug_stats.files_processed);
+                        console.log('  - Total row attempts:', data.debug_stats.total_attempts);
+                        console.log('  - Successful inserts:', data.debug_stats.total_success);
+                        console.log('  - Failed inserts:', data.debug_stats.total_failures);
+                        console.log('  - Rows deleted before insert:', data.debug_stats.total_deleted);
+                    }
+                    
+                    // Log per-file statistics if available
+                    if (data.per_file_stats && data.per_file_stats.length > 0) {
+                        console.log('[IMPORT DEBUG] Per-file breakdown:');
+                        data.per_file_stats.forEach((fileStats, idx) => {
+                            console.log(`  File ${idx + 1}: ${fileStats.file}`);
+                            console.log(`    - Attempts: ${fileStats.attempts}`);
+                            console.log(`    - Success: ${fileStats.success}`);
+                            console.log(`    - Failures: ${fileStats.failures}`);
+                            console.log(`    - Deleted: ${fileStats.deleted}`);
+                            if (fileStats.deleted_rows && Array.isArray(fileStats.deleted_rows) && fileStats.deleted_rows.length > 0) {
+                                console.log('    - Deleted rows details:');
+                                fileStats.deleted_rows.forEach(dr => {
+                                    console.log(`      id=${dr.id}, ref=${dr.reference_no}, status=${dr.status}, datetime=${dr.datetime}, cancellation_date=${dr.cancellation_date}, partner_id=${dr.partner_id}, partner_id_kpx=${dr.partner_id_kpx}, post_transaction=${dr.post_transaction}`);
+                                });
+                            }
+                            if (fileStats.failed) {
+                                console.warn(`    ⚠ This file had import errors`);
+                            }
+                        });
+                    }
+
+                    // Show result modal
+                    const hasErrors = data.errors && data.errors.length > 0;
+                    const summaryHtml = hasErrors
+                        ? `Import finished with some issues.<br>Successfully imported: ${data.imported} file(s)<br>Failed: ${data.failed}`
+                        : `Successfully imported: ${data.imported} file(s)`;
+                    
+                    console.log('[IMPORT DEBUG] Import completed - Success:', data.imported, 'Failed:', data.failed);
+
+                    Swal.fire({
+                        icon: hasErrors ? 'warning' : 'success',
+                        title: hasErrors ? 'Import Completed with Issues' : 'Import Successful',
+                        html: summaryHtml,
+                        showDenyButton: hasErrors,
+                        denyButtonText: 'View full details',
+                        confirmButtonText: 'OK',
+                        reverseButtons: true
+                    }).then((result) => {
+                        if (result.isDenied && hasErrors) {
+                            const detailList = data.errors
+                                .map((item, index) => '<li><strong>No. ' + (index + 1) + ':</strong> ' + item + '</li>')
+                                .join('');
+
+                            const detailHtml =
+                                '<div style=\'text-align:left; max-height: 60vh; overflow-y:auto;\'>' +
+                                    '<p class=\'text-muted\'>Below are the detailed errors found during import.</p>' +
+                                    '<ul>' + detailList + '</ul>' +
+                                '</div>';
+
+                            Swal.fire({
+                                icon: 'info',
+                                title: 'Import Error Details',
+                                html: detailHtml,
+                                width: '85%',
+                                confirmButtonText: 'Close'
+                            }).then(() => {
+                                window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
+                            });
+                        } else {
+                            window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
+                        }
+                    });
+                }).catch(error => {
+                    if (pollInterval) clearInterval(pollInterval);
+                    hideOverlay();
+                    console.error('[IMPORT ERROR] Failed to fetch or parse response:', error);
+                    console.error('[IMPORT ERROR] Error details:', {
+                        message: error.message,
+                        stack: error.stack
+                    });
+                    Swal.fire({ 
+                        icon: 'error', 
+                        title: 'Import Error', 
+                        text: 'An error occurred during import. Check console for details.' 
+                    });
+                });
+            });
+
+            if (hideBtn) hideBtn.addEventListener('click', function() { hideOverlay(); });
+        })();
     </script>
 </body>
 </html>
