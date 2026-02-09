@@ -37,8 +37,28 @@ if (isset($_SESSION['user_type'])) {
 
 // Increase memory and execution time for large batches (short-term mitigation).
 // Recommended: implement chunked reads for robust long-term handling.
-ini_set('memory_limit', '2048M');
+// Make memory unlimited for import processing to avoid OOM during heavy validation.
+// NOTE: Use with caution in production. Consider setting to a large finite value if preferred.
+ini_set('memory_limit', '-1');
 set_time_limit(0);
+
+// Register a shutdown handler to capture fatal errors and peak memory usage.
+register_shutdown_function(function() {
+    $logFile = __DIR__ . '/import_debug.log';
+    $err = error_get_last();
+    $peak = memory_get_peak_usage(true);
+    $now = date('c');
+    $msg = "[{$now}] Shutdown handler:\n";
+    $msg .= "memory_limit=" . ini_get('memory_limit') . "\n";
+    $msg .= "memory_peak_bytes=" . $peak . "\n";
+    if ($err) {
+        $msg .= "last_error=" . json_encode($err) . "\n";
+    }
+    // Append request summary (method, uri) for context
+    $msg .= "request=" . ($_SERVER['REQUEST_METHOD'] ?? 'CLI') . " " . ($_SERVER['REQUEST_URI'] ?? '') . "\n";
+    $msg .= "\n";
+    @file_put_contents($logFile, $msg, FILE_APPEND | LOCK_EX);
+});
 
 // Configure PhpSpreadsheet cell caching to reduce memory usage for large files
 // Use a disk-based cache (discISAM) or php temp dir. This helps prevent exhausting RAM.
@@ -1046,6 +1066,7 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     $previewData = []; // Store sample rows for preview
     $matchedRows = [];
     $cancellationRows = [];
+    $missingRows = []; // rows with missing Branch ID / ML Outlet / Region Code
     $transactionDate = null;
     $transactionStartDate = null;
     $transactionEndDate = null;
@@ -1260,6 +1281,36 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
                 }
             }
 
+            // Check for missing required location fields (Branch ID=N, ML Outlet=O, Region Code=P)
+            $branchIdCell = '';
+            $mlOutletCell = '';
+            $regionCodeCell = '';
+            try {
+                $branchIdCell = trim(strval($worksheet->getCell('N' . $row)->getValue()));
+                $mlOutletCell = trim(strval($worksheet->getCell('O' . $row)->getValue()));
+                $regionCodeCell = trim(strval($worksheet->getCell('P' . $row)->getValue()));
+            } catch (Exception $e) {
+                // ignore missing columns — treat as empty
+            }
+
+            $missing = [];
+            if ($branchIdCell === '' || strtoupper($branchIdCell) === 'NAN') $missing[] = 'Branch ID';
+            if ($mlOutletCell === '' || strtoupper($mlOutletCell) === 'NAN') $missing[] = 'ML Outlet';
+            if ($regionCodeCell === '' || strtoupper($regionCodeCell) === 'NAN') $missing[] = 'Region Code';
+
+            if (!empty($missing)) {
+                $missingRows[] = [
+                    'row' => $row,
+                    'missing' => $missing
+                ];
+                $errors[] = [
+                    'row' => $row,
+                    'type' => 'missing_fields',
+                    'message' => 'Missing fields: ' . implode(', ', $missing),
+                    'value' => ''
+                ];
+            }
+
             // Store data for transaction summary
             if (!empty($referenceNumber)) {
                 $summaryRow = [
@@ -1347,11 +1398,12 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     error_log("Validation detection for {$filePath}: " . count($matchedRows) . " active, " . count($cancellationRows) . " cancelled (total {$rowCount} rows)");
     
     return [
-        'valid' => count($errors) ===  0,
+        'valid' => (count($errors) === 0 && count($missingRows) === 0),
         'row_count' => $rowCount,
         'errors' => $errors,
         'warnings' => $warnings,
         'preview_data' => $previewData,
+        'missing_rows' => $missingRows,
         'source_type' => $sourceType,
         'partner_data' => $partnerData,
         'transaction_date' => $transactionDate,
@@ -2415,6 +2467,22 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         .summary-icon {
             margin-right: 8px;
         }
+
+        /* missing icon */
+        .missing-icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: #fff;
+            color: #dc3545;
+            border: 2px solid #dc3545;
+            box-shadow: 0 2px 6px rgba(220,53,69,0.12);
+            margin-left: 8px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -2483,27 +2551,8 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                     <strong><?php echo $file['validation_result']['row_count']; ?></strong>
                                 </div>
                                 
-                                <?php if (!empty($file['validation_result']['errors'])): ?>
-                                    <div class="alert alert-danger p-2 error-list">
-                                        <strong>Validation Errors:</strong>
-                                        <ul class="mb-0 mt-1">
-                                            <?php foreach ($file['validation_result']['errors'] as $error): ?>
-                                                <li>Row <?php echo $error['row']; ?>: <?php echo htmlspecialchars($error['message']); ?></li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    </div>
-                                <?php endif; ?>
-                                
-                                <?php if (!empty($file['validation_result']['warnings'])): ?>
-                                    <div class="alert alert-warning p-2 error-list">
-                                        <strong>Warnings:</strong>
-                                        <ul class="mb-0 mt-1">
-                                            <?php foreach ($file['validation_result']['warnings'] as $warning): ?>
-                                                <li><?php echo htmlspecialchars($warning['message']); ?></li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    </div>
-                                <?php endif; ?>
+                                <!-- Validation errors/warnings are shown per-row via the Missing Data modal;
+                                     keep card UI minimal (row count + missing icon) -->
                             <?php endif; ?>
                             
                             <div class="btn-group mt-2" role="group">
@@ -2513,6 +2562,11 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                 <button class="btn btn-sm btn-success" onclick="viewTransactionSummary('<?php echo $file['id']; ?>')">
                                     <i class="fa-solid fa-chart-bar"></i> Transaction Summary
                                 </button>
+                                <?php if (!empty($file['validation_result']['missing_rows'])): ?>
+                                    <button class="missing-icon-btn" title="Missing data detected" onclick="showMissingModal('<?php echo $file['id']; ?>')">
+                                        <i class="fa-solid fa-circle-question"></i>
+                                    </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -2991,6 +3045,41 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 customClass: {
                     container: 'swal-wide'
                 }
+            });
+        }
+
+        // Show modal listing rows with missing required fields
+        function showMissingModal(fileId) {
+            const fileData = filesData.find(f => f.id === fileId);
+            if (!fileData || !fileData.validation_result) {
+                Swal.fire({ title: 'Info', text: 'No validation data available', icon: 'info' });
+                return;
+            }
+
+            const missing = fileData.validation_result.missing_rows || [];
+            if (!missing.length) {
+                Swal.fire({ title: 'No Missing Data', text: 'No missing Branch ID / ML Outlet / Region Code found.', icon: 'success' });
+                return;
+            }
+
+            let html = `<div style="text-align:left; max-height:60vh; overflow:auto;">
+                <p class="text-danger"><strong>Rows with missing data</strong></p>
+                <table class="table table-sm table-bordered table-striped">
+                    <thead><tr><th>Row</th><th>Missing Fields</th></tr></thead>
+                    <tbody>`;
+
+            missing.forEach(m => {
+                html += `<tr><td>${m.row}</td><td>${m.missing.join(', ')}</td></tr>`;
+            });
+
+            html += `</tbody></table></div>`;
+
+            Swal.fire({
+                title: '<strong>Missing Data Details: ' + (fileData.name || '') + '</strong>',
+                html: html,
+                width: '70%',
+                showCloseButton: true,
+                confirmButtonText: 'Close'
             });
         }
         
