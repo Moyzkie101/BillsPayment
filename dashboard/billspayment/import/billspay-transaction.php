@@ -877,7 +877,7 @@ if (isset($_SESSION['user_type'])) {
                         // remove live list
                         $('#duplicate-check-list').remove();
 
-                        // Check duplicates overall
+                        // Check duplicates overal
                         const filesWithDuplicates = flat.filter(f => f.hasDuplicates);
                         if (filesWithDuplicates.length > 0) {
                             showDuplicateModal(flat, filesWithDuplicates);
@@ -984,7 +984,7 @@ if (isset($_SESSION['user_type'])) {
                     <div style="text-align: center;">
                         <div style="background-color: #fff8e1; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #ff9800;">
                             <p style="margin: 0; color: #666; font-size: 15px;">
-                                <strong style="color: #000;">${filesWithDuplicates.length}</strong> file(s) with Partner ID data already exists in the database
+                                <strong style="color: #000;">${filesWithDuplicates.length}</strong> file(s) with Partner ID data already exists
                             </p>
                         </div>
                         <div style="background-color: #f5f5f5; padding: 12px; border-radius: 5px; margin-bottom: 15px;">

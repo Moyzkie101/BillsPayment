@@ -2562,27 +2562,8 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                     <strong><?php echo $file['validation_result']['row_count']; ?></strong>
                                 </div>
                                 
-                                <?php if (!empty($file['validation_result']['errors'])): ?>
-                                    <div class="alert alert-danger p-2 error-list">
-                                        <strong>Validation Errors:</strong>
-                                        <ul class="mb-0 mt-1">
-                                            <?php foreach ($file['validation_result']['errors'] as $error): ?>
-                                                <li>Row <?php echo $error['row']; ?>: <?php echo htmlspecialchars($error['message']); ?></li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    </div>
-                                <?php endif; ?>
-                                
-                                <?php if (!empty($file['validation_result']['warnings'])): ?>
-                                    <div class="alert alert-warning p-2 error-list">
-                                        <strong>Warnings:</strong>
-                                        <ul class="mb-0 mt-1">
-                                            <?php foreach ($file['validation_result']['warnings'] as $warning): ?>
-                                                <li><?php echo htmlspecialchars($warning['message']); ?></li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    </div>
-                                <?php endif; ?>
+                                <!-- Validation errors/warnings are shown per-row via the Missing Data modal;
+                                     keep card UI minimal (row count + missing icon) -->
                             <?php endif; ?>
                             
                             <div class="btn-group mt-2" role="group">
