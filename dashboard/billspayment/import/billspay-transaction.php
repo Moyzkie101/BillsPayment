@@ -370,6 +370,10 @@ if (isset($_SESSION['user_type'])) {
                     </div>
 
                     <div id="proceedContainer" class="proceed-container" style="display: none;">
+                        <div class="form-check form-check-inline" style="margin-right:8px; align-items:center;">
+                            <input class="form-check-input" type="checkbox" id="showDebug" />
+                            <label class="form-check-label" for="showDebug" style="font-size:13px;">Show debug info</label>
+                        </div>
                         <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
                             Proceed <i class="fa-solid fa-arrow-right ms-2"></i>
                         </button>
@@ -683,11 +687,67 @@ if (isset($_SESSION['user_type'])) {
                     return;
                 }
 
-                // Show loading overlay
-                $('#loading-overlay').css('display', 'flex');
+                // If debug checkbox is checked, fetch server memory/error info first
+                function fetchDebugInfo() {
+                    return $.ajax({
+                        url: '../../../fetch/debug_memory.php',
+                        method: 'GET',
+                        dataType: 'json'
+                    });
+                }
 
-                // Step 1: Check for duplicates first
-                checkForDuplicates();
+                function formatBytes(bytes) {
+                    if (!bytes && bytes !== 0) return 'n/a';
+                    var units = ['B','KB','MB','GB','TB'];
+                    var i = 0;
+                    while(bytes >= 1024 && i < units.length-1) { bytes /= 1024; i++; }
+                    return bytes.toFixed(2) + ' ' + units[i];
+                }
+
+                function showDebugModal(data, extra) {
+                    var d = data && data.data ? data.data : data;
+                    var html = '<div style="text-align:left; font-size:13px;">';
+                    html += '<p><strong>memory_limit:</strong> ' + (d.memory_limit || 'n/a') + '</p>';
+                    html += '<p><strong>memory_usage:</strong> ' + formatBytes(d.memory_usage_bytes) + ' (' + (d.memory_usage_bytes || 'n') + ')</p>';
+                    html += '<p><strong>memory_usage_real:</strong> ' + formatBytes(d.memory_usage_real_bytes) + '</p>';
+                    html += '<p><strong>memory_peak:</strong> ' + formatBytes(d.memory_peak_bytes) + '</p>';
+                    html += '<p><strong>max_execution_time:</strong> ' + (d.max_execution_time || 'n/a') + 's</p>';
+                    html += '<p><strong>post_max_size:</strong> ' + (d.post_max_size || 'n/a') + '</p>';
+                    html += '<p><strong>upload_max_filesize:</strong> ' + (d.upload_max_filesize || 'n/a') + '</p>';
+                    if (d.error_last) {
+                        html += '<hr><p><strong>Last PHP error:</strong><br>' + (d.error_last['message'] || '') + ' in ' + (d.error_last['file'] || '') + ' on line ' + (d.error_last['line'] || '') + '</p>';
+                    }
+                    if (extra) html += '<hr><pre style="white-space:pre-wrap; font-size:12px;">' + $('<div>').text(extra).html() + '</pre>';
+                    html += '</div>';
+
+                    Swal.fire({
+                        title: 'Server debug info',
+                        html: html,
+                        width: 700,
+                        confirmButtonText: 'Continue'
+                    });
+                }
+
+                if ($('#showDebug').is(':checked')) {
+                    // Fetch debug info and show it, then proceed
+                    fetchDebugInfo().done(function(resp) {
+                        showDebugModal(resp);
+                        // Show loading overlay and continue duplicate check after user sees debug
+                        $('#loading-overlay').css('display', 'flex');
+                        checkForDuplicates();
+                    }).fail(function(xhr, status, err) {
+                        var extra = 'Debug endpoint error: ' + err + '\n' + (xhr.responseText || '');
+                        showDebugModal({ data: {} }, extra);
+                        $('#loading-overlay').css('display', 'flex');
+                        checkForDuplicates();
+                    });
+                } else {
+                    // Show loading overlay
+                    $('#loading-overlay').css('display', 'flex');
+
+                    // Step 1: Check for duplicates first
+                    checkForDuplicates();
+                }
             });
 
             // Function to check for duplicates
@@ -764,14 +824,38 @@ if (isset($_SESSION['user_type'])) {
                             file.status = 'error';
                         });
                         renderFileCards();
-                        
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Validation Error',
-                            text: 'An error occurred while checking for duplicates. Please try again.',
-                            confirmButtonText: 'OK'
+                        // Try to fetch server debug info and show combined message
+                        $.ajax({
+                            url: '../../../fetch/debug_memory.php',
+                            method: 'GET',
+                            dataType: 'json'
+                        }).done(function(debugResp) {
+                            var extra = 'AJAX error: ' + error + '\n' + (xhr.responseText || '');
+                            // show debug modal with extra info
+                            var d = debugResp && debugResp.data ? debugResp.data : debugResp;
+                            var html = '<div style="text-align:left; font-size:13px;">';
+                            html += '<p><strong>memory_limit:</strong> ' + (d.memory_limit || 'n/a') + '</p>';
+                            html += '<p><strong>memory_usage:</strong> ' + (d.memory_usage_bytes ? (d.memory_usage_bytes + ' bytes') : 'n/a') + '</p>';
+                            if (d.error_last) html += '<p><strong>Last PHP error:</strong> ' + (d.error_last['message'] || '') + '</p>';
+                            html += '<hr><pre style="white-space:pre-wrap; font-size:12px;">' + $('<div>').text(extra).html() + '</pre>';
+                            html += '</div>';
+
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Validation Error - Duplicate Check Failed',
+                                html: html,
+                                confirmButtonText: 'OK',
+                                width: 700
+                            });
+                        }).fail(function() {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Validation Error',
+                                text: 'An error occurred while checking for duplicates. Please try again.',
+                                confirmButtonText: 'OK'
+                            });
                         });
-                        console.error('Duplicate check error:', error);
+                        console.error('Duplicate check error:', error, xhr.responseText);
                     }
                 });
             }

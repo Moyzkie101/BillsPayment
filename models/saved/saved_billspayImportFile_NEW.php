@@ -37,8 +37,28 @@ if (isset($_SESSION['user_type'])) {
 
 // Increase memory and execution time for large batches (short-term mitigation).
 // Recommended: implement chunked reads for robust long-term handling.
-ini_set('memory_limit', '2048M');
+// Make memory unlimited for import processing to avoid OOM during heavy validation.
+// NOTE: Use with caution in production. Consider setting to a large finite value if preferred.
+ini_set('memory_limit', '-1');
 set_time_limit(0);
+
+// Register a shutdown handler to capture fatal errors and peak memory usage.
+register_shutdown_function(function() {
+    $logFile = __DIR__ . '/import_debug.log';
+    $err = error_get_last();
+    $peak = memory_get_peak_usage(true);
+    $now = date('c');
+    $msg = "[{$now}] Shutdown handler:\n";
+    $msg .= "memory_limit=" . ini_get('memory_limit') . "\n";
+    $msg .= "memory_peak_bytes=" . $peak . "\n";
+    if ($err) {
+        $msg .= "last_error=" . json_encode($err) . "\n";
+    }
+    // Append request summary (method, uri) for context
+    $msg .= "request=" . ($_SERVER['REQUEST_METHOD'] ?? 'CLI') . " " . ($_SERVER['REQUEST_URI'] ?? '') . "\n";
+    $msg .= "\n";
+    @file_put_contents($logFile, $msg, FILE_APPEND | LOCK_EX);
+});
 
 // Configure PhpSpreadsheet cell caching to reduce memory usage for large files
 // Use a disk-based cache (discISAM) or php temp dir. This helps prevent exhausting RAM.
