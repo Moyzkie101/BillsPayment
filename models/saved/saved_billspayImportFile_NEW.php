@@ -856,6 +856,50 @@ function loadSpreadsheet($filePath, $readDataOnly = true) {
     return $reader->load($filePath);
 }
 
+function normalizeBranchId($value) {
+    $trimmed = trim(strval($value));
+    if ($trimmed === '') {
+        return '';
+    }
+    if (is_numeric($trimmed)) {
+        return strval((int) floatval($trimmed));
+    }
+    return $trimmed;
+}
+
+function loadBranchIdSet() {
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $branchFile = __DIR__ . '/../../branch.json';
+    if (!file_exists($branchFile)) {
+        $cache = [];
+        return $cache;
+    }
+
+    $json = @file_get_contents($branchFile);
+    $data = json_decode($json, true);
+    if (!is_array($data)) {
+        $cache = [];
+        return $cache;
+    }
+
+    $set = [];
+    foreach ($data as $row) {
+        if (isset($row['branch_id'])) {
+            $id = normalizeBranchId($row['branch_id']);
+            if ($id !== '') {
+                $set[$id] = true;
+            }
+        }
+    }
+
+    $cache = $set;
+    return $cache;
+}
+
 function validateFileFast($conn, $filePath, $sourceType, $partnerId) {
     // FAST validation - just check file is readable and partner exists
     // Don't parse the entire Excel file - that's slow!
@@ -1066,13 +1110,14 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     $previewData = []; // Store sample rows for preview
     $matchedRows = [];
     $cancellationRows = [];
-    $missingRows = []; // rows with missing Branch ID / ML Outlet / Region Code
+    $missingRows = []; // rows with missing Branch ID / ML Outlet / Region Code or new Branch ID
     $transactionDate = null;
     $transactionStartDate = null;
     $transactionEndDate = null;
     $cachedData = []; // Cache full data for import to avoid re-parsing Excel
     $spreadsheet = null;
     $worksheet = null;
+    $branchIdSet = loadBranchIdSet();
     
     try {
         $spreadsheet = loadSpreadsheet($filePath, true);
@@ -1301,13 +1346,31 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
             if (!empty($missing)) {
                 $missingRows[] = [
                     'row' => $row,
-                    'missing' => $missing
+                    'missing' => $missing,
+                    'type' => 'missing_fields',
+                    'value' => ''
                 ];
                 $errors[] = [
                     'row' => $row,
                     'type' => 'missing_fields',
                     'message' => 'Missing fields: ' . implode(', ', $missing),
                     'value' => ''
+                ];
+            }
+
+            $normalizedBranchId = normalizeBranchId($branchIdCell);
+            if (!empty($branchIdSet) && $normalizedBranchId !== '' && !isset($branchIdSet[$normalizedBranchId])) {
+                $missingRows[] = [
+                    'row' => $row,
+                    'missing' => ['New Branch ID'],
+                    'type' => 'new_branch_id',
+                    'value' => $branchIdCell
+                ];
+                $errors[] = [
+                    'row' => $row,
+                    'type' => 'new_branch_id',
+                    'message' => 'New Branch ID: ' . $branchIdCell,
+                    'value' => $branchIdCell
                 ];
             }
 
@@ -3058,18 +3121,25 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
 
             const missing = fileData.validation_result.missing_rows || [];
             if (!missing.length) {
-                Swal.fire({ title: 'No Missing Data', text: 'No missing Branch ID / ML Outlet / Region Code found.', icon: 'success' });
+                Swal.fire({ title: 'No Missing Data', text: 'No missing Branch ID / ML Outlet / Region Code or New Branch ID found.', icon: 'success' });
                 return;
             }
 
             let html = `<div style="text-align:left; max-height:60vh; overflow:auto;">
                 <p class="text-danger"><strong>Rows with missing data</strong></p>
                 <table class="table table-sm table-bordered table-striped">
-                    <thead><tr><th>Row</th><th>Missing Fields</th></tr></thead>
+                    <thead><tr><th>Row</th><th>Issue</th><th>Value</th></tr></thead>
                     <tbody>`;
 
             missing.forEach(m => {
-                html += `<tr><td>${m.row}</td><td>${m.missing.join(', ')}</td></tr>`;
+                const issueType = m.type || 'missing_fields';
+                const issueText = issueType === 'new_branch_id'
+                    ? 'New Branch ID'
+                    : (m.missing ? ('Missing Fields: ' + m.missing.join(', ')) : 'Missing Fields');
+                const valueText = (m.value !== undefined && m.value !== null && String(m.value).trim() !== '')
+                    ? m.value
+                    : '-';
+                html += `<tr><td>${m.row}</td><td>${issueText}</td><td>${valueText}</td></tr>`;
             });
 
             html += `</tbody></table></div>`;
