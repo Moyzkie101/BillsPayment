@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Branch Maker</title>
+    <style>
+        :root {
+            font-family: Segoe UI, Roboto, Arial;
+            --bg: #f5f7fb;
+            --card: #ffffff;
+            --accent: #0066cc;
+            --muted: #6b7280
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: #0f172a
+        }
+
+        .wrap {
+            max-width: 980px;
+            margin: 36px auto;
+            padding: 24px
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(16, 24, 40, .06);
+            padding: 20px
+        }
+
+        h1 {
+            margin: 0 0 12px;
+            font-size: 20px
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 6px
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 160px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e6eef8;
+            resize: vertical;
+            font-family: inherit
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 12px
+        }
+
+        button {
+            background: var(--accent);
+            color: #fff;
+            padding: 8px 12px;
+            border: 0;
+            border-radius: 8px;
+            cursor: pointer
+        }
+
+        button.secondary {
+            background: #eef2ff;
+            color: var(--accent);
+            border: 1px solid rgba(0, 102, 204, .12)
+        }
+
+        pre {
+            background: #0b1220;
+            color: #e6eef8;
+            padding: 12px;
+            border-radius: 8px;
+            overflow: auto;
+            max-height: 360px;
+            margin-top: 12px
+        }
+
+        .meta {
+            font-size: 13px;
+            color: var(--muted);
+            margin-left: auto
+        }
+
+        @media (max-width:760px) {
+            .grid {
+                grid-template-columns: 1fr
+            }
+
+            .meta {
+                display: block;
+                margin-top: 8px
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="card">
+            <h1>JSON Branch Maker</h1>
+            <p style="margin:0 0 12px;color:var(--muted);font-size:13px">Enter branch names and IDs (one per line).
+                Lines are paired by index.</p>
+
+            <div class="grid">
+                <div>
+                    <label for="branch-name">Branch Names</label>
+                    <textarea name="BranchName" id="branch-name"
+                        placeholder="Put one branch name per line (e.g. Main Branch)"></textarea>
+                </div>
+                <div>
+                    <label for="branch-id">Branch IDs</label>
+                    <textarea name="BranchID" id="branch-id"
+                        placeholder="Put one branch ID per line (e.g. 101)"></textarea>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="convert-btn">Download new_branch.json</button>
+                <button id="preview-btn" class="secondary">Preview JSON</button>
+                <button id="copy-btn" class="secondary">Copy JSON</button>
+                <button id="clear-btn" class="secondary">Clear</button>
+                <div class="meta" id="pair-count">Pairs: 0</div>
+            </div>
+
+            <pre id="json-output" aria-live="polite"></pre>
+        </div>
+    </div>
+
+    <script>
+        function buildJson() {
+            const ids = document.getElementById('branch-id').value.split('\n').map(s => s.trim()).filter(Boolean);
+            const names = document.getElementById('branch-name').value.split('\n').map(s => s.trim()).filter(Boolean);
+            const max = Math.max(ids.length, names.length);
+            const out = [];
+            for (let i = 0; i < max; i++) {
+                const rawId = ids[i] ?? '';
+                const rawName = names[i] ?? '';
+                const parsed = Number(rawId);
+                out.push({
+                    branch_id: Number.isFinite(parsed) && rawId !== '' ? parsed : rawId,
+                    branch_name: rawName
+                });
+            }
+            document.getElementById('pair-count').innerText = `Pairs: ${out.length}`;
+            return out;
+        }
+
+        function downloadJson(data, filename = 'new_branch.json') {
+            const text = JSON.stringify(data, null, 2);
+            const blob = new Blob([text], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('convert-btn').addEventListener('click', () => {
+            const data = buildJson();
+            downloadJson(data);
+            document.getElementById('json-output').innerText = JSON.stringify(data, null, 2);
+        });
+
+        document.getElementById('preview-btn').addEventListener('click', () => {
+            const data = buildJson();
+            document.getElementById('json-output').innerText = JSON.stringify(data, null, 2);
+        });
+
+        document.getElementById('copy-btn').addEventListener('click', async () => {
+            const data = buildJson();
+            const text = JSON.stringify(data, null, 2);
+            try { await navigator.clipboard.writeText(text); alert('JSON copied to clipboard'); }
+            catch (e) { alert('Copy failed — preview and copy manually'); }
+        });
+
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            document.getElementById('branch-id').value = ''; document.getElementById('branch-name').value = ''; document.getElementById('json-output').innerText = ''; document.getElementById('pair-count').innerText = 'Pairs: 0';
+        });
+    </script>
+</body>
+
+</html>
