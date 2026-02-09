@@ -1066,6 +1066,7 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     $previewData = []; // Store sample rows for preview
     $matchedRows = [];
     $cancellationRows = [];
+    $missingRows = []; // rows with missing Branch ID / ML Outlet / Region Code
     $transactionDate = null;
     $transactionStartDate = null;
     $transactionEndDate = null;
@@ -1280,6 +1281,36 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
                 }
             }
 
+            // Check for missing required location fields (Branch ID=N, ML Outlet=O, Region Code=P)
+            $branchIdCell = '';
+            $mlOutletCell = '';
+            $regionCodeCell = '';
+            try {
+                $branchIdCell = trim(strval($worksheet->getCell('N' . $row)->getValue()));
+                $mlOutletCell = trim(strval($worksheet->getCell('O' . $row)->getValue()));
+                $regionCodeCell = trim(strval($worksheet->getCell('P' . $row)->getValue()));
+            } catch (Exception $e) {
+                // ignore missing columns — treat as empty
+            }
+
+            $missing = [];
+            if ($branchIdCell === '' || strtoupper($branchIdCell) === 'NAN') $missing[] = 'Branch ID';
+            if ($mlOutletCell === '' || strtoupper($mlOutletCell) === 'NAN') $missing[] = 'ML Outlet';
+            if ($regionCodeCell === '' || strtoupper($regionCodeCell) === 'NAN') $missing[] = 'Region Code';
+
+            if (!empty($missing)) {
+                $missingRows[] = [
+                    'row' => $row,
+                    'missing' => $missing
+                ];
+                $errors[] = [
+                    'row' => $row,
+                    'type' => 'missing_fields',
+                    'message' => 'Missing fields: ' . implode(', ', $missing),
+                    'value' => ''
+                ];
+            }
+
             // Store data for transaction summary
             if (!empty($referenceNumber)) {
                 $summaryRow = [
@@ -1367,11 +1398,12 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     error_log("Validation detection for {$filePath}: " . count($matchedRows) . " active, " . count($cancellationRows) . " cancelled (total {$rowCount} rows)");
     
     return [
-        'valid' => count($errors) ===  0,
+        'valid' => (count($errors) === 0 && count($missingRows) === 0),
         'row_count' => $rowCount,
         'errors' => $errors,
         'warnings' => $warnings,
         'preview_data' => $previewData,
+        'missing_rows' => $missingRows,
         'source_type' => $sourceType,
         'partner_data' => $partnerData,
         'transaction_date' => $transactionDate,
@@ -2435,6 +2467,22 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         .summary-icon {
             margin-right: 8px;
         }
+
+        /* missing icon */
+        .missing-icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: #fff;
+            color: #dc3545;
+            border: 2px solid #dc3545;
+            box-shadow: 0 2px 6px rgba(220,53,69,0.12);
+            margin-left: 8px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -2544,6 +2592,11 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                 <button class="btn btn-sm btn-success" onclick="viewTransactionSummary('<?php echo $file['id']; ?>')">
                                     <i class="fa-solid fa-chart-bar"></i> Transaction Summary
                                 </button>
+                                <?php if (!empty($file['validation_result']['missing_rows'])): ?>
+                                    <button class="missing-icon-btn" title="Missing data detected" onclick="showMissingModal('<?php echo $file['id']; ?>')">
+                                        <i class="fa-solid fa-circle-question"></i>
+                                    </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -3022,6 +3075,41 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 customClass: {
                     container: 'swal-wide'
                 }
+            });
+        }
+
+        // Show modal listing rows with missing required fields
+        function showMissingModal(fileId) {
+            const fileData = filesData.find(f => f.id === fileId);
+            if (!fileData || !fileData.validation_result) {
+                Swal.fire({ title: 'Info', text: 'No validation data available', icon: 'info' });
+                return;
+            }
+
+            const missing = fileData.validation_result.missing_rows || [];
+            if (!missing.length) {
+                Swal.fire({ title: 'No Missing Data', text: 'No missing Branch ID / ML Outlet / Region Code found.', icon: 'success' });
+                return;
+            }
+
+            let html = `<div style="text-align:left; max-height:60vh; overflow:auto;">
+                <p class="text-danger"><strong>Rows with missing data</strong></p>
+                <table class="table table-sm table-bordered table-striped">
+                    <thead><tr><th>Row</th><th>Missing Fields</th></tr></thead>
+                    <tbody>`;
+
+            missing.forEach(m => {
+                html += `<tr><td>${m.row}</td><td>${m.missing.join(', ')}</td></tr>`;
+            });
+
+            html += `</tbody></table></div>`;
+
+            Swal.fire({
+                title: '<strong>Missing Data Details: ' + (fileData.name || '') + '</strong>',
+                html: html,
+                width: '70%',
+                showCloseButton: true,
+                confirmButtonText: 'Close'
             });
         }
         
