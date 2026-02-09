@@ -1,93 +1,59 @@
-[2026-02-09T12:50:58+08:00] Shutdown handler:
-memory_limit=-1
-memory_peak_bytes=2097152
-request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
-
-[2026-02-09T13:06:52+08:00] Shutdown handler:
-memory_limit=-1
-memory_peak_bytes=2097152
-request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
-
-[2026-02-09T13:07:37+08:00] Shutdown handler:
+[2026-02-09T13:31:56+08:00] Shutdown handler:
 memory_limit=-1
 memory_peak_bytes=12582912
 request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
 
-[2026-02-09T13:07:37+08:00] Shutdown handler:
+[2026-02-09T13:31:56+08:00] Shutdown handler:
 memory_limit=-1
 memory_peak_bytes=6291456
 request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
 
-[2026-02-09T13:07:37+08:00] Shutdown handler:
-memory_limit=-1
-memory_peak_bytes=4194304
-last_error={"type":1,"message":"Uncaught Error: Call to undefined function loadBranchIdSet() in C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php:1076\nStack trace:\n#0 C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php(577): validateFile(Object(mysqli), 'C:\\\\xampp\\\\htdocs...', 'KPX', '28')\n#1 {main}\n  thrown","file":"C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php","line":1076}
-request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
-
-[2026-02-09T13:07:37+08:00] Shutdown handler:
-memory_limit=-1
-memory_peak_bytes=2097152
-last_error={"type":1,"message":"Uncaught Error: Call to undefined function loadBranchIdSet() in C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php:1076\nStack trace:\n#0 C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php(577): validateFile(Object(mysqli), 'C:\\\\xampp\\\\htdocs...', 'KPX', '28')\n#1 {main}\n  thrown","file":"C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php","line":1076}
-request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
-
-[2026-02-09T13:08:43+08:00] Shutdown handler:
-memory_limit=-1
-memory_peak_bytes=12582912
-request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
-
-[2026-02-09T13:08:43+08:00] Shutdown handler:
-memory_limit=-1
-memory_peak_bytes=6291456
-request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
-
-[2026-02-09T13:08:43+08:00] Shutdown handler:
-memory_limit=-1
-memory_peak_bytes=4194304
-last_error={"type":1,"message":"Uncaught Error: Call to undefined function loadBranchIdSet() in C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php:1076\nStack trace:\n#0 C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php(577): validateFile(Object(mysqli), 'C:\\\\xampp\\\\htdocs...', 'KPX', '28')\n#1 {main}\n  thrown","file":"C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php","line":1076}
-request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
-
-[2026-02-09T13:08:43+08:00] Shutdown handler:
-memory_limit=-1
-memory_peak_bytes=2097152
-last_error={"type":1,"message":"Uncaught Error: Call to undefined function loadBranchIdSet() in C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php:1076\nStack trace:\n#0 C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php(577): validateFile(Object(mysqli), 'C:\\\\xampp\\\\htdocs...', 'KPX', '28')\n#1 {main}\n  thrown","file":"C:\\xampp\\htdocs\\BillsPayment\\models\\saved\\saved_billspayImportFile_NEW.php","line":1076}
-request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
-
-[2026-02-09T13:10:45+08:00] Shutdown handler:
-memory_limit=-1
-memory_peak_bytes=12582912
-request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
-
-[2026-02-09T13:10:46+08:00] Shutdown handler:
-memory_limit=-1
-memory_peak_bytes=6291456
-request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
-
-[2026-02-09T13:10:47+08:00] Shutdown handler:
+[2026-02-09T13:31:57+08:00] Shutdown handler:
 memory_limit=-1
 memory_peak_bytes=12582912
 request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
 
-[2026-02-09T13:10:47+08:00] Shutdown handler:
+[2026-02-09T13:31:57+08:00] Shutdown handler:
 memory_limit=-1
 memory_peak_bytes=8388608
 request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
 
-[2026-02-09T13:12:16+08:00] Shutdown handler:
+[2026-02-09T13:49:42+08:00] Shutdown handler:
 memory_limit=-1
 memory_peak_bytes=12582912
 request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
 
-[2026-02-09T13:12:21+08:00] Shutdown handler:
+[2026-02-09T13:49:43+08:00] Shutdown handler:
 memory_limit=-1
 memory_peak_bytes=6291456
 request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
 
-[2026-02-09T13:12:21+08:00] Shutdown handler:
+[2026-02-09T13:49:44+08:00] Shutdown handler:
 memory_limit=-1
 memory_peak_bytes=12582912
 request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
 
-[2026-02-09T13:12:21+08:00] Shutdown handler:
+[2026-02-09T13:49:44+08:00] Shutdown handler:
+memory_limit=-1
+memory_peak_bytes=8388608
+request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
+
+[2026-02-09T14:48:25+08:00] Shutdown handler:
+memory_limit=-1
+memory_peak_bytes=12582912
+request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
+
+[2026-02-09T14:48:27+08:00] Shutdown handler:
+memory_limit=-1
+memory_peak_bytes=6291456
+request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
+
+[2026-02-09T14:48:28+08:00] Shutdown handler:
+memory_limit=-1
+memory_peak_bytes=12582912
+request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
+
+[2026-02-09T14:48:28+08:00] Shutdown handler:
 memory_limit=-1
 memory_peak_bytes=8388608
 request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
