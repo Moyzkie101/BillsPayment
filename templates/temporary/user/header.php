@@ -242,29 +242,44 @@
         .upload-btn:hover {
             background-color:rgb(180, 31, 31);
         }
-        /* loading screen */
+        /* loading screen (clean, centered, and consistent) */
         #loading-overlay {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(255, 255, 255, 0.7);
-            z-index: 9999;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.45);
+            z-index: 99999;
+            /* keep pointer-events enabled so overlay blocks interaction when visible */
+            pointer-events: auto;
         }
 
+        /* Use a fixed-position spinner so it always centers in the viewport
+           even if some scripts set display:block on the overlay (legacy JS). */
         .loading-spinner {
-            position: absolute;
+            position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 50px;
-            height: 50px;
+            width: 64px;
+            height: 64px;
+            border-radius: 12px;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+            padding: 8px;
+        }
+
+        .loading-spinner:before {
+            content: '';
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #3498db;
+            border: 4px solid #e9eef5;
+            border-top-color: #c13232;
             animation: spin 1s linear infinite;
+            display: block;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
