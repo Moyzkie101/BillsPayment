@@ -480,4 +480,84 @@ document.addEventListener('DOMContentLoaded', function() {
     updateMode();
 });
 </script>
+
+<!-- Drag and Drop File Upload under the Developer Area -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        if (!fileUploadArea) return;
+
+        // Visual drag states
+        ['dragenter', 'dragover'].forEach(evt => {
+            fileUploadArea.addEventListener(evt, function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                fileUploadArea.classList.add('drag-over');
+            });
+        });
+
+        ['dragleave', 'dragend'].forEach(evt => {
+            fileUploadArea.addEventListener(evt, function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                fileUploadArea.classList.remove('drag-over');
+            });
+        });
+
+        // Handle dropped files
+        fileUploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            fileUploadArea.classList.remove('drag-over');
+
+            const dt = e.dataTransfer;
+            const files = dt ? dt.files : null;
+            if (files && files.length > 0) {
+                // Build a short HTML list of filenames
+                let listHtml = `<p>${files.length} file(s) detected.</p><ul style="text-align:left; margin-left:1.1rem;">`;
+                for (let i = 0; i < files.length; i++) {
+                    listHtml += `<li>${files[i].name}</li>`;
+                }
+                listHtml += `</ul>`;
+
+                // Show SweetAlert2 notice (Under Development)
+                Swal.fire({
+                    title: 'Under Development Area',
+                    html: listHtml + '<p>This import/cancellation drag-and-drop feature is currently under development and is read-only.</p>',
+                    icon: 'info',
+                    confirmButtonText: 'OK'
+                });
+            }
+        });
+
+        // Allow clicking the area to open file picker
+        fileUploadArea.addEventListener('click', function() {
+            if (fileInput) fileInput.click();
+        });
+
+        // If files are selected via the input, show same alert
+        if (fileInput) {
+            fileInput.addEventListener('change', function(e) {
+                const files = e.target.files;
+                if (files && files.length > 0) {
+                    let listHtml = `<p>${files.length} file(s) selected.</p><ul style="text-align:left; margin-left:1.1rem;">`;
+                    for (let i = 0; i < files.length; i++) listHtml += `<li>${files[i].name}</li>`;
+                    listHtml += `</ul>`;
+
+                    Swal.fire({
+                        title: 'Under Development Area',
+                        html: listHtml + '<p>This import/cancellation file selection is currently under development and is read-only.</p>',
+                        icon: 'info',
+                        confirmButtonText: 'OK'
+                    });
+
+                    // Reset input so same file can be re-selected if needed
+                    e.target.value = '';
+                }
+            });
+        }
+    });
+</script>
 </html>
