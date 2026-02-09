@@ -2550,17 +2550,6 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <i id="menu-btn" class="fa-solid fa-bars"></i>
-                <div class="usernav">
-                    <h6><?php echo $_SESSION['user_type'] === 'admin' ? $_SESSION['admin_name'] : $_SESSION['user_name']; ?></h6>
-                </div>
-            </div>
-        </div>
-        
-        <?php include '../../templates/sidebar.php'; ?>
-        
         <div class="content-wrapper p-4">
             <?php 
                 // Prepare counts and progress token early so header can show action buttons
