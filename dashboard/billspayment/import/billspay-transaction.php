@@ -309,6 +309,37 @@ if (isset($_SESSION['user_type'])) {
             margin-top: 3px;
         }
 
+        /* Duplicate check live list inside overlay */
+        #duplicate-check-list {
+            width: 520px;
+            max-height: 420px;
+            overflow: auto;
+            background: rgba(255,255,255,0.95);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+        }
+
+        .check-item {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            padding:8px 6px;
+            border-bottom:1px solid #eee;
+            font-size:13px;
+        }
+
+        .check-item .name { flex:1; margin-right:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .check-item .status { width:36px; text-align:center; }
+
+        .fade-up {
+            animation: fadeUp 700ms forwards;
+        }
+
+        @keyframes fadeUp {
+            to { transform: translateY(-18px); opacity: 0; }
+        }
+
         .empty-state {
             text-align: center;
             padding: 20px;
@@ -497,12 +528,18 @@ if (isset($_SESSION['user_type'])) {
 
                 // Process each file
                 excelFiles.forEach(file => {
-                    processFile(file);
+                        processFile(file);
                 });
             }
 
             // Process individual file and auto-detect metadata
             function processFile(file) {
+                // Indicate files are being read so UI can block Proceed
+                window._filesBeingRead = window._filesBeingRead || 0;
+                window._filesBeingRead++;
+                $('#loading-overlay').css('display', 'flex');
+                proceedBtn.prop('disabled', true);
+
                 const reader = new FileReader();
                 
                 reader.onload = function(e) {
@@ -574,6 +611,14 @@ if (isset($_SESSION['user_type'])) {
 
                                 uploadedFiles.push(fileData);
                                 renderFileCards();
+
+                                // file processed; decrement counter and hide overlay if done
+                                window._filesBeingRead--;
+                                if (window._filesBeingRead <= 0) {
+                                    window._filesBeingRead = 0;
+                                    $('#loading-overlay').hide();
+                                    proceedBtn.prop('disabled', false);
+                                }
                             },
                             error: function() {
                                 // If AJAX fails, still add the file but without partner name
@@ -588,6 +633,14 @@ if (isset($_SESSION['user_type'])) {
 
                                 uploadedFiles.push(fileData);
                                 renderFileCards();
+
+                                // file processed; decrement counter and hide overlay if done
+                                window._filesBeingRead--;
+                                if (window._filesBeingRead <= 0) {
+                                    window._filesBeingRead = 0;
+                                    $('#loading-overlay').hide();
+                                    proceedBtn.prop('disabled', false);
+                                }
                             }
                         });
 
@@ -599,6 +652,13 @@ if (isset($_SESSION['user_type'])) {
                             html: `Error reading file: <strong>${file.name}</strong><br>${error.message}`,
                             confirmButtonText: 'OK'
                         });
+                        // ensure counter decremented on error
+                        window._filesBeingRead--;
+                        if (window._filesBeingRead <= 0) {
+                            window._filesBeingRead = 0;
+                            $('#loading-overlay').hide();
+                            proceedBtn.prop('disabled', false);
+                        }
                     }
                 };
 
@@ -750,88 +810,124 @@ if (isset($_SESSION['user_type'])) {
                 }
             });
 
-            // Function to check for duplicates
+            // Function to check for duplicates (batched to avoid PHP's max_file_uploads limit)
             function checkForDuplicates() {
                 // Set all files to "reading" status
-                uploadedFiles.forEach(file => {
-                    file.status = 'reading';
-                });
+                uploadedFiles.forEach(file => { file.status = 'reading'; });
                 renderFileCards();
-                
-                const formData = new FormData();
-                uploadedFiles.forEach((fileData, index) => {
-                    formData.append('files[]', fileData.file);
-                    formData.append('partner_ids[]', fileData.partnerId);
-                    formData.append('source_types[]', fileData.sourceType);
-                });
-                formData.append('check_duplicates', '1');
 
-                $.ajax({
-                    url: '../../../models/saved/saved_billspayImportFile_NEW.php',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    dataType: 'json',
-                    success: function(response) {
+                const BATCH_SIZE = 50; // adjust as needed (PHP default max_file_uploads is often 20)
+                let index = 0;
+                const aggregateResults = [];
+
+                // Build live-check list UI
+                $('#loading-overlay').css('display', 'flex');
+                $('#loading-overlay').append('<div id="duplicate-check-list" style="position:relative; margin:16px auto; text-align:left;"></div>');
+                const $list = $('#duplicate-check-list');
+                $list.empty();
+                uploadedFiles.forEach((f, idx) => {
+                    const item = $(`<div class="check-item" data-idx="${idx}"><div class="name">${f.name}</div><div class="status"><i class="fa-solid fa-spinner fa-spin text-primary"></i></div></div>`);
+                    $list.append(item);
+                });
+
+                function processBatch(start) {
+                    const formData = new FormData();
+                    const batchFiles = uploadedFiles.slice(start, start + BATCH_SIZE);
+                    batchFiles.forEach((fileData) => {
+                        formData.append('files[]', fileData.file);
+                        formData.append('partner_ids[]', fileData.partnerId);
+                        formData.append('source_types[]', fileData.sourceType);
+                    });
+                    formData.append('check_duplicates', '1');
+
+                    return $.ajax({
+                        url: '../../../models/saved/saved_billspayImportFile_NEW.php',
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        dataType: 'json'
+                    });
+                }
+
+                // Sequentially process batches to avoid overwhelming the server
+                function next() {
+                    if (index >= uploadedFiles.length) {
+                        // All batches done — aggregate and update UI
                         $('#loading-overlay').hide();
-                        
-                        if (response.success) {
-                            // Update file statuses based on results
-                            response.files.forEach((result, index) => {
-                                if (uploadedFiles[index]) {
-                                    if (result.hasDuplicates) {
-                                        uploadedFiles[index].status = 'duplicates';
-                                        uploadedFiles[index].duplicateCount = result.duplicateRows;
-                                        uploadedFiles[index].newCount = result.newRows;
+
+                        // Flatten aggregateResults into a single array of per-file results
+                        const flat = [].concat.apply([], aggregateResults);
+
+                        // Update uploadedFiles statuses from flat results
+                        flat.forEach((result, idx) => {
+                            if (uploadedFiles[idx]) {
+                                if (result.hasDuplicates) {
+                                    uploadedFiles[idx].status = 'duplicates';
+                                    uploadedFiles[idx].duplicateCount = result.duplicateRows;
+                                    uploadedFiles[idx].newCount = result.newRows;
+                                } else {
+                                    uploadedFiles[idx].status = 'valid';
+                                }
+                            }
+                        });
+
+                        renderFileCards();
+
+                        // remove live list
+                        $('#duplicate-check-list').remove();
+
+                        // Check duplicates overall
+                        const filesWithDuplicates = flat.filter(f => f.hasDuplicates);
+                        if (filesWithDuplicates.length > 0) {
+                            showDuplicateModal(flat, filesWithDuplicates);
+                        } else {
+                            proceedWithUpload('skip');
+                        }
+
+                        return;
+                    }
+
+                    $('#loading-overlay').css('display', 'flex');
+
+                    processBatch(index).done(function(response) {
+                        if (response && response.success && Array.isArray(response.files)) {
+                            aggregateResults.push(response.files);
+
+                            // Update live UI for this batch
+                            response.files.forEach(function(res, j) {
+                                var globalIndex = index + j;
+                                var $item = $list.find('.check-item[data-idx="' + globalIndex + '"]');
+                                if ($item.length) {
+                                    if (res.hasDuplicates) {
+                                        $item.find('.status').html('<i class="fa-solid fa-circle-xmark text-warning"></i>');
                                     } else {
-                                        uploadedFiles[index].status = 'valid';
+                                        $item.find('.status').html('<i class="fa-solid fa-circle-check text-success"></i>');
                                     }
+                                    // animate fade-up then remove the item so new ones appear from bottom
+                                    setTimeout(function() { $item.addClass('fade-up'); setTimeout(function(){ $item.remove(); }, 700); }, 500 + (j*80));
                                 }
                             });
-                            renderFileCards();
-                            
-                            // Check if any files have duplicates
-                            const filesWithDuplicates = response.files.filter(f => f.hasDuplicates);
-                            
-                            if (filesWithDuplicates.length > 0) {
-                                // Show duplicate warning modal with stats
-                                showDuplicateModal(response.files, filesWithDuplicates);
-                            } else {
-                                // No duplicates, proceed directly
-                                proceedWithUpload('skip');
-                            }
+
+                            index += BATCH_SIZE;
+                            // short delay to keep UI responsive for massive batches
+                            setTimeout(next, 50);
                         } else {
-                            // Set all files to error status
-                            uploadedFiles.forEach(file => {
-                                file.status = 'error';
-                            });
+                            // treat as error for this batch
+                            $('#loading-overlay').hide();
+                            uploadedFiles.forEach(file => { file.status = 'error'; });
                             renderFileCards();
-                            
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Validation Error',
-                                text: 'An error occurred while checking for duplicates.',
-                                confirmButtonText: 'OK'
-                            });
+                            Swal.fire({ icon: 'error', title: 'Validation Error', text: (response && response.error) ? response.error : 'An error occurred while checking for duplicates.', confirmButtonText: 'OK' });
                         }
-                    },
-                    error: function(xhr, status, error) {
+                    }).fail(function(xhr, status, error) {
                         $('#loading-overlay').hide();
-                        
-                        // Set all files to error status
-                        uploadedFiles.forEach(file => {
-                            file.status = 'error';
-                        });
+                        $('#duplicate-check-list').remove();
+                        uploadedFiles.forEach(file => { file.status = 'error'; });
                         renderFileCards();
-                        // Try to fetch server debug info and show combined message
-                        $.ajax({
-                            url: '../../../fetch/debug_memory.php',
-                            method: 'GET',
-                            dataType: 'json'
-                        }).done(function(debugResp) {
-                            var extra = 'AJAX error: ' + error + '\n' + (xhr.responseText || '');
-                            // show debug modal with extra info
+
+                        // Fetch debug info and show combined message
+                        $.ajax({ url: '../../../fetch/debug_memory.php', method: 'GET', dataType: 'json' }).done(function(debugResp) {
+                            var extra = 'AJAX batch error: ' + error + '\n' + (xhr.responseText || '');
                             var d = debugResp && debugResp.data ? debugResp.data : debugResp;
                             var html = '<div style="text-align:left; font-size:13px;">';
                             html += '<p><strong>memory_limit:</strong> ' + (d.memory_limit || 'n/a') + '</p>';
@@ -840,24 +936,16 @@ if (isset($_SESSION['user_type'])) {
                             html += '<hr><pre style="white-space:pre-wrap; font-size:12px;">' + $('<div>').text(extra).html() + '</pre>';
                             html += '</div>';
 
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Validation Error - Duplicate Check Failed',
-                                html: html,
-                                confirmButtonText: 'OK',
-                                width: 700
-                            });
+                            Swal.fire({ icon: 'error', title: 'Validation Error - Duplicate Check Failed', html: html, confirmButtonText: 'OK', width: 700 });
                         }).fail(function() {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Validation Error',
-                                text: 'An error occurred while checking for duplicates. Please try again.',
-                                confirmButtonText: 'OK'
-                            });
+                            Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.', confirmButtonText: 'OK' });
                         });
-                        console.error('Duplicate check error:', error, xhr.responseText);
-                    }
-                });
+                        console.error('Duplicate check batch error:', error, xhr.responseText);
+                    });
+                }
+
+                // Start processing
+                next();
             }
 
             // Function to show duplicate modal
