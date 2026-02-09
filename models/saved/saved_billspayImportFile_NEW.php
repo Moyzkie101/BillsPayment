@@ -2427,9 +2427,6 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 </div>
             </div>
         </div>
-        
-        <?php include '../../templates/sidebar.php'; ?>
-        
         <div class="content-wrapper p-4">
             <?php 
                 // Prepare counts and progress token early so header can show action buttons
