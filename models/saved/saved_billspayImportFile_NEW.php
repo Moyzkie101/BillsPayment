@@ -525,6 +525,33 @@ if (isset($_GET['cancel']) && $_GET['cancel'] == '1') {
         }
     }
     
+    // Also remove leftover generated XLSX and progress files in admin/temporary
+    $tmpDir = __DIR__ . '/../../admin/temporary/';
+    $tmpReal = realpath($tmpDir);
+    if ($tmpReal && is_dir($tmpReal)) {
+        // Use forward-slash glob patterns (works reliably across platforms)
+        $safeBase = rtrim(str_replace('\\', '/', $tmpReal), '/');
+        $genPattern = $safeBase . '/*_generated.xlsx';
+        $progPattern = $safeBase . '/progress_*.json';
+
+        $deletedCount = 0;
+        foreach (glob($genPattern) as $gfile) {
+            $real = realpath($gfile);
+            if ($real && strpos(str_replace('\\','/',$real), $safeBase) === 0 && file_exists($real)) {
+                if (@unlink($real)) $deletedCount++;
+            }
+        }
+        foreach (glob($progPattern) as $pfile) {
+            $real = realpath($pfile);
+            if ($real && strpos(str_replace('\\','/',$real), $safeBase) === 0 && file_exists($real)) {
+                if (@unlink($real)) $deletedCount++;
+            }
+        }
+        if (function_exists('error_log')) {
+            error_log('[IMPORT CLEANUP] Cancel removed ' . $deletedCount . ' files from admin/temporary');
+        }
+    }
+
     // Clear session
     unset($_SESSION['uploaded_files']);
     unset($_SESSION['batch_upload']);
