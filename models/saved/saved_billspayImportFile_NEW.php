@@ -2553,7 +2553,27 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         <div class="content-wrapper p-4">
             <?php 
                 // Prepare counts and progress token early so header can show action buttons
-                $validFiles = isset($_SESSION['uploaded_files']) ? array_filter($_SESSION['uploaded_files'], function($f) { return $f['status'] === 'valid'; }) : [];
+                $allUploaded = isset($_SESSION['uploaded_files']) ? $_SESSION['uploaded_files'] : [];
+
+                // Sort so that invalid files appear first and within each status sort by name DESC
+                usort($allUploaded, function($a, $b) {
+                    $priority = function($s) {
+                        $s = strtolower($s);
+                        if ($s === 'invalid') return 0;
+                        if ($s === 'valid') return 2;
+                        return 1; // pending/other
+                    };
+                    $pa = $priority($a['status'] ?? '');
+                    $pb = $priority($b['status'] ?? '');
+                    if ($pa !== $pb) return $pa - $pb;
+                    // same priority -> sort by name descending
+                    return strcasecmp($b['name'] ?? '', $a['name'] ?? '');
+                });
+
+                // Store back into a local var used for rendering
+                $renderFiles = $allUploaded;
+
+                $validFiles = array_filter($allUploaded, function($f) { return ($f['status'] ?? '') === 'valid'; });
                 $validCount = count($validFiles);
                 $progressToken = uniqid('prg_', true);
             ?>
@@ -2578,11 +2598,21 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 </div>
             </div>
             
-            <?php if (isset($_SESSION['uploaded_files']) && count($_SESSION['uploaded_files']) > 0): ?>
+            <?php if (!empty($renderFiles) && count($renderFiles) > 0): ?>
+                <div class="d-flex justify-content-end mb-2">
+                    <div style="min-width:220px; text-align:right;">
+                        <label for="fileFilter" class="me-2" style="font-weight:600;">Show:</label>
+                        <select id="fileFilter" class="form-select form-select-sm" style="display:inline-block; width:160px;">
+                            <option value="all">All</option>
+                            <option value="invalid">Invalid</option>
+                            <option value="valid">Valid</option>
+                        </select>
+                    </div>
+                </div>
                 
                 <div class="validation-container">
-                    <?php foreach ($_SESSION['uploaded_files'] as $file): ?>
-                        <div class="file-validation-card <?php echo $file['status']; ?>">
+                    <?php foreach ($renderFiles as $file): ?>
+                        <div class="file-validation-card <?php echo htmlspecialchars($file['status']); ?>" data-status="<?php echo htmlspecialchars($file['status']); ?>" data-name="<?php echo htmlspecialchars($file['name']); ?>">
                             <div class="d-flex justify-content-between align-items-start mb-3">
                                 <div>
                                     <h5 class="mb-1"><?php echo htmlspecialchars($file['name']); ?></h5>
@@ -2665,7 +2695,27 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
 
     <script>
         // Store file data for JavaScript access
-        const filesData = <?php echo json_encode($_SESSION['uploaded_files'] ?? []); ?>;
+        const filesData = <?php echo json_encode($renderFiles ?? []); ?>;
+
+        // Client-side filtering for file cards (All / Invalid / Valid)
+        document.addEventListener('DOMContentLoaded', function() {
+            const filterEl = document.getElementById('fileFilter');
+            if (!filterEl) return;
+            filterEl.addEventListener('change', function(e) {
+                const val = e.target.value;
+                const cards = Array.from(document.querySelectorAll('.file-validation-card'));
+                cards.forEach(card => {
+                    const status = (card.dataset.status || '').toLowerCase();
+                    if (val === 'all') {
+                        card.style.display = '';
+                    } else if (val === 'invalid') {
+                        card.style.display = (status === 'invalid') ? '' : 'none';
+                    } else if (val === 'valid') {
+                        card.style.display = (status === 'valid') ? '' : 'none';
+                    }
+                });
+            });
+        });
         
         function viewDetails(fileId) {
             // Find the file data
