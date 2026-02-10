@@ -3595,8 +3595,8 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 cancelButtonText: 'No, go back'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    // Clean up session and temp files
-                    window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php?cancel=1';
+                    // Clean up session and temp files via this script's cancel handler
+                    window.location.href = window.location.pathname + '?cancel=1';
                 }
             });
         }
