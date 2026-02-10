@@ -757,13 +757,14 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
 
     foreach ($_SESSION['uploaded_files'] as $file) {
         if ($file['status'] === 'valid') {
+            // Ensure we always attempt to remove the temp file after processing
             try {
                 // Get user decision from session (default to 'skip' if not set)
                 $userDecision = $_SESSION['user_decision'] ?? 'skip';
-                
+
                 // Import file with user decision
                 $result = importFileData($conn, $file['path'], $file['source_type'], $file['partner_id'], $current_user_email, null, null, $userDecision);
-                
+
                 if ($result['success']) {
                     $imported++;
                     // Collect debug stats
@@ -773,10 +774,6 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
                     // Update progress after each FILE completes
                     if (!empty($progressFile) && file_exists($progressFile)) {
                         @file_put_contents($progressFile, json_encode(['total' => $totalFiles, 'done' => $imported]));
-                    }
-                    // Delete temp file after successful import
-                    if (file_exists($file['path'])) {
-                        unlink($file['path']);
                     }
                     if (!empty($result['warnings'])) {
                         foreach ($result['warnings'] as $warn) {
@@ -793,7 +790,7 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
                     if (!empty($progressFile) && file_exists($progressFile)) {
                         @file_put_contents($progressFile, json_encode(['total' => $totalFiles, 'done' => $imported + $failed]));
                     }
-                    $errors[] = "File: " . $file['name'] . " - " . $result['error'];
+                    $errors[] = "File: " . $file['name'] . " - " . ($result['error'] ?? 'Unknown error');
                 }
             } catch (Exception $e) {
                 $failed++;
@@ -802,6 +799,28 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
                     @file_put_contents($progressFile, json_encode(['total' => $totalFiles, 'done' => $imported + $failed]));
                 }
                 $errors[] = "File: " . $file['name'] . " - " . $e->getMessage();
+            } finally {
+                // Always attempt to delete the temp file for this uploaded file (safety: only inside admin/temporary)
+                if (!empty($file['path']) && file_exists($file['path'])) {
+                    $tmpDir = realpath(__DIR__ . '/../../admin/temporary/');
+                    $real = realpath($file['path']);
+                    if ($tmpDir && $real && strpos(str_replace('\\','/',$real), str_replace('\\','/',$tmpDir)) === 0) {
+                        @unlink($real);
+                    }
+                }
+            }
+        }
+    }
+
+    // Additionally, remove any leftover uploaded files (not only valid) from admin/temporary to ensure cleanup
+    if (!empty($_SESSION['uploaded_files'])) {
+        $tmpDir = realpath(__DIR__ . '/../../admin/temporary/');
+        foreach ($_SESSION['uploaded_files'] as $uf) {
+            if (!empty($uf['path']) && file_exists($uf['path'])) {
+                $real = realpath($uf['path']);
+                if ($tmpDir && $real && strpos(str_replace('\\','/',$real), str_replace('\\','/',$tmpDir)) === 0) {
+                    @unlink($real);
+                }
             }
         }
     }
