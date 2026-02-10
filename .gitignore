@@ -1,0 +1,6 @@
+# Ignore temporary uploaded/generated files
+admin/temporary/
+
+# OS files
+Thumbs.db
+.DS_Store
