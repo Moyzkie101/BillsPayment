@@ -176,17 +176,11 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                             WHERE reference_no = ? 
                             AND (`datetime` = ? OR cancellation_date = ?)";
                     if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
-                        if (strtoupper($sourceType) === 'KP7') {
-                            $sql .= " AND partner_id = ?";
-                            $sql .= " GROUP BY post_transaction";
-                            $stmt = $conn->prepare($sql);
-                            $stmt->bind_param("ssss", $reference_number, $datetime, $datetime, $partnerId);
-                        } else {
-                            $sql .= " AND partner_id_kpx = ?";
-                            $sql .= " GROUP BY post_transaction";
-                            $stmt = $conn->prepare($sql);
-                            $stmt->bind_param("ssss", $reference_number, $datetime, $datetime, $partnerId);
-                        }
+                        // Accept either partner_id or partner_id_kpx to be tolerant of client-supplied id form
+                        $sql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
+                        $sql .= " GROUP BY post_transaction";
+                        $stmt = $conn->prepare($sql);
+                        $stmt->bind_param("sssss", $reference_number, $datetime, $datetime, $partnerId, $partnerId);
                     } else {
                         $sql .= " GROUP BY post_transaction";
                         $stmt = $conn->prepare($sql);
@@ -314,20 +308,20 @@ if (isset($_POST['check_single_duplicate']) && isset($_FILES['import_file'])) {
                 }
                 
                 // Check for duplicates (posted or unposted) with partner filter
-                if ($sourceType === 'KP7') {
+                // Use tolerant partner matching: check both partner_id and partner_id_kpx against the provided id
+                if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
                     $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
                             WHERE reference_no = ? 
-                            AND partner_id = ?
+                            AND (partner_id = ? OR partner_id_kpx = ?)
                             AND (`datetime` = ? OR cancellation_date = ?) GROUP BY post_transaction";
                     $stmt = $conn->prepare($sql);
-                    $stmt->bind_param("ssss", $reference_number, $partnerId, $datetime, $datetime);
-                } else { // KPX
+                    $stmt->bind_param("sssss", $reference_number, $partnerId, $partnerId, $datetime, $datetime);
+                } else {
                     $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
                             WHERE reference_no = ? 
-                            AND partner_id_kpx = ?
                             AND (`datetime` = ? OR cancellation_date = ?) GROUP BY post_transaction";
                     $stmt = $conn->prepare($sql);
-                    $stmt->bind_param("ssss", $reference_number, $partnerId, $datetime, $datetime);
+                    $stmt->bind_param("sss", $reference_number, $datetime, $datetime);
                 }
                 $stmt->execute();
                 $result = $stmt->get_result();
@@ -1524,12 +1518,22 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         }
 
         // Helper functions (duplicate and override checks)
-        $checkDuplicateData = function($referenceNumber, $datetime) use ($conn) {
+        $checkDuplicateData = function($referenceNumber, $datetime, $partnerIdParam = null) use ($conn) {
             $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
                     WHERE post_transaction='posted' AND reference_no = ? 
                     AND (`datetime` = ? OR cancellation_date = ?) LIMIT 1";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sss", $referenceNumber, $datetime, $datetime);
+            // If a partner id is provided, require either partner_id or partner_id_kpx to match
+            if (!empty($partnerIdParam) && strtoupper($partnerIdParam) !== 'ALL') {
+                $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
+                        WHERE post_transaction='posted' AND reference_no = ? 
+                        AND (`datetime` = ? OR cancellation_date = ?) 
+                        AND (partner_id = ? OR partner_id_kpx = ?) LIMIT 1";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("sssss", $referenceNumber, $datetime, $datetime, $partnerIdParam, $partnerIdParam);
+            } else {
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("sss", $referenceNumber, $datetime, $datetime);
+            }
             $stmt->execute();
             $result = $stmt->get_result();
             $duplicate = false;
@@ -1541,12 +1545,21 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             return $duplicate;
         };
 
-        $checkHasAlreadyDataReadyToOverride = function($referenceNumber, $datetime) use ($conn) {
+        $checkHasAlreadyDataReadyToOverride = function($referenceNumber, $datetime, $partnerIdParam = null) use ($conn) {
             $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
                     WHERE post_transaction='unposted' AND reference_no = ? 
                     AND (`datetime` = ? OR cancellation_date = ?) LIMIT 1";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sss", $referenceNumber, $datetime, $datetime);
+            if (!empty($partnerIdParam) && strtoupper($partnerIdParam) !== 'ALL') {
+                $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
+                        WHERE post_transaction='unposted' AND reference_no = ? 
+                        AND (`datetime` = ? OR cancellation_date = ?) 
+                        AND (partner_id = ? OR partner_id_kpx = ?) LIMIT 1";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("sssss", $referenceNumber, $datetime, $datetime, $partnerIdParam, $partnerIdParam);
+            } else {
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("sss", $referenceNumber, $datetime, $datetime);
+            }
             $stmt->execute();
             $result = $stmt->get_result();
             $override = false;
@@ -1836,11 +1849,11 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
 
             // Check for duplicates and overrides but don't skip - just log warnings
             // The delete-then-insert logic below will handle these cases
-            if ($checkDuplicateData($reference_number, $datetime)) {
+            if ($checkDuplicateData($reference_number, $datetime, $partnerId)) {
                 $errors[] = "Warning: Duplicate found for reference {$reference_number} - will be handled by delete-then-insert";
             }
 
-            if ($checkHasAlreadyDataReadyToOverride($reference_number, $datetime)) {
+            if ($checkHasAlreadyDataReadyToOverride($reference_number, $datetime, $partnerId)) {
                 $errors[] = "Warning: Unposted data exists for reference {$reference_number} - will be overridden";
             }
 
