@@ -550,6 +550,31 @@ if (isset($_GET['cancel']) && $_GET['cancel'] == '1') {
         if (function_exists('error_log')) {
             error_log('[IMPORT CLEANUP] Cancel removed ' . $deletedCount . ' files from admin/temporary');
         }
+
+        // Write debug summary to admin/temporary for immediate inspection by developer
+        try {
+            $debug = [
+                'timestamp' => date('c'),
+                'deleted_count' => $deletedCount,
+                'deleted_patterns' => [$genPattern, $progPattern],
+                'remaining_files' => [],
+                'session_uploaded_paths' => []
+            ];
+            // list remaining files under tmp dir
+            foreach (glob($safeBase . '/*') as $f) {
+                $debug['remaining_files'][] = str_replace('\\', '/', $f);
+            }
+            if (!empty($_SESSION['uploaded_files']) && is_array($_SESSION['uploaded_files'])) {
+                foreach ($_SESSION['uploaded_files'] as $sf) {
+                    $debug['session_uploaded_paths'][] = isset($sf['path']) ? str_replace('\\','/',$sf['path']) : null;
+                }
+            }
+
+            $debugFile = $safeBase . '/cancel_debug_' . uniqid() . '.json';
+            @file_put_contents($debugFile, json_encode($debug, JSON_PRETTY_PRINT));
+        } catch (Exception $e) {
+            // ignore debug write errors
+        }
     }
 
     // Clear session
