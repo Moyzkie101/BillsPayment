@@ -138,3 +138,34 @@ memory_limit=-1
 memory_peak_bytes=4194304
 request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
 
+[2026-02-09T18:56:53+08:00] Shutdown handler:
+memory_limit=-1
+memory_peak_bytes=12582912
+last_error={"type":2,"message":"Maximum number of allowable file uploads has been exceeded","file":"Unknown","line":0}
+request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
+
+[2026-02-09T18:59:31+08:00] Shutdown handler:
+memory_limit=-1
+memory_peak_bytes=8388608
+request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
+
+[2026-02-09T18:59:33+08:00] Shutdown handler:
+memory_limit=-1
+memory_peak_bytes=14680064
+request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
+
+[2026-02-09T18:59:35+08:00] Shutdown handler:
+memory_limit=-1
+memory_peak_bytes=8388608
+request=POST /billspayment/models/saved/saved_billspayImportFile_NEW.php
+
+[2026-02-09T18:59:37+08:00] Shutdown handler:
+memory_limit=-1
+memory_peak_bytes=14680064
+request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
+
+[2026-02-09T18:59:37+08:00] Shutdown handler:
+memory_limit=-1
+memory_peak_bytes=10485760
+request=GET /billspayment/models/saved/saved_billspayImportFile_NEW.php
+
