@@ -42,23 +42,7 @@ if (isset($_SESSION['user_type'])) {
 ini_set('memory_limit', '-1');
 set_time_limit(0);
 
-// Register a shutdown handler to capture fatal errors and peak memory usage.
-register_shutdown_function(function() {
-    $logFile = __DIR__ . '/import_debug.log';
-    $err = error_get_last();
-    $peak = memory_get_peak_usage(true);
-    $now = date('c');
-    $msg = "[{$now}] Shutdown handler:\n";
-    $msg .= "memory_limit=" . ini_get('memory_limit') . "\n";
-    $msg .= "memory_peak_bytes=" . $peak . "\n";
-    if ($err) {
-        $msg .= "last_error=" . json_encode($err) . "\n";
-    }
-    // Append request summary (method, uri) for context
-    $msg .= "request=" . ($_SERVER['REQUEST_METHOD'] ?? 'CLI') . " " . ($_SERVER['REQUEST_URI'] ?? '') . "\n";
-    $msg .= "\n";
-    @file_put_contents($logFile, $msg, FILE_APPEND | LOCK_EX);
-});
+// Shutdown handler logging removed per request (previously wrote import_debug.log)
 
 // Configure PhpSpreadsheet cell caching to reduce memory usage for large files
 // Use a disk-based cache (discISAM) or php temp dir. This helps prevent exhausting RAM.
@@ -243,6 +227,139 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
         'success' => true,
         'files' => $results
     ]);
+    exit;
+}
+
+// ============================================================================
+// AJAX Endpoint: Fix Head Office Branch IDs
+// Expects: POST fix_head_office=1, file_id, fixes (JSON array [{row:..., value:...}])
+// This will update the spreadsheet on disk and re-run validation for that file.
+// ============================================================================
+if (isset($_POST['fix_head_office']) && !empty($_POST['file_id'])) {
+    header('Content-Type: application/json');
+    $fileId = $_POST['file_id'];
+    $fixesJson = $_POST['fixes'] ?? '[]';
+    $fixes = json_decode($fixesJson, true);
+
+    if (!isset($_SESSION['uploaded_files']) || !is_array($_SESSION['uploaded_files'])) {
+        echo json_encode(['success' => false, 'error' => 'No session upload data']);
+        exit;
+    }
+
+    $found = null;
+    foreach ($_SESSION['uploaded_files'] as &$f) {
+        if (isset($f['id']) && $f['id'] === $fileId) { $found = &$f; break; }
+    }
+    if ($found === null) {
+        echo json_encode(['success' => false, 'error' => 'File not found in session']);
+        exit;
+    }
+
+    $path = $found['path'] ?? null;
+    if (!$path || !file_exists($path)) {
+        echo json_encode(['success' => false, 'error' => 'File not found on disk']);
+        exit;
+    }
+
+    try {
+        $reader = IOFactory::createReaderForFile($path);
+        $spreadsheet = $reader->load($path);
+        $worksheet = $spreadsheet->getActiveSheet();
+
+        // Apply fixes - typical fix is to set Branch ID -> 581
+        foreach ($fixes as $fix) {
+            $r = intval($fix['row'] ?? 0);
+            $v = isset($fix['value']) ? strval($fix['value']) : '581';
+            if ($r > 0) {
+                // set both common branch columns to be safe (KP7: B, KPX: N)
+                try { $worksheet->setCellValue('B' . $r, $v); } catch (Exception $e) {}
+                try { $worksheet->setCellValue('N' . $r, $v); } catch (Exception $e) {}
+            }
+        }
+
+        // Save back to same path (overwrite)
+        $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+        $writer->save($path);
+
+        // Re-run validation for this file and update session
+        $newValidation = validateFile($conn, $path, $found['source_type'] ?? '', $found['partner_id'] ?? '');
+        $found['validation_result'] = $newValidation;
+        // update status with Head Office priority
+        if (!empty($newValidation['head_office_issues'])) {
+            $found['status'] = 'head_office';
+        } elseif ($newValidation['valid']) {
+            $found['status'] = 'valid';
+        } else {
+            $found['status'] = 'invalid';
+        }
+        $_SESSION['uploaded_files'] = $_SESSION['uploaded_files'];
+
+        // Free resources
+        try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+
+        echo json_encode(['success' => true, 'validation_result' => $newValidation]);
+        exit;
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        exit;
+    }
+}
+
+// ============================================================================
+// AJAX Endpoint: Fix All Head Office Issues
+// ============================================================================
+if (isset($_POST['fix_head_office_all']) && isset($_SESSION['uploaded_files'])) {
+    header('Content-Type: application/json');
+    $results = [];
+    $any = false;
+    foreach ($_SESSION['uploaded_files'] as &$f) {
+        if (!empty($f['validation_result']['head_office_issues']) && isset($f['path']) && file_exists($f['path'])) {
+            $any = true;
+            $path = $f['path'];
+            try {
+                $reader = IOFactory::createReaderForFile($path);
+                $spreadsheet = $reader->load($path);
+                $worksheet = $spreadsheet->getActiveSheet();
+
+                $fixes = $f['validation_result']['head_office_issues'];
+                foreach ($fixes as $fix) {
+                    $r = intval($fix['row'] ?? 0);
+                    $v = '581';
+                    if ($r > 0) {
+                        try { $worksheet->setCellValue('B' . $r, $v); } catch (Exception $e) {}
+                        try { $worksheet->setCellValue('N' . $r, $v); } catch (Exception $e) {}
+                    }
+                }
+
+                $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+                $writer->save($path);
+
+                try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+
+                // Re-run validation
+                $newValidation = validateFile($conn, $path, $f['source_type'] ?? '', $f['partner_id'] ?? '');
+                $f['validation_result'] = $newValidation;
+                if (!empty($newValidation['head_office_issues'])) {
+                    $f['status'] = 'head_office';
+                } elseif ($newValidation['valid']) {
+                    $f['status'] = 'valid';
+                } else {
+                    $f['status'] = 'invalid';
+                }
+
+                $results[] = ['id' => $f['id'] ?? '', 'success' => true, 'status' => $f['status']];
+            } catch (Exception $e) {
+                $results[] = ['id' => $f['id'] ?? '', 'success' => false, 'error' => $e->getMessage()];
+            }
+        }
+    }
+    unset($f);
+    $_SESSION['uploaded_files'] = $_SESSION['uploaded_files'];
+    if (!$any) {
+        echo json_encode(['success' => false, 'error' => 'No head office issues found']);
+        exit;
+    }
+    echo json_encode(['success' => true, 'results' => $results]);
     exit;
 }
 
@@ -571,7 +688,14 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
                 $validationResult = validateFile($conn, $file['path'], $file['source_type'], $file['partner_id']);
             }
             $file['validation_result'] = $validationResult;
-            $file['status'] = $validationResult['valid'] ? 'valid' : 'invalid';
+            // Priority: Head Office (highest) -> Invalid -> Valid
+            if (!empty($validationResult['head_office_issues'])) {
+                $file['status'] = 'head_office';
+            } elseif ($validationResult['valid']) {
+                $file['status'] = 'valid';
+            } else {
+                $file['status'] = 'invalid';
+            }
         }
     }
     unset($file); // Clear the reference
@@ -1101,6 +1225,7 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     $errors = [];
     $warnings = [];
     $rowCount = 0;
+    $headOfficeIssues = []; // collect head office specific issues
     $previewData = []; // Store sample rows for preview
     $matchedRows = [];
     $cancellationRows = [];
@@ -1352,6 +1477,35 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
                 ];
             }
 
+            // -----------------------
+            // Head Office validation
+            // -----------------------
+            // Detect ML CEBU HEAD OFFICE outlet issues: outlet should be exactly 'ML CEBU HEAD OFFICE'
+            // and branch id MUST be 581. If outlet matches but branch id is missing/wrong,
+            // flag this row as a Head Office issue (file-level Head Office status).
+            try {
+                if (strtoupper($mlOutletCell) === 'ML CEBU HEAD OFFICE') {
+                    $normalizedBranch = normalizeBranchId($branchIdCell);
+                    if ($normalizedBranch === '' || strtoupper($normalizedBranch) === 'NAN' || $normalizedBranch !== '581') {
+                        $headOfficeIssues[] = [
+                            'row' => $row,
+                            'outlet' => $mlOutletCell,
+                            'issue' => 'Wrong / Missing Branch ID',
+                            'value' => ($branchIdCell === '' ? 'Empty' : $branchIdCell)
+                        ];
+                        // Add a non-blocking warning to warnings array for visibility
+                        $warnings[] = [
+                            'row' => $row,
+                            'type' => 'head_office',
+                            'message' => 'ML CEBU HEAD OFFICE with wrong/missing Branch ID',
+                            'value' => ($branchIdCell === '' ? 'Empty' : $branchIdCell)
+                        ];
+                    }
+                }
+            } catch (Exception $e) {
+                // ignore any unexpected issues here
+            }
+
             $normalizedBranchId = normalizeBranchId($branchIdCell);
             if (!empty($branchIdSet) && $normalizedBranchId !== '' && !isset($branchIdSet[$normalizedBranchId])) {
                 $missingRows[] = [
@@ -1455,12 +1609,14 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     error_log("Validation detection for {$filePath}: " . count($matchedRows) . " active, " . count($cancellationRows) . " cancelled (total {$rowCount} rows)");
     
     return [
-        'valid' => (count($errors) === 0 && count($missingRows) === 0),
+        // valid only when no errors/missing and no head office issues
+        'valid' => (count($errors) === 0 && count($missingRows) === 0 && empty($headOfficeIssues)),
         'row_count' => $rowCount,
         'errors' => $errors,
         'warnings' => $warnings,
         'preview_data' => $previewData,
         'missing_rows' => $missingRows,
+        'head_office_issues' => $headOfficeIssues,
         'source_type' => $sourceType,
         'partner_data' => $partnerData,
         'transaction_date' => $transactionDate,
@@ -2407,6 +2563,11 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             border-color: #dc3545;
             background-color: #fff5f5;
         }
+
+        .file-validation-card.head_office {
+            border-color: #ffc107;
+            background-color: #fffaf0;
+        }
         
         .file-validation-card.pending {
             border-color: #ffc107;
@@ -2425,6 +2586,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         .status-valid { background: #28a745; color: white; }
         .status-invalid { background: #dc3545; color: white; }
         .status-pending { background: #ffc107; color: black; }
+        .status-head_office { background: #ffc107; color: black; }
         
         .badge-source {
             padding: 4px 10px;
@@ -2490,6 +2652,10 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             background-color: #ffc107;
             color: black;
         }
+        .badge-head_office {
+            background-color: #ffc107;
+            color: #856404;
+        }
         
         /* Table styles in modal */
         .swal2-html-container table {
@@ -2544,7 +2710,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             margin-right: 8px;
         }
 
-        /* missing icon */
+        /* missing icon base */
         .missing-icon-btn {
             display: inline-flex;
             align-items: center;
@@ -2553,11 +2719,18 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             height: 34px;
             border-radius: 50%;
             background: #fff;
+            margin-left: 8px;
+            font-size: 14px;
+        }
+        .missing-icon-btn.missing-mode {
             color: #dc3545;
             border: 2px solid #dc3545;
             box-shadow: 0 2px 6px rgba(220,53,69,0.12);
-            margin-left: 8px;
-            font-size: 14px;
+        }
+        .missing-icon-btn.head-office-mode {
+            color: #856404;
+            border: 2px solid #ffc107;
+            box-shadow: 0 2px 6px rgba(255,193,7,0.12);
         }
     </style>
 </head>
@@ -2572,6 +2745,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 usort($allUploaded, function($a, $b) {
                     $priority = function($s) {
                         $s = strtolower($s);
+                        if ($s === 'head_office') return -1; // highest priority
                         if ($s === 'invalid') return 0;
                         if ($s === 'valid') return 2;
                         return 1; // pending/other
@@ -2594,7 +2768,17 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 <h2 class="mb-0">File Validation & Import</h2>
                 <div>
                     <?php if (isset($_SESSION['uploaded_files'])): ?>
-                        <?php if ($validCount > 0): ?>
+                            <?php 
+                                $headOfficeCount = 0;
+                                foreach ($allUploaded as $af) { if (($af['status'] ?? '') === 'head_office') $headOfficeCount++; }
+                            ?>
+                            <?php if ($headOfficeCount > 0): ?>
+                                <button type="button" id="fixAllHeadOfficeBtn" class="btn btn-warning btn-sm me-2">
+                                    <i class="fa-solid fa-wrench me-1"></i>
+                                    Fix All Head Office Issues (<?php echo $headOfficeCount; ?>)
+                                </button>
+                            <?php endif; ?>
+                            <?php if ($validCount > 0): ?>
                             <form method="post" id="performImportForm" style="display: inline; margin-right:8px;">
                                 <input type="hidden" name="progress_token" value="<?php echo htmlspecialchars($progressToken); ?>">
                                 <input type="hidden" name="perform_import" value="1">
@@ -2617,6 +2801,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                         <label for="fileFilter" class="me-2" style="font-weight:600;">Show:</label>
                         <select id="fileFilter" class="form-select form-select-sm" style="display:inline-block; width:160px;">
                             <option value="all">All</option>
+                            <option value="head_office">Head Office</option>
                             <option value="invalid">Invalid</option>
                             <option value="valid">Valid</option>
                         </select>
@@ -2632,8 +2817,9 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                     <small class="text-muted"><?php echo $file['partner_name']; ?></small>
                                 </div>
                                 <span class="status-badge status-<?php echo $file['status']; ?>">
-                                    <?php echo $file['status']; ?>
+                                    <?php echo ucwords(str_replace('_', ' ', $file['status'])); ?>
                                 </span>
+                                <?php /* header-level head-office button removed — use card icon instead */ ?>
                             </div>
                             
                             <div class="mb-3">
@@ -2668,11 +2854,17 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                 <button class="btn btn-sm btn-success" onclick="viewTransactionSummary('<?php echo $file['id']; ?>')">
                                     <i class="fa-solid fa-chart-bar"></i> Transaction Summary
                                 </button>
-                                <?php if (!empty($file['validation_result']['missing_rows'])): ?>
-                                    <button class="missing-icon-btn" title="Missing data detected" onclick="showMissingModal('<?php echo $file['id']; ?>')">
-                                        <i class="fa-solid fa-circle-question"></i>
-                                    </button>
-                                <?php endif; ?>
+                                                <?php if (!empty($file['validation_result']['missing_rows'])): ?>
+                                                    <?php if (!empty($file['validation_result']['head_office_issues'])): ?>
+                                                        <button class="missing-icon-btn head-office-mode" title="View Head Office issue" data-file-id="<?php echo htmlspecialchars($file['id']); ?>">
+                                                            <i class="fa-solid fa-circle-exclamation"></i>
+                                                        </button>
+                                                    <?php else: ?>
+                                                        <button class="missing-icon-btn missing-mode" title="Missing data detected" data-file-id="<?php echo htmlspecialchars($file['id']); ?>">
+                                                            <i class="fa-solid fa-circle-question"></i>
+                                                        </button>
+                                                    <?php endif; ?>
+                                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -2710,6 +2902,16 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         // Store file data for JavaScript access
         const filesData = <?php echo json_encode($renderFiles ?? []); ?>;
 
+        // Format internal status code to human label
+        function formatStatusLabel(s) {
+            if (!s) return 'Pending';
+            try {
+                return s.toString().replace(/_/g, ' ').replace(/\w\S*/g, function(txt){
+                    return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+                });
+            } catch (e) { return s; }
+        }
+
         // Client-side filtering for file cards (All / Invalid / Valid)
         document.addEventListener('DOMContentLoaded', function() {
             const filterEl = document.getElementById('fileFilter');
@@ -2723,10 +2925,104 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                         card.style.display = '';
                     } else if (val === 'invalid') {
                         card.style.display = (status === 'invalid') ? '' : 'none';
+                    } else if (val === 'head_office') {
+                        card.style.display = (status === 'head_office') ? '' : 'none';
                     } else if (val === 'valid') {
                         card.style.display = (status === 'valid') ? '' : 'none';
                     }
                 });
+            });
+            // Fix All Head Office button handler
+            const fixAllBtn = document.getElementById('fixAllHeadOfficeBtn');
+            if (fixAllBtn) {
+                fixAllBtn.addEventListener('click', function() {
+                    Swal.fire({
+                        title: 'Fix All Head Office Issues',
+                        text: 'This will automatically set Branch ID = 581 for all detected Head Office rows across uploaded files. Proceed?',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Yes, fix all',
+                        cancelButtonText: 'Cancel'
+                    }).then((res) => {
+                        if (!res.isConfirmed) return;
+                        Swal.fire({ title: 'Applying fixes...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                        $.post('', { fix_head_office_all: 1 }, function(resp) {
+                            if (resp && resp.success) {
+                                Swal.fire({ title: 'Done', text: 'Head Office fixes applied', icon: 'success' }).then(() => location.reload());
+                            } else {
+                                Swal.fire({ title: 'Error', text: (resp && resp.error) ? resp.error : 'Failed to apply fixes', icon: 'error' });
+                            }
+                        }, 'json').fail(function() { Swal.fire('Error','Request failed','error'); });
+                    });
+                });
+            }
+            // Delegated click handler for Head Office and Missing buttons
+            function showHeadOfficeModal(issues, fileId) {
+                if (!Array.isArray(issues) || issues.length === 0) {
+                    Swal.fire('No issues', 'No head office issues found for this file.', 'info');
+                    return;
+                }
+                let table = '<div style="max-height:420px; overflow:auto; text-align:left;"><table class="table table-sm table-bordered"><thead><tr><th>Row</th><th>Outlet</th><th>Issue</th><th>Value</th></tr></thead><tbody>';
+                issues.forEach(it => {
+                    table += '<tr>' +
+                        '<td>' + (it.row || '') + '</td>' +
+                        '<td>' + (it.outlet || '') + '</td>' +
+                        '<td>' + (it.issue || '') + '</td>' +
+                        '<td>' + (it.value || '') + '</td>' +
+                        '</tr>';
+                });
+                table += '</tbody></table></div>';
+
+                Swal.fire({
+                    title: 'Head Office Issues',
+                    html: table,
+                    width: '800px',
+                    showCancelButton: true,
+                    showDenyButton: false,
+                    confirmButtonText: 'Fix',
+                    cancelButtonText: 'Close',
+                    preConfirm: () => {
+                        const fixes = issues.map(i => ({ row: i.row, value: '581' }));
+                        return new Promise((resolve, reject) => {
+                            $.post('', { fix_head_office: 1, file_id: fileId, fixes: JSON.stringify(fixes) }, function(resp) {
+                                if (resp && resp.success) resolve(resp);
+                                else reject((resp && resp.error) ? resp.error : 'Unknown error');
+                            }, 'json').fail(function() { reject('Request failed'); });
+                        });
+                    }
+                }).then((res) => {
+                    if (res.isConfirmed) {
+                        Swal.fire({ title: 'Applying fixes...', icon: 'info', showConfirmButton: false });
+                        location.reload();
+                    }
+                });
+            }
+
+            document.addEventListener('click', function(ev) {
+                // head-office-btn (explicit head office button)
+                const headBtn = ev.target.closest && ev.target.closest('.head-office-btn');
+                if (headBtn) {
+                    const issuesJson = headBtn.getAttribute('data-issues') || '[]';
+                    let issues = [];
+                    try { issues = JSON.parse(issuesJson); } catch (e) { issues = []; }
+                    const fid = headBtn.getAttribute('data-file-id') || '';
+                    showHeadOfficeModal(issues, fid);
+                    return;
+                }
+
+                // missing-icon-btn (repurposed) - decide which modal to show
+                const missBtn = ev.target.closest && ev.target.closest('.missing-icon-btn');
+                if (missBtn) {
+                    const fid = missBtn.getAttribute('data-file-id');
+                    const file = filesData.find(f => f.id === fid);
+                    if (file && file.validation_result && file.validation_result.head_office_issues && file.validation_result.head_office_issues.length > 0) {
+                        showHeadOfficeModal(file.validation_result.head_office_issues, fid);
+                    } else {
+                        // fallback to existing missing modal behavior
+                        showMissingModal(fid);
+                    }
+                    return;
+                }
             });
         });
         
@@ -2781,7 +3077,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <tr><th>Source Type:</th><td><span class="badge badge-${(sourceType || 'unknown').toLowerCase()}">${sourceType}</span></td></tr>
                             <tr><th>Transaction Date:</th><td>${validation.transaction_start_date ? ('Start Date: ' + validation.transaction_start_date + (validation.transaction_end_date ? ' - End Date: ' + validation.transaction_end_date : '')) : transactionDate}</td></tr>
                             <tr><th>Total Rows:</th><td>${validation.row_count || 0}</td></tr>
-                            <tr><th>Status:</th><td><span class="badge badge-${fileData.status || 'pending'}">${(fileData.status || 'pending').toUpperCase()}</span></td></tr>
+                            <tr><th>Status:</th><td><span class="badge badge-${fileData.status || 'pending'}">${formatStatusLabel(fileData.status || 'pending')}</span></td></tr>
                         </table>
                     </div>`;
             
