@@ -551,30 +551,7 @@ if (isset($_GET['cancel']) && $_GET['cancel'] == '1') {
             error_log('[IMPORT CLEANUP] Cancel removed ' . $deletedCount . ' files from admin/temporary');
         }
 
-        // Write debug summary to admin/temporary for immediate inspection by developer
-        try {
-            $debug = [
-                'timestamp' => date('c'),
-                'deleted_count' => $deletedCount,
-                'deleted_patterns' => [$genPattern, $progPattern],
-                'remaining_files' => [],
-                'session_uploaded_paths' => []
-            ];
-            // list remaining files under tmp dir
-            foreach (glob($safeBase . '/*') as $f) {
-                $debug['remaining_files'][] = str_replace('\\', '/', $f);
-            }
-            if (!empty($_SESSION['uploaded_files']) && is_array($_SESSION['uploaded_files'])) {
-                foreach ($_SESSION['uploaded_files'] as $sf) {
-                    $debug['session_uploaded_paths'][] = isset($sf['path']) ? str_replace('\\','/',$sf['path']) : null;
-                }
-            }
-
-            $debugFile = $safeBase . '/cancel_debug_' . uniqid() . '.json';
-            @file_put_contents($debugFile, json_encode($debug, JSON_PRETTY_PRINT));
-        } catch (Exception $e) {
-            // ignore debug write errors
-        }
+        // Debug file writing disabled - no debug artifacts will be left in admin/temporary
     }
 
     // Clear session
@@ -3054,6 +3031,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                     cancelButtonText: 'Close',
                     preConfirm: () => {
                         const fixes = issues.map(i => ({ row: i.row, value: '581' }));
+                        try { Swal.update({ confirmButtonText: 'Fixing...' }); Swal.showLoading(); } catch (e) {}
                         return new Promise((resolve, reject) => {
                             $.post('', { fix_head_office: 1, file_id: fileId, fixes: JSON.stringify(fixes) }, function(resp) {
                                 if (resp && resp.success) resolve(resp);

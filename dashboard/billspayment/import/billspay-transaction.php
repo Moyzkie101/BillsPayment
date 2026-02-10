@@ -309,28 +309,45 @@ if (isset($_SESSION['user_type'])) {
             margin-top: 3px;
         }
 
-        /* Duplicate check live list inside overlay */
+        /* Duplicate check live list inside overlay (improved) */
+        .duplicate-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+        }
+
         #duplicate-check-list {
-            width: 520px;
+            width: 560px;
             max-height: 420px;
             overflow: auto;
-            background: rgba(255,255,255,0.95);
+            background: #ffffff;
             border-radius: 8px;
             padding: 12px;
-            box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            text-align: left;
+        }
+
+        #duplicate-check-header {
+            font-weight: 700;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #333;
         }
 
         .check-item {
             display:flex;
             align-items:center;
             justify-content:space-between;
-            padding:8px 6px;
-            border-bottom:1px solid #eee;
+            gap: 12px;
+            padding:10px 8px;
+            border-bottom:1px solid #f1f1f1;
             font-size:13px;
         }
 
-        .check-item .name { flex:1; margin-right:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .check-item .status { width:36px; text-align:center; }
+        .check-item .name { flex:1; margin-right:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .check-item .status { width:40px; text-align:center; margin-left:8px; }
 
         .fade-up {
             animation: fadeUp 700ms forwards;
@@ -460,6 +477,262 @@ if (isset($_SESSION['user_type'])) {
             </div>
         </div>
     </div>
+    <style>
+        /* Professional Duplicate-Check Modal */
+        .duplicate-modal {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 19999;
+            pointer-events: none;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .duplicate-modal .duplicate-modal-content {
+            pointer-events: auto;
+            width: 580px;
+            max-width: 100%;
+            max-height: 85vh;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.2), 0 8px 16px rgba(0,0,0,0.1);
+            text-align: left;
+            box-sizing: border-box;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        @keyframes slideUp {
+            from { 
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        /* Header Section */
+        .duplicate-modal-header {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            padding: 20px 24px 18px;
+            color: #ffffff;
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .duplicate-modal-header-title {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .duplicate-modal-header-title i {
+            font-size: 24px;
+            margin-right: 12px;
+        }
+        
+        #duplicate-check-header {
+            font-weight: 600;
+            font-size: 18px;
+            color: #ffffff;
+            margin: 0;
+        }
+        
+        /* Progress Bar */
+        .duplicate-progress-bar-container {
+            background: rgba(255,255,255,0.25);
+            height: 6px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+        
+        .duplicate-progress-bar {
+            height: 100%;
+            background: #ffffff;
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        
+        /* List Container */
+        .duplicate-modal-body {
+            padding: 20px 24px;
+            flex: 1 1 auto;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #duplicate-check-list {
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 8px;
+            flex: 1 1 auto;
+        }
+        
+        /* Check Items */
+        .check-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            margin-bottom: 10px;
+            background: #ffffff;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        }
+        
+        .check-item:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            border-color: #dee2e6;
+        }
+        
+        .check-item .name {
+            flex: 1;
+            margin-right: 16px;
+            font-size: 13px;
+            color: #495057;
+            word-break: break-word;
+            line-height: 1.5;
+            font-weight: 500;
+        }
+        
+        .check-item .status {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        
+        .check-item.checking {
+            border-color: #007bff20;
+            background: linear-gradient(to right, #ffffff, #f8f9fa);
+        }
+        
+        .check-item.success {
+            border-color: #28a74520;
+            background: linear-gradient(to right, #d4edda, #ffffff);
+        }
+        
+        .check-item.warning {
+            border-color: #ffc10720;
+            background: linear-gradient(to right, #fff3cd, #ffffff);
+        }
+        
+        .check-item.fade-up {
+            transform: translateX(10px);
+            opacity: 0;
+            transition: all 0.4s ease;
+            max-height: 0;
+            padding: 0 16px;
+            margin-bottom: 0;
+            border-color: transparent;
+        }
+        
+        /* Footer Section */
+        .duplicate-modal-footer {
+            padding: 16px 24px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            border-radius: 0 0 12px 12px;
+        }
+        
+        #duplicate-check-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #6c757d;
+            margin: 0;
+        }
+        
+        .duplicate-footer-icon {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .duplicate-footer-icon i {
+            color: #dc3545;
+        }
+        
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.4);
+            z-index: 9998;
+            backdrop-filter: blur(2px);
+        }
+        
+        #loading-overlay .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+        }
+        
+        /* Custom Scrollbar */
+        #duplicate-check-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #duplicate-check-list::-webkit-scrollbar-track {
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        #duplicate-check-list::-webkit-scrollbar-thumb {
+            background: #dee2e6;
+            border-radius: 10px;
+            transition: background 0.3s;
+        }
+        
+        #duplicate-check-list::-webkit-scrollbar-thumb:hover {
+            background: #adb5bd;
+        }
+        
+        /* Status Icons */
+        .status-icon-checking {
+            color: #007bff;
+            animation: spin 1s linear infinite;
+        }
+        
+        .status-icon-success {
+            color: #28a745;
+        }
+        
+        .status-icon-warning {
+            color: #ffc107;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -820,15 +1093,55 @@ if (isset($_SESSION['user_type'])) {
                 let index = 0;
                 const aggregateResults = [];
 
-                // Build live-check list UI
+                // Build live-check modal UI (professional design)
                 $('#loading-overlay').css('display', 'flex');
-                $('#loading-overlay').append('<div id="duplicate-check-list" style="position:relative; margin:16px auto; text-align:left;"></div>');
+                // hide the small global spinner while the modal is visible
+                $('#loading-overlay .loading-spinner').hide();
+
+                var modalHtml = '<div class="duplicate-modal">'
+                    + '<div class="duplicate-modal-content">'
+                    + '<div class="duplicate-modal-header">'
+                    + '<div class="duplicate-modal-header-title">'
+                    + '<i class="fa-solid fa-shield-halved"></i>'
+                    + '<h4 id="duplicate-check-header">Checking files (0/' + uploadedFiles.length + ')</h4>'
+                    + '</div>'
+                    + '<div class="duplicate-progress-bar-container">'
+                    + '<div class="duplicate-progress-bar" id="duplicate-progress-bar"></div>'
+                    + '</div>'
+                    + '</div>'
+                    + '<div class="duplicate-modal-body">'
+                    + '<div id="duplicate-check-list"></div>'
+                    + '</div>'
+                    + '<div class="duplicate-modal-footer">'
+                    + '<div id="duplicate-check-footer">'
+                    + '<span class="duplicate-footer-icon"><i class="fa-solid fa-file-circle-check"></i> Validating files</span>'
+                    + '<span id="duplicate-progress-text"><strong>0</strong> / ' + uploadedFiles.length + '</span>'
+                    + '</div>'
+                    + '</div>'
+                    + '</div></div>';
+
+                // append modal to body to avoid clipping by overlay containers
+                $('body').append(modalHtml);
                 const $list = $('#duplicate-check-list');
                 $list.empty();
                 uploadedFiles.forEach((f, idx) => {
-                    const item = $(`<div class="check-item" data-idx="${idx}"><div class="name">${f.name}</div><div class="status"><i class="fa-solid fa-spinner fa-spin text-primary"></i></div></div>`);
+                    const item = $(`<div class="check-item checking" data-idx="${idx}">
+                        <div class="name">${f.name}</div>
+                        <div class="status"><i class="fa-solid fa-spinner fa-spin status-icon-checking"></i></div>
+                    </div>`);
                     $list.append(item);
                 });
+
+                let totalCount = uploadedFiles.length;
+                let processedCount = 0;
+                function updateHeader() {
+                    $('#duplicate-check-header').text('Checking files (' + processedCount + '/' + totalCount + ')');
+                    $('#duplicate-progress-text').html('<strong>' + processedCount + '</strong> / ' + totalCount);
+                    
+                    // Update progress bar
+                    const progressPercent = (processedCount / totalCount) * 100;
+                    $('#duplicate-progress-bar').css('width', progressPercent + '%');
+                }
 
                 function processBatch(start) {
                     const formData = new FormData();
@@ -854,7 +1167,8 @@ if (isset($_SESSION['user_type'])) {
                 function next() {
                     if (index >= uploadedFiles.length) {
                         // All batches done — aggregate and update UI
-                        $('#loading-overlay').hide();
+                        // restore global spinner visibility then hide overlay
+                        $('#loading-overlay .loading-spinner').show();
 
                         // Flatten aggregateResults into a single array of per-file results
                         const flat = [].concat.apply([], aggregateResults);
@@ -874,8 +1188,9 @@ if (isset($_SESSION['user_type'])) {
 
                         renderFileCards();
 
-                        // remove live list
-                        $('#duplicate-check-list').remove();
+                        // remove live modal
+                        $('.duplicate-modal').remove();
+                        $('#loading-overlay').hide();
 
                         // Check duplicates overal
                         const filesWithDuplicates = flat.filter(f => f.hasDuplicates);
@@ -900,12 +1215,21 @@ if (isset($_SESSION['user_type'])) {
                                 var $item = $list.find('.check-item[data-idx="' + globalIndex + '"]');
                                 if ($item.length) {
                                     if (res.hasDuplicates) {
-                                        $item.find('.status').html('<i class="fa-solid fa-circle-xmark text-warning"></i>');
+                                        $item.removeClass('checking').addClass('warning');
+                                        $item.find('.status').html('<i class="fa-solid fa-circle-exclamation status-icon-warning"></i>');
                                     } else {
-                                        $item.find('.status').html('<i class="fa-solid fa-circle-check text-success"></i>');
+                                        $item.removeClass('checking').addClass('success');
+                                        $item.find('.status').html('<i class="fa-solid fa-circle-check status-icon-success"></i>');
                                     }
                                     // animate fade-up then remove the item so new ones appear from bottom
-                                    setTimeout(function() { $item.addClass('fade-up'); setTimeout(function(){ $item.remove(); }, 700); }, 500 + (j*80));
+                                    setTimeout(function() { 
+                                        $item.addClass('fade-up'); 
+                                        setTimeout(function(){ 
+                                            $item.remove(); 
+                                            processedCount++; 
+                                            updateHeader(); 
+                                        }, 400); 
+                                    }, 300 + (j*60));
                                 }
                             });
 
@@ -920,8 +1244,9 @@ if (isset($_SESSION['user_type'])) {
                             Swal.fire({ icon: 'error', title: 'Validation Error', text: (response && response.error) ? response.error : 'An error occurred while checking for duplicates.', confirmButtonText: 'OK' });
                         }
                     }).fail(function(xhr, status, error) {
+                        $('#loading-overlay .loading-spinner').show();
+                        $('.duplicate-modal').remove();
                         $('#loading-overlay').hide();
-                        $('#duplicate-check-list').remove();
                         uploadedFiles.forEach(file => { file.status = 'error'; });
                         renderFileCards();
 
