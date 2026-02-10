@@ -127,37 +127,34 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
         $mainWhereClause = 'AND ' . implode(' AND ', $whereConditions);
     }
 
+    // Normalize partner key in the CTEs to avoid multiple JOIN matches that yield duplicate partner rows
     $DataQuery = "WITH summary_vol AS (
                 SELECT
-                    bt.partner_id,
-                    bt.partner_id_kpx,
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key,
                     COUNT(*) AS vol1,
-                    sum(bt.amount_paid) AS principal1,
-                    sum(bt.charge_to_partner + charge_to_customer) AS charge1
+                    SUM(bt.amount_paid) AS principal1,
+                    SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
                 FROM
                     mldb.billspayment_transaction AS bt 
                 WHERE
                     $dateCondition
                     AND bt.status IS NULL 
                 GROUP BY
-                    bt.partner_id,
-                    bt.partner_id_kpx
+                    COALESCE(bt.partner_id, bt.partner_id_kpx)
         ),
         adjustment_vol AS (
             SELECT
-                bt.partner_id,
-                bt.partner_id_kpx,
+                COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key,
                 COUNT(*) AS vol2,
-                sum(bt.amount_paid) AS principal2,
-                sum(bt.charge_to_partner + charge_to_customer) AS charge2
+                SUM(bt.amount_paid) AS principal2,
+                SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
             FROM
                 mldb.billspayment_transaction AS bt 
             WHERE
                 $dateCondition
                 AND bt.status = '*' 
             GROUP BY
-                bt.partner_id,
-                bt.partner_id_kpx
+                COALESCE(bt.partner_id, bt.partner_id_kpx)
         )
 
         SELECT
@@ -178,14 +175,14 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
         LEFT JOIN
             summary_vol AS sv
             ON (
-                mpm.partner_id = sv.partner_id
-                OR mpm.partner_id_kpx = sv.partner_id_kpx
+                mpm.partner_id = sv.partner_key
+                OR mpm.partner_id_kpx = sv.partner_key
             )
         LEFT JOIN
             adjustment_vol AS av
             ON (
-                mpm.partner_id = av.partner_id
-                OR mpm.partner_id_kpx = av.partner_id_kpx
+                mpm.partner_id = av.partner_key
+                OR mpm.partner_id_kpx = av.partner_key
             )
         WHERE
             mpm.status = 'ACTIVE'
