@@ -214,7 +214,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     <div class="card-header">
                         <div class="row g-3 align-items-end justify-content-between">
                             <div class="col-md-3">
-                                <label class="h5 text-muted">INSTRUCTION: <i>To view, double click the row</i></label>
+                                <label id="searchInstruction" class="h5 text-muted" style="display:none;">INSTRUCTION: <i>To view, double click the row</i></label>
                             </div>
                             
                             <!-- Search Input and Button Group -->
@@ -722,6 +722,7 @@ $(document).ready(function() {
             $('.card-body').hide();
             $('#transactionReportTable tbody').empty();
             updateTotals({ total_principal: 0, total_charge_partner: 0, total_charge_customer: 0 });
+            $('#searchInstruction').hide();
         }
     });
     
@@ -762,6 +763,7 @@ $(document).ready(function() {
                         
                         // Show success message
                         showSearchResults(response.pagination.total_rows, searchValue);
+                        $('#searchInstruction').show();
                     } else {
                         // No results found
                         $('#transactionReportTable tbody').html(
@@ -772,6 +774,7 @@ $(document).ready(function() {
                         );
                         updatePagination({ current_page: 1, total_pages: 0, total_rows: 0, rows_per_page: rowsPerPage });
                         updateTotals({ total_principal: 0, total_charge_partner: 0, total_charge_customer: 0 });
+                        $('#searchInstruction').hide();
                         
                         // Show no results message
                         Swal.fire({
@@ -880,6 +883,8 @@ $(document).ready(function() {
             
             tbody.append(tr);
         });
+        // Show instruction now that data has been rendered
+        $('#searchInstruction').show();
     }
     
     // Function to get CAD Status badge

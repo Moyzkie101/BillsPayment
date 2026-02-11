@@ -393,7 +393,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                 <i class="fa-solid fa-chart-simple" aria-hidden="true"></i>
                 <div>
                     <h2>Transaction Summary Report</h2>
-                    <p class="bp-section-sub">Summary of transactions and aggregates</p>
+                    <p class="bp-section-sub">Summarized Transaction Output</p>
                 </div>
             </div>
         </div>
@@ -402,9 +402,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                 <div class="col-md-18">
                     <div class="card">
                         <div class="card-header">
-                            <!-- <div class="mb-3">
-                                <label class="h5 text-muted" style="display: none;">Hint: <i>Double click the row to view the details</i></label>
-                            </div> -->
+                            <div class="mb-3">
+                                <label id="searchHint" class="h5 text-muted" style="display: none;">Hint: <i>Double click the row to view the details</i></label>
+                            </div>
                             <div class="row g-2 align-items-end">
                                 <!-- Partner List -->
                                 <div class="col-md-2 col-sm-6">
@@ -596,8 +596,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
             loadTransactionData();
             // Show the card body when search is performed
             toggleCardBodyVisibility(true);
-            // Show the hint label when search is performed
-            toggleHintLabelVisibility(true);
         }
     });
 
@@ -708,6 +706,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
         });
         
         console.log(`Displayed ${data.length} transaction rows`);
+        // Show or hide the hint label depending on whether rows exist
+        if (Array.isArray(data) && data.length > 0) {
+            $('#searchHint').show();
+        } else {
+            $('#searchHint').hide();
+        }
     }
 
     // Method to update totals in footer - improved version
@@ -812,15 +816,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     updatePagination(response.pagination || {});
                     // Show the card body on successful data load
                     toggleCardBodyVisibility(true);
-                    // Show the hint label on successful data load
-                    toggleHintLabelVisibility(true);
+                    // Show or hide the hint label depending on returned rows (handled in displayTransactionData)
                 } else {
                     console.error('Error in response:', response); // Debug log
                     showAlert('Error', response.error || 'Failed to load transaction data', 'error');
                     // Hide the card body on error
                     toggleCardBodyVisibility(false);
                     // Hide the hint label on error
-                    toggleHintLabelVisibility(false);
+                    $('#searchHint').hide();
                 }
             },
             error: function(xhr, status, error) {
@@ -845,7 +848,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                 // Hide the card body on error
                 toggleCardBodyVisibility(false);
                 // Hide the hint label on error
-                toggleHintLabelVisibility(false);
+                $('#searchHint').hide();
             }
         });
     }

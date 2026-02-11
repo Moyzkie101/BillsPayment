@@ -516,7 +516,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                     <div class="card">
                         <div class="card-header">
                             <div class="mb-3">
-                                <label class="h5 text-muted">Hint: <i>Double click the row to view the details</i></label>
+                                <label id="searchHint" class="h5 text-muted" style="display:none;">Hint: <i>Double click the row to view the details</i></label>
                             </div>
                             <div class="row g-2 align-items-end">
                                 <!-- Partner List -->
@@ -1132,6 +1132,16 @@ $(document).ready(function() {
             $('#searchButton').click();
         }
     });
+
+    // Hide hint and results when search input is cleared
+    $('#search_input').on('input', function() {
+        if ($(this).val().trim() === '') {
+            $('.card-body').hide();
+            $('#transactionReportTable tbody').empty();
+            updateTotalsFromServer({ principal: '0.00', partner: '0.00', customer: '0.00' });
+            $('#searchHint').hide();
+        }
+    });
     
     // Add Export button click handler
     $('#ExportButton').click(function() {
@@ -1351,15 +1361,22 @@ $(document).ready(function() {
             timeout: 30000,
             success: function(response) {
                 hideLoading();
-                
+
                 if (response && response.success) {
-                    populateTable(response.data || []);
+                    var rows = response.data || [];
+                    populateTable(rows);
                     updatePagination(response.pagination || {});
                     updateTotalsFromServer(response.totals || {});
                     $('.card-body').show();
+                    if (Array.isArray(rows) && rows.length > 0) {
+                        $('#searchHint').show();
+                    } else {
+                        $('#searchHint').hide();
+                    }
                 } else {
                     showAlert('Error', response.error || 'Failed to load transaction data', 'error');
                     $('.card-body').hide();
+                    $('#searchHint').hide();
                 }
             },
             error: function(xhr, status, error) {
