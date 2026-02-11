@@ -77,66 +77,62 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
                     )";
     }
 
-    // Same query as in volume-report.php
+    // Use normalized partner_key and aggregate to avoid duplicate rows
     $DataQuery = "WITH summary_vol AS (
                 SELECT
-                    bt.partner_id,
-                    bt.partner_id_kpx,
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
                     COUNT(*) AS vol1,
-                    sum(bt.amount_paid) AS principal1,
-                    sum(bt.charge_to_partner + charge_to_customer) AS charge1
+                    SUM(bt.amount_paid) AS principal1,
+                    SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
                 FROM
                     mldb.billspayment_transaction AS bt 
                 WHERE
                     $sqlDATE
                     AND bt.status IS NULL 
                 GROUP BY
-                    bt.partner_id,
-                    bt.partner_id_kpx
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
         ),
         adjustment_vol AS (
             SELECT
-                bt.partner_id,
-                bt.partner_id_kpx,
+                COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
                 COUNT(*) AS vol2,
-                sum(bt.amount_paid) AS principal2,
-                sum(bt.charge_to_partner + charge_to_customer) AS charge2
+                SUM(bt.amount_paid) AS principal2,
+                SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
             FROM
                 mldb.billspayment_transaction AS bt 
             WHERE
                 $sqlDATE
                 AND bt.status = '*' 
             GROUP BY
-                bt.partner_id,
-                bt.partner_id_kpx
+                COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
         )
 
         SELECT
             mpm.partner_name,
-            COALESCE(sv.vol1, 0) AS summary_vol,
-            COALESCE(sv.principal1, 0) AS summary_principal,
-            COALESCE(sv.charge1, 0) AS summary_charges,
-            
-            COALESCE(av.vol2, 0) AS adjustment_vol,
-            COALESCE(ABS(av.principal2), 0) AS adjustment_principal,
-            COALESCE(ABS(av.charge2), 0) AS adjustment_charges,
-            
-            (COALESCE(sv.vol1, 0) - COALESCE(av.vol2, 0)) AS net_vol,
-            (COALESCE(sv.principal1, 0) - COALESCE(ABS(av.principal2), 0)) AS net_principal,
-            (COALESCE(sv.charge1, 0) - COALESCE(ABS(av.charge2), 0)) AS net_charges
+            SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
+            SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
+            SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
+
+            SUM(COALESCE(av.vol2, 0)) AS adjustment_vol,
+            SUM(COALESCE(ABS(av.principal2), 0)) AS adjustment_principal,
+            SUM(COALESCE(ABS(av.charge2), 0)) AS adjustment_charges,
+
+            (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
+            (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
+            (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
         FROM
             masterdata.partner_masterfile AS mpm
         LEFT JOIN
             summary_vol AS sv
             ON (
-                mpm.partner_id = sv.partner_id
-                OR mpm.partner_id_kpx = sv.partner_id_kpx
+                mpm.partner_id = sv.partner_key
+                OR mpm.partner_id_kpx = sv.partner_key
             )
         LEFT JOIN
             adjustment_vol AS av
             ON (
-                mpm.partner_id = av.partner_id
-                OR mpm.partner_id_kpx = av.partner_id_kpx
+                mpm.partner_id = av.partner_key
+                OR mpm.partner_id_kpx = av.partner_key
             )
         WHERE
             mpm.status = 'ACTIVE'";
@@ -146,6 +142,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
         $DataQuery .= " AND mpm.partner_name = '" . mysqli_real_escape_string($conn, $partner) . "'";
     }
     
+    // Aggregate by partner_name to collapse any duplicate masterfile rows
+    $DataQuery .= " GROUP BY mpm.partner_name";
     $DataQuery .= " ORDER BY mpm.partner_name";
 
     try {
