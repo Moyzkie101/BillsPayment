@@ -130,7 +130,7 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
     // Normalize partner key in the CTEs to avoid multiple JOIN matches that yield duplicate partner rows
     $DataQuery = "WITH summary_vol AS (
                 SELECT
-                    COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key,
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
                     COUNT(*) AS vol1,
                     SUM(bt.amount_paid) AS principal1,
                     SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
@@ -140,11 +140,11 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
                     $dateCondition
                     AND bt.status IS NULL 
                 GROUP BY
-                    COALESCE(bt.partner_id, bt.partner_id_kpx)
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
         ),
         adjustment_vol AS (
             SELECT
-                COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key,
+                COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
                 COUNT(*) AS vol2,
                 SUM(bt.amount_paid) AS principal2,
                 SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
@@ -154,7 +154,7 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
                 $dateCondition
                 AND bt.status = '*' 
             GROUP BY
-                COALESCE(bt.partner_id, bt.partner_id_kpx)
+                COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
         )
 
         SELECT
