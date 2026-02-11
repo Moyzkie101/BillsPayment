@@ -428,40 +428,22 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_billing_invoice') {
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <div style="text-align: left;">
-                    <i id="menu-btn" class="fa-solid fa-bars"></i>Menu
-                </div>
-                <div class="usernav">
-                    <h6><?php 
-                            if($_SESSION['user_type'] === 'admin'){
-                                echo $_SESSION['admin_name'];
-                            }elseif($_SESSION['user_type'] === 'user'){
-                                echo $_SESSION['user_name']; 
-                            }else{
-                                echo "GUEST";
-                            }
-                    ?></h6>
-                    <h6 style="margin-left:5px;"><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo "(".$_SESSION['admin_email'].")";
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo "(".$_SESSION['user_email'].")";
-                        }else{
-                            echo "GUEST";
-                        }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>Billing Invoice</h3></center>
-        <div class="container">
+        <div class="bp-section-header" role="region" aria-label="Page title">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-robot" aria-hidden="true"></i>
+                <div>
+                    <h2>Billing Invoice</h2>
+                    <p class="bp-section-sub">Automated billing invoice generation</p>
+                </div>
+            </div>
+        </div>
+        <div class="bp-card container">
             <div class="row">
                 <div class="col-md-12">
                     <div class="card">

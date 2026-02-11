@@ -118,38 +118,22 @@ try {
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <i id="menu-btn" class="fa-solid fa-bars"></i>
-                <div class="usernav">
-                    <h6><?php 
-                            if($_SESSION['user_type'] === 'admin'){
-                                echo $_SESSION['admin_name'];
-                            }elseif($_SESSION['user_type'] === 'user'){
-                                echo $_SESSION['user_name']; 
-                            }else{
-                                echo "GUEST";
-                            }
-                    ?></h6>
-                    <h6 style="margin-left:5px;"><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo "(".$_SESSION['admin_email'].")";
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo "(".$_SESSION['user_email'].")";
-                        }else{
-                            echo "GUEST";
-                        }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>User Management</h3></center>
-        <div class="container-fluid">
+        <div class="bp-section-header" role="region" aria-label="Page title">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-users-cog" aria-hidden="true"></i>
+                <div>
+                    <h2>User Management</h2>
+                    <p class="bp-section-sub">Manage user accounts and permissions</p>
+                </div>
+            </div>
+        </div>
+        <div class="bp-card container-fluid mt-3 p-4">
             <!-- Your content goes here -->
             <div class="row">
                 <div class="col-md-12">

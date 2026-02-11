@@ -382,40 +382,22 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <div style="text-align: left;">
-                    <i id="menu-btn" class="fa-solid fa-bars"></i>Menu
-                </div>
-                <div class="usernav">
-                    <h6><?php 
-                            if($_SESSION['user_type'] === 'admin'){
-                                echo $_SESSION['admin_name'];
-                            }elseif($_SESSION['user_type'] === 'user'){
-                                echo $_SESSION['user_name']; 
-                            }else{
-                                echo "GUEST";
-                            }
-                    ?></h6>
-                    <h6 style="margin-left:5px;"><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo "(".$_SESSION['admin_email'].")";
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo "(".$_SESSION['user_email'].")";
-                        }else{
-                            echo "GUEST";
-                        }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>TRANSACTION SUMMARY REPORT</h3></center>
-        <div class="container-fluid">
+        <div class="bp-section-header" role="region" aria-label="Page title">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-chart-simple" aria-hidden="true"></i>
+                <div>
+                    <h2>Transaction Summary Report</h2>
+                    <p class="bp-section-sub">Summary of transactions and aggregates</p>
+                </div>
+            </div>
+        </div>
+        <div class="bp-card container-fluid mt-3 p-4">
             <div class="row">
                 <div class="col-md-18">
                     <div class="card">

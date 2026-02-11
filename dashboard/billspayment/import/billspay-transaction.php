@@ -363,44 +363,42 @@ if (isset($_SESSION['user_type'])) {
             color: #6c757d;
         }
         
+        /* Branded section header and card */
+        .bp-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0 0 0;
+        }
+        .bp-section-title { display:flex; align-items:center; gap:12px; }
+        .bp-section-title i { font-size:32px; color: #dc3545; }
+        .bp-section-title h2 { margin:0; font-size:20px; color:#212529; font-weight:700; }
+        .bp-section-sub { margin:0; font-size:13px; color:#6c757d; }
+        .bp-card { background:#ffffff; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.04); border:1px solid #f1f1f1; }
+
     </style>
 </head>
 
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <i id="menu-btn" class="fa-solid fa-bars"></i>
-                <div class="usernav">
-                <h6><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo $_SESSION['admin_name'];
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo $_SESSION['user_name']; 
-                        }else{
-                            echo "GUEST";
-                        }
-                ?></h6>
-                <h6 style="margin-left:5px;"><?php 
-                    if($_SESSION['user_type'] === 'admin'){
-                        echo "(".$_SESSION['admin_email'].")";
-                    }elseif($_SESSION['user_type'] === 'user'){
-                        echo "(".$_SESSION['user_email'].")";
-                    }else{
-                        echo "GUEST";
-                    }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>Import Transaction</h3></center>
-        <div class="container-fluid border border-danger rounded mt-3 p-4">
-            <div class="container-fluid">
+        <div class="bp-section-header">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+                <div>
+                    <h2>Import Transaction</h2>
+                    <p class="bp-section-sub">Upload Excel files (.xls, .xlsx) for processing</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bp-card container-fluid mt-3 p-4">
+            <div class="bp-card-body">
                 <!-- Mode Toggle (Auto / Manual) + Proceed (moved to top-right) -->
                 <div class="mb-3 d-flex align-items-center justify-content-between" style="gap:12px;">
                     <div class="d-flex align-items-center" style="gap:12px;">
@@ -423,7 +421,7 @@ if (isset($_SESSION['user_type'])) {
                             <label class="form-check-label" for="showDebug" style="font-size:13px;">Show debug info</label>
                         </div>
                         <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
-                            Proceed <i class="fa-solid fa-arrow-right ms-2"></i>
+                            <i class="fa-solid fa-paper-plane me-2" aria-hidden="true"></i>Proceed
                         </button>
                     </div>
                 </div>
@@ -478,6 +476,68 @@ if (isset($_SESSION['user_type'])) {
         </div>
     </div>
     <style>
+        /* Page header, card and upload area - M Lhuillier theme */
+        .bp-section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            background: #ffffff; /* changed to white per request */
+            border-radius: 8px;
+            color: #212529;
+            margin: 18px 0 8px;
+            box-shadow: 0 6px 18px rgba(16,24,40,0.04);
+            border-left: 4px solid #dc3545; /* subtle brand accent */
+        }
+
+        .bp-section-title { display:flex; gap:12px; align-items:center; }
+        .bp-section-title i { font-size:28px; color:#dc3545; }
+        .bp-section-title h2 { margin:0; font-size:20px; font-weight:700; }
+        .bp-section-sub { margin:0; font-size:13px; opacity:0.95; }
+
+        .bp-card { background:#ffffff; border-radius:10px; box-shadow: 0 10px 24px rgba(16,24,40,0.06); color:#212529; }
+
+        /* File upload area */
+        .file-upload-area {
+            border: 2px dashed rgba(220,53,69,0.16);
+            border-radius: 10px;
+            padding: 34px 18px;
+            text-align: center;
+            background: #fff;
+            transition: all 180ms ease;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .file-upload-area.drag-over { background:#fff5f5; transform: translateY(-4px); box-shadow: 0 10px 20px rgba(220,53,69,0.06); border-color:#dc3545; }
+
+        .file-upload-icon i { font-size:36px; color:#dc3545; margin-bottom:8px; }
+        .file-upload-area h5 { margin:8px 0 4px; font-weight:700; }
+        .file-upload-area p { margin:0; color:#6c757d; }
+
+        /* File cards */
+        .files-container { margin-top: 14px; }
+        .file-card { border:1px solid #eef0f2; border-radius:10px; padding:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; background:#fff; }
+        .file-card-header { display:flex; gap:12px; align-items:center; }
+        .file-card-info .file-card-label { font-size:12px; color:#6c757d; font-weight:600; }
+        .file-card-info .file-card-value { font-size:14px; color:#212529; font-weight:600; }
+        .file-card-delete { color:#6c757d; cursor:pointer; padding:6px; border-radius:6px; }
+        .file-card-delete:hover { background:#f8f9fa; color:#dc3545; }
+
+        .badge-source { padding:4px 8px; border-radius:6px; font-weight:700; font-size:12px; }
+        .badge-kpx { background:#e9f7ef; color:#1e7e34; }
+        .badge-kp7 { background:#eaf4ff; color:#1552c1; }
+
+        /* Proceed button */
+        .proceed-container { display:flex; align-items:center; gap:10px; }
+        .btn-proceed { background:#dc3545; border: none; color:#fff; padding:8px 14px; border-radius:8px; font-weight:700; }
+        .btn-proceed i { margin-right:8px; }
+
+        /* Tooltip partner name */
+        .partner-tooltip { position: relative; display:inline-block; }
+        .partner-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #212529; color: #fff; text-align: left; border-radius: 6px; padding: 8px; position: absolute; z-index: 99999; bottom: 125%; left: 0; opacity: 0; transition: opacity 0.2s; font-size:12px; }
+        .partner-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+
         /* Professional Duplicate-Check Modal */
         .duplicate-modal {
             position: fixed;
