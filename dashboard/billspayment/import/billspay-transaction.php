@@ -807,9 +807,18 @@ if (isset($_SESSION['user_type'])) {
             const proceedContainer = $('#proceedContainer');
             const proceedBtn = $('#proceedBtn');
 
-            // Click to open file dialog
+            // Click to open file dialog — use native DOM click for reliability
             fileUploadArea.on('click', function() {
-                fileInput.click();
+                if (fileInput.length && fileInput[0]) {
+                    try {
+                        fileInput[0].click();
+                    } catch (e) {
+                        // Fallback to jQuery trigger if DOM click fails
+                        fileInput.trigger('click');
+                    }
+                } else {
+                    fileInput.trigger('click');
+                }
             });
 
             // File input change event
