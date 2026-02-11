@@ -108,6 +108,30 @@ if (isset($_SESSION['user_type'])) {
             margin-bottom: 20px;
         }
 
+        /* Mode card selector */
+        .mode-cards { display:flex; gap:8px; }
+        .mode-card {
+            border: 1px solid #e9ecef;
+            padding: 8px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            min-width: 120px;
+            text-align: left;
+            background: #fff;
+            transition: all 120ms ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            display:flex;
+            flex-direction:row;
+            align-items:center;
+            gap:10px;
+        }
+        .mode-card .mode-icon { font-size:18px; color:#6c757d; width:28px; text-align:center; }
+        .mode-card .mode-text { display:flex; flex-direction:column; }
+        .mode-card .mode-label { font-weight:700; margin:0; font-size:13px; }
+        .mode-card small { color:#6c757d; display:block; font-size:11px; }
+        .mode-card.selected { border-color: #dc3545; box-shadow: 0 8px 24px rgba(220,53,69,0.06); }
+        .mode-card.selected .mode-icon { color:#dc3545; }
+
         .file-upload-area.drag-over {
             border-color: #dc3545;
             background-color: #ffe5e5;
@@ -144,6 +168,8 @@ if (isset($_SESSION['user_type'])) {
             gap: 10px;
             transition: all 0.3s ease;
         }
+        /* ensure positioning context for absolute elements */
+        .file-card { position: relative; padding: 18px 15px 44px 15px; }
 
         .file-card:hover {
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
@@ -181,6 +207,13 @@ if (isset($_SESSION['user_type'])) {
             color: #dc3545;
             font-size: 20px;
             transition: all 0.2s ease;
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 5;
+            padding: 6px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.6);
         }
 
         .file-card-delete:hover {
@@ -188,13 +221,30 @@ if (isset($_SESSION['user_type'])) {
             transform: scale(1.1);
         }
 
+        /* place partner id and source type at bottom-right */
         .file-card-body {
             display: flex;
-            gap: 15px;
+            gap: 12px;
+            justify-content: flex-end;
+            align-items: flex-end;
         }
 
         .file-card-detail {
-            flex: 1;
+            flex: 0 0 auto;
+            text-align: right;
+            min-width: 80px;
+        }
+
+        /* Footer container pinned to bottom-right of card for partner + source */
+        .file-card-footer {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: flex-end;
         }
 
         .badge-source {
@@ -403,23 +453,27 @@ if (isset($_SESSION['user_type'])) {
                 <div class="mb-3 d-flex align-items-center justify-content-between" style="gap:12px;">
                     <div class="d-flex align-items-center" style="gap:12px;">
                         <label class="form-label me-2 mb-0">Import Mode:</label>
-                        <div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="importMode" id="modeAuto" value="auto" checked>
-                                <label class="form-check-label" for="modeAuto">Auto</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="importMode" id="modeManual" value="manual">
-                                <label class="form-check-label" for="modeManual">Manual</label>
-                            </div>
+                        <div class="mode-cards">
+                                <label class="mode-card selected" data-mode="auto">
+                                    <input type="radio" name="importMode" id="modeAuto" value="auto" checked style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Auto</div>
+                                        <small>Drag & Drop</small>
+                                    </div>
+                                </label>
+                                <label class="mode-card" data-mode="manual">
+                                    <input type="radio" name="importMode" id="modeManual" value="manual" style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-file-lines"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Manual</div>
+                                        <small>Form Upload</small>
+                                    </div>
+                                </label>
                         </div>
                     </div>
 
                     <div id="proceedContainer" class="proceed-container" style="display: none;">
-                        <div class="form-check form-check-inline" style="margin-right:8px; align-items:center;">
-                            <input class="form-check-input" type="checkbox" id="showDebug" />
-                            <label class="form-check-label" for="showDebug" style="font-size:13px;">Show debug info</label>
-                        </div>
                         <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
                             <i class="fa-solid fa-paper-plane me-2" aria-hidden="true"></i>Proceed
                         </button>
@@ -1041,6 +1095,10 @@ if (isset($_SESSION['user_type'])) {
                                 </div>
                             </div>
                             <div class="file-card-body">
+                                <!-- additional details can go here -->
+                            </div>
+
+                            <div class="file-card-footer">
                                 <div class="file-card-detail">
                                     <div class="file-card-label">Partner ID</div>
                                     <div class="file-card-value partner-tooltip">
@@ -1089,61 +1147,9 @@ if (isset($_SESSION['user_type'])) {
                     return;
                 }
 
-                // If debug checkbox is checked, fetch server memory/error info first
-                function fetchDebugInfo() {
-                    return $.ajax({
-                        url: '../../../fetch/debug_memory.php',
-                        method: 'GET',
-                        dataType: 'json'
-                    });
-                }
-
-                function formatBytes(bytes) {
-                    if (!bytes && bytes !== 0) return 'n/a';
-                    var units = ['B','KB','MB','GB','TB'];
-                    var i = 0;
-                    while(bytes >= 1024 && i < units.length-1) { bytes /= 1024; i++; }
-                    return bytes.toFixed(2) + ' ' + units[i];
-                }
-
-                function showDebugModal(data, extra) {
-                    var d = data && data.data ? data.data : data;
-                    var html = '<div style="text-align:left; font-size:13px;">';
-                    html += '<p><strong>memory_limit:</strong> ' + (d.memory_limit || 'n/a') + '</p>';
-                    html += '<p><strong>memory_usage:</strong> ' + formatBytes(d.memory_usage_bytes) + ' (' + (d.memory_usage_bytes || 'n') + ')</p>';
-                    html += '<p><strong>memory_usage_real:</strong> ' + formatBytes(d.memory_usage_real_bytes) + '</p>';
-                    html += '<p><strong>memory_peak:</strong> ' + formatBytes(d.memory_peak_bytes) + '</p>';
-                    html += '<p><strong>max_execution_time:</strong> ' + (d.max_execution_time || 'n/a') + 's</p>';
-                    html += '<p><strong>post_max_size:</strong> ' + (d.post_max_size || 'n/a') + '</p>';
-                    html += '<p><strong>upload_max_filesize:</strong> ' + (d.upload_max_filesize || 'n/a') + '</p>';
-                    if (d.error_last) {
-                        html += '<hr><p><strong>Last PHP error:</strong><br>' + (d.error_last['message'] || '') + ' in ' + (d.error_last['file'] || '') + ' on line ' + (d.error_last['line'] || '') + '</p>';
-                    }
-                    if (extra) html += '<hr><pre style="white-space:pre-wrap; font-size:12px;">' + $('<div>').text(extra).html() + '</pre>';
-                    html += '</div>';
-
-                    Swal.fire({
-                        title: 'Server debug info',
-                        html: html,
-                        width: 700,
-                        confirmButtonText: 'Continue'
-                    });
-                }
-
-                if ($('#showDebug').is(':checked')) {
-                    // Fetch debug info and show it, then proceed
-                    fetchDebugInfo().done(function(resp) {
-                        showDebugModal(resp);
-                        // Show loading overlay and continue duplicate check after user sees debug
-                        $('#loading-overlay').css('display', 'flex');
-                        checkForDuplicates();
-                    }).fail(function(xhr, status, err) {
-                        var extra = 'Debug endpoint error: ' + err + '\n' + (xhr.responseText || '');
-                        showDebugModal({ data: {} }, extra);
-                        $('#loading-overlay').css('display', 'flex');
-                        checkForDuplicates();
-                    });
-                } else {
+                // Start duplicate check flow
+                $('#loading-overlay').css('display', 'flex');
+                checkForDuplicates();
                     // Show loading overlay
                     $('#loading-overlay').css('display', 'flex');
 
@@ -1319,21 +1325,8 @@ if (isset($_SESSION['user_type'])) {
                         uploadedFiles.forEach(file => { file.status = 'error'; });
                         renderFileCards();
 
-                        // Fetch debug info and show combined message
-                        $.ajax({ url: '../../../fetch/debug_memory.php', method: 'GET', dataType: 'json' }).done(function(debugResp) {
-                            var extra = 'AJAX batch error: ' + error + '\n' + (xhr.responseText || '');
-                            var d = debugResp && debugResp.data ? debugResp.data : debugResp;
-                            var html = '<div style="text-align:left; font-size:13px;">';
-                            html += '<p><strong>memory_limit:</strong> ' + (d.memory_limit || 'n/a') + '</p>';
-                            html += '<p><strong>memory_usage:</strong> ' + (d.memory_usage_bytes ? (d.memory_usage_bytes + ' bytes') : 'n/a') + '</p>';
-                            if (d.error_last) html += '<p><strong>Last PHP error:</strong> ' + (d.error_last['message'] || '') + '</p>';
-                            html += '<hr><pre style="white-space:pre-wrap; font-size:12px;">' + $('<div>').text(extra).html() + '</pre>';
-                            html += '</div>';
-
-                            Swal.fire({ icon: 'error', title: 'Validation Error - Duplicate Check Failed', html: html, confirmButtonText: 'OK', width: 700 });
-                        }).fail(function() {
-                            Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.', confirmButtonText: 'OK' });
-                        });
+                        // Show generic error message for batch failure
+                        Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.', confirmButtonText: 'OK' });
                         console.error('Duplicate check batch error:', error, xhr.responseText);
                     });
                 }
@@ -1576,6 +1569,10 @@ if (isset($_SESSION['user_type'])) {
         // Mode toggle: show/hide Auto (drag-drop) vs Manual form
         $(function() {
             function setMode(mode) {
+                // update selected card UI
+                $('.mode-card').removeClass('selected');
+                $('.mode-card[data-mode="' + mode + '"]').addClass('selected');
+
                 if (mode === 'manual') {
                     $('#fileUploadArea').hide();
                     $('#filesContainer').hide();
@@ -1594,6 +1591,14 @@ if (isset($_SESSION['user_type'])) {
 
             $('input[name="importMode"]').on('change', function() {
                 setMode($(this).val());
+            });
+
+            // Clickable mode-card behavior: toggle radio and classes
+            $('.mode-card').on('click', function() {
+                var mode = $(this).data('mode');
+                $('input[name="importMode"][value="' + mode + '"]').prop('checked', true).trigger('change');
+                $('.mode-card').removeClass('selected');
+                $(this).addClass('selected');
             });
 
             function initManualSelect2() {
