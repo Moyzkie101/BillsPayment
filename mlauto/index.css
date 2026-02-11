@@ -1,13 +1,13 @@
 :root {
   color-scheme: light;
-  --bg: #f5f1ea;
-  --surface: #fffdf8;
-  --ink: #1c1b18;
-  --muted: #6f655e;
-  --accent: #c9652d;
-  --accent-dark: #a74f1d;
-  --stroke: #e2d8cc;
-  --shadow: 0 24px 40px rgba(48, 38, 30, 0.12);
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --ink: #0f172a;
+  --muted: #6b7280;
+  --accent: #dc3545; /* import UI red */
+  --accent-dark: #b02a37;
+  --stroke: #e6eef8;
+  --shadow: 0 24px 40px rgba(16,24,40,0.06);
 }
 
 * {
@@ -18,22 +18,22 @@ body {
   margin: 0;
   font-family: "Spline Sans", system-ui, -apple-system, sans-serif;
   color: var(--ink);
-  background: radial-gradient(circle at top, #fff7ee 0%, #f5f1ea 45%, #efe6d7 100%);
+  background: var(--bg);
   min-height: 100vh;
 }
 
 .page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 48px 28px 64px;
+  padding: 36px 28px 56px;
 }
 
 .hero {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 32px;
-  margin-bottom: 32px;
+  gap: 24px;
+  margin-bottom: 28px;
 }
 
 .eyebrow {
@@ -45,22 +45,23 @@ body {
 }
 
 h1 {
-  font-family: "Fraunces", serif;
-  font-size: 40px;
-  margin: 0 0 12px;
+  font-family: "Helvetica", serif;
+  font-weight: 800;
+  font-size: 34px;
+  margin: 0 0 10px;
 }
 
 .subhead {
   margin: 0;
   color: var(--muted);
-  max-width: 480px;
+  max-width: 520px;
 }
 
 .source-select {
   background: var(--surface);
   border: 1px solid var(--stroke);
-  border-radius: 18px;
-  padding: 16px 18px;
+  border-radius: 14px;
+  padding: 12px 14px;
   min-width: 200px;
   box-shadow: var(--shadow);
 }
@@ -74,10 +75,10 @@ h1 {
 
 .source-select select {
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
   border: 1px solid var(--stroke);
-  font-size: 15px;
+  font-size: 14px;
   background: #fff;
 }
 
@@ -89,27 +90,27 @@ h1 {
 
 .panel {
   background: var(--surface);
-  border-radius: 24px;
+  border-radius: 14px;
   border: 1px solid var(--stroke);
-  padding: 24px;
+  padding: 20px;
   box-shadow: var(--shadow);
 }
 
 .drop-zone {
   position: relative;
-  border: 2px dashed #d4b6a4;
-  border-radius: 22px;
-  padding: 32px;
+  border: 2px dashed rgba(220,53,69,0.18);
+  border-radius: 18px;
+  padding: 28px;
   text-align: center;
-  background: linear-gradient(120deg, rgba(201, 101, 45, 0.08), rgba(255, 255, 255, 0.8));
+  background: linear-gradient(120deg, rgba(220,53,69,0.04), rgba(255,255,255,0.9));
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .drop-zone.dragover {
   border-color: var(--accent);
   transform: translateY(-2px);
-  background: linear-gradient(120deg, rgba(201, 101, 45, 0.18), rgba(255, 255, 255, 0.9));
+  background: linear-gradient(120deg, rgba(220,53,69,0.12), rgba(255,255,255,0.95));
 }
 
 .drop-zone input {
@@ -121,8 +122,9 @@ h1 {
 
 .drop-title {
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 700;
   margin: 0 0 8px;
+  color: var(--ink);
 }
 
 .drop-sub {
@@ -134,8 +136,8 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 24px;
-  margin-bottom: 16px;
+  margin-top: 20px;
+  margin-bottom: 14px;
 }
 
 .header-actions {
@@ -160,15 +162,13 @@ h1 {
 .file-card,
 .result-card {
   border: 1px solid var(--stroke);
-  border-radius: 16px;
-  padding: 14px 16px;
+  border-radius: 12px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   background: #fff;
 }
-
-/* removed fallback badge styles */
 
 .file-name {
   font-weight: 500;
@@ -193,9 +193,9 @@ h1 {
   border-radius: 999px;
   padding: 8px 12px;
   font-weight: 700;
-  background: #fff4e6;
-  border: 1px solid #f2c59b;
-  color: #9a4b1a;
+  background: #fff4f4;
+  border: 1px solid rgba(220,53,69,0.12);
+  color: #b02a37;
 }
 
 .warn-btn:disabled {
@@ -204,7 +204,7 @@ h1 {
 }
 
 .warn-count {
-  background: #9a4b1a;
+  background: var(--accent);
   color: #fff;
   border-radius: 999px;
   padding: 2px 8px;
@@ -213,11 +213,11 @@ h1 {
 
 button {
   border: none;
-  border-radius: 14px;
-  padding: 12px 18px;
+  border-radius: 10px;
+  padding: 10px 16px;
   font-size: 14px;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 button:disabled {
@@ -228,7 +228,7 @@ button:disabled {
 .primary {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 12px 20px rgba(201, 101, 45, 0.3);
+  box-shadow: 0 12px 20px rgba(220,53,69,0.12);
 }
 
 .primary:hover {
@@ -242,7 +242,7 @@ button:disabled {
 }
 
 .status {
-  margin-top: 16px;
+  margin-top: 14px;
   color: var(--muted);
   font-size: 13px;
   min-height: 24px;
@@ -251,16 +251,16 @@ button:disabled {
 .status-highlight {
   color: #fff;
   background: var(--accent);
-  padding: 2px 8px;
+  padding: 4px 10px;
   border-radius: 10px;
-  font-weight: 600;
+  font-weight: 700;
   margin-left: 6px;
 }
 
 .download-btn {
   width: 38px;
   height: 38px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--accent);
   color: #fff;
   display: grid;
@@ -330,8 +330,8 @@ button:disabled {
 }
 
 .modal-item.warn {
-  border-color: #f2c59b;
-  background: #fff4e6;
+  border-color: rgba(220,53,69,0.12);
+  background: #fff4f4;
   color: #7a3b12;
 }
 
@@ -364,7 +364,7 @@ button:disabled {
   width: 100%;
   height: 12px;
   border-radius: 999px;
-  background: #efe2d6;
+  background: #f1f3f5;
   overflow: hidden;
   border: 1px solid var(--stroke);
 }
@@ -372,8 +372,9 @@ button:disabled {
 .progress-bar {
   height: 100%;
   width: 0;
-  background: linear-gradient(90deg, #c9652d, #e39b6b);
+  background: linear-gradient(90deg, var(--accent), #e57373);
   transition: width 0.2s ease;
+ 
 }
 
 @media (max-width: 980px) {
@@ -386,3 +387,20 @@ button:disabled {
     align-items: flex-start;
   }
 }
+
+/* Header (shared) */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  margin-bottom: 18px;
+}
+.app-logo { height: 42px; width: auto; }
+.app-nav { margin-left: auto; display:flex; gap:12px; align-items:center }
+.app-nav a { color: var(--muted); font-weight:700; text-decoration:none; padding:8px 12px; border-radius:8px }
+.app-nav a:hover { color: var(--accent); background: rgba(220,53,69,0.04); }
+.app-nav a.active { color: #fff; background: var(--accent); }

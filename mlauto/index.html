@@ -3,22 +3,32 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Batch Excel Generator</title>
+    <title>KPX/KP7 Gen.</title>
+    <link rel="icon" href="mlassets/MLW Logo.png" type="image/png">
     <link rel="stylesheet" href="index.css" />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Spline+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
+    <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   </head>
   <body>
+    <header class="app-header page">
+      <img src="mlassets/ml.png" alt="ML Logo" class="app-logo">
+      <div class="app-nav">
+        <a href="index.html" class="active">KPX/KP7 Generator</a>
+        <a href="../mlbranchmaker/convert.html">Branch.json Generator</a>
+      </div>
+    </header>
+
     <div class="page">
       <header class="hero">
         <div>
           <p class="eyebrow">ML Tool Generation</p>
           <h1>KPX/KP7 GENERATOR</h1>
           <p class="subhead">
-            Drop your files, pick KPX or KP7, generate updated workbooks.
+            This tool is used for the Auto Detection of the new Import Feature
           </p>
         </div>
         <div class="source-select">

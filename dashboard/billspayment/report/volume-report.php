@@ -700,7 +700,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                 <div class="col-md-1 col-sm-6">
                                     <div class="d-flex align-items-end" style="gap:8px; white-space:nowrap;">
                                         <button class="btn btn-danger" id="exportButton" type="button" style="display:none;">Export to</button>
-                                        <button class="btn btn-warning" id="debugButton" type="button" style="display:none;">Debug</button>
+                                        <button class="btn btn-warning" id="debugButton" type="button" style="display:none;">Debug Report</button>
                                     </div>
                                 </div>
                             </div>
