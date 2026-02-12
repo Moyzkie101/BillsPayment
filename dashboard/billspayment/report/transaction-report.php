@@ -495,46 +495,28 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <div style="text-align: left;">
-                    <i id="menu-btn" class="fa-solid fa-bars"></i>Menu
-                </div>
-                <div class="usernav">
-                    <h6><?php 
-                            if($_SESSION['user_type'] === 'admin'){
-                                echo $_SESSION['admin_name'];
-                            }elseif($_SESSION['user_type'] === 'user'){
-                                echo $_SESSION['user_name']; 
-                            }else{
-                                echo "GUEST";
-                            }
-                    ?></h6>
-                    <h6 style="margin-left:5px;"><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo "(".$_SESSION['admin_email'].")";
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo "(".$_SESSION['user_email'].")";
-                        }else{
-                            echo "GUEST";
-                        }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>TRANSACTION DETAILS REPORT</h3></center>
-        <div class="container-fluid">
+        <div class="bp-section-header" role="region" aria-label="Page title">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+                <div>
+                    <h2>Transaction Details Report</h2>
+                    <p class="bp-section-sub">Detailed transaction filters and listing</p>
+                </div>
+            </div>
+        </div>
+        <div class="bp-card container-fluid mt-3 p-4">
             <div class="row">
                 <div class="col-md-18">
                     <div class="card">
                         <div class="card-header">
                             <div class="mb-3">
-                                <label class="h5 text-muted">Hint: <i>Double click the row to view the details</i></label>
+                                <label id="searchHint" class="h5 text-muted" style="display:none;">Hint: <i>Double click the row to view the details</i></label>
                             </div>
                             <div class="row g-2 align-items-end">
                                 <!-- Partner List -->
@@ -1150,6 +1132,16 @@ $(document).ready(function() {
             $('#searchButton').click();
         }
     });
+
+    // Hide hint and results when search input is cleared
+    $('#search_input').on('input', function() {
+        if ($(this).val().trim() === '') {
+            $('.card-body').hide();
+            $('#transactionReportTable tbody').empty();
+            updateTotalsFromServer({ principal: '0.00', partner: '0.00', customer: '0.00' });
+            $('#searchHint').hide();
+        }
+    });
     
     // Add Export button click handler
     $('#ExportButton').click(function() {
@@ -1369,15 +1361,22 @@ $(document).ready(function() {
             timeout: 30000,
             success: function(response) {
                 hideLoading();
-                
+
                 if (response && response.success) {
-                    populateTable(response.data || []);
+                    var rows = response.data || [];
+                    populateTable(rows);
                     updatePagination(response.pagination || {});
                     updateTotalsFromServer(response.totals || {});
                     $('.card-body').show();
+                    if (Array.isArray(rows) && rows.length > 0) {
+                        $('#searchHint').show();
+                    } else {
+                        $('#searchHint').hide();
+                    }
                 } else {
                     showAlert('Error', response.error || 'Failed to load transaction data', 'error');
                     $('.card-body').hide();
+                    $('#searchHint').hide();
                 }
             },
             error: function(xhr, status, error) {

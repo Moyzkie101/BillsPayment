@@ -93,8 +93,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
         $query = "
             WITH summary_vol AS (
                 SELECT
-                    bt.partner_id,
-                    bt.partner_id_kpx,
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
                     COUNT(*) AS vol1,
                     sum(bt.amount_paid) AS principal1,
                     sum(bt.charge_to_partner) AS charge_partner1,
@@ -106,13 +105,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     AND bt.status IS NULL
                     $sourceFileCondition
                 GROUP BY
-                    bt.partner_id,
-                    bt.partner_id_kpx
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
             ),
             adjustment_vol AS (
                 SELECT
-                    bt.partner_id,
-                    bt.partner_id_kpx,
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
                     COUNT(*) AS vol2,
                     sum(bt.amount_paid) AS principal2,
                     sum(bt.charge_to_partner) AS charge_partner2,
@@ -124,8 +121,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     AND bt.status = '*'
                     $sourceFileCondition
                 GROUP BY
-                    bt.partner_id,
-                    bt.partner_id_kpx
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
             )
             SELECT 
                 mpm.partner_name,
@@ -155,14 +151,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
             LEFT JOIN
                 summary_vol AS sv
                 ON (
-                    mpm.partner_id = sv.partner_id
-                    OR mpm.partner_id_kpx = sv.partner_id_kpx
+                    COALESCE(mpm.partner_id, mpm.partner_id_kpx) COLLATE utf8mb4_general_ci = sv.partner_key
                 )
             LEFT JOIN
                 adjustment_vol AS av
                 ON (
-                    mpm.partner_id = av.partner_id
-                    OR mpm.partner_id_kpx = av.partner_id_kpx
+                    COALESCE(mpm.partner_id, mpm.partner_id_kpx) COLLATE utf8mb4_general_ci = av.partner_key
                 )
             WHERE
                 mpm.status = 'ACTIVE'
@@ -266,6 +260,115 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
         ]);
     }
     exit;
+}
+
+// Debug partner details: return transaction rows and group breakdowns for a selected partner
+if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
+    header('Content-Type: application/json');
+    $partner = $_POST['partner'] ?? '';
+    $filterType = $_POST['filterType'] ?? '';
+    $startDate = $_POST['startDate'] ?? '';
+    $endDate = $_POST['endDate'] ?? '';
+
+    if (empty($partner) || $partner === 'All') { 
+        echo json_encode(['status' => 'error', 'message' => 'Please select a specific partner for debugging.']); 
+        exit(); 
+    }
+
+    // Resolve partner masterfile row
+    $mpm = null;
+    $mpmStmt = $conn->prepare("SELECT * FROM masterdata.partner_masterfile WHERE partner_name = ? LIMIT 1");
+    if ($mpmStmt) {
+        $mpmStmt->bind_param('s', $partner);
+        $mpmStmt->execute();
+        $res = $mpmStmt->get_result();
+        if ($res && $row = $res->fetch_assoc()) { $mpm = $row; }
+        $mpmStmt->close();
+    }
+
+    if (!$mpm) {
+        echo json_encode(['status' => 'error', 'message' => 'Partner not found in masterfile']);
+        exit();
+    }
+
+    // Build date condition same as report
+    $dateCondition = '(1=1)';
+    $dateParams = [];
+    if ($filterType === 'daily') {
+        $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ? )";
+        $dateParams = [$startDate, $startDate];
+    } elseif ($filterType === 'weekly' || $filterType === 'monthly' || $filterType === 'yearly') {
+        $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
+        $dateParams = [$startDate, $endDate, $startDate, $endDate];
+    }
+
+    $pid = $mpm['partner_id'] ?? '';
+    $pid_kpx = $mpm['partner_id_kpx'] ?? '';
+
+    // Fetch transaction rows that match either partner id
+    $txQuery = "SELECT bt.* FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) ORDER BY bt.datetime LIMIT 1000";
+    $txStmt = $conn->prepare($txQuery);
+    $txRows = [];
+    if ($txStmt) {
+        // bind date params + two ids
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) {
+            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
+        }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $txStmt->bind_param($bindTypes, ...$bindValues);
+        $txStmt->execute();
+        $txRes = $txStmt->get_result();
+        if ($txRes) {
+            while ($r = $txRes->fetch_assoc()) { $txRows[] = $r; }
+        }
+        $txStmt->close();
+    }
+
+    // Fetch aggregated groups (by partner_id / partner_id_kpx) for selected partner ids
+    $groupQuery = "SELECT bt.partner_id, bt.partner_id_kpx, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY bt.partner_id, bt.partner_id_kpx";
+    $groupStmt = $conn->prepare($groupQuery);
+    $groups = [];
+    if ($groupStmt) {
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) { foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; } }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $groupStmt->bind_param($bindTypes, ...$bindValues);
+        $groupStmt->execute();
+        $gRes = $groupStmt->get_result();
+        if ($gRes) { while ($gr = $gRes->fetch_assoc()) { $groups[] = $gr; } }
+        $groupStmt->close();
+    }
+
+    // Also show normalized grouping
+    $normQuery = "SELECT COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY COALESCE(bt.partner_id, bt.partner_id_kpx)";
+    $normStmt = $conn->prepare($normQuery);
+    $norm = [];
+    if ($normStmt) {
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) { foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; } }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $normStmt->bind_param($bindTypes, ...$bindValues);
+        $normStmt->execute();
+        $nRes = $normStmt->get_result();
+        if ($nRes) { while ($nr = $nRes->fetch_assoc()) { $norm[] = $nr; } }
+        $normStmt->close();
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'partner_master' => $mpm,
+        'transactions' => $txRows,
+        'groups' => $groups,
+        'normalized' => $norm
+    ]);
+    exit();
 }
 ?>
 
@@ -382,47 +485,32 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <div style="text-align: left;">
-                    <i id="menu-btn" class="fa-solid fa-bars"></i>Menu
-                </div>
-                <div class="usernav">
-                    <h6><?php 
-                            if($_SESSION['user_type'] === 'admin'){
-                                echo $_SESSION['admin_name'];
-                            }elseif($_SESSION['user_type'] === 'user'){
-                                echo $_SESSION['user_name']; 
-                            }else{
-                                echo "GUEST";
-                            }
-                    ?></h6>
-                    <h6 style="margin-left:5px;"><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo "(".$_SESSION['admin_email'].")";
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo "(".$_SESSION['user_email'].")";
-                        }else{
-                            echo "GUEST";
-                        }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>TRANSACTION SUMMARY REPORT</h3></center>
-        <div class="container-fluid">
+        <div class="bp-section-header" role="region" aria-label="Page title">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-chart-simple" aria-hidden="true"></i>
+                <div>
+                    <h2>Transaction Summary Report</h2>
+                    <p class="bp-section-sub">Summarized Transaction Output</p>
+                </div>
+            </div>
+            <div style="margin-top:8px;">
+                <button id="debugButton" class="btn btn-secondary" style="display:none;margin-left:8px;">Debug</button>
+            </div>
+        </div>
+        <div class="bp-card container-fluid mt-3 p-4">
             <div class="row">
                 <div class="col-md-18">
                     <div class="card">
                         <div class="card-header">
-                            <!-- <div class="mb-3">
-                                <label class="h5 text-muted" style="display: none;">Hint: <i>Double click the row to view the details</i></label>
-                            </div> -->
+                            <div class="mb-3">
+                                <label id="searchHint" class="h5 text-muted" style="display: none;"></i></label>
+                            </div>
                             <div class="row g-2 align-items-end">
                                 <!-- Partner List -->
                                 <div class="col-md-2 col-sm-6">
@@ -614,8 +702,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
             loadTransactionData();
             // Show the card body when search is performed
             toggleCardBodyVisibility(true);
-            // Show the hint label when search is performed
-            toggleHintLabelVisibility(true);
         }
     });
 
@@ -726,6 +812,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
         });
         
         console.log(`Displayed ${data.length} transaction rows`);
+        // Show or hide the hint label depending on whether rows exist
+        if (Array.isArray(data) && data.length > 0) {
+            $('#searchHint').show();
+        } else {
+            $('#searchHint').hide();
+        }
     }
 
     // Method to update totals in footer - improved version
@@ -830,15 +922,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     updatePagination(response.pagination || {});
                     // Show the card body on successful data load
                     toggleCardBodyVisibility(true);
-                    // Show the hint label on successful data load
-                    toggleHintLabelVisibility(true);
+                    // Show or hide the hint label depending on returned rows (handled in displayTransactionData)
                 } else {
                     console.error('Error in response:', response); // Debug log
                     showAlert('Error', response.error || 'Failed to load transaction data', 'error');
                     // Hide the card body on error
                     toggleCardBodyVisibility(false);
                     // Hide the hint label on error
-                    toggleHintLabelVisibility(false);
+                    $('#searchHint').hide();
                 }
             },
             error: function(xhr, status, error) {
@@ -863,7 +954,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                 // Hide the card body on error
                 toggleCardBodyVisibility(false);
                 // Hide the hint label on error
-                toggleHintLabelVisibility(false);
+                $('#searchHint').hide();
             }
         });
     }

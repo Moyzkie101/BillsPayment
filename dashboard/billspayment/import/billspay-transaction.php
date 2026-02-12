@@ -108,6 +108,30 @@ if (isset($_SESSION['user_type'])) {
             margin-bottom: 20px;
         }
 
+        /* Mode card selector */
+        .mode-cards { display:flex; gap:8px; }
+        .mode-card {
+            border: 1px solid #e9ecef;
+            padding: 8px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            min-width: 120px;
+            text-align: left;
+            background: #fff;
+            transition: all 120ms ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            display:flex;
+            flex-direction:row;
+            align-items:center;
+            gap:10px;
+        }
+        .mode-card .mode-icon { font-size:18px; color:#6c757d; width:28px; text-align:center; }
+        .mode-card .mode-text { display:flex; flex-direction:column; }
+        .mode-card .mode-label { font-weight:700; margin:0; font-size:13px; }
+        .mode-card small { color:#6c757d; display:block; font-size:11px; }
+        .mode-card.selected { border-color: #dc3545; box-shadow: 0 8px 24px rgba(220,53,69,0.06); }
+        .mode-card.selected .mode-icon { color:#dc3545; }
+
         .file-upload-area.drag-over {
             border-color: #dc3545;
             background-color: #ffe5e5;
@@ -127,7 +151,7 @@ if (isset($_SESSION['user_type'])) {
         /* File Cards Container */
         .files-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 15px;
             margin-top: 20px;
         }
@@ -135,66 +159,40 @@ if (isset($_SESSION['user_type'])) {
         /* Individual File Card */
         .file-card {
             border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 15px;
+            border-radius: 10px;
+            padding: 14px;
             background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            transition: all 0.3s ease;
-        }
-
-        .file-card:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        }
-
-        .file-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            border-bottom: 1px solid #dee2e6;
-            padding-bottom: 10px;
-        }
-
-        .file-card-info {
-            flex: 1;
-        }
-
-        .file-card-label {
-            font-size: 11px;
-            color: #6c757d;
-            text-transform: uppercase;
-            font-weight: 600;
-            margin-bottom: 3px;
-        }
-
-        .file-card-value {
-            font-size: 14px;
-            color: #212529;
-            font-weight: 500;
-            word-break: break-word;
-        }
-
-        .file-card-delete {
-            cursor: pointer;
-            color: #dc3545;
-            font-size: 20px;
+            gap: 8px;
             transition: all 0.2s ease;
+            min-height: 96px;
+            position: relative;
+            overflow: hidden;
         }
 
-        .file-card-delete:hover {
-            color: #bb2d3b;
-            transform: scale(1.1);
-        }
+        .file-card:hover { box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
 
-        .file-card-body {
+        .file-card-header { display:flex; gap:10px; align-items:flex-start; }
+
+        .file-card-info { flex: 1 1 auto; }
+
+        .file-card-label { font-size: 12px; color: #6c757d; font-weight:600; margin-bottom:4px; }
+        .file-card-value { font-size: 14px; color:#212529; font-weight:600; word-break: break-word; }
+
+        .file-card-delete { cursor:pointer; color:#6c757d; padding:6px; border-radius:6px; background: rgba(255,255,255,0.6); position:absolute; top:10px; right:10px; z-index:6; }
+        .file-card-delete:hover { background:#f8f9fa; color:#dc3545; transform: none; }
+
+        /* Footer container stays inside card flow and is pushed to bottom */
+        .file-card-footer {
+            margin-top: auto;
+            text-align: right;
             display: flex;
-            gap: 15px;
-        }
-
-        .file-card-detail {
-            flex: 1;
+            gap: 8px;
+            align-items: center;
+            justify-content: flex-end;
+            padding-top: 6px;
         }
 
         .badge-source {
@@ -363,67 +361,69 @@ if (isset($_SESSION['user_type'])) {
             color: #6c757d;
         }
         
+        /* Branded section header and card */
+        .bp-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0 0 0;
+        }
+        .bp-section-title { display:flex; align-items:center; gap:12px; }
+        .bp-section-title i { font-size:32px; color: #dc3545; }
+        .bp-section-title h2 { margin:0; font-size:20px; color:#212529; font-weight:700; }
+        .bp-section-sub { margin:0; font-size:13px; color:#6c757d; }
+        .bp-card { background:#ffffff; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.04); border:1px solid #f1f1f1; }
+
     </style>
 </head>
 
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <i id="menu-btn" class="fa-solid fa-bars"></i>
-                <div class="usernav">
-                <h6><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo $_SESSION['admin_name'];
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo $_SESSION['user_name']; 
-                        }else{
-                            echo "GUEST";
-                        }
-                ?></h6>
-                <h6 style="margin-left:5px;"><?php 
-                    if($_SESSION['user_type'] === 'admin'){
-                        echo "(".$_SESSION['admin_email'].")";
-                    }elseif($_SESSION['user_type'] === 'user'){
-                        echo "(".$_SESSION['user_email'].")";
-                    }else{
-                        echo "GUEST";
-                    }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>Import Transaction</h3></center>
-        <div class="container-fluid border border-danger rounded mt-3 p-4">
-            <div class="container-fluid">
+        <div class="bp-section-header">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+                <div>
+                    <h2>Import Transaction</h2>
+                    <p class="bp-section-sub">Upload Excel files (.xls, .xlsx) for processing</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bp-card container-fluid mt-3 p-4">
+            <div class="bp-card-body">
                 <!-- Mode Toggle (Auto / Manual) + Proceed (moved to top-right) -->
                 <div class="mb-3 d-flex align-items-center justify-content-between" style="gap:12px;">
                     <div class="d-flex align-items-center" style="gap:12px;">
                         <label class="form-label me-2 mb-0">Import Mode:</label>
-                        <div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="importMode" id="modeAuto" value="auto" checked>
-                                <label class="form-check-label" for="modeAuto">Auto</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="importMode" id="modeManual" value="manual">
-                                <label class="form-check-label" for="modeManual">Manual</label>
-                            </div>
+                        <div class="mode-cards">
+                                <label class="mode-card selected" data-mode="auto">
+                                    <input type="radio" name="importMode" id="modeAuto" value="auto" checked style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Auto</div>
+                                        <small>Drag & Drop</small>
+                                    </div>
+                                </label>
+                                <label class="mode-card" data-mode="manual">
+                                    <input type="radio" name="importMode" id="modeManual" value="manual" style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-file-lines"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Manual</div>
+                                        <small>Form Upload</small>
+                                    </div>
+                                </label>
                         </div>
                     </div>
 
                     <div id="proceedContainer" class="proceed-container" style="display: none;">
-                        <div class="form-check form-check-inline" style="margin-right:8px; align-items:center;">
-                            <input class="form-check-input" type="checkbox" id="showDebug" />
-                            <label class="form-check-label" for="showDebug" style="font-size:13px;">Show debug info</label>
-                        </div>
                         <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
-                            Proceed <i class="fa-solid fa-arrow-right ms-2"></i>
+                            <i class="fa-solid fa-paper-plane me-2" aria-hidden="true"></i>Proceed
                         </button>
                     </div>
                 </div>
@@ -478,6 +478,68 @@ if (isset($_SESSION['user_type'])) {
         </div>
     </div>
     <style>
+        /* Page header, card and upload area - M Lhuillier theme */
+        .bp-section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            background: #ffffff; /* changed to white per request */
+            border-radius: 8px;
+            color: #212529;
+            margin: 18px 0 8px;
+            box-shadow: 0 6px 18px rgba(16,24,40,0.04);
+            border-left: 4px solid #dc3545; /* subtle brand accent */
+        }
+
+        .bp-section-title { display:flex; gap:12px; align-items:center; }
+        .bp-section-title i { font-size:28px; color:#dc3545; }
+        .bp-section-title h2 { margin:0; font-size:20px; font-weight:700; }
+        .bp-section-sub { margin:0; font-size:13px; opacity:0.95; }
+
+        .bp-card { background:#ffffff; border-radius:10px; box-shadow: 0 10px 24px rgba(16,24,40,0.06); color:#212529; }
+
+        /* File upload area */
+        .file-upload-area {
+            border: 2px dashed rgba(220,53,69,0.16);
+            border-radius: 10px;
+            padding: 34px 18px;
+            text-align: center;
+            background: #fff;
+            transition: all 180ms ease;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .file-upload-area.drag-over { background:#fff5f5; transform: translateY(-4px); box-shadow: 0 10px 20px rgba(220,53,69,0.06); border-color:#dc3545; }
+
+        .file-upload-icon i { font-size:36px; color:#dc3545; margin-bottom:8px; }
+        .file-upload-area h5 { margin:8px 0 4px; font-weight:700; }
+        .file-upload-area p { margin:0; color:#6c757d; }
+
+        /* small adjustments for alternate rules (kept for backward compatibility) */
+        .files-container { margin-top: 14px; }
+        .file-card { margin-bottom:10px; }
+        .file-card-header { display:flex; gap:12px; align-items:center; }
+        .file-card-info .file-card-label { font-size:12px; color:#6c757d; font-weight:600; }
+        .file-card-info .file-card-value { font-size:14px; color:#212529; font-weight:600; }
+        .file-card-delete { color:#6c757d; cursor:pointer; padding:6px; border-radius:6px; }
+        .file-card-delete:hover { background:#f8f9fa; color:#dc3545; }
+
+        .badge-source { padding:4px 8px; border-radius:6px; font-weight:700; font-size:12px; }
+        .badge-kpx { background:#e9f7ef; color:#1e7e34; }
+        .badge-kp7 { background:#eaf4ff; color:#1552c1; }
+
+        /* Proceed button */
+        .proceed-container { display:flex; align-items:center; gap:10px; }
+        .btn-proceed { background:#dc3545; border: none; color:#fff; padding:8px 14px; border-radius:8px; font-weight:700; }
+        .btn-proceed i { margin-right:8px; }
+
+        /* Tooltip partner name */
+        .partner-tooltip { position: relative; display:inline-block; }
+        .partner-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #212529; color: #fff; text-align: left; border-radius: 6px; padding: 8px; position: absolute; z-index: 99999; bottom: 125%; left: 0; opacity: 0; transition: opacity 0.2s; font-size:12px; }
+        .partner-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+
         /* Professional Duplicate-Check Modal */
         .duplicate-modal {
             position: fixed;
@@ -737,8 +799,34 @@ if (isset($_SESSION['user_type'])) {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-        // Global variable to store file data
-        let uploadedFiles = [];
+        // Global variable to store file data (use var so it's available across script tags)
+        var uploadedFiles = window.uploadedFiles || [];
+
+        // Backwards-compatibility wrappers: expose global uploadFile/uploadFiles
+        // Define early so inline handlers can call them before DOM ready
+        window.uploadFile = function(f) {
+            try {
+                if (!f) return;
+                // if processFile is available, delegate; otherwise push into uploadedFiles
+                if (typeof processFile === 'function') return processFile(f);
+                // fallback: add file to uploadedFiles and attempt to render later
+                uploadedFiles.push(f);
+            } catch (e) {
+                console.error('uploadFile wrapper error:', e);
+            }
+        };
+
+        window.uploadFiles = function(files) {
+            try {
+                if (!files) return;
+                if (files instanceof FileList) files = Array.from(files);
+                if (!Array.isArray(files)) files = [files];
+                if (typeof handleFiles === 'function') return handleFiles(files);
+                files.forEach(function(f){ uploadedFiles.push(f); });
+            } catch (e) {
+                console.error('uploadFiles wrapper error:', e);
+            }
+        };
 
         $(document).ready(function() {
             const fileUploadArea = $('#fileUploadArea');
@@ -747,9 +835,18 @@ if (isset($_SESSION['user_type'])) {
             const proceedContainer = $('#proceedContainer');
             const proceedBtn = $('#proceedBtn');
 
-            // Click to open file dialog
+            // Click to open file dialog — use native DOM click for reliability
             fileUploadArea.on('click', function() {
-                fileInput.click();
+                if (fileInput.length && fileInput[0]) {
+                    try {
+                        fileInput[0].click();
+                    } catch (e) {
+                        // Fallback to jQuery trigger if DOM click fails
+                        fileInput.trigger('click');
+                    }
+                } else {
+                    fileInput.trigger('click');
+                }
             });
 
             // File input change event
@@ -937,7 +1034,6 @@ if (isset($_SESSION['user_type'])) {
 
                 reader.readAsArrayBuffer(file);
             }
-
             // Render file cards
             function renderFileCards() {
                 filesContainer.empty();
@@ -972,6 +1068,10 @@ if (isset($_SESSION['user_type'])) {
                                 </div>
                             </div>
                             <div class="file-card-body">
+                                <!-- additional details can go here -->
+                            </div>
+
+                            <div class="file-card-footer">
                                 <div class="file-card-detail">
                                     <div class="file-card-label">Partner ID</div>
                                     <div class="file-card-value partner-tooltip">
@@ -1020,67 +1120,9 @@ if (isset($_SESSION['user_type'])) {
                     return;
                 }
 
-                // If debug checkbox is checked, fetch server memory/error info first
-                function fetchDebugInfo() {
-                    return $.ajax({
-                        url: '../../../fetch/debug_memory.php',
-                        method: 'GET',
-                        dataType: 'json'
-                    });
-                }
-
-                function formatBytes(bytes) {
-                    if (!bytes && bytes !== 0) return 'n/a';
-                    var units = ['B','KB','MB','GB','TB'];
-                    var i = 0;
-                    while(bytes >= 1024 && i < units.length-1) { bytes /= 1024; i++; }
-                    return bytes.toFixed(2) + ' ' + units[i];
-                }
-
-                function showDebugModal(data, extra) {
-                    var d = data && data.data ? data.data : data;
-                    var html = '<div style="text-align:left; font-size:13px;">';
-                    html += '<p><strong>memory_limit:</strong> ' + (d.memory_limit || 'n/a') + '</p>';
-                    html += '<p><strong>memory_usage:</strong> ' + formatBytes(d.memory_usage_bytes) + ' (' + (d.memory_usage_bytes || 'n') + ')</p>';
-                    html += '<p><strong>memory_usage_real:</strong> ' + formatBytes(d.memory_usage_real_bytes) + '</p>';
-                    html += '<p><strong>memory_peak:</strong> ' + formatBytes(d.memory_peak_bytes) + '</p>';
-                    html += '<p><strong>max_execution_time:</strong> ' + (d.max_execution_time || 'n/a') + 's</p>';
-                    html += '<p><strong>post_max_size:</strong> ' + (d.post_max_size || 'n/a') + '</p>';
-                    html += '<p><strong>upload_max_filesize:</strong> ' + (d.upload_max_filesize || 'n/a') + '</p>';
-                    if (d.error_last) {
-                        html += '<hr><p><strong>Last PHP error:</strong><br>' + (d.error_last['message'] || '') + ' in ' + (d.error_last['file'] || '') + ' on line ' + (d.error_last['line'] || '') + '</p>';
-                    }
-                    if (extra) html += '<hr><pre style="white-space:pre-wrap; font-size:12px;">' + $('<div>').text(extra).html() + '</pre>';
-                    html += '</div>';
-
-                    Swal.fire({
-                        title: 'Server debug info',
-                        html: html,
-                        width: 700,
-                        confirmButtonText: 'Continue'
-                    });
-                }
-
-                if ($('#showDebug').is(':checked')) {
-                    // Fetch debug info and show it, then proceed
-                    fetchDebugInfo().done(function(resp) {
-                        showDebugModal(resp);
-                        // Show loading overlay and continue duplicate check after user sees debug
-                        $('#loading-overlay').css('display', 'flex');
-                        checkForDuplicates();
-                    }).fail(function(xhr, status, err) {
-                        var extra = 'Debug endpoint error: ' + err + '\n' + (xhr.responseText || '');
-                        showDebugModal({ data: {} }, extra);
-                        $('#loading-overlay').css('display', 'flex');
-                        checkForDuplicates();
-                    });
-                } else {
-                    // Show loading overlay
-                    $('#loading-overlay').css('display', 'flex');
-
-                    // Step 1: Check for duplicates first
-                    checkForDuplicates();
-                }
+                // Start duplicate check flow
+                $('#loading-overlay').css('display', 'flex');
+                checkForDuplicates();
             });
 
             // Function to check for duplicates (batched to avoid PHP's max_file_uploads limit)
@@ -1250,21 +1292,8 @@ if (isset($_SESSION['user_type'])) {
                         uploadedFiles.forEach(file => { file.status = 'error'; });
                         renderFileCards();
 
-                        // Fetch debug info and show combined message
-                        $.ajax({ url: '../../../fetch/debug_memory.php', method: 'GET', dataType: 'json' }).done(function(debugResp) {
-                            var extra = 'AJAX batch error: ' + error + '\n' + (xhr.responseText || '');
-                            var d = debugResp && debugResp.data ? debugResp.data : debugResp;
-                            var html = '<div style="text-align:left; font-size:13px;">';
-                            html += '<p><strong>memory_limit:</strong> ' + (d.memory_limit || 'n/a') + '</p>';
-                            html += '<p><strong>memory_usage:</strong> ' + (d.memory_usage_bytes ? (d.memory_usage_bytes + ' bytes') : 'n/a') + '</p>';
-                            if (d.error_last) html += '<p><strong>Last PHP error:</strong> ' + (d.error_last['message'] || '') + '</p>';
-                            html += '<hr><pre style="white-space:pre-wrap; font-size:12px;">' + $('<div>').text(extra).html() + '</pre>';
-                            html += '</div>';
-
-                            Swal.fire({ icon: 'error', title: 'Validation Error - Duplicate Check Failed', html: html, confirmButtonText: 'OK', width: 700 });
-                        }).fail(function() {
-                            Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.', confirmButtonText: 'OK' });
-                        });
+                        // Show generic error message for batch failure
+                        Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.', confirmButtonText: 'OK' });
                         console.error('Duplicate check batch error:', error, xhr.responseText);
                     });
                 }
@@ -1507,6 +1536,10 @@ if (isset($_SESSION['user_type'])) {
         // Mode toggle: show/hide Auto (drag-drop) vs Manual form
         $(function() {
             function setMode(mode) {
+                // update selected card UI
+                $('.mode-card').removeClass('selected');
+                $('.mode-card[data-mode="' + mode + '"]').addClass('selected');
+
                 if (mode === 'manual') {
                     $('#fileUploadArea').hide();
                     $('#filesContainer').hide();
@@ -1525,6 +1558,14 @@ if (isset($_SESSION['user_type'])) {
 
             $('input[name="importMode"]').on('change', function() {
                 setMode($(this).val());
+            });
+
+            // Clickable mode-card behavior: toggle radio and classes
+            $('.mode-card').on('click', function() {
+                var mode = $(this).data('mode');
+                $('input[name="importMode"][value="' + mode + '"]').prop('checked', true).trigger('change');
+                $('.mode-card').removeClass('selected');
+                $(this).addClass('selected');
             });
 
             function initManualSelect2() {

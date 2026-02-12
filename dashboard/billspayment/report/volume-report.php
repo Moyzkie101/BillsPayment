@@ -159,17 +159,17 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
 
         SELECT
             mpm.partner_name,
-            COALESCE(sv.vol1, 0) AS summary_vol,
-            COALESCE(sv.principal1, 0) AS summary_principal,
-            COALESCE(sv.charge1, 0) AS summary_charges,
-            
-            COALESCE(av.vol2, 0) AS adjustment_vol,
-            COALESCE(ABS(av.principal2), 0) AS adjustment_principal,
-            COALESCE(ABS(av.charge2), 0) AS adjustment_charges,
-            
-            (COALESCE(sv.vol1, 0) - COALESCE(av.vol2, 0)) AS net_vol,
-            (COALESCE(sv.principal1, 0) - COALESCE(ABS(av.principal2), 0)) AS net_principal,
-            (COALESCE(sv.charge1, 0) - COALESCE(ABS(av.charge2), 0)) AS net_charges
+            SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
+            SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
+            SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
+
+            SUM(COALESCE(av.vol2, 0)) AS adjustment_vol,
+            SUM(COALESCE(ABS(av.principal2), 0)) AS adjustment_principal,
+            SUM(COALESCE(ABS(av.charge2), 0)) AS adjustment_charges,
+
+            (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
+            (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
+            (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
         FROM
             masterdata.partner_masterfile AS mpm
         LEFT JOIN
@@ -187,6 +187,7 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
         WHERE
             mpm.status = 'ACTIVE'
             $mainWhereClause
+        GROUP BY mpm.partner_name
         ORDER BY mpm.partner_name";
 
     try {
@@ -246,6 +247,125 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
             ]
         ]);
     }
+    exit();
+}
+
+// Debug partner details: return transaction rows and group breakdowns for a selected partner
+if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
+    $partner = $_POST['partner'] ?? '';
+    $filterType = $_POST['filterType'] ?? '';
+    $startDate = $_POST['startDate'] ?? '';
+    $endDate = $_POST['endDate'] ?? '';
+
+    if (empty($partner) || $partner === 'All') {
+        echo json_encode(['status' => 'error', 'message' => 'Please select a specific partner for debugging.']);
+        exit();
+    }
+
+    // Resolve partner masterfile row
+    $mpm = null;
+    $mpmStmt = $conn->prepare("SELECT * FROM masterdata.partner_masterfile WHERE partner_name = ? LIMIT 1");
+    if ($mpmStmt) {
+        $mpmStmt->bind_param('s', $partner);
+        $mpmStmt->execute();
+        $res = $mpmStmt->get_result();
+        if ($res && $row = $res->fetch_assoc()) {
+            $mpm = $row;
+        }
+        $mpmStmt->close();
+    }
+
+    if (!$mpm) {
+        echo json_encode(['status' => 'error', 'message' => 'Partner not found in masterfile']);
+        exit();
+    }
+
+    // Build date condition same as report
+    $dateCondition = '(1=1)';
+    $dateParams = [];
+    if ($filterType === 'daily') {
+        $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ?)";
+        $dateParams = [$startDate, $startDate];
+    } elseif ($filterType === 'weekly' || $filterType === 'monthly' || $filterType === 'yearly') {
+        // for weekly/monthly/yearly we expect startDate and endDate already adapted by UI
+        $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
+        $dateParams = [$startDate, $endDate, $startDate, $endDate];
+    }
+
+    $pid = $mpm['partner_id'] ?? '';
+    $pid_kpx = $mpm['partner_id_kpx'] ?? '';
+
+    // Fetch transaction rows that match either partner id
+    $txQuery = "SELECT bt.* FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) ORDER BY bt.datetime LIMIT 1000";
+    $txStmt = $conn->prepare($txQuery);
+    $txRows = [];
+    if ($txStmt) {
+        // bind date params + two ids
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) {
+            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
+        }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $txStmt->bind_param($bindTypes, ...$bindValues);
+        $txStmt->execute();
+        $txRes = $txStmt->get_result();
+        if ($txRes) {
+            while ($r = $txRes->fetch_assoc()) $txRows[] = $r;
+        }
+        $txStmt->close();
+    }
+
+    // Fetch aggregated groups (by partner_id / partner_id_kpx) for selected partner ids
+    $groupQuery = "SELECT bt.partner_id, bt.partner_id_kpx, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY bt.partner_id, bt.partner_id_kpx";
+    $groupStmt = $conn->prepare($groupQuery);
+    $groups = [];
+    if ($groupStmt) {
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) {
+            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
+        }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $groupStmt->bind_param($bindTypes, ...$bindValues);
+        $groupStmt->execute();
+        $gRes = $groupStmt->get_result();
+        if ($gRes) {
+            while ($g = $gRes->fetch_assoc()) $groups[] = $g;
+        }
+        $groupStmt->close();
+    }
+
+    // Also show what normalized partner_key grouping would produce
+    $normQuery = "SELECT COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY COALESCE(bt.partner_id, bt.partner_id_kpx)";
+    $normStmt = $conn->prepare($normQuery);
+    $norm = [];
+    if ($normStmt) {
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) {
+            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
+        }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $normStmt->bind_param($bindTypes, ...$bindValues);
+        $normStmt->execute();
+        $nRes = $normStmt->get_result();
+        if ($nRes) {
+            while ($n = $nRes->fetch_assoc()) $norm[] = $n;
+        }
+        $normStmt->close();
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'partner_master' => $mpm,
+        'transactions' => $txRows,
+        'groups' => $groups,
+        'normalized' => $norm
+    ]);
     exit();
 }
 
@@ -465,42 +585,63 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
             }
         }
     </style>
+    <style>
+        /* Loading overlay and spinner */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.45);
+            z-index: 99999;
+            backdrop-filter: blur(2px);
+        }
+
+       #loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #dc3545;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <div style="text-align: left;">
-                    <i id="menu-btn" class="fa-solid fa-bars"></i>Menu
-                </div>
-                <div class="usernav">
-                    <h6><?php 
-                            if($_SESSION['user_type'] === 'admin'){
-                                echo $_SESSION['admin_name'];
-                            }elseif($_SESSION['user_type'] === 'user'){
-                                echo $_SESSION['user_name']; 
-                            }else{
-                                echo "GUEST";
-                            }
-                    ?></h6>
-                    <h6 style="margin-left:5px;"><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo "(".$_SESSION['admin_email'].")";
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo "(".$_SESSION['user_email'].")";
-                        }else{
-                            echo "GUEST";
-                        }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>VOLUME REPORT</h3></center>
+        <div class="bp-section-header" role="region" aria-label="Page title">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                <div>
+                    <h2>Volume Report</h2>
+                    <p class="bp-section-sub">Summary of transaction volumes by partner and period</p>
+                </div>
+            </div>
+        </div>
         <div class="container-fluid">
             <div class="row">
                 <div class="col-md-18">
@@ -547,10 +688,11 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
                                     
                                 </div>
 
-                                <!-- Export Button -->
+                                <!-- Export + Debug Buttons (inline) -->
                                 <div class="col-md-1 col-sm-6">
-                                    <div class="align-items-end">
-                                        <button class="btn btn-danger" id="exportButton" type="button">Export to</button>
+                                    <div class="d-flex align-items-end" style="gap:8px; white-space:nowrap;">
+                                        <button class="btn btn-danger" id="exportButton" type="button" style="display:none;">Export to</button>
+                                        <button class="btn btn-warning" id="debugButton" type="button" style="display:none;">Debug Report</button>
                                     </div>
                                 </div>
                             </div>
@@ -785,6 +927,8 @@ $(document).ready(function() {
     
     // Hide export button initially
     $('#exportButton').hide();
+    // Client-side cache for debug responses
+    var debugCache = {};
     
     // Handle date input changes
     $('input[name="startDate"], input[name="endDate"]').on('change', function() {
@@ -958,7 +1102,7 @@ $(document).ready(function() {
         showFilterContainersBasedOnDates(startDate, endDate);
         
         // Show loading
-        $('#loading-overlay').show();
+        $('#loading-overlay').css('display', 'flex');
         
         // Make AJAX request to generate report
         $.ajax({
@@ -973,6 +1117,8 @@ $(document).ready(function() {
             },
             success: function(response) {
                 console.log('Response received:', response);
+                        // Clear debug cache when a new report is generated
+                        debugCache = {};
                 try {
                     const result = JSON.parse(response);
                     
@@ -1353,15 +1499,14 @@ $(document).ready(function() {
             datesValid = startDate !== '' && endDate !== '';
         }
         
-        if (filterType && partner && datesValid) {
-            $('#generateReport').prop('disabled', false)
-            .removeClass('btn-secondary')
-            .addClass('btn-danger');
+        const enable = (filterType && partner && datesValid);
+        if (enable) {
+            $('#generateReport').prop('disabled', false).removeClass('btn-secondary').addClass('btn-danger');
         } else {
-            $('#generateReport').prop('disabled', true)
-            .removeClass('btn-danger')
-            .addClass('btn-secondary');
+            $('#generateReport').prop('disabled', true).removeClass('btn-danger').addClass('btn-secondary');
         }
+
+        // debug visibility handled after report generation
     }
     
     function updateDateInputsFromFilter(button) {
@@ -1478,6 +1623,15 @@ $(document).ready(function() {
         
         // Check if all totals are zero and toggle export button visibility
         toggleExportButton(totals);
+
+        // Show debug button only after a report is generated and when a specific partner + weekly (date range) is used
+        const selectedPartner = $('#partnerlistDropdown').val();
+        const selectedFilter = $('select[name="filterType"]').val();
+        if (selectedPartner && selectedPartner !== 'All' && selectedFilter === 'weekly' && Array.isArray(data) && data.length > 0) {
+            $('#debugButton').show();
+        } else {
+            $('#debugButton').hide();
+        }
     }
     
     function toggleExportButton(totals) {
@@ -1603,6 +1757,120 @@ $(document).ready(function() {
                     Swal.close();
                     exportToXLS();
                 });
+            }
+        });
+    });
+
+    // Build and render debug modal from response
+    function renderDebugModal(resp) {
+        if (!resp || resp.status === 'error') {
+            Swal.fire({ icon: 'error', title: 'Debug Error', text: resp ? (resp.message || 'Unknown error') : 'No debug data returned.' });
+            return;
+        }
+
+        let html = '<div style="text-align:left; max-height:60vh; overflow:auto; font-size:13px;">';
+        html += '<h4>Partner Masterfile</h4>';
+        html += '<table class="table table-sm table-bordered"><tbody>';
+        for (const k in resp.partner_master) {
+            html += `<tr><th style="width:30%">${k}</th><td>${resp.partner_master[k]}</td></tr>`;
+        }
+        html += '</tbody></table>';
+
+        html += '<h4>Aggregated groups (by partner_id / partner_id_kpx)</h4>';
+        if (Array.isArray(resp.groups) && resp.groups.length) {
+            html += '<table class="table table-sm table-bordered"><thead><tr><th>partner_id</th><th>partner_id_kpx</th><th>vol</th><th>principal</th><th>charge</th></tr></thead><tbody>';
+            resp.groups.forEach(g => {
+                html += `<tr><td>${g.partner_id}</td><td>${g.partner_id_kpx}</td><td>${g.vol}</td><td>${parseFloat(g.principal||0).toLocaleString()}</td><td>${parseFloat(g.charge||0).toLocaleString()}</td></tr>`;
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<p>No grouped matches found.</p>';
+        }
+
+        html += '<h4>Normalized grouping (COALESCE)</h4>';
+        if (Array.isArray(resp.normalized) && resp.normalized.length) {
+            html += '<table class="table table-sm table-bordered"><thead><tr><th>partner_key</th><th>vol</th><th>principal</th><th>charge</th></tr></thead><tbody>';
+            resp.normalized.forEach(n => {
+                html += `<tr><td>${n.partner_key}</td><td>${n.vol}</td><td>${parseFloat(n.principal||0).toLocaleString()}</td><td>${parseFloat(n.charge||0).toLocaleString()}</td></tr>`;
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<p>No normalized groups found.</p>';
+        }
+
+        html += '<h4>Sample Transactions (first 200)</h4>';
+        if (Array.isArray(resp.transactions) && resp.transactions.length) {
+            html += '<table class="table table-sm table-bordered"><thead><tr><th>id</th><th>datetime</th><th>partner_id</th><th>partner_id_kpx</th><th>amount_paid</th><th>charge_to_partner</th><th>charge_to_customer</th><th>status</th></tr></thead><tbody>';
+            resp.transactions.slice(0,200).forEach(t => {
+                html += `<tr><td>${t.id||''}</td><td>${t.datetime||''}</td><td>${t.partner_id||''}</td><td>${t.partner_id_kpx||''}</td><td>${parseFloat(t.amount_paid||0).toLocaleString()}</td><td>${parseFloat(t.charge_to_partner||0).toLocaleString()}</td><td>${parseFloat(t.charge_to_customer||0).toLocaleString()}</td><td>${t.status||''}</td></tr>`;
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<p>No transactions matched the selected partner and date range.</p>';
+        }
+
+        html += '</div>';
+
+        Swal.fire({ title: 'Debug Details', html: html, width: 900, customClass: { popup: 'swal2-overflow' }, confirmButtonText: 'Close' });
+    }
+
+    // Debug button click handler with client-side caching
+    $('#debugButton').on('click', function() {
+        const filterType = $('select[name="filterType"]').val();
+        const partner = $('#partnerlistDropdown').val();
+        const startDate = $('input[name="startDate"]').val();
+        const endDate = $('input[name="endDate"]').val();
+
+        if (!partner || partner === 'All') {
+            Swal.fire({ icon: 'warning', title: 'Select Partner', text: 'Please select a specific partner to debug.' });
+            return;
+        }
+        if (filterType !== 'weekly') {
+            Swal.fire({ icon: 'warning', title: 'Invalid Time Frame', text: 'Debug is available when Time Frame is Date Range.' });
+            return;
+        }
+
+        const cacheKey = [filterType, partner, startDate, endDate].join('|');
+
+        // Use cached response if available
+        if (debugCache[cacheKey]) {
+            renderDebugModal(debugCache[cacheKey]);
+            return;
+        }
+
+        // Not cached: fetch and cache
+        $('#loading-overlay').css('display', 'flex');
+
+        $.ajax({
+            url: '',
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'debug_partner',
+                partner: partner,
+                filterType: filterType,
+                startDate: startDate,
+                endDate: endDate
+            },
+            success: function(resp) {
+                $('#loading-overlay').hide();
+                if (!resp) {
+                    renderDebugModal(null);
+                    return;
+                }
+                if (resp.status !== 'success') {
+                    renderDebugModal(resp);
+                    return;
+                }
+
+                // Cache and render
+                debugCache[cacheKey] = resp;
+                renderDebugModal(resp);
+            },
+            error: function(xhr, status, err) {
+                $('#loading-overlay').hide();
+                console.error('Debug AJAX error', err, xhr.responseText);
+                Swal.fire({ icon: 'error', title: 'Debug Error', text: 'Failed to fetch debug data.' });
             }
         });
     });

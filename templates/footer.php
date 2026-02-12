@@ -49,33 +49,51 @@ document.addEventListener('DOMContentLoaded', function () {
 <!-- under observation end -->
 
 <script>
-   // Hide and Show Side Menu
+    // Hide and Show Side Menu
     var menubtn = document.getElementById("menu-btn"); // Menu Button
     var sidemenu = document.getElementById("sidemenu"); // Side Menu Div
 
-    // Add a click event listener to the document object
+    // Click outside handler: ignore clicks on the menubtn or its children
     document.addEventListener("click", function(event) {
-        // Check if the clicked element is outside of the sidemenu and is not the button
-        if (!sidemenu.contains(event.target) && event.target !== menubtn) {
-            // Hide the sidemenu
-            sidemenu.style.animation = "slide-out-to-left 0.5s ease";
-            setTimeout(function() {
-                sidemenu.style.display = "none";
-            }, 450);
+        try {
+            var clickedInsideMenuBtn = menubtn && menubtn.contains(event.target);
+            var clickedInsideSidemenu = sidemenu && sidemenu.contains(event.target);
+
+            if (!clickedInsideSidemenu && !clickedInsideMenuBtn) {
+                if (sidemenu) {
+                    sidemenu.style.animation = "slide-out-to-left 0.5s ease";
+                    setTimeout(function() {
+                        sidemenu.style.display = "none";
+                    }, 450);
+                }
+            }
+        } catch (e) {
+            // Fail silently if elements not present
+            console.error(e);
         }
     });
 
-    menubtn.addEventListener("click", function(){
-        if(sidemenu.style.display == "none" || sidemenu.style.display == ""){
-            sidemenu.style.animation = "slide-in-from-left 0.5s ease";
-            sidemenu.style.display = "block";
-        }else{
-            sidemenu.style.animation = "slide-out-to-left 0.5s ease";
-            setTimeout(function() {
-                sidemenu.style.display = "none";
-            }, 450);
-        }
-    });
+    if (menubtn) {
+        menubtn.addEventListener("click", function(e){
+            // Prevent the document click handler from immediately hiding the menu
+            e.stopPropagation();
+            try {
+                if (!sidemenu || sidemenu.style.display == "none" || sidemenu.style.display == ""){
+                    if (sidemenu) {
+                        sidemenu.style.animation = "slide-in-from-left 0.5s ease";
+                        sidemenu.style.display = "block";
+                    }
+                } else {
+                    sidemenu.style.animation = "slide-out-to-left 0.5s ease";
+                    setTimeout(function() {
+                        sidemenu.style.display = "none";
+                    }, 450);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        });
+    }
 
     // Get all the elements (with null checks)
     var parabtn = document.getElementById("para-btn"); // Main Para Button
@@ -149,6 +167,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var setmaintenancebtn = document.getElementById("set-maintenance-btn"); // Set Maintenance Btn
 
+    var setduplicatebtn = document.getElementById("set-duplicate-btn"); // Set Duplicate Btn
+    var setduplicatenav = document.getElementById("set-duplicate-nav"); // Set Duplicate Nav
+    var setopenduplicate = document.getElementById("open-set-duplicate"); // duplicate down arrow
+    var setclosedduplicate = document.getElementById("closed-set-duplicate"); // duplicate right arrow
+
     // Set Sub-elements
     var setopenmaintenance = document.getElementById("open-set-maintenance"); // set maintenance Div Down Arrow or Expanded
     var setclosedmaintenance = document.getElementById("closed-set-maintenance"); // set maintenance Div Right Arrow or Minimized
@@ -176,6 +199,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (setmaintenancebtn) setmaintenancebtn.style.display = "none";
         if (setmaintenancenav) setmaintenancenav.style.display = "none";
+
+        if (setduplicatebtn) setduplicatebtn.style.display = "none";
+        if (setduplicatenav) setduplicatenav.style.display = "none";
 
         if (actionreportbtn) actionreportbtn.style.display = "none";
         if (actionreportnav) actionreportnav.style.display = "none";
@@ -207,6 +233,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (setclosed) setclosed.style.display = "block";
         if (setopenmaintenance) setopenmaintenance.style.display = "none";
         if (setclosedmaintenance) setclosedmaintenance.style.display = "block";
+        if (setopenduplicate) setopenduplicate.style.display = "none";
+        if (setclosedduplicate) setclosedduplicate.style.display = "block";
 
         if (actionopenreport) actionopenreport.style.display = "none";
         if (actionclosedreport) actionclosedreport.style.display = "block";
@@ -704,6 +732,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 availableSubMenus.push(setmaintenancebtn);
                 if (setmaintenancenav) availableSubNavs.push(setmaintenancenav);
             }
+            if (setduplicatebtn) {
+                availableSubMenus.push(setduplicatebtn);
+                if (setduplicatenav) availableSubNavs.push(setduplicatenav);
+            }
             
             // Check if any sub-menu is currently visible
             var isAnyVisible = false;
@@ -738,6 +770,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Reset child arrows
                 if (setopenmaintenance) setopenmaintenance.style.display = "none";
                 if (setclosedmaintenance) setclosedmaintenance.style.display = "block";
+                if (setopenduplicate) setopenduplicate.style.display = "none";
+                if (setclosedduplicate) setclosedduplicate.style.display = "block";
                 
                 // Animate out parent menus
                 availableSubMenus.forEach(function(menu) {
@@ -772,6 +806,31 @@ document.addEventListener('DOMContentLoaded', function () {
                     setmaintenancenav.style.animation = "slide-out-to-top 0.5s ease";
                     setTimeout(function() {
                         setmaintenancenav.style.display = "none";
+                    }, 450);
+                }
+            }
+        });
+    }
+
+    // Sub-menu Duplicates dropdown handler
+    if (setduplicatebtn) {
+        setduplicatebtn.addEventListener("click", function(){ 
+            var isHidden = !setduplicatenav || setduplicatenav.style.display === "none" || setduplicatenav.style.display === "";
+            
+            if (isHidden) {
+                if (setduplicatenav) {
+                    setduplicatenav.style.animation = "slide-in-from-top 0.8s ease";
+                    setduplicatenav.style.display = "block";
+                }
+                if (setopenduplicate) setopenduplicate.style.display = "block";
+                if (setclosedduplicate) setclosedduplicate.style.display = "none";
+            } else {
+                if (setopenduplicate) setopenduplicate.style.display = "none";
+                if (setclosedduplicate) setclosedduplicate.style.display = "block";
+                if (setduplicatenav) {
+                    setduplicatenav.style.animation = "slide-out-to-top 0.5s ease";
+                    setTimeout(function() {
+                        setduplicatenav.style.display = "none";
                     }, 450);
                 }
             }

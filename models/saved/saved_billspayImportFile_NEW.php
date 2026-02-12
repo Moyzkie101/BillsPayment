@@ -266,11 +266,29 @@ if (isset($_POST['fix_head_office']) && !empty($_POST['file_id'])) {
         $spreadsheet = $reader->load($path);
         $worksheet = $spreadsheet->getActiveSheet();
 
-        // Apply fixes - typical fix is to set Branch ID -> 581
+        // Apply fixes - decide branch id automatically when no explicit value provided.
+        // If the outlet (column O) contains the word 'CEBU' (case-insensitive) assign ML CEBU HEAD OFFICE -> 581
+        // Otherwise assign HEAD OFFICE -> 2607
         foreach ($fixes as $fix) {
             $r = intval($fix['row'] ?? 0);
-            $v = isset($fix['value']) ? strval($fix['value']) : '581';
+            $v = isset($fix['value']) ? strval($fix['value']) : '';
             if ($r > 0) {
+                // attempt to inspect outlet cell O for this row to infer proper head office
+                try {
+                    $outlet = '';
+                    try { $outlet = trim(strval($worksheet->getCell('O' . $r)->getValue())); } catch (Exception $e) { $outlet = ''; }
+                    if ($v === '') {
+                        if (stripos($outlet, 'CEBU') !== false) {
+                            $v = '581';
+                        } else {
+                            $v = '2607';
+                        }
+                    }
+                } catch (Exception $e) {
+                    // fallback to default if anything fails
+                    if ($v === '') $v = '2607';
+                }
+
                 // set both common branch columns to be safe (KP7: B, KPX: N)
                 try { $worksheet->setCellValue('B' . $r, $v); } catch (Exception $e) {}
                 try { $worksheet->setCellValue('N' . $r, $v); } catch (Exception $e) {}
@@ -324,8 +342,22 @@ if (isset($_POST['fix_head_office_all']) && isset($_SESSION['uploaded_files'])) 
                 $fixes = $f['validation_result']['head_office_issues'];
                 foreach ($fixes as $fix) {
                     $r = intval($fix['row'] ?? 0);
-                    $v = '581';
+                    $v = '';
                     if ($r > 0) {
+                        try {
+                            $outlet = '';
+                            try { $outlet = trim(strval($worksheet->getCell('O' . $r)->getValue())); } catch (Exception $e) { $outlet = ''; }
+                            if ($v === '') {
+                                if (stripos($outlet, 'CEBU') !== false) {
+                                    $v = '581';
+                                } else {
+                                    $v = '2607';
+                                }
+                            }
+                        } catch (Exception $e) {
+                            if ($v === '') $v = '2607';
+                        }
+
                         try { $worksheet->setCellValue('B' . $r, $v); } catch (Exception $e) {}
                         try { $worksheet->setCellValue('N' . $r, $v); } catch (Exception $e) {}
                     }
