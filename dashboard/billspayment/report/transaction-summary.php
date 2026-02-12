@@ -261,6 +261,115 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     }
     exit;
 }
+
+// Debug partner details: return transaction rows and group breakdowns for a selected partner
+if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
+    header('Content-Type: application/json');
+    $partner = $_POST['partner'] ?? '';
+    $filterType = $_POST['filterType'] ?? '';
+    $startDate = $_POST['startDate'] ?? '';
+    $endDate = $_POST['endDate'] ?? '';
+
+    if (empty($partner) || $partner === 'All') { 
+        echo json_encode(['status' => 'error', 'message' => 'Please select a specific partner for debugging.']); 
+        exit(); 
+    }
+
+    // Resolve partner masterfile row
+    $mpm = null;
+    $mpmStmt = $conn->prepare("SELECT * FROM masterdata.partner_masterfile WHERE partner_name = ? LIMIT 1");
+    if ($mpmStmt) {
+        $mpmStmt->bind_param('s', $partner);
+        $mpmStmt->execute();
+        $res = $mpmStmt->get_result();
+        if ($res && $row = $res->fetch_assoc()) { $mpm = $row; }
+        $mpmStmt->close();
+    }
+
+    if (!$mpm) {
+        echo json_encode(['status' => 'error', 'message' => 'Partner not found in masterfile']);
+        exit();
+    }
+
+    // Build date condition same as report
+    $dateCondition = '(1=1)';
+    $dateParams = [];
+    if ($filterType === 'daily') {
+        $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ? )";
+        $dateParams = [$startDate, $startDate];
+    } elseif ($filterType === 'weekly' || $filterType === 'monthly' || $filterType === 'yearly') {
+        $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
+        $dateParams = [$startDate, $endDate, $startDate, $endDate];
+    }
+
+    $pid = $mpm['partner_id'] ?? '';
+    $pid_kpx = $mpm['partner_id_kpx'] ?? '';
+
+    // Fetch transaction rows that match either partner id
+    $txQuery = "SELECT bt.* FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) ORDER BY bt.datetime LIMIT 1000";
+    $txStmt = $conn->prepare($txQuery);
+    $txRows = [];
+    if ($txStmt) {
+        // bind date params + two ids
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) {
+            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
+        }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $txStmt->bind_param($bindTypes, ...$bindValues);
+        $txStmt->execute();
+        $txRes = $txStmt->get_result();
+        if ($txRes) {
+            while ($r = $txRes->fetch_assoc()) { $txRows[] = $r; }
+        }
+        $txStmt->close();
+    }
+
+    // Fetch aggregated groups (by partner_id / partner_id_kpx) for selected partner ids
+    $groupQuery = "SELECT bt.partner_id, bt.partner_id_kpx, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY bt.partner_id, bt.partner_id_kpx";
+    $groupStmt = $conn->prepare($groupQuery);
+    $groups = [];
+    if ($groupStmt) {
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) { foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; } }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $groupStmt->bind_param($bindTypes, ...$bindValues);
+        $groupStmt->execute();
+        $gRes = $groupStmt->get_result();
+        if ($gRes) { while ($gr = $gRes->fetch_assoc()) { $groups[] = $gr; } }
+        $groupStmt->close();
+    }
+
+    // Also show normalized grouping
+    $normQuery = "SELECT COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY COALESCE(bt.partner_id, bt.partner_id_kpx)";
+    $normStmt = $conn->prepare($normQuery);
+    $norm = [];
+    if ($normStmt) {
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) { foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; } }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $normStmt->bind_param($bindTypes, ...$bindValues);
+        $normStmt->execute();
+        $nRes = $normStmt->get_result();
+        if ($nRes) { while ($nr = $nRes->fetch_assoc()) { $norm[] = $nr; } }
+        $normStmt->close();
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'partner_master' => $mpm,
+        'transactions' => $txRows,
+        'groups' => $groups,
+        'normalized' => $norm
+    ]);
+    exit();
+}
 ?>
 
 <!DOCTYPE html>
@@ -390,6 +499,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     <p class="bp-section-sub">Summarized Transaction Output</p>
                 </div>
             </div>
+            <div style="margin-top:8px;">
+                <button id="debugButton" class="btn btn-secondary" style="display:none;margin-left:8px;">Debug</button>
+            </div>
         </div>
         <div class="bp-card container-fluid mt-3 p-4">
             <div class="row">
@@ -397,7 +509,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     <div class="card">
                         <div class="card-header">
                             <div class="mb-3">
-                                <label id="searchHint" class="h5 text-muted" style="display: none;">Hint: <i>Double click the row to view the details</i></label>
+                                <label id="searchHint" class="h5 text-muted" style="display: none;"></i></label>
                             </div>
                             <div class="row g-2 align-items-end">
                                 <!-- Partner List -->

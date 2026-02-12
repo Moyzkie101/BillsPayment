@@ -311,11 +311,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 <button id="btn-export" class="btn-proceed" style="display:none;background:#0d6efd;color:#fff;margin-left:6px;">Export</button>
                 <button id="btn-delete-all" class="btn-proceed" style="display:none;background:#6c757d;">Delete All Duplicates</button>
             </div>
-            <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
-                <label style="font-weight:700; color:#495057; margin-right:6px;">Mode:</label>
-                <div id="mode-toggle" class="mode-toggle" role="tablist" aria-label="Duplicate checker mode">
-                    <button type="button" class="mode-btn active" data-mode="normal" aria-pressed="true">Normal Mode</button>
-                    <button type="button" class="mode-btn" data-mode="dev" aria-pressed="false">Dev Mode</button>
+            <div style="margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <label style="font-weight:700; color:#495057; margin-right:6px;">Mode:</label>
+                    <div id="mode-toggle" class="mode-toggle" role="tablist" aria-label="Duplicate checker mode">
+                        <button type="button" class="mode-btn active" data-mode="normal" aria-pressed="true">Normal Mode</button>
+                        <button type="button" class="mode-btn" data-mode="dev" aria-pressed="false">Dev Mode</button>
+                    </div>
+                </div>
+                <div style="width:100%; display:flex; justify-content:flex-end;">
+                    <div id="dev-include-container" style="display:none; align-items:center;">
+                        <label style="font-weight:700; color:#495057; margin-right:6px; font-size:13px;">Include:</label>
+                        <select id="dev-include" style="padding:6px;border-radius:6px;border:1px solid #e9ecef;font-weight:700;">
+                            <option value="all">All</option>
+                            <option value="cancelled">No Cancelled</option>
+                        </select>
+                        <input id="dev-search" placeholder="Search Reference No." style="margin-left:8px;padding:6px;border-radius:6px;border:1px solid #e9ecef;width:240px;font-weight:700;display:inline-block;" />
+                    </div>
                 </div>
             </div>
         </div>
@@ -435,13 +447,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
         function renderDev(groups){
             console.debug('[dup-check] renderDev called, groups count:', groups ? groups.length : 0);
             removeSummaryIcon();
+            // store raw dev groups for re-filtering later
+            window.lastDevGroupsRaw = groups || [];
+
             if(!groups || groups.length === 0){
                 $('#dev-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
                 $('#btn-delete-all').hide();
                 $('#btn-export').hide();
                 $('#result-count').text('');
+                window.lastDevGroups = [];
                 return;
             }
+            // read include filter: 'all' or 'cancelled' (when 'cancelled' we exclude rows with status='*')
+            const includeMode = ($('#dev-include').length ? $('#dev-include').val() : 'all') || 'all';
+            // read search term (reference no) for quick filtering
+            const searchTerm = ($('#dev-search').length ? String($('#dev-search').val() || '').trim().toLowerCase() : '');
             // columns to compare (in requested order)
             const columns = [
                 'id','status','billing_invoice','datetime','cancellation_date','source_file','control_no','reference_no','payor','address','account_no','account_name','amount_paid','charge_to_customer','charge_to_partner','contact_no','other_details','branch_id','branch_code','outlet','zone_code','region_code','region','operator','remote_branch','remote_operator','2nd_approver','partner_name','partner_id','partner_id_kpx','mpm_gl_code','settle_unsettle','claim_unclaim','imported_by','imported_date','rfp_no','cad_no','hold_status','post_transaction'
@@ -449,17 +469,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
 
             let html = '';
             let totalDupRows = 0;
+            const filteredGroups = [];
+
             groups.forEach(function(g){
-                const rows = g.rows || [];
+                const rows = Array.isArray(g.rows) ? g.rows.slice() : [];
                 if(rows.length === 0) return;
-                
+
+                // apply include filter: if includeMode === 'cancelled', exclude status === '*'
+                const rowsFiltered = (includeMode === 'cancelled') ? rows.filter(function(r){ return String(r.status || '').trim() !== '*'; }) : rows.slice();
+                // only treat as duplicate group if there are at least 2 rows after filtering
+                if(!rowsFiltered || rowsFiltered.length < 2) return;
+
+                // if searchTerm provided, only include groups whose reference_no contains the term
+                if(searchTerm && String(g.reference_no || '').toLowerCase().indexOf(searchTerm) === -1) return;
+                filteredGroups.push({ reference_no: g.reference_no, rows: rowsFiltered });
+
                 // Card container for each reference_no group (store encoded ref)
                 html += '<div class="dev-group-card" data-ref="' + encodeURIComponent(g.reference_no || '') + '">';
                 
                 // Card header
                 html += '<div class="dev-group-header">';
                 html += 'Reference No.: <strong>' + (g.reference_no||'') + '</strong>';
-                html += ' &nbsp;<span style="color:#6c757d;font-weight:400;">(' + rows.length + ' rows)</span>';
+                html += ' &nbsp;<span style="color:#6c757d;font-weight:400;">(' + rowsFiltered.length + ' rows)</span>';
                 html += '</div>';
                 
                 // Card body with table
@@ -479,7 +510,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 columns.forEach(function(col){ html += '<th>' + col + '</th>'; });
                 html += '</tr></thead><tbody>';
 
-                rows.forEach(function(r, idx){
+                rowsFiltered.forEach(function(r, idx){
                     html += '<tr data-id="'+(r.id||'')+'">';
                     
                     // Action column (delete icon) - LEFTMOST
@@ -510,13 +541,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             });
 
             $('#dev-card').html(html);
-            $('#result-count').text('Found '+ totalDupRows +' duplicate row(s) across ' + groups.length + ' reference number(s).');
+            $('#result-count').text('Found '+ totalDupRows +' duplicate row(s) across ' + filteredGroups.length + ' reference number(s).');
             // HIDE bulk delete button in Dev Mode - manual deletion only
             $('#btn-delete-all').hide();
-            // Show Export button in Dev Mode
-            $('#btn-export').show();
-            // store last dev groups for export
-            window.lastDevGroups = groups;
+            // Show Export button in Dev Mode only when there are filtered groups
+            if(filteredGroups.length > 0) $('#btn-export').show(); else $('#btn-export').hide();
+            // store last dev groups for export (filtered) and raw
+            window.lastDevGroups = filteredGroups;
             setTimeout(function(){ var el = document.getElementById('dev-card'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
         }
 
@@ -624,12 +655,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                     $('#normal-card').hide();
                     // export button visibility depends on whether dev data exists
                     if(window.lastDevGroups && window.lastDevGroups.length>0) $('#btn-export').show(); else $('#btn-export').hide();
+                    // show include filter control in dev mode
+                    $('#dev-include-container').show();
                     // always hide bulk delete in Dev mode
                     $('#btn-delete-all').hide();
                 } else {
                     $('#normal-card').show();
                     $('#dev-card').hide();
                     $('#btn-export').hide();
+                    // hide include filter control in normal mode
+                    $('#dev-include-container').hide();
                     // show bulk delete only if there are red duplicate rows in normal view
                     if($('#normal-card .dup-row.red').length > 0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
                 }
@@ -667,50 +702,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             // compare (arrow) button on green rows - switch to Dev Mode and scroll to matching group
             function gotoDevRef(ref){
                 if(!ref) return;
-                if(!window.lastDevGroups || window.lastDevGroups.length === 0){
-                    Swal.fire({
-                        title: 'No root data to compare',
-                        text: 'Load root data first in the Dev Mode',
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#0d6efd',
-                        cancelButtonColor: '#6c757d',
-                        confirmButtonText: 'Switch to Dev Mode',
-                        cancelButtonText: 'Cancel'
-                    }).then((result) => {
-                        if(result.isConfirmed){
-                            $('#mode-toggle .mode-btn').removeClass('active').attr('aria-pressed','false');
-                            $('#mode-toggle .mode-btn[data-mode="dev"]').addClass('active').attr('aria-pressed','true');
-                            $('#normal-card').hide(); $('#dev-card').show();
-                            $('#btn-check').trigger('click');
-                        }
-                    });
-                    return;
-                }
 
                 // ensure dev mode is active and visible
                 $('#mode-toggle .mode-btn').removeClass('active').attr('aria-pressed','false');
                 $('#mode-toggle .mode-btn[data-mode="dev"]').addClass('active').attr('aria-pressed','true');
                 $('#normal-card').hide(); $('#dev-card').show();
+                $('#dev-include-container').show();
 
-                const encoded = encodeURIComponent(ref || '');
-                const $target = $('[data-ref="'+ encoded +'"]').first();
-                if($target && $target.length){
-                    // try to highlight the reference text inside the card header
-                    const $headerRef = $target.find('.dev-group-header strong').first();
-                    if($headerRef && $headerRef.length){
-                        $headerRef[0].scrollIntoView({behavior:'smooth', block:'center'});
-                        $target.addClass('dev-highlight');
-                        $headerRef.addClass('dev-ref-highlight');
-                        setTimeout(function(){ $headerRef.removeClass('dev-ref-highlight'); $target.removeClass('dev-highlight'); }, 3000);
-                    } else {
-                        $target[0].scrollIntoView({behavior:'smooth', block:'start'});
-                        $target.addClass('dev-highlight');
-                        setTimeout(function(){ $target.removeClass('dev-highlight'); }, 3000);
-                    }
-                } else {
-                    Swal.fire('Not found in Dev Data','The selected reference is not present in the loaded Dev data. Try loading Dev Mode first.','info');
+                // copy the reference into the search box and trigger a render/search
+                $('#dev-search').val(ref);
+
+                // If there is no dev data loaded yet, prompt to load it and then perform search
+                if(!window.lastDevGroupsRaw || window.lastDevGroupsRaw.length === 0){
+                    Swal.fire({
+                        title: 'Load Dev Data?',
+                        text: 'Dev data is not loaded. Load root data and search for the reference?',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: '#0d6efd',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: 'Load & Search',
+                        cancelButtonText: 'Cancel'
+                    }).then((result) => {
+                        if(result.isConfirmed){
+                            // trigger a dev-mode check which will call renderDev; renderDev reads the search box value
+                            $('#btn-check').trigger('click');
+                            // poll for the results to be available
+                            const start = Date.now();
+                            const poll = setInterval(function(){
+                                if(window.lastDevGroups && typeof window.lastDevGroups !== 'undefined'){
+                                    clearInterval(poll);
+                                    // if rendered groups exist, highlight the first one
+                                    const $card = $('#dev-card .dev-group-card').first();
+                                    if($card && $card.length){
+                                        const $headerRef = $card.find('.dev-group-header strong').first();
+                                        $card[0].scrollIntoView({behavior:'smooth', block:'center'});
+                                        $card.addClass('dev-highlight');
+                                        if($headerRef && $headerRef.length) $headerRef.addClass('dev-ref-highlight');
+                                        setTimeout(function(){ if($headerRef && $headerRef.length) $headerRef.removeClass('dev-ref-highlight'); $card.removeClass('dev-highlight'); }, 3000);
+                                    } else {
+                                        Swal.fire('Not found in Dev Data','The selected reference is not present in the loaded Dev data.','info');
+                                    }
+                                } else if(Date.now() - start > 8000){
+                                    clearInterval(poll);
+                                }
+                            }, 250);
+                        }
+                    });
+                    return;
                 }
+
+                // If dev data is already loaded, re-render using stored raw data (search box already set)
+                renderDev(window.lastDevGroupsRaw);
+
+                // After render, locate first visible card (filtered) and highlight
+                setTimeout(function(){
+                    const $card = $('#dev-card .dev-group-card').first();
+                    if($card && $card.length){
+                        const $headerRef = $card.find('.dev-group-header strong').first();
+                        $card[0].scrollIntoView({behavior:'smooth', block:'center'});
+                        $card.addClass('dev-highlight');
+                        if($headerRef && $headerRef.length) $headerRef.addClass('dev-ref-highlight');
+                        setTimeout(function(){ if($headerRef && $headerRef.length) $headerRef.removeClass('dev-ref-highlight'); $card.removeClass('dev-highlight'); }, 3000);
+                    } else {
+                        Swal.fire('Not found in Dev Data','The selected reference is not present in the loaded Dev data.','info');
+                    }
+                }, 220);
             }
 
             $(document).on('click', '.btn-compare', function(){
@@ -894,12 +951,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 $('#dev-card').show(); $('#normal-card').hide();
                 $('#btn-export').hide();
                 $('#btn-delete-all').hide();
+                $('#dev-include-container').show();
             } else {
                 $('#normal-card').show(); $('#dev-card').hide();
                 // show delete-all only when normal view already has red duplicate rows
                 if($('#normal-card .dup-row.red').length > 0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
                 $('#btn-export').hide();
+                $('#dev-include-container').hide();
             }
+
+            // when include selection changes, re-render dev view using stored raw groups
+            $(document).on('change', '#dev-include', function(){
+                if(window.lastDevGroupsRaw && window.lastDevGroupsRaw.length>0){
+                    renderDev(window.lastDevGroupsRaw);
+                }
+            });
+            // realtime search for reference no in dev mode
+            $(document).on('input', '#dev-search', function(){
+                if(window.lastDevGroupsRaw && window.lastDevGroupsRaw.length>0){
+                    renderDev(window.lastDevGroupsRaw);
+                }
+            });
         });
     </script>
     <?php include '../../../templates/footer.php'; ?>
