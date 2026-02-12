@@ -325,37 +325,21 @@ $partnersResult = $conn->query($partnersQuery);
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <i id="menu-btn" class="fa-solid fa-bars"></i>
-                <div class="usernav">
-                    <h6><?php 
-                            if($_SESSION['user_type'] === 'admin'){
-                                echo $_SESSION['admin_name'];
-                            }elseif($_SESSION['user_type'] === 'user'){
-                                echo $_SESSION['user_name']; 
-                            }else{
-                                echo "GUEST";
-                            }
-                    ?></h6>
-                    <h6 style="margin-left:5px;"><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo "(".$_SESSION['admin_email'].")";
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo "(".$_SESSION['user_email'].")";
-                        }else{
-                            echo "GUEST";
-                        }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
         <!-- Show and Hide Side Nav Menu -->
+        <?php include '../../../templates/header_ui.php'; ?>
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h1>Import Cancellation</h1></center>
+        <div class="bp-section-header">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+                <div>
+                    <h2>Import Cancellation</h2>
+                    <p class="bp-section-sub">Upload Excel files (.xls, .xlsx) for processing</p>
+                </div>
+            </div>
+        </div>
         <div class="container-fluid border border-danger rounded mt-3 p-4">
             <div class="container-fluid">
                 <!-- Mode Toggle (Auto / Manual) + Proceed (moved to top-right) -->
