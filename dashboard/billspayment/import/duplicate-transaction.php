@@ -303,6 +303,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
         <div style="margin-top:12px; display:flex; align-items:center; gap:12px;">
             <div class="controls" style="display:flex; gap:8px; align-items:center;">
                 <button id="btn-check" class="btn-proceed">Check Duplicates</button>
+                <button id="btn-export" class="btn-proceed" style="display:none;background:#0d6efd;color:#fff;margin-left:6px;">Export</button>
                 <button id="btn-delete-all" class="btn-proceed" style="display:none;background:#6c757d;">Delete All Duplicates</button>
             </div>
             <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
@@ -358,6 +359,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             $('#modal-card').html(html);
             $('#result-count').text('Found ' + groups.length + ' reference_no(s) with duplicates.');
             $('#btn-delete-all').hide();
+            // hide export when not in Dev mode
+            $('#btn-export').hide();
             setTimeout(function(){ document.getElementById('modal-card').scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
         }
 
@@ -401,6 +404,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             $('#modal-card').html(html);
             $('#result-count').text('Found '+ totalDuplicates +' duplicate row(s).');
             if(totalDuplicates>0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
+            // hide export when showing legacy view
+            $('#btn-export').hide();
             setTimeout(function(){ document.getElementById('modal-card').scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
         }
 
@@ -409,6 +414,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             if(!groups || groups.length === 0){
                 $('#modal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
                 $('#btn-delete-all').hide();
+                $('#btn-export').hide();
                 $('#result-count').text('');
                 return;
             }
@@ -483,6 +489,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             $('#result-count').text('Found '+ totalDupRows +' duplicate row(s) across ' + groups.length + ' reference number(s).');
             // HIDE bulk delete button in Dev Mode - manual deletion only
             $('#btn-delete-all').hide();
+            // Show Export button in Dev Mode
+            $('#btn-export').show();
+            // store last dev groups for export
+            window.lastDevGroups = groups;
             setTimeout(function(){ document.getElementById('modal-card').scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
         }
 
@@ -641,6 +651,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                     }
                 });
             });
+
+            // Export Dev-mode results as an Excel-friendly HTML file with color fills
+            $('#btn-export').on('click', function(){
+                const groups = window.lastDevGroups || [];
+                if(!groups || groups.length === 0){ Swal.fire('No data','No dev-mode data to export','info'); return; }
+
+                const columns = [
+                    'id','status','billing_invoice','datetime','cancellation_date','source_file','control_no','reference_no','payor','address','account_no','account_name','amount_paid','charge_to_customer','charge_to_partner','contact_no','other_details','branch_id','branch_code','outlet','zone_code','region_code','region','operator','remote_branch','remote_operator','2nd_approver','partner_name','partner_id','partner_id_kpx','mpm_gl_code','settle_unsettle','claim_unclaim','imported_by','imported_date','rfp_no','cad_no','hold_status','post_transaction'
+                ];
+
+                // Build HTML content
+                let html = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><style>table{border-collapse:collapse;font-family:Arial,Helvetica,sans-serif}th,td{border:1px solid #e9ecef;padding:6px;}</style></head><body>';
+                html += '<h3>Duplicate Checker - Dev Export</h3>';
+
+                groups.forEach(function(g, groupIdx){
+                    const rows = g.rows || [];
+                    if(rows.length === 0) return;
+
+                    // compute uniformity per column
+                    const uniform = {};
+                    columns.forEach(function(col){
+                        const vals = new Set(rows.map(r => (typeof r[col] === 'undefined' || r[col] === null) ? '' : String(r[col])));
+                        uniform[col] = (vals.size === 1);
+                    });
+
+                    html += '<div style="margin-top:14px;margin-bottom:6px;font-weight:700;">Reference No.: ' + escapeHtml(g.reference_no || '') + ' (' + rows.length + ' rows)</div>';
+                    html += '<table><thead><tr><th>Action</th>';
+                    columns.forEach(function(col){ html += '<th>' + escapeHtml(col) + '</th>'; });
+                    html += '</tr></thead><tbody>';
+
+                    rows.forEach(function(r, idx){
+                        html += '<tr>';
+                        html += '<td></td>'; // empty action col
+                        columns.forEach(function(col){
+                            var raw = (typeof r[col] === 'undefined' || r[col] === null) ? '' : String(r[col]);
+                            var display = raw;
+                            if(col === 'datetime' || col.toLowerCase().includes('date')){
+                                display = formatLongDate(raw);
+                            }
+                            const bg = uniform[col] ? '#e6ffed' : '#fff2f2';
+                            html += '<td style="background:' + bg + ';">' + escapeHtml(display) + '</td>';
+                        });
+                        html += '</tr>';
+                    });
+
+                    html += '</tbody></table>';
+                });
+
+                html += '</body></html>';
+
+                // Create Blob and force download as .xls so Excel opens HTML
+                const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+                const ts = new Date().toISOString().replace(/[:.]/g,'-');
+                const filename = 'duplicate_report_dev_' + ts + '.xls';
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                setTimeout(function(){ URL.revokeObjectURL(link.href); link.remove(); }, 5000);
+            });
+
+            // escape html helper
+            function escapeHtml(str){
+                return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+            }
 
             // ensure duplicates container is visible when results are present
             // (click-outside handler removed because results are inline)
