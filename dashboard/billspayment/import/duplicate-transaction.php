@@ -181,6 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
     <link rel="icon" href="../../../images/MLW logo.png" type="image/png">
     <style>
            /* Loading Overlay */
@@ -652,24 +653,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 });
             });
 
-            // Export Dev-mode results as an Excel-friendly HTML file with color fills
-            $('#btn-export').on('click', function(){
-                const groups = window.lastDevGroups || [];
-                if(!groups || groups.length === 0){ Swal.fire('No data','No dev-mode data to export','info'); return; }
+            // Helpers for export
+            function escapeHtml(str){
+                return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+            }
 
+            function exportToExcel(groups){
                 const columns = [
                     'id','status','billing_invoice','datetime','cancellation_date','source_file','control_no','reference_no','payor','address','account_no','account_name','amount_paid','charge_to_customer','charge_to_partner','contact_no','other_details','branch_id','branch_code','outlet','zone_code','region_code','region','operator','remote_branch','remote_operator','2nd_approver','partner_name','partner_id','partner_id_kpx','mpm_gl_code','settle_unsettle','claim_unclaim','imported_by','imported_date','rfp_no','cad_no','hold_status','post_transaction'
                 ];
 
-                // Build HTML content
                 let html = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><style>table{border-collapse:collapse;font-family:Arial,Helvetica,sans-serif}th,td{border:1px solid #e9ecef;padding:6px;}</style></head><body>';
                 html += '<h3>Duplicate Checker - Dev Export</h3>';
 
-                groups.forEach(function(g, groupIdx){
+                groups.forEach(function(g){
                     const rows = g.rows || [];
                     if(rows.length === 0) return;
-
-                    // compute uniformity per column
                     const uniform = {};
                     columns.forEach(function(col){
                         const vals = new Set(rows.map(r => (typeof r[col] === 'undefined' || r[col] === null) ? '' : String(r[col])));
@@ -681,15 +680,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                     columns.forEach(function(col){ html += '<th>' + escapeHtml(col) + '</th>'; });
                     html += '</tr></thead><tbody>';
 
-                    rows.forEach(function(r, idx){
+                    rows.forEach(function(r){
                         html += '<tr>';
-                        html += '<td></td>'; // empty action col
+                        html += '<td></td>';
                         columns.forEach(function(col){
                             var raw = (typeof r[col] === 'undefined' || r[col] === null) ? '' : String(r[col]);
                             var display = raw;
-                            if(col === 'datetime' || col.toLowerCase().includes('date')){
-                                display = formatLongDate(raw);
-                            }
+                            if(col === 'datetime' || col.toLowerCase().includes('date')){ display = formatLongDate(raw); }
                             const bg = uniform[col] ? '#e6ffed' : '#fff2f2';
                             html += '<td style="background:' + bg + ';">' + escapeHtml(display) + '</td>';
                         });
@@ -701,7 +698,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
 
                 html += '</body></html>';
 
-                // Create Blob and force download as .xls so Excel opens HTML
                 const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
                 const ts = new Date().toISOString().replace(/[:.]/g,'-');
                 const filename = 'duplicate_report_dev_' + ts + '.xls';
@@ -711,12 +707,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 document.body.appendChild(link);
                 link.click();
                 setTimeout(function(){ URL.revokeObjectURL(link.href); link.remove(); }, 5000);
-            });
-
-            // escape html helper
-            function escapeHtml(str){
-                return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
             }
+
+            function exportToPDF(groups){
+                // build same HTML as Excel export but render to PDF via html2pdf
+                let html = '<div style="font-family:Arial,Helvetica,sans-serif;">';
+                html += '<h3>Duplicate Checker - Dev Export</h3>';
+                const columns = [
+                    'id','status','billing_invoice','datetime','cancellation_date','source_file','control_no','reference_no','payor','address','account_no','account_name','amount_paid','charge_to_customer','charge_to_partner','contact_no','other_details','branch_id','branch_code','outlet','zone_code','region_code','region','operator','remote_branch','remote_operator','2nd_approver','partner_name','partner_id','partner_id_kpx','mpm_gl_code','settle_unsettle','claim_unclaim','imported_by','imported_date','rfp_no','cad_no','hold_status','post_transaction'
+                ];
+
+                groups.forEach(function(g){
+                    const rows = g.rows || [];
+                    if(rows.length === 0) return;
+                    const uniform = {};
+                    columns.forEach(function(col){
+                        const vals = new Set(rows.map(r => (typeof r[col] === 'undefined' || r[col] === null) ? '' : String(r[col])));
+                        uniform[col] = (vals.size === 1);
+                    });
+
+                    html += '<div style="margin-top:14px;margin-bottom:6px;font-weight:700;">Reference No.: ' + escapeHtml(g.reference_no || '') + ' (' + rows.length + ' rows)</div>';
+                    html += '<table style="width:100%;border-collapse:collapse;">';
+                    html += '<thead><tr><th style="border:1px solid #e9ecef;padding:6px;">Action</th>';
+                    columns.forEach(function(col){ html += '<th style="border:1px solid #e9ecef;padding:6px;">' + escapeHtml(col) + '</th>'; });
+                    html += '</tr></thead><tbody>';
+
+                    rows.forEach(function(r){
+                        html += '<tr>';
+                        html += '<td style="border:1px solid #e9ecef;padding:6px;"></td>';
+                        columns.forEach(function(col){
+                            var raw = (typeof r[col] === 'undefined' || r[col] === null) ? '' : String(r[col]);
+                            var display = raw;
+                            if(col === 'datetime' || col.toLowerCase().includes('date')){ display = formatLongDate(raw); }
+                            const bg = uniform[col] ? '#e6ffed' : '#fff2f2';
+                            html += '<td style="background:' + bg + ';border:1px solid #e9ecef;padding:6px;">' + escapeHtml(display) + '</td>';
+                        });
+                        html += '</tr>';
+                    });
+
+                    html += '</tbody></table>';
+                });
+
+                html += '</div>';
+
+                // create container and call html2pdf
+                const container = document.createElement('div');
+                container.style.padding = '10px';
+                container.innerHTML = html;
+                document.body.appendChild(container);
+
+                const opt = {
+                    margin:       10,
+                    filename:     'duplicate_report_dev_' + new Date().toISOString().replace(/[:.]/g,'-') + '.pdf',
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+                };
+
+                // html2pdf available via CDN
+                try {
+                    html2pdf().set(opt).from(container).save().then(function(){ setTimeout(function(){ container.remove(); }, 5000); });
+                } catch (e) {
+                    container.remove();
+                    Swal.fire('Error','PDF export failed: ' + (e.message || e),'error');
+                }
+            }
+
+            // open modal to choose format
+            $('#btn-export').on('click', function(){
+                const groups = window.lastDevGroups || [];
+                if(!groups || groups.length === 0){ Swal.fire('No data','No dev-mode data to export','info'); return; }
+
+                const html = '<div style="display:flex;gap:10px;justify-content:center;padding:8px;"><button id="export-excel" class="swal2-confirm swal2-styled" style="background:#0d6efd;border:none;color:#fff;">Export Excel</button><button id="export-pdf" class="swal2-confirm swal2-styled" style="background:#6c757d;border:none;color:#fff;">Export PDF</button></div>';
+
+                Swal.fire({ title: 'Export format', html: html, showConfirmButton: false, showCloseButton: true, didOpen: () => {
+                    document.getElementById('export-excel').onclick = function(){ exportToExcel(groups); Swal.close(); };
+                    document.getElementById('export-pdf').onclick = function(){ exportToPDF(groups); Swal.close(); };
+                }});
+            });
 
             // ensure duplicates container is visible when results are present
             // (click-outside handler removed because results are inline)
