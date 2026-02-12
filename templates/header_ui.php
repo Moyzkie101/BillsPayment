@@ -142,3 +142,14 @@
         </div>
     </div>
 </header>
+
+<?php
+// Helper to render a branded section header used across pages
+function bp_section_header_html($icon = 'fa-solid fa-file-import', $title = '', $subtitle = '') {
+    $icon_html = $icon ? '<i class="' . htmlspecialchars($icon) . '"></i>' : '';
+    $title_html = htmlspecialchars($title);
+    $subtitle_html = $subtitle !== '' ? '<div class="bp-section-sub">' . htmlspecialchars($subtitle) . '</div>' : '';
+    echo '<div class="bp-section-header"><div class="bp-section-title">' . $icon_html . '<div><h2>' . $title_html . '</h2>' . $subtitle_html . '</div></div></div>';
+}
+
+?>

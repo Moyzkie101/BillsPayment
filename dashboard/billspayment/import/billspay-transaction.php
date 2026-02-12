@@ -151,7 +151,7 @@ if (isset($_SESSION['user_type'])) {
         /* File Cards Container */
         .files-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 15px;
             margin-top: 20px;
         }
@@ -159,92 +159,40 @@ if (isset($_SESSION['user_type'])) {
         /* Individual File Card */
         .file-card {
             border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 15px;
+            border-radius: 10px;
+            padding: 14px;
             background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            transition: all 0.3s ease;
-        }
-        /* ensure positioning context for absolute elements */
-        .file-card { position: relative; padding: 18px 15px 44px 15px; }
-
-        .file-card:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        }
-
-        .file-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            border-bottom: 1px solid #dee2e6;
-            padding-bottom: 10px;
-        }
-
-        .file-card-info {
-            flex: 1;
-        }
-
-        .file-card-label {
-            font-size: 11px;
-            color: #6c757d;
-            text-transform: uppercase;
-            font-weight: 600;
-            margin-bottom: 3px;
-        }
-
-        .file-card-value {
-            font-size: 14px;
-            color: #212529;
-            font-weight: 500;
-            word-break: break-word;
-        }
-
-        .file-card-delete {
-            cursor: pointer;
-            color: #dc3545;
-            font-size: 20px;
+            gap: 8px;
             transition: all 0.2s ease;
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            z-index: 5;
-            padding: 6px;
-            border-radius: 6px;
-            background: rgba(255,255,255,0.6);
+            min-height: 96px;
+            position: relative;
+            overflow: hidden;
         }
 
-        .file-card-delete:hover {
-            color: #bb2d3b;
-            transform: scale(1.1);
-        }
+        .file-card:hover { box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
 
-        /* place partner id and source type at bottom-right */
-        .file-card-body {
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-            align-items: flex-end;
-        }
+        .file-card-header { display:flex; gap:10px; align-items:flex-start; }
 
-        .file-card-detail {
-            flex: 0 0 auto;
-            text-align: right;
-            min-width: 80px;
-        }
+        .file-card-info { flex: 1 1 auto; }
 
-        /* Footer container pinned to bottom-right of card for partner + source */
+        .file-card-label { font-size: 12px; color: #6c757d; font-weight:600; margin-bottom:4px; }
+        .file-card-value { font-size: 14px; color:#212529; font-weight:600; word-break: break-word; }
+
+        .file-card-delete { cursor:pointer; color:#6c757d; padding:6px; border-radius:6px; background: rgba(255,255,255,0.6); position:absolute; top:10px; right:10px; z-index:6; }
+        .file-card-delete:hover { background:#f8f9fa; color:#dc3545; transform: none; }
+
+        /* Footer container stays inside card flow and is pushed to bottom */
         .file-card-footer {
-            position: absolute;
-            right: 12px;
-            bottom: 12px;
+            margin-top: auto;
             text-align: right;
             display: flex;
-            flex-direction: column;
-            gap: 6px;
-            align-items: flex-end;
+            gap: 8px;
+            align-items: center;
+            justify-content: flex-end;
+            padding-top: 6px;
         }
 
         .badge-source {
@@ -569,9 +517,9 @@ if (isset($_SESSION['user_type'])) {
         .file-upload-area h5 { margin:8px 0 4px; font-weight:700; }
         .file-upload-area p { margin:0; color:#6c757d; }
 
-        /* File cards */
+        /* small adjustments for alternate rules (kept for backward compatibility) */
         .files-container { margin-top: 14px; }
-        .file-card { border:1px solid #eef0f2; border-radius:10px; padding:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; background:#fff; }
+        .file-card { margin-bottom:10px; }
         .file-card-header { display:flex; gap:12px; align-items:center; }
         .file-card-info .file-card-label { font-size:12px; color:#6c757d; font-weight:600; }
         .file-card-info .file-card-value { font-size:14px; color:#212529; font-weight:600; }
@@ -851,8 +799,34 @@ if (isset($_SESSION['user_type'])) {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-        // Global variable to store file data
-        let uploadedFiles = [];
+        // Global variable to store file data (use var so it's available across script tags)
+        var uploadedFiles = window.uploadedFiles || [];
+
+        // Backwards-compatibility wrappers: expose global uploadFile/uploadFiles
+        // Define early so inline handlers can call them before DOM ready
+        window.uploadFile = function(f) {
+            try {
+                if (!f) return;
+                // if processFile is available, delegate; otherwise push into uploadedFiles
+                if (typeof processFile === 'function') return processFile(f);
+                // fallback: add file to uploadedFiles and attempt to render later
+                uploadedFiles.push(f);
+            } catch (e) {
+                console.error('uploadFile wrapper error:', e);
+            }
+        };
+
+        window.uploadFiles = function(files) {
+            try {
+                if (!files) return;
+                if (files instanceof FileList) files = Array.from(files);
+                if (!Array.isArray(files)) files = [files];
+                if (typeof handleFiles === 'function') return handleFiles(files);
+                files.forEach(function(f){ uploadedFiles.push(f); });
+            } catch (e) {
+                console.error('uploadFiles wrapper error:', e);
+            }
+        };
 
         $(document).ready(function() {
             const fileUploadArea = $('#fileUploadArea');
@@ -1060,7 +1034,6 @@ if (isset($_SESSION['user_type'])) {
 
                 reader.readAsArrayBuffer(file);
             }
-
             // Render file cards
             function renderFileCards() {
                 filesContainer.empty();
@@ -1150,12 +1123,6 @@ if (isset($_SESSION['user_type'])) {
                 // Start duplicate check flow
                 $('#loading-overlay').css('display', 'flex');
                 checkForDuplicates();
-                    // Show loading overlay
-                    $('#loading-overlay').css('display', 'flex');
-
-                    // Step 1: Check for duplicates first
-                    checkForDuplicates();
-                }
             });
 
             // Function to check for duplicates (batched to avoid PHP's max_file_uploads limit)

@@ -598,20 +598,30 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
             backdrop-filter: blur(2px);
         }
 
-        #loading-overlay .loading-spinner {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            box-sizing: border-box;
-            border: 6px solid rgba(255,255,255,0.15);
-            border-top-color: #ffffff;
-            animation: spin 1s linear infinite;
-            display: block;
+       #loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
         }
 
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+        .loading-spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #dc3545;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>

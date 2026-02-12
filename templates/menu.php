@@ -308,6 +308,20 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     <a href="<?php echo $base_url; ?>maintenance/accounts/user-management.php"><i class="fa-solid fa-user-cog"></i> User Management</a>
                 </div>
             </div>
+
+            <!-- Show/Hide Set duplicates Sub-menu -->
+            <div class="tabcat" id="set-duplicate-btn" style="display: none;">
+                <h6><i class="fa-solid fa-code-compare"></i> Duplicate</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-set-duplicate" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-set-duplicate" style="display: none"></i>
+            </div>
+
+            <!-- Set Duplicate Buttons -->
+            <div class="onetab-sub" id="set-duplicate-nav" style="display: none;">
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/duplicate-transaction.php'">
+                    <a href="<?php echo $base_url; ?>billspayment/import/duplicate-transaction.php"><i class="fa-solid fa-receipt"></i> Transaction</a>
+                </div>
+            </div>
         <?php endif; ?>
 
         <!-- Logout Button -->
