@@ -321,7 +321,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 </div>
                 <div style="width:100%; display:flex; justify-content:flex-end;">
                     <div id="dev-include-container" style="display:none; align-items:center;">
-                        <label style="font-weight:700; color:#495057; margin-right:6px; font-size:13px;">Include:</label>
+                        <label style="font-weight:700; color:#495057; margin-right:6px; font-size:13px;">Show:</label>
                         <select id="dev-include" style="padding:6px;border-radius:6px;border:1px solid #e9ecef;font-weight:700;">
                             <option value="all">All</option>
                             <option value="cancelled">No Cancelled</option>
