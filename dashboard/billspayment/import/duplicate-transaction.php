@@ -481,7 +481,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 if(!rowsFiltered || rowsFiltered.length < 2) return;
 
                 // if searchTerm provided, only include groups whose reference_no contains the term
-                if(searchTerm && String(g.reference_no || '').toLowerCase().indexOf(searchTerm) === -1) return;
+                // or whose rows contain a matching id (allow searching by id or reference)
+                if(searchTerm){
+                    const refMatch = String(g.reference_no || '').toLowerCase().indexOf(searchTerm) !== -1;
+                    const idMatch = rowsFiltered.some(function(r){ return String(r.id || '').indexOf(searchTerm) !== -1; });
+                    if(!refMatch && !idMatch) return;
+                }
                 filteredGroups.push({ reference_no: g.reference_no, rows: rowsFiltered });
 
                 // Card container for each reference_no group (store encoded ref)
