@@ -93,8 +93,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
         $query = "
             WITH summary_vol AS (
                 SELECT
-                    bt.partner_id,
-                    bt.partner_id_kpx,
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
                     COUNT(*) AS vol1,
                     sum(bt.amount_paid) AS principal1,
                     sum(bt.charge_to_partner) AS charge_partner1,
@@ -106,13 +105,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     AND bt.status IS NULL
                     $sourceFileCondition
                 GROUP BY
-                    bt.partner_id,
-                    bt.partner_id_kpx
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
             ),
             adjustment_vol AS (
                 SELECT
-                    bt.partner_id,
-                    bt.partner_id_kpx,
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
                     COUNT(*) AS vol2,
                     sum(bt.amount_paid) AS principal2,
                     sum(bt.charge_to_partner) AS charge_partner2,
@@ -124,8 +121,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     AND bt.status = '*'
                     $sourceFileCondition
                 GROUP BY
-                    bt.partner_id,
-                    bt.partner_id_kpx
+                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
             )
             SELECT 
                 mpm.partner_name,
@@ -155,14 +151,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
             LEFT JOIN
                 summary_vol AS sv
                 ON (
-                    mpm.partner_id = sv.partner_id
-                    OR mpm.partner_id_kpx = sv.partner_id_kpx
+                    COALESCE(mpm.partner_id, mpm.partner_id_kpx) COLLATE utf8mb4_general_ci = sv.partner_key
                 )
             LEFT JOIN
                 adjustment_vol AS av
                 ON (
-                    mpm.partner_id = av.partner_id
-                    OR mpm.partner_id_kpx = av.partner_id_kpx
+                    COALESCE(mpm.partner_id, mpm.partner_id_kpx) COLLATE utf8mb4_general_ci = av.partner_key
                 )
             WHERE
                 mpm.status = 'ACTIVE'
