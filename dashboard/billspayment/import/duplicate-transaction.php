@@ -345,6 +345,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 return d.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' });
             } catch(e){ return val; }
         }
+        // ensure removeSummaryIcon exists in global scope (used by renderers)
+        function removeSummaryIcon(){
+            try{
+                console.debug('[dup-check] removeSummaryIcon called');
+                $('#btn-summary').remove();
+            } catch(e){ console.debug('[dup-check] removeSummaryIcon error', e); }
+        }
         function renderNormal(groups){
             if(!groups || groups.length === 0){
                 $('#modal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
@@ -411,6 +418,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
         }
 
         function renderDev(groups){
+            console.debug('[dup-check] renderDev called, groups count:', groups ? groups.length : 0);
             removeSummaryIcon();
             if(!groups || groups.length === 0){
                 $('#modal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
@@ -506,7 +514,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 $('#modal-card').html('Checking duplicates...');
                 // read mode from the toggle buttons
                 const mode = $('#mode-toggle .mode-btn.active').data('mode') || 'normal';
+                console.debug('[dup-check] initiating check, mode:', mode);
                 $.post(window.location.href, { check_duplicates_db: 1, mode: mode }, function(resp){
+                        console.debug('[dup-check] check_duplicates response', resp);
                         if(resp && resp.success){
                                 // Normal (legacy) - if no groups found, request global summary
                                     if(resp.mode === 'normal'){
@@ -524,7 +534,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                                     else renderNormal(resp.groups);
                         } else { $('#modal-card').html('<div style="padding:10px;color:#c00">Error occurred</div>'); }
                     hideOverlay();
-                }, 'json').fail(function(){ $('#modal-card').html('<div style="padding:10px;color:#c00">Request failed</div>'); hideOverlay(); });
+                }, 'json').fail(function(jqxhr, status, err){ console.debug('[dup-check] request failed', status, err); $('#modal-card').html('<div style="padding:10px;color:#c00">Request failed</div>'); hideOverlay(); });
             });
 
                 // request summary (global reference_no counts)
