@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['check_duplicates_db']
                 $partner = $conn->real_escape_string($g['partner_id']);
                 $amount = $g['amount_paid'];
 
-                $rowsSql = "SELECT id, reference_no, datetime, partner_id, partner_name, partner_id_kpx, amount_paid, payor, branch_id
+                $rowsSql = "SELECT id, reference_no, datetime, partner_id, partner_name, partner_id_kpx, amount_paid, payor, branch_id, imported_by, imported_date
                             FROM billspayment_transaction
                             WHERE reference_no = '" . $ref . "' AND DATE(datetime) = '" . $dt . "' AND partner_id = '" . $partner . "' AND amount_paid = '" . $amount . "'
                             ORDER BY id ASC";
@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['check_duplicates_db']
             $partner = $conn->real_escape_string($g['partner_id']);
             $amount = $g['amount_paid'];
 
-            $rowsSql = "SELECT id, reference_no, datetime, partner_id, partner_name, partner_id_kpx, amount_paid, payor, branch_id
+            $rowsSql = "SELECT id, reference_no, datetime, partner_id, partner_name, partner_id_kpx, amount_paid, payor, branch_id, imported_by, imported_date
                         FROM billspayment_transaction
                         WHERE reference_no = '" . $ref . "' AND DATE(datetime) = '" . $dt . "' AND partner_id = '" . $partner . "' AND amount_paid = '" . $amount . "'
                         ORDER BY id ASC";
@@ -292,6 +292,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
         .group-table thead th { position: sticky; top: 0; background: #fff; z-index: 3; border:1px solid #e9ecef; }
         .group-table tbody td { border:1px solid #e9ecef; padding:8px; }
         .dev-cell { white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+        .dup-actions .btn-compare { background:transparent; border:none; color:#6c757d; cursor:pointer; padding:6px; border-radius:6px; font-size:16px; }
+        .dup-actions .btn-compare:hover { background:#e9f2ff; color:#0d6efd; }
+        .dev-group-card.dev-highlight { box-shadow: 0 0 0 4px rgba(13,110,253,0.12); border-color:#0d6efd; transition:box-shadow 240ms ease; }
+        .dev-ref-highlight { background: #fff3cd; color: #856404; padding:2px 6px; border-radius:4px; }
     </style>
 </head>
 <body>
@@ -324,7 +328,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
 
     <!-- Duplicates container (inline under the result-count) -->
     <div id="duplicates-container" style="display:block; width:100%;">
-        <div class="modal-card" id="modal-card" style="max-height:calc(100vh - 110px); width:100%; max-width:100%;"> </div>
+        <div class="modal-card" id="normal-card" style="max-height:calc(100vh - 110px); width:100%; max-width:100%; display:none;"> </div>
+        <div class="modal-card" id="dev-card" style="max-height:calc(100vh - 110px); width:100%; max-width:100%; display:none;"> </div>
     </div>
 
     <script>
@@ -353,8 +358,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             } catch(e){ console.debug('[dup-check] removeSummaryIcon error', e); }
         }
         function renderNormal(groups){
+            console.debug('[dup-check] renderNormal called, groups count:', groups ? groups.length : 0);
             if(!groups || groups.length === 0){
-                $('#modal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
+                $('#normal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
                 $('#btn-delete-all').hide();
                 $('#result-count').text('');
                 return;
@@ -364,19 +370,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 html += '<tr><td>' + (g.reference_no||'') + '</td><td style="text-align:right">' + (g.count||0) + '</td></tr>';
             });
             html += '</tbody></table></div>';
-            $('#modal-card').html(html);
+            $('#normal-card').html(html);
             $('#result-count').text('Found ' + groups.length + ' reference_no(s) with duplicates.');
             $('#btn-delete-all').hide();
             // hide export when not in Dev mode
             $('#btn-export').hide();
-            setTimeout(function(){ document.getElementById('modal-card').scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
+            setTimeout(function(){ var el = document.getElementById('normal-card'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
         }
 
         // Legacy detailed renderer (used by restored Normal mode)
         function renderLegacy(groups){
+            console.debug('[dup-check] renderLegacy called, groups count:', groups ? groups.length : 0);
             removeSummaryIcon();
             if(!groups || groups.length === 0){
-                $('#modal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
+                $('#normal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
                 $('#btn-delete-all').hide();
                 $('#result-count').text('');
                 return;
@@ -395,6 +402,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                     const partnerId = r.partner_id || '';
                           const amount = (typeof r.amount_paid !== 'undefined' && r.amount_paid !== null && r.amount_paid !== '') ? ('₱' + Number(r.amount_paid).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2})) : '';
                           const formattedDate = formatLongDate(r.datetime || '');
+                          var actionHtml = '';
+                          if(idx > 0){
+                              actionHtml = '<button class="btn-delete" title="Delete" data-id="'+r.id+'"><i class="fa-solid fa-trash"></i></button>';
+                          } else {
+                              actionHtml = '<button class="btn-compare" title="Compare in Dev Mode" data-ref="'+ (r.reference_no || '') +'"><i class="fa-solid fa-arrow-right"></i></button>';
+                          }
                           html += '<div class="dup-row '+cls+'" data-id="'+r.id+'">'
                                 + '<div><div><strong>'+ (r.reference_no || '') +'</strong></div>'
                                 + '<div style="font-size:12px;color:#6c757d">'
@@ -403,25 +416,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                                     + '<span title="Partner ID">'+ partnerId +'</span> • '
                                     + '<span title="Partner KPX ID">'+ partnerKpx +'</span> • '
                                     + '<span title="Amount">'+ amount +'</span>'
+                                    + ' • <span title="Imported By">Imported by: '+ (r.imported_by || '') +'</span>'
+                                    + ' • <span title="Imported Date">'+ formatLongDate(r.imported_date || '') +'</span>'
                                 + '</div></div>'
-                                + '<div class="dup-actions">' + (idx>0? '<button class="btn-delete" title="Delete" data-id="'+r.id+'"><i class="fa-solid fa-trash"></i></button>' : '') + '</div>'
+                                + '<div class="dup-actions">' + actionHtml + '</div>'
                                 + '</div>';
                 });
                 html += '<hr>';
             });
-            $('#modal-card').html(html);
+            $('#normal-card').html(html);
             $('#result-count').text('Found '+ totalDuplicates +' duplicate row(s).');
             if(totalDuplicates>0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
             // hide export when showing legacy view
             $('#btn-export').hide();
-            setTimeout(function(){ document.getElementById('modal-card').scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
+            setTimeout(function(){ var el = document.getElementById('normal-card'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
         }
 
         function renderDev(groups){
             console.debug('[dup-check] renderDev called, groups count:', groups ? groups.length : 0);
             removeSummaryIcon();
             if(!groups || groups.length === 0){
-                $('#modal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
+                $('#dev-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
                 $('#btn-delete-all').hide();
                 $('#btn-export').hide();
                 $('#result-count').text('');
@@ -438,8 +453,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 const rows = g.rows || [];
                 if(rows.length === 0) return;
                 
-                // Card container for each reference_no group
-                html += '<div class="dev-group-card">';
+                // Card container for each reference_no group (store encoded ref)
+                html += '<div class="dev-group-card" data-ref="' + encodeURIComponent(g.reference_no || '') + '">';
                 
                 // Card header
                 html += '<div class="dev-group-header">';
@@ -494,7 +509,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 html += '</div>'; // dev-group-card
             });
 
-            $('#modal-card').html(html);
+            $('#dev-card').html(html);
             $('#result-count').text('Found '+ totalDupRows +' duplicate row(s) across ' + groups.length + ' reference number(s).');
             // HIDE bulk delete button in Dev Mode - manual deletion only
             $('#btn-delete-all').hide();
@@ -502,7 +517,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             $('#btn-export').show();
             // store last dev groups for export
             window.lastDevGroups = groups;
-            setTimeout(function(){ document.getElementById('modal-card').scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
+            setTimeout(function(){ var el = document.getElementById('dev-card'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
         }
 
         function showOverlay(){ $('#loading-overlay').css('display','flex'); }
@@ -511,9 +526,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
         $(function(){
             $('#btn-check').on('click', function(){
                 showOverlay();
-                $('#modal-card').html('Checking duplicates...');
                 // read mode from the toggle buttons
                 const mode = $('#mode-toggle .mode-btn.active').data('mode') || 'normal';
+                const target = (mode === 'dev') ? '#dev-card' : '#normal-card';
+                $(target).html('Checking duplicates...');
                 console.debug('[dup-check] initiating check, mode:', mode);
                 $.post(window.location.href, { check_duplicates_db: 1, mode: mode }, function(resp){
                         console.debug('[dup-check] check_duplicates response', resp);
@@ -523,7 +539,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                                         if(!resp.groups || resp.groups.length === 0){
                                             // request summary counts
                                             // clear the checking text
-                                            $('#modal-card').html('');
+                                            $('#normal-card').html('');
                                             requestSummary();
                                         } else {
                                             removeSummaryIcon();
@@ -534,7 +550,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                                     else renderNormal(resp.groups);
                         } else { $('#modal-card').html('<div style="padding:10px;color:#c00">Error occurred</div>'); }
                     hideOverlay();
-                }, 'json').fail(function(jqxhr, status, err){ console.debug('[dup-check] request failed', status, err); $('#modal-card').html('<div style="padding:10px;color:#c00">Request failed</div>'); hideOverlay(); });
+                }, 'json').fail(function(jqxhr, status, err){ console.debug('[dup-check] request failed', status, err); var t = ($('#mode-toggle .mode-btn.active').data('mode') === 'dev') ? '#dev-card' : '#normal-card'; $(t).html('<div style="padding:10px;color:#c00">Request failed</div>'); hideOverlay(); });
             });
 
                 // request summary (global reference_no counts)
@@ -544,11 +560,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                             // show yellow question icon/button next to Check Duplicates
                             showSummaryIcon(sr.groups);
                             // Inform the user that a summary is available
-                            $('#modal-card').html('<div style="padding:10px;color:#6c757d">No grouped duplicates found. A global summary is available (click the yellow icon).</div>');
+                            $('#normal-card').html('<div style="padding:10px;color:#6c757d">No grouped duplicates found. A global summary is available (click the yellow icon).</div>');
                             $('#result-count').text('0 duplicates found');
                         } else {
                             removeSummaryIcon();
-                            $('#modal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
+                            $('#normal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
                             $('#result-count').text('0 duplicates found');
                         }
                     }, 'json');
@@ -584,10 +600,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                                     // remove summary icon before switching
                                     removeSummaryIcon();
                                     // switch toggle to dev and trigger check
-                                    $('#mode-toggle .mode-btn').removeClass('active').attr('aria-pressed','false');
-                                    $('#mode-toggle .mode-btn[data-mode="dev"]').addClass('active').attr('aria-pressed','true');
-                                    Swal.close();
-                                    $('#btn-check').trigger('click');
+                                        $('#mode-toggle .mode-btn').removeClass('active').attr('aria-pressed','false');
+                                        $('#mode-toggle .mode-btn[data-mode="dev"]').addClass('active').attr('aria-pressed','true');
+                                        // show appropriate container
+                                        $('#normal-card').hide(); $('#dev-card').show();
+                                        Swal.close();
+                                        $('#btn-check').trigger('click');
                                 });
                             }
                         });
@@ -596,10 +614,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
 
                 function removeSummaryIcon(){ $('#btn-summary').remove(); }
 
-            // Mode toggle click handler
+            // Mode toggle click handler - show separate containers
             $(document).on('click', '#mode-toggle .mode-btn', function(){
                 $('#mode-toggle .mode-btn').removeClass('active').attr('aria-pressed','false');
                 $(this).addClass('active').attr('aria-pressed','true');
+                const mode = $(this).data('mode');
+                if(mode === 'dev'){
+                    $('#dev-card').show();
+                    $('#normal-card').hide();
+                    // export button visibility depends on whether dev data exists
+                    if(window.lastDevGroups && window.lastDevGroups.length>0) $('#btn-export').show(); else $('#btn-export').hide();
+                    // always hide bulk delete in Dev mode
+                    $('#btn-delete-all').hide();
+                } else {
+                    $('#normal-card').show();
+                    $('#dev-card').hide();
+                    $('#btn-export').hide();
+                    // show bulk delete only if there are red duplicate rows in normal view
+                    if($('#normal-card .dup-row.red').length > 0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
+                }
             });
 
             // delete single (with SweetAlert2 confirmation)
@@ -620,6 +653,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                         $.post(window.location.href, { delete_duplicate: 1, id: id }, function(res){
                             hideOverlay();
                             if(res && res.success){
+                                // remove from whichever container(s) contain the id
                                 $('[data-id="'+id+'"]').remove();
                                 Swal.fire('Deleted','Row removed','success');
                             } else {
@@ -630,11 +664,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 });
             });
 
-            // delete all duplicates (delete all red rows currently shown)
+            // compare (arrow) button on green rows - switch to Dev Mode and scroll to matching group
+            function gotoDevRef(ref){
+                if(!ref) return;
+                if(!window.lastDevGroups || window.lastDevGroups.length === 0){
+                    Swal.fire({
+                        title: 'No root data to compare',
+                        text: 'Load root data first in the Dev Mode',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#0d6efd',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: 'Switch to Dev Mode',
+                        cancelButtonText: 'Cancel'
+                    }).then((result) => {
+                        if(result.isConfirmed){
+                            $('#mode-toggle .mode-btn').removeClass('active').attr('aria-pressed','false');
+                            $('#mode-toggle .mode-btn[data-mode="dev"]').addClass('active').attr('aria-pressed','true');
+                            $('#normal-card').hide(); $('#dev-card').show();
+                            $('#btn-check').trigger('click');
+                        }
+                    });
+                    return;
+                }
+
+                // ensure dev mode is active and visible
+                $('#mode-toggle .mode-btn').removeClass('active').attr('aria-pressed','false');
+                $('#mode-toggle .mode-btn[data-mode="dev"]').addClass('active').attr('aria-pressed','true');
+                $('#normal-card').hide(); $('#dev-card').show();
+
+                const encoded = encodeURIComponent(ref || '');
+                const $target = $('[data-ref="'+ encoded +'"]').first();
+                if($target && $target.length){
+                    // try to highlight the reference text inside the card header
+                    const $headerRef = $target.find('.dev-group-header strong').first();
+                    if($headerRef && $headerRef.length){
+                        $headerRef[0].scrollIntoView({behavior:'smooth', block:'center'});
+                        $target.addClass('dev-highlight');
+                        $headerRef.addClass('dev-ref-highlight');
+                        setTimeout(function(){ $headerRef.removeClass('dev-ref-highlight'); $target.removeClass('dev-highlight'); }, 3000);
+                    } else {
+                        $target[0].scrollIntoView({behavior:'smooth', block:'start'});
+                        $target.addClass('dev-highlight');
+                        setTimeout(function(){ $target.removeClass('dev-highlight'); }, 3000);
+                    }
+                } else {
+                    Swal.fire('Not found in Dev Data','The selected reference is not present in the loaded Dev data. Try loading Dev Mode first.','info');
+                }
+            }
+
+            $(document).on('click', '.btn-compare', function(){
+                const ref = $(this).data('ref');
+                gotoDevRef(ref);
+            });
+
+            // delete all duplicates (delete all red rows currently shown in Normal mode)
             $('#btn-delete-all').on('click', function(){
-                // collect red rows ids
+                // collect red rows ids from normal container only
                 const ids = [];
-                $('#modal-card .dup-row.red').each(function(){ ids.push($(this).data('id')); });
+                $('#normal-card .dup-row.red').each(function(){ ids.push($(this).data('id')); });
                 if(ids.length === 0) { Swal.fire('Nothing to delete','No duplicate rows selected','info'); return; }
                 Swal.fire({
                     title: 'Delete ALL duplicates?',
@@ -651,7 +739,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                         $.post(window.location.href, { delete_multiple: 1, ids: ids }, function(resp){
                             hideOverlay();
                             if(resp && resp.success){
-                                $('#modal-card .dup-row.red').remove();
+                                    $('#normal-card .dup-row.red').remove();
                                 $('#btn-delete-all').hide();
                                 $('#result-count').text('');
                                 Swal.fire('Deleted','Selected rows removed','success');
@@ -798,6 +886,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
 
             // ensure duplicates container is visible when results are present
             // (click-outside handler removed because results are inline)
+            // initialize both containers with default messages so mode switching preserves content
+            $('#normal-card').html('<div style="padding:10px;color:#6c757d">Check Duplicate in Normal Mode</div>');
+            $('#dev-card').html('<div style="padding:10px;color:#6c757d">Check Duplicate in Root Mode</div>');
+            // ensure only active mode's container is visible
+            if($('#mode-toggle .mode-btn.active').data('mode') === 'dev'){
+                $('#dev-card').show(); $('#normal-card').hide();
+                $('#btn-export').hide();
+                $('#btn-delete-all').hide();
+            } else {
+                $('#normal-card').show(); $('#dev-card').hide();
+                // show delete-all only when normal view already has red duplicate rows
+                if($('#normal-card .dup-row.red').length > 0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
+                $('#btn-export').hide();
+            }
         });
     </script>
     <?php include '../../../templates/footer.php'; ?>
