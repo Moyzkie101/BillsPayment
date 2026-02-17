@@ -89,6 +89,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
                 WHERE
                     $sqlDATE
                     AND bt.status IS NULL 
+                    AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
                 GROUP BY
                     COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
         ),
@@ -103,6 +104,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             WHERE
                 $sqlDATE
                 AND bt.status = '*' 
+                AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
             GROUP BY
                 COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
         )
