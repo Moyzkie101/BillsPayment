@@ -75,6 +75,8 @@
             if ($partner === 'All') {
                 $PartnerID = 'All';
                 $PartnerName = 'All';
+                $PartnerID_KPX = 'All';
+                $GLCode = 'All';
             } else {
                 $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name FROM masterdata.partner_masterfile where partner_name = ? LIMIT 1";
                 // if ($fileType === 'KPX') {
@@ -326,22 +328,22 @@
                     //     return !$partnerGLCodeExists;
                     // }
 
-                    function checkHadBranchID($conn, $branch_id) {
-                        $sql = "SELECT COUNT(*) as count FROM masterdata.branch_profile WHERE branch_id = ? LIMIT 1";
-                            $stmt = $conn->prepare($sql);
-                            $stmt->bind_param("i", $branch_id);
-                            $stmt->execute();
-                            $result = $stmt->get_result();
+                    // function checkHadBranchID($conn, $branch_id) {
+                    //     $sql = "SELECT COUNT(*) as count FROM masterdata.branch_profile WHERE branch_id = ? LIMIT 1";
+                    //         $stmt = $conn->prepare($sql);
+                    //         $stmt->bind_param("i", $branch_id);
+                    //         $stmt->execute();
+                    //         $result = $stmt->get_result();
                             
-                            if ($result) {
-                                $row = $result->fetch_assoc();
-                                if ($row && $row['count'] > 0) {
-                                    $branchID = true;
-                                }
-                            }
-                        $stmt->close();
-                        return !$branchID;
-                    }
+                    //         if ($result) {
+                    //             $row = $result->fetch_assoc();
+                    //             if ($row && $row['count'] > 0) {
+                    //                 $branchID = true;
+                    //             }
+                    //         }
+                    //     $stmt->close();
+                    //     return !$branchID;
+                    // }
 
                     // Initialize variables before loops
                     // $cancellStatus = '';
@@ -1027,29 +1029,29 @@
                             //         'file_type' => $fileType
                             //     ];
                             // } 
-                            elseif (checkHadBranchID($conn, $branch_id)) {
-                                // Branch ID not found - add to missing branch IDs array
-                                $branchID_notFoundData[] = [
-                                    'row' => $row,
-                                    'branch_id' => $branch_id,
-                                    'region_description' => $region_description,
-                                    'reference_number' => $reference_number,
-                                    'payor_name' => $payor_name,
-                                    'amount_paid' => $amount_paid,
-                                    'amount_charge_customer' => $amount_charge_customer,
-                                    'amount_charge_partner' => $amount_charge_partner,
-                                    'datetime' => $datetime,
-                                    'control_number' => $control_number,
-                                    'region_code' => $region_code,
-                                    'person_operator' => $person_operator,
-                                    'partner_name' => $partnerName,
-                                    'partner_id' => $partnerId,
-                                    'account_number' => $account_number,
-                                    'account_name' => $account_name,
-                                    'contact_number' => $contact_number,
-                                    'other_details' => $other_details
-                                ];
-                            }
+                            // elseif (checkHadBranchID($conn, $branch_id)) {
+                            //     // Branch ID not found - add to missing branch IDs array
+                            //     $branchID_notFoundData[] = [
+                            //         'row' => $row,
+                            //         'branch_id' => $branch_id,
+                            //         'region_description' => $region_description,
+                            //         'reference_number' => $reference_number,
+                            //         'payor_name' => $payor_name,
+                            //         'amount_paid' => $amount_paid,
+                            //         'amount_charge_customer' => $amount_charge_customer,
+                            //         'amount_charge_partner' => $amount_charge_partner,
+                            //         'datetime' => $datetime,
+                            //         'control_number' => $control_number,
+                            //         'region_code' => $region_code,
+                            //         'person_operator' => $person_operator,
+                            //         'partner_name' => $partnerName,
+                            //         'partner_id' => $partnerId,
+                            //         'account_number' => $account_number,
+                            //         'account_name' => $account_name,
+                            //         'contact_number' => $contact_number,
+                            //         'other_details' => $other_details
+                            //     ];
+                            // }
                             else{
                                 $rawData[] = [
                                     'numeric_number' => $cancellStatus,
