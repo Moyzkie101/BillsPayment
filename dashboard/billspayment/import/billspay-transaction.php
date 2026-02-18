@@ -441,7 +441,7 @@ if (isset($_SESSION['user_type'])) {
 
                 <!-- Manual Import Area (hidden by default) -->
                 <div id="manualArea" style="display:none;">
-                    <form id="manualUploadForm" action="../../../models/saved/saved_billspayImportFile_NEW.php" method="post" enctype="multipart/form-data">
+                    <form id="manualUploadForm" action="../../../models/saved/saved_billspaymentImportFile.php" method="post" enctype="multipart/form-data">
                         <div class="row mt-3">
                             <div class="col-md-5 mb-3">
                                 <div class="d-flex align-items-center">
@@ -1914,6 +1914,99 @@ if (isset($_SESSION['user_type'])) {
             setMode('auto');
         });
     </script>
+    <script>
+        // Call this once on DOM ready to hook the manual form
+        function initManualImportRedirect() {
+            const form = document.getElementById('manualUploadForm');
+            if (!form) return;
+
+            form.addEventListener('submit', submitManualImportToSaved);
+        }
+
+        function submitManualImportToSaved(e) {
+            e.preventDefault();
+
+            const form = document.getElementById('manualUploadForm');
+            const fileInput = form.querySelector('input[type="file"][name="import_file"]');
+            const companyInput = form.querySelector('input[name="company"]');
+            const fileTypeSelect = form.querySelector('select[name="fileType"]');
+
+            // Basic validation
+            // if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+            // Swal.fire({ icon: 'warning', title: 'No file selected', text: 'Please choose an Excel file to upload.' });
+            // return;
+            // }
+            // if (!companyInput || !companyInput.value) {
+            // Swal.fire({ icon: 'warning', title: 'Partners Name required', text: 'Please select or type a partner name.' });
+            // return;
+            // }
+            // if (!fileTypeSelect || !fileTypeSelect.value) {
+            // Swal.fire({ icon: 'warning', title: 'Source File Type required', text: 'Please select KPX or KP7.' });
+            // return;
+            // }
+
+            // Show loading overlay (assumes #loading-overlay exists)
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) overlay.style.display = 'flex';
+
+            // Build temporary form that posts to the saved handler
+            const targetAction = '../../../models/saved/saved_billspaymentImportFile.php';
+            const tempForm = document.createElement('form');
+            tempForm.method = 'POST';
+            tempForm.enctype = 'multipart/form-data';
+            tempForm.action = targetAction;
+            tempForm.style.display = 'none';
+
+            // Move the actual file input into the temp form so the browser will include the file(s)
+            const originalParent = fileInput.parentNode;
+            const nextSibling = fileInput.nextSibling;
+            tempForm.appendChild(fileInput);
+
+            // Add hidden fields expected by the PHP handler
+            const hiddenUpload = document.createElement('input');
+            hiddenUpload.type = 'hidden';
+            hiddenUpload.name = 'upload';
+            hiddenUpload.value = '1';
+            tempForm.appendChild(hiddenUpload);
+
+            const hiddenCompany = document.createElement('input');
+            hiddenCompany.type = 'hidden';
+            hiddenCompany.name = 'company';
+            hiddenCompany.value = companyInput.value;
+            tempForm.appendChild(hiddenCompany);
+
+            const hiddenFileType = document.createElement('input');
+            hiddenFileType.type = 'hidden';
+            hiddenFileType.name = 'fileType';
+            hiddenFileType.value = fileTypeSelect.value;
+            tempForm.appendChild(hiddenFileType);
+
+            // Append form to body and submit (will cause navigation to the PHP handler)
+            document.body.appendChild(tempForm);
+            tempForm.submit();
+
+            // Note: page will unload on successful submit. If submission is prevented, restore file input.
+            setTimeout(() => {
+            if (document.body.contains(tempForm)) {
+                // restore file input to original place (if still on page)
+                if (originalParent) {
+                if (nextSibling) originalParent.insertBefore(fileInput, nextSibling);
+                else originalParent.appendChild(fileInput);
+                }
+                document.body.removeChild(tempForm);
+                if (overlay) overlay.style.display = 'none';
+            }
+            }, 2000);
+        }
+
+        // Initialize on DOM ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initManualImportRedirect);
+        } else {
+            initManualImportRedirect();
+        }
+        
+</script>
 </body>
 <?php include '../../../templates/footer.php'; ?>
 
