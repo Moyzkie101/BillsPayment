@@ -1983,11 +1983,11 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                     if (isset($getColumnLabels[13]) && $getColumnLabels[13] === 'Branch ID') {
                         if (is_numeric($branch_id_raw)) {
                             $cntl_num_for_region = ($branch_id_raw == 581) ? intval(2607) : intval($branch_id_raw);
-                        } elseif ($branch_id_raw === 'HEAD OFFICE') {
+                        } elseif ($branch_id_raw === 'ML HEAD OFFICE' || $branch_id_raw === 'HEAD OFFICE') {
                             $cntl_num_for_region = intval(2607);
                         }
-                        if ($branch_outlet_raw === 'HEAD OFFICE' || $branch_outlet_raw === 'ML CEBU HEAD OFFICE') {
-                            $cntl_num_for_region = intval(2607);
+                        if ($branch_outlet_raw === 'ML CEBU HEAD OFFICE' || $branch_outlet_raw === 'CEBU HEAD OFFICE') {
+                            $cntl_num_for_region = intval(581);
                         }
                         $branch_id = $cntl_num_for_region;
 
@@ -2047,8 +2047,10 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                     if (isset($getColumnLabels[14]) && $getColumnLabels[14] === 'Branch ID') {
                         if (is_numeric($branch_id_raw)) {
                             $cntl_num_for_region = ($branch_id_raw == 581) ? intval(2607) : intval($branch_id_raw);
-                        } elseif ($branch_id_raw === 'HEAD OFFICE') {
+                        } elseif ($branch_id_raw === 'ML HEAD OFFICE' || $branch_id_raw === 'HEAD OFFICE') {
                             $cntl_num_for_region = intval(2607);
+                        }elseif($branch_id_raw === 'ML CEBU HEAD OFFICE' || $branch_id_raw === 'CEBU HEAD OFFICE'){
+                            $cntl_num_for_region = intval(581);
                         }
                         $branch_id = $cntl_num_for_region;
 
