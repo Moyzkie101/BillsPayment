@@ -1564,7 +1564,7 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
             // and branch id MUST be 581. If outlet matches but branch id is missing/wrong,
             // flag this row as a Head Office issue (file-level Head Office status).
             try {
-                if (strtoupper($mlOutletCell) === 'ML CEBU HEAD OFFICE') {
+                if (strtoupper($mlOutletCell) === 'ML CEBU HEAD OFFICE' || strtoupper($mlOutletCell) === 'CEBU HEAD OFFICE') {
                     $normalizedBranch = normalizeBranchId($branchIdCell);
                     if ($normalizedBranch === '' || strtoupper($normalizedBranch) === 'NAN' || $normalizedBranch !== '581') {
                         $headOfficeIssues[] = [
@@ -1578,6 +1578,23 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
                             'row' => $row,
                             'type' => 'head_office',
                             'message' => 'ML CEBU HEAD OFFICE with wrong/missing Branch ID',
+                            'value' => ($branchIdCell === '' ? 'Empty' : $branchIdCell)
+                        ];
+                    }
+                } else if (strtoupper($mlOutletCell) === 'ML HEAD OFFICE' || strtoupper($mlOutletCell) === 'HEAD OFFICE') {
+                    $normalizedBranch = normalizeBranchId($branchIdCell);
+                    if ($normalizedBranch === '' || strtoupper($normalizedBranch) === 'NAN' || $normalizedBranch !== '2607') {
+                        $headOfficeIssues[] = [
+                            'row' => $row,
+                            'outlet' => $mlOutletCell,
+                            'issue' => 'Wrong / Missing Branch ID',
+                            'value' => ($branchIdCell === '' ? 'Empty' : $branchIdCell)
+                        ];
+                        // Add a non-blocking warning to warnings array for visibility
+                        $warnings[] = [
+                            'row' => $row,
+                            'type' => 'head_office',
+                            'message' => 'ML HEAD OFFICE with wrong/missing Branch ID',
                             'value' => ($branchIdCell === '' ? 'Empty' : $branchIdCell)
                         ];
                     }
