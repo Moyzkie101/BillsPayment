@@ -267,8 +267,9 @@ if (isset($_POST['fix_head_office']) && !empty($_POST['file_id'])) {
         $worksheet = $spreadsheet->getActiveSheet();
 
         // Apply fixes - decide branch id automatically when no explicit value provided.
-        // If the outlet (column O) contains the word 'CEBU' (case-insensitive) assign ML CEBU HEAD OFFICE -> 581
-        // Otherwise assign HEAD OFFICE -> 2607
+        // Use exact outlet matching on column O only:
+        // - ML CEBU HEAD OFFICE / CEBU HEAD OFFICE => 581
+        // - ML HEAD OFFICE / HEAD OFFICE => 2607
         foreach ($fixes as $fix) {
             $r = intval($fix['row'] ?? 0);
             $v = isset($fix['value']) ? strval($fix['value']) : '';
@@ -278,20 +279,21 @@ if (isset($_POST['fix_head_office']) && !empty($_POST['file_id'])) {
                     $outlet = '';
                     try { $outlet = trim(strval($worksheet->getCell('O' . $r)->getValue())); } catch (Exception $e) { $outlet = ''; }
                     if ($v === '') {
-                        if (stripos($outlet, 'CEBU') !== false) {
+                        $normalizedOutlet = strtoupper(preg_replace('/\s+/', ' ', $outlet));
+                        if ($normalizedOutlet === 'ML CEBU HEAD OFFICE' || $normalizedOutlet === 'CEBU HEAD OFFICE') {
                             $v = '581';
-                        } else {
+                        } elseif ($normalizedOutlet === 'ML HEAD OFFICE' || $normalizedOutlet === 'HEAD OFFICE') {
                             $v = '2607';
                         }
                     }
                 } catch (Exception $e) {
-                    // fallback to default if anything fails
-                    if ($v === '') $v = '2607';
+                    // keep explicit value only if provided; do not force fallback value
                 }
 
-                // set both common branch columns to be safe (KP7: B, KPX: N)
-                try { $worksheet->setCellValue('B' . $r, $v); } catch (Exception $e) {}
-                try { $worksheet->setCellValue('N' . $r, $v); } catch (Exception $e) {}
+                // Target branch id column: N
+                if ($v !== '') {
+                    try { $worksheet->setCellValue('N' . $r, $v); } catch (Exception $e) {}
+                }
             }
         }
 
@@ -348,18 +350,20 @@ if (isset($_POST['fix_head_office_all']) && isset($_SESSION['uploaded_files'])) 
                             $outlet = '';
                             try { $outlet = trim(strval($worksheet->getCell('O' . $r)->getValue())); } catch (Exception $e) { $outlet = ''; }
                             if ($v === '') {
-                                if (stripos($outlet, 'CEBU') !== false) {
+                                $normalizedOutlet = strtoupper(preg_replace('/\s+/', ' ', $outlet));
+                                if ($normalizedOutlet === 'ML CEBU HEAD OFFICE' || $normalizedOutlet === 'CEBU HEAD OFFICE') {
                                     $v = '581';
-                                } else {
+                                } elseif ($normalizedOutlet === 'ML HEAD OFFICE' || $normalizedOutlet === 'HEAD OFFICE') {
                                     $v = '2607';
                                 }
                             }
                         } catch (Exception $e) {
-                            if ($v === '') $v = '2607';
+                            // do not force fallback value
                         }
 
-                        try { $worksheet->setCellValue('B' . $r, $v); } catch (Exception $e) {}
-                        try { $worksheet->setCellValue('N' . $r, $v); } catch (Exception $e) {}
+                        if ($v !== '') {
+                            try { $worksheet->setCellValue('N' . $r, $v); } catch (Exception $e) {}
+                        }
                     }
                 }
 

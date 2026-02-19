@@ -158,6 +158,11 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <div class="sub">
                 <a href="#" id="cancellation-report-link"><i class="fa-solid fa-circle-xmark"></i> Cancellation Report</a>
             </div>
+            <?php if ($current_user_email === 'cill17098209'):?>
+                <div class="sub">
+                    <a href="#" id="balance-sheet-report-link"><i class="fa-solid fa-chart-bar"></i> Balance Sheet Report</a>
+                </div>
+            <?php endif;?>
             <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/report/monthly-volume.php'">
                 <a href="<?php //echo $base_url; ?>billspayment/report/monthly-volume.php">Monthly Volume Report</a>
             </div> -->
