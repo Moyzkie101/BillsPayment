@@ -222,8 +222,18 @@ if ($mainzone !== 'ALL') {
                     $geoParams[] = $area;
                 }
             } else {
-                $geoConditions[] = 'ab.ml_matic_region = ?';
-                $geoParams[] = $mainzone . ' ' . $zone;
+                if ($mainzone === 'LNCR') {
+                    $geoConditions[] = 'ab.zone = ? AND ab.ml_matic_region <> ?';
+                    $geoParams[] = $zone;
+                    $geoParams[] = $mainzone . ' Showroom';
+                } elseif($mainzone === 'VISMIN') {
+                        $geoConditions[] = 'ab.zone = ? AND ab.ml_matic_region <> ?';
+                        $geoParams[] = $zone;
+                        $geoParams[] = $mainzone . ' Showroom';
+                } else {
+                    $geoConditions[] = 'ab.ml_matic_region = ?';
+                    $geoParams[] = $mainzone . ' ' . $zone;
+                }
             }
         } else {
             if ($region !== 'ALL') {
@@ -242,8 +252,16 @@ if ($mainzone !== 'ALL') {
                     $geoParams[] = $area;
                 }
             } else {
-                $geoConditions[] = 'ab.ml_matic_region = ?';
-                $geoParams[] = $mainzone . ' Showroom';
+                if ($mainzone === 'LNCR') {
+                    $geoConditions[] = "ab.ml_matic_region = ? AND ab.zone IN ('LZN', 'NCR')";
+                    $geoParams[] = $mainzone . ' Showroom';
+                } elseif ($mainzone === 'VISMIN') {
+                    $geoConditions[] = "ab.ml_matic_region = ? AND ab.zone IN ('VIS', 'MIN')";
+                    $geoParams[] = $mainzone . ' Showroom';
+                } else {
+                    $geoConditions[] = 'ab.ml_matic_region = ?';
+                    $geoParams[] = $mainzone . ' Showroom';
+                }
             }
         }
     } else {
@@ -261,8 +279,16 @@ if ($mainzone !== 'ALL') {
                 $geoParams[] = $area;
             }
         } else {
-            $geoConditions[] = 'ab.ml_matic_region LIKE ?';
-            $geoParams[] = $mainzone . '%';
+            if ($mainzone === 'LNCR') {
+                $geoConditions[] = "(ab.zone IN ('LZN', 'NCR') OR ab.ml_matic_region = ?)";
+                $geoParams[] = $mainzone . ' Showroom';
+            } elseif ($mainzone === 'VISMIN') {
+                $geoConditions[] = "(ab.zone IN ('VIS', 'MIN') OR ab.ml_matic_region = ?)";
+                $geoParams[] = $mainzone . ' Showroom';
+            } else {
+                $geoConditions[] = 'ab.ml_matic_region LIKE ?';
+                $geoParams[] = $mainzone . '%';
+            }
         }
     }
 } else {

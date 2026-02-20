@@ -536,8 +536,18 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                         $geoParams[] = $area;
                     }
                 } else {
-                    $geoConditions[] = "ab.ml_matic_region = ?";
-                    $geoParams[] = $mainzone . " " . $zone;
+                    if($mainzone === 'LNCR') {
+                        $geoConditions[] = "ab.zone = ? AND ab.ml_matic_region <> ?";
+                        $geoParams[] = $zone;
+                        $geoParams[] = $mainzone . " Showroom";
+                    } elseif($mainzone === 'VISMIN') {
+                        $geoConditions[] = "ab.zone = ? AND ab.ml_matic_region <> ?";
+                        $geoParams[] = $zone;
+                        $geoParams[] = $mainzone . " Showroom";
+                    } else {
+                        $geoConditions[] = "ab.ml_matic_region = ?";
+                        $geoParams[] = $mainzone . " " . $zone;
+                    }
                 }
             } else {
                 // Showroom
@@ -557,8 +567,19 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                         $geoParams[] = $area;
                     }
                 } else {
-                    $geoConditions[] = "ab.ml_matic_region = ?";
-                    $geoParams[] = $mainzone . " Showroom";
+                    // REGION ALL
+                    if($mainzone === 'LNCR') {
+                        $geoConditions[] = "ab.ml_matic_region = ?";
+                        $geoParams[] = $mainzone . " ". $zone;
+                    } elseif($mainzone === 'VISMIN') {
+                        $geoConditions[] = "ab.ml_matic_region = ?";
+                        $geoParams[] = $mainzone . " ". $zone;
+                    }
+
+                    if($area !== 'ALL') {
+                        $geoConditions[] = "ab.area = ?";
+                        $geoParams[] = $area;
+                    }
                 }
             }
         } else {
@@ -577,8 +598,16 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                     $geoParams[] = $area;
                 }
             } else {
-                $geoConditions[] = "ab.ml_matic_region LIKE ?";
-                $geoParams[] = $mainzone . "%";
+                if ($mainzone === 'LNCR') {
+                    $geoConditions[] = "(ab.zone IN ('LZN', 'NCR') OR ab.ml_matic_region = ?)";
+                    $geoParams[] = $mainzone . ' Showroom';
+                } elseif ($mainzone === 'VISMIN') {
+                    $geoConditions[] = "(ab.zone IN ('VIS', 'MIN') OR ab.ml_matic_region = ?)";
+                    $geoParams[] = $mainzone . ' Showroom';
+                } else {
+                    $geoConditions[] = 'ab.ml_matic_region LIKE ?';
+                    $geoParams[] = $mainzone . '%';
+                }
             }
         }
     } else {
