@@ -72,10 +72,11 @@ function sanitizeSheetTitle(string $value): string {
 }
 
 $partner_name_raw = readInput('partner_name', 'All');
-$mainzone = readInput('mainzone', 'ALL');
-$zone = readInput('zone', 'ALL');
-$region = readInput('region', 'ALL');
-$area = readInput('area', 'ALL');
+$mainzone = strtoupper(trim(readInput('mainzone', 'ALL')));
+$zoneInput = strtoupper(trim(readInput('zone', 'ALL')));
+$zone = ($zoneInput === 'SHOWROOM') ? 'Showroom' : $zoneInput;
+$region = strtoupper(trim(readInput('region', 'ALL')));
+$area = trim(readInput('area', 'ALL'));
 $filterType = readInput('filterType', '');
 $startDate = readInput('startDate', '');
 $endDate = readInput('endDate', '');
@@ -245,6 +246,9 @@ if ($mainzone !== 'ALL') {
                     $geoConditions[] = 'ab.ml_matic_region = ? AND ab.zone = ?';
                     $geoParams[] = 'VISMIN Showroom';
                     $geoParams[] = $region;
+                } else {
+                    $geoConditions[] = 'ab.ml_matic_region = ?';
+                    $geoParams[] = $mainzone . ' Showroom';
                 }
 
                 if ($area !== 'ALL') {
@@ -253,10 +257,10 @@ if ($mainzone !== 'ALL') {
                 }
             } else {
                 if ($mainzone === 'LNCR') {
-                    $geoConditions[] = "ab.ml_matic_region = ? AND ab.zone IN ('LZN', 'NCR')";
+                    $geoConditions[] = 'ab.ml_matic_region = ?';
                     $geoParams[] = $mainzone . ' Showroom';
                 } elseif ($mainzone === 'VISMIN') {
-                    $geoConditions[] = "ab.ml_matic_region = ? AND ab.zone IN ('VIS', 'MIN')";
+                    $geoConditions[] = 'ab.ml_matic_region = ?';
                     $geoParams[] = $mainzone . ' Showroom';
                 } else {
                     $geoConditions[] = 'ab.ml_matic_region = ?';

@@ -44,7 +44,7 @@ $mainzoneResult = $conn->query($mainzoneQuery);
 
 // Handle AJAX requests for zones
 if (isset($_POST['action']) && $_POST['action'] === 'get_zones') {
-    $mainzone = $_POST['mainzone'];
+    $mainzone = strtoupper(trim($_POST['mainzone'] ?? ''));
     
     $zoneQuery = "SELECT 
                     mzm.zone_code
@@ -81,8 +81,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_zones') {
     exit; // Stop execution for AJAX response
 }
 elseif (isset($_POST['action']) && $_POST['action'] === 'get_regions'){
-    $mainzone = $_POST['mainzone'];
-    $zone = $_POST['zone'];
+    $mainzone = strtoupper(trim($_POST['mainzone'] ?? ''));
+    $zoneInput = strtoupper(trim($_POST['zone'] ?? ''));
+    $zone = ($zoneInput === 'SHOWROOM') ? 'Showroom' : $zoneInput;
     
     $regionQuery = "SELECT 
                     mrm.region_code,
@@ -148,9 +149,10 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_regions'){
     exit;
 }
 elseif (isset($_POST['action']) && $_POST['action'] === 'get_areas') {
-    $mainzone = $_POST['mainzone'];
-    $zone = $_POST['zone'];
-    $region = $_POST['region'];
+    $mainzone = strtoupper(trim($_POST['mainzone'] ?? ''));
+    $zoneInput = strtoupper(trim($_POST['zone'] ?? ''));
+    $zone = ($zoneInput === 'SHOWROOM') ? 'Showroom' : $zoneInput;
+    $region = strtoupper(trim($_POST['region'] ?? ''));
     
     $areaQuery = "SELECT DISTINCT area FROM masterdata.branch_profile WHERE 1=1";
     $params = array();
@@ -194,6 +196,11 @@ elseif (isset($_POST['action']) && $_POST['action'] === 'get_areas') {
                         $params[] = "VISMIN Showroom";
                         $params[] = $region;
                         $types .= "ss";
+                    } else {
+                        // Fallback for non-standard showroom region labels (e.g., LNCR SHOWROOM)
+                        $areaQuery .= " AND ml_matic_region = ?";
+                        $params[] = $mainzone . " Showroom";
+                        $types .= "s";
                     }
                 }else{
                     // Region is ALL for Showroom
@@ -321,10 +328,11 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
         }
     }
 
-    $mainzone = $_POST['mainzone'];
-    $zone = $_POST['zone'];
-    $region = $_POST['region'];
-    $area = $_POST['area'];
+    $mainzone = strtoupper(trim($_POST['mainzone'] ?? ''));
+    $zoneInput = strtoupper(trim($_POST['zone'] ?? ''));
+    $zone = ($zoneInput === 'SHOWROOM') ? 'Showroom' : $zoneInput;
+    $region = strtoupper(trim($_POST['region'] ?? ''));
+    $area = trim($_POST['area'] ?? '');
 
     $filterType_raw = $_POST['filterType'];
     if($filterType_raw === 'date_range'){
@@ -560,6 +568,10 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                         $geoConditions[] = "ab.ml_matic_region = ? AND ab.zone = ?";
                         $geoParams[] = "VISMIN Showroom";
                         $geoParams[] = $region;
+                    } else {
+                        // Fallback for non-standard showroom region labels (e.g., LNCR SHOWROOM)
+                        $geoConditions[] = "ab.ml_matic_region = ?";
+                        $geoParams[] = $mainzone . " Showroom";
                     }
                     
                     if($area !== 'ALL') {
@@ -1137,7 +1149,7 @@ $(document).ready(function() {
                         });
 
                     }else{ // (Showroom) (LNCR, VISMIN)
-                        let regionOptions = '<option value="">Select Region</option><option value="'+mainzoneValue+' '+zoneValue+'">ALL</option>';
+                        let regionOptions = '<option value="">Select Region</option><option value="ALL">ALL</option>';
                         if(mainzoneValue === 'VISMIN'){
                             regionOptions += '<option value="VIS">VISAYAS SHOWROOM</option>';
                             regionOptions += '<option value="MIN">MINDANAO SHOWROOM</option>';
