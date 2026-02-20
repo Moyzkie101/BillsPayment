@@ -160,7 +160,7 @@
     "partner_name": "BATANGAS CATV, INC. - BAUAN"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "47",
     "partner_name": "BATANGAS CATV, INC.-MABINI"
   },
@@ -320,7 +320,7 @@
     "partner_name": "BOUNTY PLUS - VISAYAS (PROVINCIAL FRESH VISAYAS)"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1123",
     "partner_name": "BOUNTY PLUS INC."
   },
@@ -380,7 +380,7 @@
     "partner_name": "CALBAYOG WATER COMPANY INC."
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1070",
     "partner_name": "CAMIGUIN WATER COMPANY (BLUE HYDRO PACIFIC INC.)"
   },
@@ -440,7 +440,7 @@
     "partner_name": "CBN ASIA / 700 CLUB"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "989",
     "partner_name": "CEBECO III(CEBU ELECTRIC COOPERATIVE III)"
   },
@@ -460,7 +460,7 @@
     "partner_name": "CEBU CFI COOP PAYMENTS FOR HEALTH INSURANCE, LOANS, AND SAVINGS/TIME DEPOSITS"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "123",
     "partner_name": "CEBU CFI LOAN APPLICATION FEE"
   },
@@ -545,7 +545,7 @@
     "partner_name": "CHARLES PEAK"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1079",
     "partner_name": "CHICKY OINK"
   },
@@ -670,7 +670,7 @@
     "partner_name": "DAVAO LIGHTS"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "516",
     "partner_name": "DAVAO ORIENTAL ELECTRIC COOPERATIVE (DORECO)"
   },
@@ -700,7 +700,7 @@
     "partner_name": "DIPOLOG CITY WATER DISTRICT"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1082",
     "partner_name": "DITO TELECOMMUNITY CORPORATION"
   },
@@ -720,7 +720,7 @@
     "partner_name": "DMC COLLEGE FOUNDATION INC."
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "996",
     "partner_name": "DOKTORS GENERICS PHARMACY INC"
   },
@@ -740,7 +740,7 @@
     "partner_name": "DRAGON PAY CORPORATION - API"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1086",
     "partner_name": "DU EK SAM, INC"
   },
@@ -800,7 +800,7 @@
     "partner_name": "ESAMELCO"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1013",
     "partner_name": "ESSENRICH PHILIPPINES INC."
   },
@@ -885,12 +885,12 @@
     "partner_name": "FILBAKE FOOD CORPORATION"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1131",
     "partner_name": "FILEPINO INC. VISA APPLICATION"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1077",
     "partner_name": "FILHOLLAND CORP."
   },
@@ -915,7 +915,7 @@
     "partner_name": "FIRST STANDARD FINANCE CORP ROXAS"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "991",
     "partner_name": "FLASHPAY"
   },
@@ -930,7 +930,7 @@
     "partner_name": "FORTUNE ENTERPRISES"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "279",
     "partner_name": "FOUNDATION FOR VALUES TRAINING INC."
   },
@@ -940,7 +940,7 @@
     "partner_name": "FOUNDATION UNIVERSITY"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1116",
     "partner_name": "FUEL EXPRESS GASOLINE STATION"
   },
@@ -1040,7 +1040,7 @@
     "partner_name": "GRANVILLE SUPPLY CHAIN MANAGEMENT"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1120",
     "partner_name": "GREEN VALLEY COLLEGE FOUNDATION INC."
   },
@@ -1210,7 +1210,7 @@
     "partner_name": "ICONIX GLASS AND ALUMINUM SUPPLY"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "745",
     "partner_name": "ILECO 1 (ILOILO 1 ELECTRIC COOPERATIVE, INC.)"
   },
@@ -1220,7 +1220,7 @@
     "partner_name": "ILECO 3"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1108",
     "partner_name": "ILOILO II ELECTRIC COOPERATIVE (ILECO 2)"
   },
@@ -1315,7 +1315,7 @@
     "partner_name": "ISABEL WATER DISTRICT"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "744",
     "partner_name": "ISLAMIC RELIEF ORGANIZATION"
   },
@@ -1330,22 +1330,22 @@
     "partner_name": "ISPD - 2GO TRAVEL TICKET PRINCIPAL"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "378",
     "partner_name": "ISPD - AIR ASIA SERVICE FEE"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "379",
     "partner_name": "ISPD - AIR ASIA TICKET PRINCIPAL"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "382",
     "partner_name": "ISPD - BIYAHE ADDITIONAL BAGGAGE"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "383",
     "partner_name": "ISPD - BIYAHE REBOOKING"
   },
@@ -1375,12 +1375,12 @@
     "partner_name": "ISPD - GI CORP BIYAHEKO AIR TICKET DOMESTIC SERVICE FEE"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "389",
     "partner_name": "ISPD - GI CORP BIYAHEKO AIR TICKET INTERNATIONAL PRINCIPAL"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "390",
     "partner_name": "ISPD - GI CORP BIYAHEKO AIR TICKET INTERNATIONAL SERVICE FEE"
   },
@@ -1395,7 +1395,7 @@
     "partner_name": "ISPD - GI CORP BIYAHEKO SEA TICKETING 2GO TRAVEL PRINCIPAL"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "399",
     "partner_name": "ISPD - GI CORP BIYAHEKO SEA TICKETING 2GO TRAVEL REVALIDATION"
   },
@@ -1410,7 +1410,7 @@
     "partner_name": "ISPD - GI CORP BIYAHEKO SEA TICKETING OCEAN JET PRINCIPAL"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1036",
     "partner_name": "ISPD - M. LHUILLIER GENERAL INSURANCE AGENCY INC."
   },
@@ -1420,22 +1420,22 @@
     "partner_name": "ISPD - ML WATER"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "408",
     "partner_name": "ISPD - SUPERCAT SERVICE FEE"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "409",
     "partner_name": "ISPD - SUPERCAT TICKET PRINCIPAL"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "411",
     "partner_name": "ISPD - TRANS ASIA SERVICE FEE"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "412",
     "partner_name": "ISPD - TRANS ASIA TICKET PRINCIPAL"
   },
@@ -1455,7 +1455,7 @@
     "partner_name": "J STORE INNOVATION WORLDWIDE CORPORATION"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1078",
     "partner_name": "JMC DISTRIBUTION"
   },
@@ -1520,9 +1520,14 @@
     "partner_name": "JT INTERNATIONAL PHILIPPINES INC."
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1092",
     "partner_name": "JULIE'S FRANCHISE CORP"
+  },
+  {
+    "partner_id": null,
+    "partner_id_kpx": "1074",
+    "partner_name": "JUNANS MARKETING"
   },
   {
     "partner_id": "MLBPP210782",
@@ -1560,7 +1565,7 @@
     "partner_name": "KOOL KITCHEN MANAGEMENT CORP."
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1025",
     "partner_name": "KRN ASIA BREWERY"
   },
@@ -1570,12 +1575,12 @@
     "partner_name": "KRN MARKETING"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1041",
     "partner_name": "KRN MULTI-LINES"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1037",
     "partner_name": "KRN ZAMBOANGA"
   },
@@ -1590,32 +1595,32 @@
     "partner_name": "LA TRINIDAD WATER DISTRICT"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1153",
     "partner_name": "LA VIE - LBC"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1072",
     "partner_name": "LA VIE - LVM"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1071",
     "partner_name": "LA VIE - LVP"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1073",
     "partner_name": "LA VIE - PINO TALAMBAN"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1156",
     "partner_name": "LA VIE - PIZZERIA BANILAD"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1023",
     "partner_name": "LA VIE LIFESTYLE INC."
   },
@@ -1670,12 +1675,12 @@
     "partner_name": "LDS-REMITTANCE"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1114",
     "partner_name": "LEBAK WATER DISTRICT"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1165",
     "partner_name": "LEGACY PLAINS DEVELOPERS - LPDC1"
   },
@@ -1765,12 +1770,12 @@
     "partner_name": "MACRO DISTRIBUTORS DUMAGUETE"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1011",
     "partner_name": "MACRO DISTRIBUTORS INC. - BOHOL"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1003",
     "partner_name": "MACRO DISTRIBUTORS INC. - CEBU"
   },
@@ -1860,7 +1865,7 @@
     "partner_name": "MARYLAND DISTRIBUTORS, INC."
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1000",
     "partner_name": "MATI WATER DISTRICT"
   },
@@ -1875,7 +1880,7 @@
     "partner_name": "MEDICAL COLLEGES OF NORTHERN PHILS"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1029",
     "partner_name": "MEDICARE"
   },
@@ -1930,7 +1935,7 @@
     "partner_name": "METROPOLITAN CEBU WATER DISTRICT"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1160",
     "partner_name": "MI HEALTHCARE INC."
   },
@@ -1980,7 +1985,7 @@
     "partner_name": "MITSUKOSHI MOTORS PHILS. INC."
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1057",
     "partner_name": "ML BISAYA BREW"
   },
@@ -2000,17 +2005,17 @@
     "partner_name": "ML FUND"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1007",
     "partner_name": "ML JEWELLER'S LIVE SELLING"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1133",
     "partner_name": "ML JEWELLERS LIVE SELLING USA"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1035",
     "partner_name": "ML MARKETING SUBASTA LIVE SELLING"
   },
@@ -2025,7 +2030,7 @@
     "partner_name": "ML SAKO"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1119",
     "partner_name": "ML SHOP SALES"
   },
@@ -2035,7 +2040,7 @@
     "partner_name": "ML SMALL BUSINESS LOAN"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1026",
     "partner_name": "ML SUBASTA SALES"
   },
@@ -2045,12 +2050,12 @@
     "partner_name": "ML VEHICLE LOANS AND FINANCING"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "541",
     "partner_name": "ML WEB INSURANCE"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1117",
     "partner_name": "MLTGQA COMPANY"
   },
@@ -2060,7 +2065,7 @@
     "partner_name": "MONIELEND CORPORATION"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1083",
     "partner_name": "MORE ELECTRIC AND POWER CORPORATION"
   },
@@ -2070,12 +2075,12 @@
     "partner_name": "MOTOR ACE PHILIPPINES, INC"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1094",
     "partner_name": "MR. POTATO"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1101",
     "partner_name": "MR. TAHO"
   },
@@ -2103,6 +2108,11 @@
     "partner_id": "MLBPP170377",
     "partner_id_kpx": null,
     "partner_name": "MY GAS PETROLEUM CORPORATION"
+  },
+  {
+    "partner_id": null,
+    "partner_id_kpx": 1074,
+    "partner_name": "MYLORA CORPORATION"
   },
   {
     "partner_id": "MLBPP180443",
@@ -2160,7 +2170,7 @@
     "partner_name": "NITO'S AUTOSUPPLY INC."
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "987",
     "partner_name": "NORDECO (NORTHERN DAVAO ELECTRIC COOPERATIVE)"
   },
@@ -2695,7 +2705,7 @@
     "partner_name": "PLDT (PHILIPPINE LONG DISTANCE TELEPHONE COMPANY)"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1125",
     "partner_name": "POLANCO WATER DISTRICT"
   },
@@ -2720,7 +2730,7 @@
     "partner_name": "POWERSOURCE- BALUT ISLAND"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1015",
     "partner_name": "PREMIUM AICILA CAFE"
   },
@@ -2780,7 +2790,7 @@
     "partner_name": "QUEZON CATV INC"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1104",
     "partner_name": "RADIOWEALTH FINANCE COMPANY INC."
   },
@@ -2790,7 +2800,7 @@
     "partner_name": "RAFI MICRO - FINANCE INC."
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "736",
     "partner_name": "RAFI MICROFINANCE INC. - COLLECTION FACILITY"
   },
@@ -3020,7 +3030,7 @@
     "partner_name": "SAN ANTONIO DE PADUA BAKESHOP"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1080",
     "partner_name": "SAN MARCELINO WATER DISTRICT"
   },
@@ -3050,7 +3060,7 @@
     "partner_name": "SBT-ART BOOK ENTERPRISE"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1074",
     "partner_name": "SECURITY BANK"
   },
@@ -3090,7 +3100,7 @@
     "partner_name": "SETTLEMENT ACCOUNT FOR CORPORATE PARTNER"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1115",
     "partner_name": "SETTLEMENT ACCOUNT FOR MCASH SALARY LOAN"
   },
@@ -3105,27 +3115,27 @@
     "partner_name": "SETTLEMENT ACCOUNT FOR ML EXPRESS AGENT"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "800",
     "partner_name": "SETTLEMENT ACCOUNT FOR ML LENDING AUTOLOAN"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "801",
     "partner_name": "SETTLEMENT ACCOUNT FOR ML LENDING HOMELOAN"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1021",
     "partner_name": "SETTLEMENT ACCOUNT FOR ML LENDING SALARY LOAN"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1113",
     "partner_name": "SETTLEMENT ACCOUNT FOR ML PAYPRO"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1017",
     "partner_name": "SETTLEMENT ACCOUNT FOR ML SPECIAL WALLET"
   },
@@ -3135,7 +3145,7 @@
     "partner_name": "SHOP4FUN INC."
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1005",
     "partner_name": "SHOPEE - LSD"
   },
@@ -3145,7 +3155,7 @@
     "partner_name": "SILLIMAN UNIVERSITY"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1132",
     "partner_name": "SILVER SPOON FOOD SERVICES"
   },
@@ -3200,7 +3210,7 @@
     "partner_name": "SOUTHCENTRAL HARDWARE - UNIONBANK"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1076",
     "partner_name": "SPICA DISTRIBUTION INTERNATIONAL INC."
   },
@@ -3505,7 +3515,7 @@
     "partner_name": "TAGUM COOPERATIVE"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "1034",
     "partner_name": "TALIBON WATER DISTRICT"
   },
@@ -3520,7 +3530,7 @@
     "partner_name": "TERESA (RIZAL) WATER DISTRICT"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "985",
     "partner_name": "TG DIVISION FILE/UPLOAD"
   },
@@ -3585,9 +3595,19 @@
     "partner_name": "TRIPLE FIVE GLOBAL DISTRIBUTION INC-GUIMARAS"
   },
   {
+    "partner_id": null,
+    "partner_id_kpx": "727",
+    "partner_name": "TRIPLE FIVE GLOBAL DISTRIBUTION INC. ROXAS"
+  },
+  {
     "partner_id": "MLBPP190523",
     "partner_id_kpx": "912",
     "partner_name": "TRIPLE FIVE GLOBAL DISTRIBUTION INC-ILOILO"
+  },
+  {
+    "partner_id": null,
+    "partner_id_kpx": "1059",
+    "partner_name": "TUPI WATER DISTRICT​"
   },
   {
     "partner_id": "MLBPP210781",
@@ -3800,7 +3820,7 @@
     "partner_name": "VECO"
   },
   {
-    "partner_id": NaN,
+    "partner_id": null,
     "partner_id_kpx": "439",
     "partner_name": "VIC IMPERIAL APPLIANCE"
   },
