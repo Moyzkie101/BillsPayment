@@ -170,11 +170,6 @@ const partnerMaster = [
     partner_name: "BAVI-CTG"
   },
   {
-    partner_id: NaN,
-    partner_id_kpx: "1095",
-    partner_name: "BAYADCENTER II"
-  },
-  {
     partner_id: "MLBPP160303",
     partner_id_kpx: null,
     partner_name: "BAYAN TELECOMMUNICATIONS INC"
@@ -570,9 +565,19 @@ const partnerMaster = [
     partner_name: "CHOOKS TO GO PILIPINAS"
   },
   {
-    partner_id: "MLBPP180496",
-    partner_id_kpx: null,
-    partner_name: "CIS BAYAD CENTER INC."
+    "partner_id": "MLBPP180496",
+    "partner_id_kpx": "1095",
+    "partner_name": "CIS BAYAD CENTER INC."
+  },
+  {
+    "partner_id": "MLBPP180496",
+    "partner_id_kpx": "1095",
+    "partner_name": "BAYADCENTER"
+  },
+  {
+    "partner_id": "MLBPP180496",
+    "partner_id_kpx": "1095",
+    "partner_name": "BAYADCENTER II"
   },
   {
     partner_id: "MLBPP130055",
