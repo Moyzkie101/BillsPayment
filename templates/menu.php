@@ -137,8 +137,8 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
 
         <!-- Paramount Settlement Buttons -->
         <div class="onetab-sub" id="para-settlement-nav" style="display: none;">
-            <div class="sub">
-                <a href="#" id="settle-transaction-link"><i class="fa-solid fa-chart-column"></i> Settle Transaction</a>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/settle-transaction.php'">
+                <a href="<?php echo $base_url; ?>billspayment/settlement/settle-transaction.php"><i class="fa-solid fa-chart-column"></i> Settle Transaction</a>
             </div>
         </div>
         <?php endif; ?>
