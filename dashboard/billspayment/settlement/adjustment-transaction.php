@@ -29,7 +29,7 @@ try {
         }
     }
 } catch (Exception $e) {
-    error_log('Failed to load partner options in settle-transaction.php: ' . $e->getMessage());
+    error_log('Failed to load partner options in adjustment-transaction.php: ' . $e->getMessage());
 }
 
 // get display dropdown menu for partners
@@ -860,7 +860,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             <div class="bp-section-title">
                 <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
                 <div>
-                    <h2>Settle Transaction</h2>
+                    <h2>Adjustment Transaction</h2>
                     <!-- <p class="bp-section-sub">Sample Description</p> -->
                 </div>
             </div>
