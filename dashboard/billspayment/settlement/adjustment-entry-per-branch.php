@@ -343,7 +343,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
         return str_replace(',', '', trim((string)$value));
     };
 
-    $insertSql = "INSERT INTO mldb.settlement_transaction (
+    $insertSql = "INSERT INTO mldb.settle_adjustment_branch_transaction (
                     datetime, reference_no,
                     prev_payor, edited_payor,
                     prev_address, edited_address,
@@ -379,7 +379,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                   AND bt.datetime = ?
                   AND NOT EXISTS (
                     SELECT 1
-                    FROM mldb.settlement_transaction st
+                    FROM mldb.settle_adjustment_branch_transaction st
                     WHERE st.reference_no = bt.reference_no
                       AND st.datetime = bt.datetime
                   )
@@ -860,7 +860,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             <div class="bp-section-title">
                 <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
                 <div>
-                    <h2>Adjustment Transaction</h2>
+                    <h2>Adjustment Entry</h2>
                     <!-- <p class="bp-section-sub">Sample Description</p> -->
                 </div>
             </div>
@@ -946,7 +946,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 <div class="card-body settle-report-body">
                     <div class="d-flex justify-content-end align-items-center mb-2 gap-2">
                         <div class="d-flex gap-2">
-                            <button id="settle-edit" type="button" class="btn btn-secondary" disabled>Edit</button>
+                            <button id="settle-edit" type="button" class="btn btn-secondary" disabled>Reason</button>
                             <button id="settle-save" type="button" class="btn btn-secondary" disabled>Save</button>
                         </div>
                         <div class="input-group table-search-wrap">
@@ -1018,7 +1018,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
         <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="settlementEditModalLabel">Edit Settle Transaction</h5>
+                    <h5 class="modal-title" id="settlementEditModalLabel">Reason</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">

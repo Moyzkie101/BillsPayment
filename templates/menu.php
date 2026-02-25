@@ -137,12 +137,15 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
 
         <!-- Paramount Settlement Buttons -->
         <div class="onetab-sub" id="para-settlement-nav" style="display: none;">
-            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/adjustment-transaction.php'">
-                <a href="<?php echo $base_url; ?>billspayment/settlement/adjustment-transaction.php"><i class="fa-solid fa-chart-column"></i> Adjustment Transaction</a>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/adjustment-entry-per-branch.php'">
+                <a href="<?php echo $base_url; ?>billspayment/settlement/adjustment-entry-per-branch.php"><i class="fa-solid fa-chart-column"></i> Adjustment Entry</a>
             </div>
-            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/per-banks-transaction.php'">
-                <a href="<?php echo $base_url; ?>billspayment/settlement/per-banks-transaction.php"><i class="fa-solid fa-chart-column"></i> Per Banks Transaction</a>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/settlement-per-bank.php'">
+                <a href="<?php echo $base_url; ?>billspayment/settlement/settlement-per-bank.php"><i class="fa-solid fa-chart-column"></i> Per Bank</a>
             </div>
+            <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/settlement/adjustment-transaction-per-partner.php'">
+                <a href="<?php //echo $base_url; ?>billspayment/settlement/adjustment-transaction-per-partner.php"><i class="fa-solid fa-chart-column"></i> Per Partner</a>
+            </div> -->
         </div>
         <?php endif; ?>
 
@@ -173,6 +176,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <!-- <div class="sub">
                 <a href="#" id="transaction-report-summary-link">Transaction Report (Summary)</a>
             </div> -->
+            
             <div class="sub">
                 <a href="#" id="cancellation-report-link"><i class="fa-solid fa-circle-xmark"></i> Cancellation Report</a>
             </div>
