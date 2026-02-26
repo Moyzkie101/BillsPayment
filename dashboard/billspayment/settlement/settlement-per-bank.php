@@ -57,16 +57,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_partner_list') {
 
 // get display dropdown menu for banks based on settlement type dropdown selection
 if (isset($_POST['action']) && $_POST['action'] === 'get_bank_list') {
-    $settledOnlineCheck = isset($_POST['settled_online_check']) ? $_POST['settled_online_check'] : '';
     try {
-        if ($settledOnlineCheck === 'ALL') {
-            $bankQuery = "SELECT DISTINCT bank_name FROM mldb.bank_table WHERE settled_online_check IN ('CHECK','ONLINE') ORDER BY bank_name";
-            $stmt = $conn->prepare($bankQuery);
-        } else {
-            $bankQuery = "SELECT DISTINCT bank_name FROM mldb.bank_table WHERE settled_online_check = ? ORDER BY bank_name";
-            $stmt = $conn->prepare($bankQuery);
-            $stmt->bind_param("s", $settledOnlineCheck);
-        }
+        $bankQuery = 'SELECT bank_name FROM mldb.bank_table GROUP BY bank_name ORDER BY bank_name';
+        $stmt = $conn->prepare($bankQuery);
 
         $stmt->execute();
         $bankResult = $stmt->get_result();
@@ -90,6 +83,72 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_bank_list') {
         ]);
         exit();
     }
+}
+
+// get display dropdown menu for settlement types based on Bank Name dropdown selection
+if (isset($_POST['action']) && $_POST['action'] === 'get_settlement_type_list') {
+    try {
+        $bankName = $_POST['bank_name'] ?? '';
+
+        if ($bankName === '') {
+            echo json_encode([
+                'status' => 'success',
+                'data' => []
+            ]);
+            exit();
+        }
+
+        $settlementTypeQuery = 'SELECT
+                                    settled_online_check
+                                FROM
+                                    mldb.bank_table
+                                WHERE
+                                    used_unused = ?';
+
+        if ($bankName !== 'ALL') {
+            $settlementTypeQuery .= ' AND bank_name = ?';
+        }
+
+        $settlementTypeQuery .= ' GROUP BY settled_online_check ORDER BY settled_online_check';
+        $stmt = $conn->prepare($settlementTypeQuery);
+
+        if (!$stmt) {
+            throw new Exception('Prepare failed: ' . $conn->error);
+        }
+
+        $usedStatus = 'used';
+
+        if ($bankName !== 'ALL') {
+            $stmt->bind_param('ss', $usedStatus, $bankName);
+        } else {
+            $stmt->bind_param('s', $usedStatus);
+        }
+
+        $stmt->execute();
+        $settlementTypeResult = $stmt->get_result();
+
+        $settlementTypes = array();
+        if ($settlementTypeResult && $settlementTypeResult->num_rows > 0) {
+            while ($row = $settlementTypeResult->fetch_assoc()) {
+                $settlementTypes[] = $row;
+            }
+        }
+
+        $stmt->close();
+
+        echo json_encode([
+            'status' => 'success',
+            'data' => $settlementTypes
+        ]);
+        exit();
+    } catch (Exception $e) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Database error: ' . $e->getMessage()
+        ]);
+        exit();
+    }
+
 }
 
 // get data table results based on filter dropdown selection
@@ -258,9 +317,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                             SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
                         FROM mldb.billspayment_transaction AS bt
                         WHERE $dateCondition
-                          AND bt.status IS NULL
-                          AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                          $cteFilterClause
+                            AND bt.status IS NULL
+                            AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                            $cteFilterClause
                         GROUP BY
                             CASE
                                 WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
@@ -282,9 +341,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
                     FROM mldb.billspayment_transaction AS bt
                     WHERE $dateCondition
-                      AND bt.status = '*'
-                      AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                      $cteFilterClause
+                        AND bt.status = '*'
+                        AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                        $cteFilterClause
                     GROUP BY
                         CASE
                             WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
@@ -301,7 +360,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         mpm.bank_accNumber
                     FROM masterdata.partner_masterfile AS mpm
                     WHERE mpm.status = 'ACTIVE'
-                                            $allPartnersWhereClause
+                    $allPartnersWhereClause
 
                     UNION
 
@@ -323,7 +382,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 LEFT JOIN adjustment_vol AS av ON (ap.partner_key = av.partner_key OR ap.partner_name = av.partner_name)
                 LEFT JOIN masterdata.partner_masterfile AS mpm ON (ap.partner_name = mpm.partner_name)
                 WHERE (mpm.status = 'ACTIVE' OR mpm.status IS NULL)
-                  $mainWhereClause
+                $mainWhereClause
                 GROUP BY ap.partner_name
                 HAVING ap.partner_name IS NOT NULL
                 ORDER BY ap.partner_name";
@@ -398,6 +457,19 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             background-color: #212529;
             color: #fff;
         }
+
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.25);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
     </style>
 </head>
 <body>
@@ -406,7 +478,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
-            <div class="loading-spinner"></div>
+            <div class="spinner-border text-danger" role="status" aria-hidden="true"></div>
         </div>
         <div class="bp-section-header" role="region" aria-label="Page title">
             <div class="bp-section-title">
@@ -433,22 +505,21 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                     </select>
                                 </div>
 
-                                <!-- Settlement Type -->
-                                <div class="col-md-2 col-sm-6">
-                                    <label class="form-label">Settlement Type:</label>
-                                    <select class="form-select" name="settlementType" required>
-                                        <option value="">Select Settlement Type</option>
-                                        <option value="ALL">ALL</option>
-                                        <option value="CHECK">CHECK</option>
-                                        <option value="ONLINE">ONLINE</option>
-                                    </select>
-                                </div>
-
                                 <!-- Bank Name -->
                                 <div class="col-md-2 col-sm-6">
                                     <label class="form-label">Bank Name:</label>
                                     <select class="form-select" name="bankName" required>
                                         <option value="">Select Bank</option>
+                                        <option value="ALL">ALL</option>
+                                        <!-- options will be populated by JS -->
+                                    </select>
+                                </div>
+
+                                <!-- Settlement Type -->
+                                <div class="col-md-2 col-sm-6">
+                                    <label class="form-label">Settlement Type:</label>
+                                    <select class="form-select" name="settlementType" required>
+                                        <option value="">Select Settlement Type</option>
                                         <option value="ALL">ALL</option>
                                         <!-- options will be populated by JS -->
                                     </select>
@@ -675,9 +746,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
         loadPartners();
         window.SettlementPerBankBank.init({
-            $settlementType,
             $bankName,
             onBankSelectionChanged: function() {
+                window.SettlementPerBankTimeFrame.toggleGenerateButton(timeFrameRefs);
+            }
+        });
+        window.SettlementPerBankSettlementType.init({
+            $bankName,
+            $settlementType,
+            onSettlementTypeSelectionChanged: function() {
                 window.SettlementPerBankTimeFrame.toggleGenerateButton(timeFrameRefs);
             }
         });
@@ -710,16 +787,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
     window.SettlementPerBankBank = {
         init: function(refs) {
             const self = this;
-            const $settlementType = refs.$settlementType;
             const $bankName = refs.$bankName;
 
             self.resetBankOptions($bankName);
-            $bankName.prop('disabled', true);
-
-            $settlementType.on('change', function() {
-                const selectedSettlementType = $(this).val();
-                self.loadBankOptions(selectedSettlementType, refs);
-            });
+            self.loadBankOptions(refs);
 
             $bankName.on('change', function() {
                 if (typeof refs.onBankSelectionChanged === 'function') {
@@ -733,26 +804,17 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             $bankName.val('');
         },
 
-        loadBankOptions: function(settlementType, refs) {
+        loadBankOptions: function(refs) {
             const self = this;
             const $bankName = refs.$bankName;
 
             self.resetBankOptions($bankName);
 
-            if (!settlementType) {
-                $bankName.prop('disabled', true);
-                if (typeof refs.onBankSelectionChanged === 'function') {
-                    refs.onBankSelectionChanged();
-                }
-                return;
-            }
-
             $.ajax({
                 url: '',
                 type: 'POST',
                 data: {
-                    action: 'get_bank_list',
-                    settled_online_check: settlementType
+                    action: 'get_bank_list'
                 },
                 success: function(response) {
                     try {
@@ -762,13 +824,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                 $bankName.append(new Option(bank.bank_name, bank.bank_name));
                             });
 
-                            $bankName.prop('disabled', false);
                             $bankName.val('');
                             if (typeof refs.onBankSelectionChanged === 'function') {
                                 refs.onBankSelectionChanged();
                             }
                         } else {
-                            $bankName.prop('disabled', true);
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Bank List Error',
@@ -776,7 +836,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                             });
                         }
                     } catch (e) {
-                        $bankName.prop('disabled', true);
                         console.error('Error loading bank list:', e, response);
                         Swal.fire({
                             icon: 'error',
@@ -786,12 +845,99 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     }
                 },
                 error: function(xhr, status, error) {
-                    $bankName.prop('disabled', true);
                     console.error('Bank list request error:', { xhr: xhr, status: status, error: error });
                     Swal.fire({
                         icon: 'error',
                         title: 'Connection Error',
                         text: 'Failed to load bank list. Please try again.'
+                    });
+                }
+            });
+        }
+    };
+
+</script>
+
+<!-- SETTLEMENT TYPE DROPDOWN SELECTION HANDLER -->
+<script>
+    window.SettlementPerBankSettlementType = {
+        init: function(refs) {
+            const self = this;
+            const $bankName = refs.$bankName;
+            const $settlementType = refs.$settlementType;
+
+            self.resetSettlementTypeOptions($settlementType);
+
+            $bankName.on('change', function() {
+                const selectedBankName = $(this).val();
+                self.loadSettlementTypeOptions(selectedBankName, refs);
+            });
+
+            $settlementType.on('change', function() {
+                if (typeof refs.onSettlementTypeSelectionChanged === 'function') {
+                    refs.onSettlementTypeSelectionChanged();
+                }
+            });
+        },
+
+        resetSettlementTypeOptions: function($settlementType) {
+            $settlementType.find('option:not([value=""],[value="ALL"])').remove();
+            $settlementType.val('');
+        },
+
+        loadSettlementTypeOptions: function(bankName, refs) {
+            const self = this;
+            const $settlementType = refs.$settlementType;
+
+            self.resetSettlementTypeOptions($settlementType);
+
+            if (!bankName) {
+                if (typeof refs.onSettlementTypeSelectionChanged === 'function') {
+                    refs.onSettlementTypeSelectionChanged();
+                }
+                return;
+            }
+
+            $.ajax({
+                url: '',
+                type: 'POST',
+                data: {
+                    action: 'get_settlement_type_list',
+                    bank_name: bankName
+                },
+                success: function(response) {
+                    try {
+                        const result = JSON.parse(response);
+                        if (result.status === 'success') {
+                            (result.data || []).forEach(item => {
+                                $settlementType.append(new Option(item.settled_online_check, item.settled_online_check));
+                            });
+
+                            if (typeof refs.onSettlementTypeSelectionChanged === 'function') {
+                                refs.onSettlementTypeSelectionChanged();
+                            }
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Settlement Type Error',
+                                text: result.message || 'Unable to load settlement types.'
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Error loading settlement types:', e, response);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Invalid Response',
+                            text: 'Failed to process settlement type response.'
+                        });
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Settlement type request error:', { xhr: xhr, status: status, error: error });
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Connection Error',
+                        text: 'Failed to load settlement types. Please try again.'
                     });
                 }
             });
@@ -895,6 +1041,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             const self = this;
 
             self.clearReportTable();
+            $('#loading-overlay').hide();
 
             refs.$generateReport.on('click', function() {
                 self.handleGenerate(refs);
@@ -1002,7 +1149,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
         requestReport: function(refs, startDate, endDate) {
             const self = this;
-            $('#loading-overlay').show();
+            $('#loading-overlay').css('display', 'flex');
 
             $.ajax({
                 url: '',
