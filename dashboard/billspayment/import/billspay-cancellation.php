@@ -101,18 +101,48 @@ $partnersResult = $conn->query($partnersQuery);
             backdrop-filter: none !important;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }
+        
 
         /* File Upload Area Styles */
-        .file-upload-area {
-            border: 3px dashed #dee2e6;
+       .file-upload-area {
+            border: 2px dashed rgba(220,53,69,0.16);
             border-radius: 10px;
-            padding: 40px;
+            padding: 34px 18px;
             text-align: center;
-            background-color: #f8f9fa;
-            transition: all 0.3s ease;
+            background: #fff;
+            transition: all 180ms ease;
             cursor: pointer;
-            margin-bottom: 20px;
+            user-select: none;
         }
+
+        .file-upload-area.drag-over { background:#fff5f5; transform: translateY(-4px); box-shadow: 0 10px 20px rgba(220,53,69,0.06); border-color:#dc3545; }
+
+        .file-upload-icon i { font-size:36px; color:#dc3545; margin-bottom:8px; }
+        .file-upload-area h5 { margin:8px 0 4px; font-weight:700; }
+        .file-upload-area p { margin:0; color:#6c757d; }
+        /* Mode card selector (match transaction UI) */
+        .mode-cards { display:flex; gap:8px; align-items:center; }
+        .mode-card {
+            border: 1px solid #e9ecef;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            min-width: 120px;
+            text-align: left;
+            background: #fff;
+            transition: all 120ms ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            display:flex;
+            flex-direction:row;
+            align-items:center;
+            gap:10px;
+        }
+        .mode-card .mode-icon { font-size:18px; color:#6c757d; width:28px; text-align:center; }
+        .mode-card .mode-text { display:flex; flex-direction:column; }
+        .mode-card .mode-label { font-weight:700; margin:0; font-size:13px; }
+        .mode-card small { color:#6c757d; display:block; font-size:11px; }
+        .mode-card.selected { border-color: #dc3545; box-shadow: 0 8px 24px rgba(220,53,69,0.06); }
+        .mode-card.selected .mode-icon { color:#dc3545; }
 
         .file-upload-area.drag-over {
             border-color: #dc3545;
@@ -321,6 +351,25 @@ $partnersResult = $conn->query($partnersQuery);
             color: #6c757d;
         }
         
+        /* Page header, card and upload area - match transaction UI */
+        .bp-section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            background: #ffffff;
+            border-radius: 8px;
+            color: #212529;
+            margin: 18px 0 8px;
+            box-shadow: 0 6px 18px rgba(16,24,40,0.04);
+            border-left: 4px solid #dc3545;
+        }
+
+    .bp-section-title { display:flex; align-items:center; gap:12px; }
+        .bp-section-title i { font-size:32px; color: #dc3545; }
+        .bp-section-title h2 { margin:0; font-size:20px; color:#212529; font-weight:700; }
+        .bp-section-sub { margin:0; font-size:13px; color:#6c757d; }
+        .bp-card { background:#ffffff; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.04); border:1px solid #f1f1f1; }
     </style>
 </head>
 <body>
@@ -340,26 +389,35 @@ $partnersResult = $conn->query($partnersQuery);
                 </div>
             </div>
         </div>
-        <div class="container-fluid border border-danger rounded mt-3 p-4">
-            <div class="container-fluid">
+        <div class="bp-card container-fluid mt-3 p-4">
+            <div class="bp-card-body">
                 <!-- Mode Toggle (Auto / Manual) + Proceed (moved to top-right) -->
                 <div class="mb-3 d-flex align-items-center justify-content-between" style="gap:12px;">
                     <div class="d-flex align-items-center" style="gap:12px;">
                         <label class="form-label me-2 mb-0">Import Mode:</label>
-                        <div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="importMode" id="modeAuto" value="auto" checked>
-                                <label class="form-check-label" for="modeAuto">Auto</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="importMode" id="modeManual" value="manual">
-                                <label class="form-check-label" for="modeManual">Manual</label>
-                            </div>
+                        <div class="mode-cards">
+                                <label class="mode-card selected" data-mode="auto">
+                                    <input type="radio" name="importMode" id="modeAuto" value="auto" checked style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Auto</div>
+                                        <small>Drag &amp; Drop</small>
+                                    </div>
+                                </label>
+                                <label class="mode-card" data-mode="manual">
+                                    <input type="radio" name="importMode" id="modeManual" value="manual" style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-file-lines"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Manual</div>
+                                        <small>Form Upload</small>
+                                    </div>
+                                </label>
                         </div>
                     </div>
+
                     <div id="proceedContainer" class="proceed-container" style="display: none;">
                         <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
-                            Proceed <i class="fa-solid fa-arrow-right ms-2"></i>
+                            <i class="fa-solid fa-paper-plane me-2" aria-hidden="true"></i>Proceed
                         </button>
                     </div>
                 </div>
@@ -369,43 +427,47 @@ $partnersResult = $conn->query($partnersQuery);
                     <div class="file-upload-icon">
                         <i class="fa-solid fa-cloud-arrow-up"></i>
                     </div>
-                    <h5>Drag & Drop Files Here</h5>
+                    <h5>Drag &amp; Drop Files Here</h5>
                     <p class="text-muted">or click to browse</p>
                     <p class="text-muted"><small>Supports multiple Excel files (.xls, .xlsx)</small></p>
                     <input type="file" id="fileInput" accept=".xls,.xlsx" multiple style="display: none;">
                 </div>
-                <!-- Manual Import Area (hidden by default) -->
+                <!-- Manual Import Area (hidden by default) - transaction-style -->
                 <div id="manualArea" style="display:none;">
                     <form id="manualUploadForm" action="../../../models/saved/saved_billspayImportCancelledFile.php" method="post" enctype="multipart/form-data">
-                        <div class="row mt-3 align-items-center">
+                        <div class="row mt-3">
                             <div class="col-md-5 mb-3">
-                                <label for="partnerlistDropdown" class="form-label mb-0">Partners Name:</label>
-                                <select id="partnerlistDropdown" class="form-select select2 form-select-sm" aria-label="Select Partner" name="partner" required 
-                                    data-placeholder="Search or select a Partner..." style="width:100%; min-width:160px;">
-                                    <option value="">Select Partner</option>
-                                    <option value="All">All</option>
-                                    <?php 
-                                        if ($partnersResult && mysqli_num_rows($partnersResult) > 0) {
-                                            while ($row = mysqli_fetch_assoc($partnersResult)) {
-                                                $partner_names = htmlspecialchars($row['partner_name']);
-                                                $selected = (isset($_GET['partner_name']) && $_GET['partner_name'] == $partner_names) ? 'selected' : '';
-                                                echo "<option value='$partner_names' $selected>" . ucfirst($partner_names) . "</option>";
+                                <div class="d-flex align-items-center">
+                                    <label class="form-label me-2 mb-0">Partners Name:</label>
+                                    <input list="manualCompanyList" id="manualCompanyInput" name="company" class="form-control" placeholder="Search or type company name" required />
+                                    <datalist id="manualCompanyList">
+                                        <?php
+                                            if ($partnersResult && mysqli_num_rows($partnersResult) > 0) {
+                                                // populate datalist options
+                                                mysqli_data_seek($partnersResult, 0);
+                                                while ($row = mysqli_fetch_assoc($partnersResult)) {
+                                                    $partner_names = htmlspecialchars($row['partner_name']);
+                                                    echo "<option value=\"{$partner_names}\"></option>\n";
+                                                }
                                             }
-                                        }
-                                    ?>
-                                </select>
+                                        ?>
+                                    </datalist>
+                                </div>
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label for="manualFileType" class="form-label mb-0">Source File Type:</label>
-                                <select id="manualFileType" class="form-select" name="fileType" required>
-                                    <option value="">Select Source File Type</option>
-                                    <option value="KPX">KPX</option>
-                                    <option value="KP7">KP7</option>
-                                </select>
+                                <div class="d-flex align-items-center">
+                                    <label for="manualFileType" class="form-label me-2 mb-0">Source File Type:</label>
+                                    <select id="manualFileType" class="form-select" name="fileType" required>
+                                        <option value="">Select Source File Type</option>
+                                        <option value="KPX">KPX</option>
+                                        <option value="KP7">KP7</option>
+                                    </select>
+                                </div>
                             </div>
 
-                            <div class="col-md-4 mb-3 d-flex align-items-center"><input type="file" name="import_file" accept=".csv" class="form-control me-2" required />
-                                <input type="submit" class="btn btn-danger" name="upload" value="Proceed">
+                            <div class="col-md-4 mb-3 d-flex">
+                                <input type="file" name="import_file" accept=".xls,.xlsx" class="form-control me-2" required />
+                                <input type="submit" class="btn btn-danger" id="manualProceed" value="Proceed">
                             </div>
                         </div>
                     </form>
@@ -414,16 +476,7 @@ $partnersResult = $conn->query($partnersQuery);
         </div>
     </div>
 </body><?php include '../../../templates/footer.php'; ?>
-<!-- PARTNER DROPDOWN USING SELECT2 -->
-<script>
-    // Initialize Select2 for partner dropdown
-    $('#partnerlistDropdown').select2({
-        placeholder: 'Search or select a Partner...',
-        allowClear: true,
-        width: 'style',
-        dropdownAutoWidth: true
-    });
-</script>
+<!-- Manual input uses datalist; no Select2 init required -->
 
 <!-- IMPORT MODE RADIO BUTTONS -->
 <script>
@@ -462,6 +515,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // initialize on load
     updateMode();
+});
+</script>
+
+<script>
+// mode-card click handling to keep visuals and radios in sync
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.mode-card').forEach(function(card) {
+        card.addEventListener('click', function(e) {
+            var input = card.querySelector('input[type="radio"]');
+            if (input) {
+                input.checked = true;
+                input.dispatchEvent(new Event('change'));
+            }
+            document.querySelectorAll('.mode-card').forEach(function(c){ c.classList.remove('selected'); });
+            card.classList.add('selected');
+        });
+    });
+
+    // ensure selected class matches radio initial state
+    var checked = document.querySelector('input[name="importMode"]:checked');
+    if (checked) {
+        var parent = checked.closest('.mode-card');
+        if (parent) {
+            document.querySelectorAll('.mode-card').forEach(function(c){ c.classList.remove('selected'); });
+            parent.classList.add('selected');
+        }
+    }
 });
 </script>
 
