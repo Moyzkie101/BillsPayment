@@ -357,23 +357,49 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
                         mpm.partner_name,
                         mpm.partner_accName,
-                        mpm.bank_accNumber
+                        mpm.bank_accNumber,
+                        mpm.bank,
+                        mpm.settled_online_check,
+                        mpm.charge_to,
+                        mpm.charge_sched
                     FROM masterdata.partner_masterfile AS mpm
                     WHERE mpm.status = 'ACTIVE'
                     $allPartnersWhereClause
 
                     UNION
 
-                    SELECT partner_key, partner_name, NULL AS partner_accName, NULL AS bank_accNumber FROM summary_vol
+                    SELECT
+                        partner_key,
+                        partner_name,
+                        NULL AS partner_accName,
+                        NULL AS bank_accNumber,
+                        NULL AS bank,
+                        NULL AS settled_online_check,
+                        NULL AS charge_to,
+                        NULL AS charge_sched
+                    FROM summary_vol
 
                     UNION
 
-                    SELECT partner_key, partner_name, NULL AS partner_accName, NULL AS bank_accNumber FROM adjustment_vol
+                    SELECT
+                        partner_key,
+                        partner_name,
+                        NULL AS partner_accName,
+                        NULL AS bank_accNumber,
+                        NULL AS bank,
+                        NULL AS settled_online_check,
+                        NULL AS charge_to,
+                        NULL AS charge_sched
+                    FROM adjustment_vol
                 )
                 SELECT
                     ap.partner_name,
                     MAX(ap.partner_accName) AS partner_accName,
                     MAX(ap.bank_accNumber) AS bank_accNumber,
+                    MAX(mpm.bank) AS bank,
+                    MAX(mpm.settled_online_check) AS settled_online_check,
+                    MAX(mpm.charge_to) AS charge_to,
+                    MAX(mpm.charge_sched) AS charge_sched,
                     (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
                     (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
                     (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
@@ -1058,7 +1084,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             $('#totalnetcharge').text('0.00');
         },
 
-        populateReportTable: function(data) {
+        populateReportTable: function(data, refs) {
             const tbody = $('#transactionReportTable tbody');
             tbody.empty();
 
@@ -1067,10 +1093,20 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             let totalNetCharge = 0;
 
             const rows = Array.isArray(data) ? data : [];
-            if (rows.length === 0) {
-                tbody.append('<tr><td colspan="9" class="text-center">No data found for the selected criteria</td></tr>');
-            } else {
-                rows.forEach((row, index) => {
+            const partner = (refs.$partner.val() || '').toUpperCase();
+            const bankName = (refs.$bankName.val() || '').toUpperCase();
+            const settlementType = (refs.$settlementType.val() || '').toUpperCase();
+            const chargeBy = (refs.$chargeBy.val() || '').toUpperCase();
+
+            const isCustomerSectionMode = (
+                partner === 'ALL' &&
+                bankName === 'ALL' &&
+                settlementType === 'CHECK' &&
+                chargeBy === 'CUSTOMER'
+            );
+
+            const appendDataRows = function(sectionRows, startIndex) {
+                sectionRows.forEach((row, index) => {
                     const netVol = parseInt(row.net_vol || 0, 10);
                     const netPrincipal = parseFloat(row.net_principal || 0);
                     const netCharge = parseFloat(row.net_charges || 0);
@@ -1079,10 +1115,20 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     totalNetPrincipal += netPrincipal;
                     totalNetCharge += netCharge;
 
+                    const partnerMeta = [
+                        row.bank ? `Bank: ${row.bank}` : '',
+                        row.settled_online_check ? `Settlement: ${row.settled_online_check}` : '',
+                        row.charge_to ? `Charge To: ${row.charge_to}` : '',
+                        row.charge_sched ? `Charge Sched: ${row.charge_sched}` : ''
+                    ].filter(Boolean).join(' | ');
+
                     const tr = `
                         <tr>
-                            <td class="text-center">${index + 1}</td>
-                            <td>${row.partner_name || ''}</td>
+                            <td class="text-center">${startIndex + index + 1}</td>
+                            <td>
+                                ${row.partner_name || ''}
+                                ${partnerMeta ? `<div class="small text-muted">${partnerMeta}</div>` : ''}
+                            </td>
                             <td>${row.partner_accName || ''}</td>
                             <td class="text-truncate">${row.bank_accNumber || ''}</td>
                             <td class="text-end">${netVol.toLocaleString()}</td>
@@ -1094,6 +1140,28 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     `;
                     tbody.append(tr);
                 });
+            };
+
+            if (rows.length === 0) {
+                tbody.append('<tr><td colspan="9" class="text-center">No data found for the selected criteria</td></tr>');
+            } else {
+                if (isCustomerSectionMode) {
+                    const customerRows = rows.filter(row => {
+                        const rowSettlementType = (row.settled_online_check || '').toUpperCase();
+                        const rowChargeTo = (row.charge_to || '').toUpperCase();
+                        return rowSettlementType === 'CHECK' && (rowChargeTo === 'CUSTOMER' || rowChargeTo === 'CUSTOMER&PARTNER');
+                    });
+
+                    tbody.append('<tr><td colspan="9" class="text-center"><b>CHARGE BY CUSTOMER</b></td></tr>');
+
+                    if (customerRows.length === 0) {
+                        tbody.append('<tr><td colspan="9" class="text-center">No CHARGE BY CUSTOMER data found for the selected criteria</td></tr>');
+                    } else {
+                        appendDataRows(customerRows, 0);
+                    }
+                } else {
+                    appendDataRows(rows, 0);
+                }
             }
 
             $('#totalnetvolume').text(totalNetVolume.toLocaleString());
@@ -1171,7 +1239,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     try {
                         const result = JSON.parse(response);
                         if (result.status === 'success') {
-                            self.populateReportTable(result.data || []);
+                            self.populateReportTable(result.data || [], refs);
                         } else {
                             Swal.fire({
                                 icon: 'error',
