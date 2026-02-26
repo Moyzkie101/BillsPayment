@@ -74,37 +74,25 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
     
     if(!empty($filterType)){
         if($filterType === 'daily'){
-            // For daily, use only startDate for both datetime and cancellation_date
-            // Each CTE needs the same parameters, so we need 4 total (2 for each CTE)
             $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ?)";
             $dateParams = [$startDate, $endDate, $startDate, $endDate]; // 4 params for 2 CTEs
             $dateTypes = 'ssss';
         }elseif($filterType === 'weekly'){
-            // For weekly, use BETWEEN for date range
-            // Each CTE needs 4 parameters, so we need 8 total
             $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-            // $dateParams = [$startDate, $endDate, $startDate, $endDate];
             $dateParams = [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate, $startDate, $endDate];
-            // $dateTypes = 'ssss';
             $dateTypes = 'ssssssss';
         }elseif($filterType === 'monthly'){
-            // For monthly, convert to first and last day of month
             $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
             $startMonth = $startDate . '-01';
-            $endMonth = date('Y-m-t', strtotime($endDate . '-01')); // Last day of month
-            // $dateParams = [$startMonth, $endMonth, $startMonth, $endMonth];
-            // $dateTypes = 'ssss';
+            $endMonth = date('Y-m-t', strtotime($endDate . '-01'));
             $dateParams = [$startMonth, $endMonth, $startMonth, $endMonth, $startMonth, $endMonth, $startMonth, $endMonth];
             $dateTypes = 'ssssssss';
         }elseif($filterType === 'yearly'){
-            // For yearly, convert to first and last day of year
             $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
             $startYear = $startDate . '-01-01';
             $endYear = $endDate . '-12-31';
             $dateParams = [$startYear, $endYear, $startYear, $endYear];
             $dateTypes = 'ssss';
-            // $dateParams = [$startYear, $endYear, $startYear, $endYear, $startYear, $endYear, $startYear, $endYear];
-            // $dateTypes = 'ssssssss';
         }
     }
     
@@ -127,68 +115,111 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
         $mainWhereClause = 'AND ' . implode(' AND ', $whereConditions);
     }
 
-    // Normalize partner key in the CTEs to avoid multiple JOIN matches that yield duplicate partner rows
+    // Modified query to handle partners without partner_id/partner_id_kpx
     $DataQuery = "WITH summary_vol AS (
+                        SELECT
+                            CASE 
+                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                                ELSE CONCAT('temp_', bt.partner_name)
+                            END COLLATE utf8mb4_general_ci AS partner_key,
+                            bt.partner_name,
+                            COUNT(*) AS vol1,
+                            SUM(bt.amount_paid) AS principal1,
+                            SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
+                        FROM
+                            mldb.billspayment_transaction AS bt 
+                        WHERE
+                            $dateCondition
+                            AND bt.status IS NULL 
+                            AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                        GROUP BY
+                            CASE 
+                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                                ELSE CONCAT('temp_', bt.partner_name)
+                            END COLLATE utf8mb4_general_ci,
+                            bt.partner_name
+                ),
+                adjustment_vol AS (
+                    SELECT
+                        CASE 
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', bt.partner_name)
+                        END COLLATE utf8mb4_general_ci AS partner_key,
+                        bt.partner_name,
+                        COUNT(*) AS vol2,
+                        SUM(bt.amount_paid) AS principal2,
+                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
+                    FROM
+                        mldb.billspayment_transaction AS bt 
+                    WHERE
+                        $dateCondition
+                        AND bt.status = '*' 
+                        AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                    GROUP BY
+                        CASE 
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', bt.partner_name)
+                        END COLLATE utf8mb4_general_ci,
+                        bt.partner_name
+                ),
+                all_partners AS (
+                    -- Partners from master file
+                    SELECT 
+                        COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
+                        mpm.partner_name
+                    FROM masterdata.partner_masterfile AS mpm
+                    WHERE mpm.status = 'ACTIVE'
+                    
+                    UNION
+                    
+                    -- Partners from summary transactions
+                    SELECT partner_key, partner_name FROM summary_vol
+                    
+                    UNION
+                    
+                    -- Partners from adjustment transactions
+                    SELECT partner_key, partner_name FROM adjustment_vol
+                )
+
                 SELECT
-                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
-                    COUNT(*) AS vol1,
-                    SUM(bt.amount_paid) AS principal1,
-                    SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
+                    ap.partner_name,
+                    SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
+                    SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
+                    SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
+
+                    SUM(COALESCE(av.vol2, 0)) AS adjustment_vol,
+                    SUM(COALESCE(ABS(av.principal2), 0)) AS adjustment_principal,
+                    SUM(COALESCE(ABS(av.charge2), 0)) AS adjustment_charges,
+
+                    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
+                    (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
+                    (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
                 FROM
-                    mldb.billspayment_transaction AS bt 
+                    all_partners AS ap
+                LEFT JOIN
+                    summary_vol AS sv ON (
+                        ap.partner_key = sv.partner_key
+                        OR ap.partner_name = sv.partner_name
+                    )
+                LEFT JOIN
+                    adjustment_vol AS av ON (
+                        ap.partner_key = av.partner_key
+                        OR ap.partner_name = av.partner_name
+                    )
+                LEFT JOIN
+                    masterdata.partner_masterfile AS mpm ON (
+                        ap.partner_name = mpm.partner_name
+                    )
                 WHERE
-                    $dateCondition
-                    AND bt.status IS NULL 
-                GROUP BY
-                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
-        ),
-        adjustment_vol AS (
-            SELECT
-                COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
-                COUNT(*) AS vol2,
-                SUM(bt.amount_paid) AS principal2,
-                SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
-            FROM
-                mldb.billspayment_transaction AS bt 
-            WHERE
-                $dateCondition
-                AND bt.status = '*' 
-            GROUP BY
-                COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
-        )
-
-        SELECT
-            mpm.partner_name,
-            SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
-            SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
-            SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
-
-            SUM(COALESCE(av.vol2, 0)) AS adjustment_vol,
-            SUM(COALESCE(ABS(av.principal2), 0)) AS adjustment_principal,
-            SUM(COALESCE(ABS(av.charge2), 0)) AS adjustment_charges,
-
-            (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
-            (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
-            (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
-        FROM
-            masterdata.partner_masterfile AS mpm
-        LEFT JOIN
-            summary_vol AS sv
-            ON (
-                mpm.partner_id = sv.partner_key
-                OR mpm.partner_id_kpx = sv.partner_key
-            )
-        LEFT JOIN
-            adjustment_vol AS av
-            ON (
-                mpm.partner_id = av.partner_key
-                OR mpm.partner_id_kpx = av.partner_key
-            )
-        WHERE
-            mpm.status = 'ACTIVE'
-            $mainWhereClause
-        GROUP BY mpm.partner_name
-        ORDER BY mpm.partner_name";
+                    (mpm.status = 'ACTIVE' OR mpm.status IS NULL)
+                    $mainWhereClause
+                GROUP BY ap.partner_name
+                HAVING ap.partner_name IS NOT NULL
+                ORDER BY ap.partner_name";
 
     try {
         // Use prepared statement to execute the query
@@ -275,11 +306,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
         $mpmStmt->close();
     }
 
-    if (!$mpm) {
-        echo json_encode(['status' => 'error', 'message' => 'Partner not found in masterfile']);
-        exit();
-    }
-
     // Build date condition same as report
     $dateCondition = '(1=1)';
     $dateParams = [];
@@ -287,20 +313,22 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
         $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ?)";
         $dateParams = [$startDate, $startDate];
     } elseif ($filterType === 'weekly' || $filterType === 'monthly' || $filterType === 'yearly') {
-        // for weekly/monthly/yearly we expect startDate and endDate already adapted by UI
         $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
         $dateParams = [$startDate, $endDate, $startDate, $endDate];
     }
 
+    // Modified to handle partners without IDs
     $pid = $mpm['partner_id'] ?? '';
     $pid_kpx = $mpm['partner_id_kpx'] ?? '';
 
-    // Fetch transaction rows that match either partner id
-    $txQuery = "SELECT bt.* FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) ORDER BY bt.datetime LIMIT 1000";
+    // Fetch transaction rows that match either partner id OR partner name if no IDs
+    $txQuery = "SELECT bt.* FROM mldb.billspayment_transaction bt WHERE $dateCondition AND 
+                (bt.partner_id = ? OR bt.partner_id_kpx = ? OR 
+                 (bt.partner_name = ? AND (bt.partner_id IS NULL OR bt.partner_id_kpx IS NULL))) 
+                ORDER BY bt.datetime LIMIT 1000";
     $txStmt = $conn->prepare($txQuery);
     $txRows = [];
     if ($txStmt) {
-        // bind date params + two ids
         $bindTypes = '';
         $bindValues = [];
         if (!empty($dateParams)) {
@@ -308,6 +336,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
         }
         $bindValues[] = $pid; $bindTypes .= 's';
         $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $bindValues[] = $partner; $bindTypes .= 's'; // Add partner name
         $txStmt->bind_param($bindTypes, ...$bindValues);
         $txStmt->execute();
         $txRes = $txStmt->get_result();
@@ -793,8 +822,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                     <label class="form-label">Partners Name:</label>
                     <select id="partnerlistDropdown" class="form-select select2" aria-label="Select Partner" name="partnerlist" data-placeholder="Search or select a Partner..." required>
                         <option value="">Select Partner</option>
-                        <option value="All">All</option> -->
-                        <!-- options will be populated by JS -->
+                        <option value="All">All</option>
+                        options will be populated by JS -->
                     <!-- </select>
                 </div>
                 <div class="col-md-2">

@@ -90,8 +90,12 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-transaction.php'">
                     <a href="<?php echo $base_url; ?>billspayment/import/billspay-transaction.php"><i class="fa-solid fa-receipt"></i> Transaction</a>
                 </div>
-                <div class="sub">
+                <!-- <div class="sub">
                     <a href="#" id="cancellation-link"><i class="fa-solid fa-ban"></i> Cancellation</a>
+                </div> -->
+
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php'">
+                    <a href="<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php">Cancellation</a>
                 </div>
 
                 <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billsFeedback.php'">
@@ -123,6 +127,27 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     </div> -->
                 </div>
         <?php endif; ?>
+        <?php if( $_SESSION['user_type'] === 'admin' || $current_user_email === 'cill17098209'):?>
+            <!-- Show/Hide Paramount Settlement -->
+        <div class="tabcat" id="para-settlement-btn" style="display: none;">
+            <h6><i class="fa-solid fa-chart-line"></i> Settlement</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-para-settlement" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-para-settlement" style="display: none"></i>
+        </div>
+
+        <!-- Paramount Settlement Buttons -->
+        <div class="onetab-sub" id="para-settlement-nav" style="display: none;">
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/adjustment-entry-per-branch.php'">
+                <a href="<?php echo $base_url; ?>billspayment/settlement/adjustment-entry-per-branch.php"><i class="fa-solid fa-chart-column"></i> Adjustment Entry</a>
+            </div>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/settlement-per-bank.php'">
+                <a href="<?php echo $base_url; ?>billspayment/settlement/settlement-per-bank.php"><i class="fa-solid fa-chart-column"></i> Per Bank</a>
+            </div>
+            <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/settlement/adjustment-transaction-per-partner.php'">
+                <a href="<?php //echo $base_url; ?>billspayment/settlement/adjustment-transaction-per-partner.php"><i class="fa-solid fa-chart-column"></i> Per Partner</a>
+            </div> -->
+        </div>
+        <?php endif; ?>
 
         <!-- Show/Hide Paramount Report -->
         <div class="tabcat" id="para-report-btn" style="display: none;">
@@ -151,9 +176,15 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <!-- <div class="sub">
                 <a href="#" id="transaction-report-summary-link">Transaction Report (Summary)</a>
             </div> -->
+            
             <div class="sub">
                 <a href="#" id="cancellation-report-link"><i class="fa-solid fa-circle-xmark"></i> Cancellation Report</a>
             </div>
+            <?php if ($current_user_email === 'cill17098209' || $_SESSION['user_type'] === 'admin'):?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/balance-sheet-report.php'">
+                    <a href="<?php echo $base_url; ?>billspayment/report/balance-sheet-report.php" id="balance-sheet-report-link"><i class="fa-solid fa-chart-bar"></i> Balance Sheet Report</a>
+                </div>
+            <?php endif;?>
             <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/report/monthly-volume.php'">
                 <a href="<?php //echo $base_url; ?>billspayment/report/monthly-volume.php">Monthly Volume Report</a>
             </div> -->
@@ -350,6 +381,7 @@ function showUnderConstructionAlert() {
 const underConstructionIds = [
     'cancellation-link',
     'post-transaction-link',
+    'settle-transaction-link',
     'transaction-report-summary-link',
     'cancellation-report-link',
     'service-charge-automate-link'

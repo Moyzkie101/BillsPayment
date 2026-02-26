@@ -170,11 +170,6 @@ const partnerMaster = [
     partner_name: "BAVI-CTG"
   },
   {
-    partner_id: NaN,
-    partner_id_kpx: "1095",
-    partner_name: "BAYADCENTER II"
-  },
-  {
     partner_id: "MLBPP160303",
     partner_id_kpx: null,
     partner_name: "BAYAN TELECOMMUNICATIONS INC"
@@ -571,8 +566,18 @@ const partnerMaster = [
   },
   {
     partner_id: "MLBPP180496",
-    partner_id_kpx: null,
+    partner_id_kpx: "1095",
     partner_name: "CIS BAYAD CENTER INC."
+  },
+  {
+    partner_id: "MLBPP180496",
+    partner_id_kpx: "1095",
+    partner_name: "BAYADCENTER"
+  },
+  {
+    partner_id: "MLBPP180496",
+    partner_id_kpx: "1095",
+    partner_name: "BAYADCENTER II"
   },
   {
     partner_id: "MLBPP130055",
@@ -1520,6 +1525,11 @@ const partnerMaster = [
     partner_name: "JULIE'S FRANCHISE CORP"
   },
   {
+    partner_id: NaN,
+    partner_id_kpx: "1074",
+    partner_name: "JUNANS MARKETING"
+  },
+  {
     partner_id: "MLBPP210782",
     partner_id_kpx: "435",
     partner_name: "KABACAN WATER DISTRICT(KWD)"
@@ -2098,6 +2108,11 @@ const partnerMaster = [
     partner_id: "MLBPP170377",
     partner_id_kpx: null,
     partner_name: "MY GAS PETROLEUM CORPORATION"
+  },
+  {
+    partner_id: null,
+    partner_id_kpx: 1074,
+    partner_name: "MYLORA CORPORATION"
   },
   {
     partner_id: "MLBPP180443",
@@ -3580,9 +3595,19 @@ const partnerMaster = [
     partner_name: "TRIPLE FIVE GLOBAL DISTRIBUTION INC-GUIMARAS"
   },
   {
+    partner_id: null,
+    partner_id_kpx: "727",
+    partner_name: "TRIPLE FIVE GLOBAL DISTRIBUTION INC. ROXAS"
+  },
+  {
     partner_id: "MLBPP190523",
     partner_id_kpx: "912",
     partner_name: "TRIPLE FIVE GLOBAL DISTRIBUTION INC-ILOILO"
+  },
+  {
+    partner_id: null,
+    partner_id_kpx: "1059",
+    partner_name: "TUPI WATER DISTRICT​"
   },
   {
     partner_id: "MLBPP210781",

@@ -80,7 +80,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
     // Use normalized partner_key and aggregate to avoid duplicate rows
     $DataQuery = "WITH summary_vol AS (
                 SELECT
-                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
+                    CASE 
+                        WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                        WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                        ELSE CONCAT('temp_', bt.partner_name)
+                    END COLLATE utf8mb4_general_ci AS partner_key,
+                    bt.partner_name,
                     COUNT(*) AS vol1,
                     SUM(bt.amount_paid) AS principal1,
                     SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
@@ -89,12 +94,23 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
                 WHERE
                     $sqlDATE
                     AND bt.status IS NULL 
+                    AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
                 GROUP BY
-                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
+                    CASE 
+                        WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                        WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                        ELSE CONCAT('temp_', bt.partner_name)
+                    END COLLATE utf8mb4_general_ci,
+                    bt.partner_name
         ),
         adjustment_vol AS (
             SELECT
-                COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
+                CASE 
+                    WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                    WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                    ELSE CONCAT('temp_', bt.partner_name)
+                END COLLATE utf8mb4_general_ci AS partner_key,
+                bt.partner_name,
                 COUNT(*) AS vol2,
                 SUM(bt.amount_paid) AS principal2,
                 SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
@@ -103,12 +119,36 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             WHERE
                 $sqlDATE
                 AND bt.status = '*' 
+                AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
             GROUP BY
-                COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
+                CASE 
+                    WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                    WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                    ELSE CONCAT('temp_', bt.partner_name)
+                END COLLATE utf8mb4_general_ci,
+                bt.partner_name
+        ),
+        all_partners AS (
+            -- Partners from master file
+            SELECT 
+                COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
+                mpm.partner_name
+            FROM masterdata.partner_masterfile AS mpm
+            WHERE mpm.status = 'ACTIVE'
+            
+            UNION
+            
+            -- Partners from summary transactions
+            SELECT partner_key, partner_name FROM summary_vol
+            
+            UNION
+            
+            -- Partners from adjustment transactions
+            SELECT partner_key, partner_name FROM adjustment_vol
         )
 
         SELECT
-            mpm.partner_name,
+            ap.partner_name,
             SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
             SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
             SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
@@ -121,30 +161,33 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
             (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
         FROM
-            masterdata.partner_masterfile AS mpm
+            all_partners AS ap
         LEFT JOIN
-            summary_vol AS sv
-            ON (
-                mpm.partner_id = sv.partner_key
-                OR mpm.partner_id_kpx = sv.partner_key
+            summary_vol AS sv ON (
+                ap.partner_key = sv.partner_key
+                OR ap.partner_name = sv.partner_name
             )
         LEFT JOIN
-            adjustment_vol AS av
-            ON (
-                mpm.partner_id = av.partner_key
-                OR mpm.partner_id_kpx = av.partner_key
+            adjustment_vol AS av ON (
+                ap.partner_key = av.partner_key
+                OR ap.partner_name = av.partner_name
+            )
+        LEFT JOIN
+            masterdata.partner_masterfile AS mpm ON (
+                ap.partner_name = mpm.partner_name
             )
         WHERE
-            mpm.status = 'ACTIVE'";
+            (mpm.status = 'ACTIVE' OR mpm.status IS NULL)";
     
     // Add partner filter if not "All"
     if ($partner !== 'All') {
-        $DataQuery .= " AND mpm.partner_name = '" . mysqli_real_escape_string($conn, $partner) . "'";
+        $DataQuery .= " AND ap.partner_name = '" . mysqli_real_escape_string($conn, $partner) . "'";
     }
     
     // Aggregate by partner_name to collapse any duplicate masterfile rows
-    $DataQuery .= " GROUP BY mpm.partner_name";
-    $DataQuery .= " ORDER BY mpm.partner_name";
+    $DataQuery .= " GROUP BY ap.partner_name";
+    $DataQuery .= " HAVING ap.partner_name IS NOT NULL";
+    $DataQuery .= " ORDER BY ap.partner_name";
 
     try {
         $DataResult = $conn->query($DataQuery);
@@ -208,7 +251,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             $sheet->setCellValue('B7', ucfirst($filterType));
 
             $sheet->setCellValue('A8', 'Generated By');
-            $sheet->setCellValue('B8', 'Administrator');
+            $sheet->setCellValue('B8', $_SESSION['admin_name'] ?? $_SESSION['user_name']);
             $sheet->setCellValue('A9', '');
 
             // Style the department header

@@ -41,7 +41,15 @@ if (isset($_SESSION['user_type'])) {
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h1>Sample Header</h1></center>
+        <div class="bp-section-header" role="region" aria-label="Page title">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                <div>
+                    <h2>Sample Title</h2>
+                    <p class="bp-section-sub">Sample Description</p>
+                </div>
+            </div>
+        </div>
         
     </div>
 </body>

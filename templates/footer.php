@@ -104,11 +104,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var paraimportnav = document.getElementById("para-import-nav"); // Para Import Div
     var parapostnav = document.getElementById("para-post-nav"); // Para Post Div
+    var parasettlementnav = document.getElementById("para-settlement-nav"); // Para Settlement Div
     var parareportnav = document.getElementById("para-report-nav"); // Para Report Div
     
 
     var paraimportbtn = document.getElementById("para-import-btn"); // Para Import Btn
     var parapostbtn = document.getElementById("para-post-btn"); // Para Post Btn
+    var parasettlementbtn = document.getElementById("para-settlement-btn"); // Para Settlement Btn
     var parareportbtn = document.getElementById("para-report-btn"); // Para Report Btn
     
 
@@ -122,6 +124,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var paraclosedpost = document.getElementById("closed-para-post"); // Para Post Div Right Arrow or Minimized
     var paraopenreport = document.getElementById("open-para-report"); // Para Report Div Down Arrow or Expanded
     var paraclosedreport = document.getElementById("closed-para-report"); // Para Report Div Right Arrow or Minimized
+    var paraopensettlement = document.getElementById("open-para-settlement"); // Para Settlement Div Down Arrow or Expanded
+    var paraclosedsettlement = document.getElementById("closed-para-settlement"); // Para Settlement Div Right Arrow or Minimized
     var actionopenreport = document.getElementById("open-action-report"); // Action Report Div Down Arrow or Expanded
     var actionclosedreport = document.getElementById("closed-action-report"); // Action Report Div Right Arrow or Minimized
 
@@ -185,6 +189,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (parapostbtn) parapostbtn.style.display = "none";
         if (parapostnav) parapostnav.style.display = "none";
 
+        if (parasettlementbtn) parasettlementbtn.style.display = "none";
+        if (parasettlementnav) parasettlementnav.style.display = "none";
+
         if (parareportbtn) parareportbtn.style.display = "none";
         if (parareportnav) parareportnav.style.display = "none";
 
@@ -213,6 +220,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (paraclosedimport) paraclosedimport.style.display = "block";
         if (paraopenpost) paraopenpost.style.display = "none";
         if (paraclosedpost) paraclosedpost.style.display = "block";
+        if (paraopensettlement) paraopensettlement.style.display = "none";
+        if (paraclosedsettlement) paraclosedsettlement.style.display = "block";
         if (paraopenreport) paraopenreport.style.display = "none";
         if (paraclosedreport) paraclosedreport.style.display = "block";
 
@@ -261,6 +270,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 availableSubMenus.push(parapostbtn);
                 if (parapostnav) availableSubNavs.push(parapostnav);
             }
+            if (parasettlementbtn) {
+                availableSubMenus.push(parasettlementbtn);
+                if (parasettlementnav) availableSubNavs.push(parasettlementnav);
+            }
             if (parareportbtn) {
                 availableSubMenus.push(parareportbtn);
                 if (parareportnav) availableSubNavs.push(parareportnav);
@@ -305,6 +318,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (paraclosedimport) paraclosedimport.style.display = "block";
                 if (paraopenpost) paraopenpost.style.display = "none";
                 if (paraclosedpost) paraclosedpost.style.display = "block";
+                if (paraopensettlement) paraopensettlement.style.display = "none";
+                if (paraclosedsettlement) paraclosedsettlement.style.display = "block";
                 if (paraopenreport) paraopenreport.style.display = "none";
                 if (paraclosedreport) paraclosedreport.style.display = "block";
                 if (actionopenreport) actionopenreport.style.display = "none";
@@ -373,6 +388,32 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    // Billspayment Settlement dropdown handler
+    if (parasettlementbtn) {
+        parasettlementbtn.addEventListener("click", function(){
+            var isHidden = !parasettlementnav || parasettlementnav.style.display === "none" || parasettlementnav.style.display === "";
+
+            if (isHidden) {
+                if (parasettlementnav) {
+                    parasettlementnav.style.animation = "slide-in-from-top 0.8s ease";
+                    parasettlementnav.style.display = "block";
+                }
+                if (paraopensettlement) paraopensettlement.style.display = "block";
+                if (paraclosedsettlement) paraclosedsettlement.style.display = "none";
+            } else {
+                if (paraopensettlement) paraopensettlement.style.display = "none";
+                if (paraclosedsettlement) paraclosedsettlement.style.display = "block";
+                if (parasettlementnav) {
+                    parasettlementnav.style.animation = "slide-out-to-top 0.5s ease";
+                    setTimeout(function() {
+                        parasettlementnav.style.display = "none";
+                    }, 450);
+                }
+            }
+        });
+    }
+
     // Billspayment Report dropdown handler
     if (parareportbtn) {
         parareportbtn.addEventListener("click", function(){ 
