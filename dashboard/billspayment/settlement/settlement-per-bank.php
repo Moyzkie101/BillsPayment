@@ -1051,7 +1051,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         clearReportTable: function() {
             const tbody = $('#transactionReportTable tbody');
             tbody.empty();
-            tbody.append('<tr><td colspan="9" class="text-center"></td></tr>');
+            tbody.append('<tr><td colspan="9" class="text-center"><b>CHARGE BY CUSTOMER</b></td></tr><tr><td colspan="9" class="text-center"></td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER DAILY</b></td></tr><tr><td colspan="9" class="text-center"></td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER WEEKLY</b></td></tr><tr><td colspan="9" class="text-center"></td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER MONTHLY</b></td></tr>');
 
             $('#totalnetvolume').text('0');
             $('#totalnetprincipal').text('0.00');
