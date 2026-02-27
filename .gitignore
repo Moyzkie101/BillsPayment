@@ -4,3 +4,6 @@ admin/temporary/
 # OS files
 Thumbs.db
 .DS_Store
+
+# Import Excel files folder
+IMPORT EXCEL FILES/
