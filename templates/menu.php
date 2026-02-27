@@ -127,7 +127,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     </div> -->
                 </div>
         <?php endif; ?>
-        <?php if( $_SESSION['user_type'] === 'admin' || $current_user_email === 'cill17098209'):?>
+        <?php //if( $_SESSION['user_type'] === 'admin' || $current_user_email === 'cill17098209'):?>
             <!-- Show/Hide Paramount Settlement -->
         <div class="tabcat" id="para-settlement-btn" style="display: none;">
             <h6><i class="fa-solid fa-chart-line"></i> Settlement</h6>
@@ -147,7 +147,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="<?php //echo $base_url; ?>billspayment/settlement/adjustment-transaction-per-partner.php"><i class="fa-solid fa-chart-column"></i> Per Partner</a>
             </div> -->
         </div>
-        <?php endif; ?>
+        <?php //endif; ?>
 
         <!-- Show/Hide Paramount Report -->
         <div class="tabcat" id="para-report-btn" style="display: none;">

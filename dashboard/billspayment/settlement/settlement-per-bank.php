@@ -156,7 +156,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
     $partner = $_POST['partner'] ?? '';
     $settlementType = $_POST['settlementType'] ?? '';
     $bankName = $_POST['bankName'] ?? '';
-    $chargeBy = $_POST['chargeBy'] ?? '';
     $filterType = $_POST['filterType'] ?? '';
     $startDate = $_POST['startDate'] ?? '';
     $endDate = $_POST['endDate'] ?? '';
@@ -225,31 +224,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         $cteFilterParams[] = $bankName;
     }
 
-    if (!empty($chargeBy) && strtoupper($chargeBy) !== 'ALL') {
-        if (strtoupper($chargeBy) === 'CUSTOMER') {
-            $cteFilterConditions[] = "EXISTS (
-                SELECT 1
-                FROM masterdata.partner_masterfile pm
-                WHERE (pm.partner_id = bt.partner_id OR pm.partner_id_kpx = bt.partner_id_kpx OR pm.partner_name = bt.partner_name)
-                  AND pm.charge_to IN ('CUSTOMER', 'CUSTOMER&PARTNER')
-            )";
-        } elseif (strtoupper($chargeBy) === 'PARTNER') {
-            $cteFilterConditions[] = "EXISTS (
-                SELECT 1
-                FROM masterdata.partner_masterfile pm
-                WHERE (pm.partner_id = bt.partner_id OR pm.partner_id_kpx = bt.partner_id_kpx OR pm.partner_name = bt.partner_name)
-                  AND pm.charge_to IN ('PARTNER', 'CUSTOMER&PARTNER')
-            )";
-        } elseif (strtoupper($chargeBy) === 'BOTH') {
-            $cteFilterConditions[] = "EXISTS (
-                SELECT 1
-                FROM masterdata.partner_masterfile pm
-                WHERE (pm.partner_id = bt.partner_id OR pm.partner_id_kpx = bt.partner_id_kpx OR pm.partner_name = bt.partner_name)
-                  AND pm.charge_to = 'CUSTOMER&PARTNER'
-            )";
-        }
-    }
-
     $allPartnersFilterConditions = [];
     $allPartnersFilterTypes = '';
     $allPartnersFilterParams = [];
@@ -269,16 +243,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         )";
         $allPartnersFilterTypes .= 's';
         $allPartnersFilterParams[] = $bankName;
-    }
-
-    if (!empty($chargeBy) && strtoupper($chargeBy) !== 'ALL') {
-        if (strtoupper($chargeBy) === 'CUSTOMER') {
-            $allPartnersFilterConditions[] = "mpm.charge_to IN ('CUSTOMER', 'CUSTOMER&PARTNER')";
-        } elseif (strtoupper($chargeBy) === 'PARTNER') {
-            $allPartnersFilterConditions[] = "mpm.charge_to IN ('PARTNER', 'CUSTOMER&PARTNER')";
-        } elseif (strtoupper($chargeBy) === 'BOTH') {
-            $allPartnersFilterConditions[] = "mpm.charge_to = 'CUSTOMER&PARTNER'";
-        }
     }
 
     $cteFilterClause = '';
@@ -536,7 +500,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                     <label class="form-label">Bank Name:</label>
                                     <select class="form-select" name="bankName" required>
                                         <option value="">Select Bank</option>
-                                        <option value="ALL">ALL</option>
+                                        <!-- <option value="ALL">ALL</option> -->
                                         <!-- options will be populated by JS -->
                                     </select>
                                 </div>
@@ -552,27 +516,25 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                 </div>
 
                                 <!-- Charge By -->
-                                <div class="col-md-2 col-sm-6">
+                                <!-- <div class="col-md-2 col-sm-6">
                                     <label class="form-label">Charge By:</label>
                                     <select class="form-select" name="chargeBy" required>
                                         <option value="">Select Charge By</option>
                                         <option value="ALL">ALL</option>
                                         <option value="CUSTOMER">CUSTOMER</option>
                                         <option value="PARTNER">PARTNER</option>
-                                        <!-- <option value="BOTH">BOTH</option> -->
+                                        <option value="BOTH">BOTH</option>
                                     </select>
-                                </div>
+                                </div> -->
 
                                 <!-- Time Frame -->
                                 <div class="col-md-2 col-sm-6">
-                                    <label class="form-label mb-0">Transaction Date</label>
-                                    <br>
                                     <label class="form-label">Time Frame:</label>
                                     <select class="form-select" name="filterType" required>
                                         <option value="">Select Time Frame</option>
-                                        <option value="daily">Per Day</option>
+                                        <option value="daily">Daily</option>
+                                        <option value="monthly">Monthly</option>
                                         <option value="date-range">Date Range</option>
-                                        <option value="monthly">Per Month</option>
                                         <!-- <option value="monthly-range">Monthly Range</option>
                                         <option value="yearly">Per Year</option>
                                         <option value="yearly-range">Yearly Range</option> -->
@@ -581,11 +543,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
                                 <!-- Date Range based on selected Time Frame -->
                                 <div class="col-md-2" style="display: none;">
-                                    <label class="form-label">Start Date:</label>
+                                    <label class="form-label mb-0 transaction-date-label">Transaction Date</label>
+                                    <br>
+                                    <label class="form-label start-date-label">Start Date:</label>
                                     <input type="date" class="form-control" name="startDate" required>
                                 </div>
                                 <div class="col-md-2" style="display: none;">
-                                    <label class="form-label">End Date:</label>
+                                    <label class="form-label end-date-label">End Date:</label>
                                     <input type="date" class="form-control" name="endDate" required>
                                 </div>
 
@@ -598,7 +562,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                 <!-- Action Button -->
                                 <div class="col-md-1 col-sm-6">
                                     <div class="col-md-3 d-flex align-items-end">
-                                        <button type="button" class="btn btn-secondary" id="generateReport" disabled>Generate</button>
+                                        <button type="button" class="btn btn-danger" id="generateReport">Generate</button>
                                     </div>
                                     
                                 </div>
@@ -644,7 +608,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Account Number</th>
                                             <th colspan="3" class='text-truncate text-center align-middle'>Net Total Transaction</th>
                                             <th class='text-truncate text-center align-middle'>Principal Adjustment</th>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>Account for Settlement</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>Amount for Settlement</th>
                                         </tr>
                                         <tr>
                                             <!-- Column header for Net -->
@@ -703,7 +667,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         const $partner = $('#partnerlistDropdown');
         const $settlementType = $('select[name="settlementType"]');
         const $bankName = $('select[name="bankName"]');
-        const $chargeBy = $('select[name="chargeBy"]');
         const $filterType = $('select[name="filterType"]');
         const $startDate = $('input[name="startDate"]');
         const $endDate = $('input[name="endDate"]');
@@ -762,7 +725,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             $partner,
             $settlementType,
             $bankName,
-            $chargeBy,
             $startDate,
             $endDate,
             $startWrap,
@@ -794,10 +756,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         });
 
         $partner.on('change', function() {
-            window.SettlementPerBankTimeFrame.toggleGenerateButton(timeFrameRefs);
-        });
-
-        $chargeBy.on('change', function() {
             window.SettlementPerBankTimeFrame.toggleGenerateButton(timeFrameRefs);
         });
 
@@ -981,8 +939,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             const $startWrap = refs.$startWrap;
             const $endWrap = refs.$endWrap;
 
-            const startLabel = $startWrap.find('label');
-            const endLabel = $endWrap.find('label');
+            const $transactionDateLabel = $startWrap.find('.transaction-date-label');
+            const $startLabel = $startWrap.find('.start-date-label');
+            const $endLabel = $endWrap.find('.end-date-label');
 
             $startDate.val('');
             $endDate.val('');
@@ -992,8 +951,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             if (filterType === 'date-range') {
                 $startDate.attr('type', 'date');
                 $endDate.attr('type', 'date');
-                startLabel.text('Start Date:');
-                endLabel.text('End Date:');
+                $transactionDateLabel.text('Transaction Date').show();
+                $startLabel.text('Start Date:');
+                $endLabel.text('End Date:');
                 $startWrap.show();
                 $endWrap.show();
                 return;
@@ -1001,7 +961,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
             if (filterType === 'daily') {
                 $startDate.attr('type', 'date');
-                startLabel.text('Select Date:');
+                $transactionDateLabel.text('Transaction Date').show();
+                $startLabel.text('Select Date:');
                 $startWrap.show();
                 $endWrap.hide();
                 return;
@@ -1010,8 +971,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             if (filterType === 'monthly' || filterType === 'monthly-range') {
                 $startDate.attr('type', 'month');
                 $endDate.attr('type', 'month');
-                startLabel.text(filterType === 'monthly' ? 'Select Month:' : 'Start Month:');
-                endLabel.text('End Month:');
+                $transactionDateLabel.text('Transaction Date').show();
+                $startLabel.text(filterType === 'monthly' ? 'Select Month:' : 'Start Month:');
+                $endLabel.text('End Month:');
                 $startWrap.show();
                 $endWrap.toggle(filterType === 'monthly-range');
                 return;
@@ -1022,8 +984,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 $endDate.attr('type', 'number');
                 $startDate.attr({ min: '2020', max: '2035', placeholder: 'YYYY' });
                 $endDate.attr({ min: '2020', max: '2035', placeholder: 'YYYY' });
-                startLabel.text(filterType === 'yearly' ? 'Select Year:' : 'Start Year:');
-                endLabel.text('End Year:');
+                $transactionDateLabel.text('Transaction Date').show();
+                $startLabel.text(filterType === 'yearly' ? 'Select Year:' : 'Start Year:');
+                $endLabel.text('End Year:');
                 $startWrap.show();
                 $endWrap.toggle(filterType === 'yearly-range');
                 return;
@@ -1038,7 +1001,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             const partner = refs.$partner.val();
             const settlementType = refs.$settlementType ? refs.$settlementType.val() : '';
             const bankName = refs.$bankName ? refs.$bankName.val() : '';
-            const chargeBy = refs.$chargeBy ? refs.$chargeBy.val() : '';
             const startDate = refs.$startDate.val();
             const endDate = refs.$endDate.val();
             const $generateReport = refs.$generateReport;
@@ -1050,12 +1012,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 datesValid = startDate !== '' && endDate !== '';
             }
 
-            const enable = !!(filterType && partner && settlementType && bankName && chargeBy && datesValid);
-            if (enable) {
-                $generateReport.prop('disabled', false).removeClass('btn-secondary').addClass('btn-danger');
-            } else {
-                $generateReport.prop('disabled', true).removeClass('btn-danger').addClass('btn-secondary');
-            }
+            // const enable = !!(filterType && partner && settlementType && bankName && datesValid);
+            // if (enable) {
+            //     $generateReport.prop('disabled', false).removeClass('btn-secondary').addClass('btn-danger');
+            // } else {
+            //     $generateReport.prop('disabled', true).removeClass('btn-danger').addClass('btn-secondary');
+            // }
         }
     };
 </script>
@@ -1077,7 +1039,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         clearReportTable: function() {
             const tbody = $('#transactionReportTable tbody');
             tbody.empty();
-            tbody.append('<tr><td colspan="9" class="text-center"><b>CHARGE BY CUSTOMER</b></td></tr><tr><td colspan="9" class="text-center"></td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER DAILY</b></td></tr><tr><td colspan="9" class="text-center"></td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER WEEKLY</b></td></tr><tr><td colspan="9" class="text-center"></td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER MONTHLY</b></td></tr>');
+            tbody.append('<tr><td colspan="9" class="text-center">No data found for the selected criteria</td></tr>');
 
             $('#totalnetvolume').text('0');
             $('#totalnetprincipal').text('0.00');
@@ -1093,17 +1055,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             let totalNetCharge = 0;
 
             const rows = Array.isArray(data) ? data : [];
-            const partner = (refs.$partner.val() || '').toUpperCase();
-            const bankName = (refs.$bankName.val() || '').toUpperCase();
-            const settlementType = (refs.$settlementType.val() || '').toUpperCase();
-            const chargeBy = (refs.$chargeBy.val() || '').toUpperCase();
-
-            const isCustomerSectionMode = (
-                partner === 'ALL' &&
-                bankName === 'ALL' &&
-                settlementType === 'CHECK' &&
-                chargeBy === 'CUSTOMER'
-            );
 
             const appendDataRows = function(sectionRows, startIndex) {
                 sectionRows.forEach((row, index) => {
@@ -1145,23 +1096,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             if (rows.length === 0) {
                 tbody.append('<tr><td colspan="9" class="text-center">No data found for the selected criteria</td></tr>');
             } else {
-                if (isCustomerSectionMode) {
-                    const customerRows = rows.filter(row => {
-                        const rowSettlementType = (row.settled_online_check || '').toUpperCase();
-                        const rowChargeTo = (row.charge_to || '').toUpperCase();
-                        return rowSettlementType === 'CHECK' && (rowChargeTo === 'CUSTOMER' || rowChargeTo === 'CUSTOMER&PARTNER');
-                    });
-
-                    tbody.append('<tr><td colspan="9" class="text-center"><b>CHARGE BY CUSTOMER</b></td></tr>');
-
-                    if (customerRows.length === 0) {
-                        tbody.append('<tr><td colspan="9" class="text-center">No CHARGE BY CUSTOMER data found for the selected criteria</td></tr>');
-                    } else {
-                        appendDataRows(customerRows, 0);
-                    }
-                } else {
-                    appendDataRows(rows, 0);
-                }
+                appendDataRows(rows, 0);
             }
 
             $('#totalnetvolume').text(totalNetVolume.toLocaleString());
@@ -1189,18 +1124,17 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             const partner = refs.$partner.val();
             const settlementType = refs.$settlementType.val();
             const bankName = refs.$bankName.val();
-            const chargeBy = refs.$chargeBy.val();
             const startDate = refs.$startDate.val();
             const endDate = refs.$endDate.val();
 
-            if (!partner || !settlementType || !bankName || !chargeBy || !filterType || !startDate) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Missing Information',
-                    text: 'Please complete all required filters.'
-                });
-                return;
-            }
+            // if (!partner || !settlementType || !bankName || !filterType || !startDate) {
+            //     Swal.fire({
+            //         icon: 'warning',
+            //         title: 'Missing Information',
+            //         text: 'Please complete all required filters.'
+            //     });
+            //     return;
+            // }
 
             if (filterType === 'date-range' && !endDate) {
                 Swal.fire({
@@ -1227,7 +1161,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     partner: refs.$partner.val(),
                     settlementType: refs.$settlementType.val(),
                     bankName: refs.$bankName.val(),
-                    chargeBy: refs.$chargeBy.val(),
                     filterType: refs.$filterType.val(),
                     startDate: startDate,
                     endDate: endDate
@@ -1243,7 +1176,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         } else {
                             Swal.fire({
                                 icon: 'error',
-                                title: 'Server Error',
+                                title: 'Error',
                                 text: result.message || 'Unable to generate report.'
                             });
                         }

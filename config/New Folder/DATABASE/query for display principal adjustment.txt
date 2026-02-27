@@ -1,0 +1,129 @@
+WITH summary_vol AS (
+    SELECT
+        CASE
+            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+            ELSE CONCAT('temp_', bt.partner_name)
+        END COLLATE utf8mb4_general_ci AS partner_key,
+        bt.partner_name,
+        COUNT(*) AS vol1,
+        SUM(bt.amount_paid) AS principal1,
+        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
+    FROM mldb.billspayment_transaction AS bt
+    WHERE 
+        (
+            DATE(bt.datetime) BETWEEN '2026-01-01' AND '2026-12-31' 
+            OR 
+            DATE(bt.cancellation_date) BETWEEN '2026-01-01' AND '2026-12-31'
+        ) 
+        AND bt.status IS NULL 
+        AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944') 
+    GROUP BY 
+        CASE
+            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+            ELSE CONCAT('temp_', bt.partner_name)
+        END COLLATE utf8mb4_general_ci,
+        bt.partner_name
+),
+adjustment_vol AS (
+    SELECT
+        CASE
+            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+            ELSE CONCAT('temp_', bt.partner_name)
+        END COLLATE utf8mb4_general_ci AS partner_key,
+        bt.partner_name,
+        COUNT(*) AS vol2,
+        SUM(bt.amount_paid) AS principal2,
+        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
+    FROM mldb.billspayment_transaction AS bt
+    WHERE
+        (
+            DATE(bt.datetime) BETWEEN '2026-01-01' AND '2026-12-31' 
+            OR 
+            DATE(bt.cancellation_date) BETWEEN '2026-01-01' AND '2026-12-31'
+        ) 
+        AND bt.status = '*'
+        AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+    GROUP BY
+        CASE
+            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+            ELSE CONCAT('temp_', bt.partner_name)
+        END COLLATE utf8mb4_general_ci,
+        bt.partner_name
+),
+principal_adjustment AS (
+    SELECT
+        SUM(sabt.prev_amount_paid) AS principal4
+    FROM mldb.settle_adjustment_branch_transaction AS sabt
+    JOIN mldb.billspayment_transaction AS bt
+        ON sabt.datetime = bt.datetime 
+        AND sabt.reference_no = bt.reference_no 
+        AND sabt.partner_id = bt.partner_id 
+        AND sabt.partner_id_kpx = bt.partner_id_kpx 
+    WHERE 
+        sabt.reason_note = 'late-posting' 
+        AND (
+            DATE(sabt.datetime) BETWEEN '2026-01-01' AND '2026-12-31' 
+            OR 
+            DATE(bt.cancellation_date) BETWEEN '2026-01-01' AND '2026-12-31'
+        )
+),
+all_partners AS (
+    SELECT
+        COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
+        mpm.partner_name,
+        mpm.partner_accName,
+        mpm.bank_accNumber,
+        mpm.bank,
+        mpm.settled_online_check,
+        mpm.charge_to,
+        mpm.charge_sched
+    FROM masterdata.partner_masterfile AS mpm
+    WHERE 
+        mpm.status = 'ACTIVE' 
+        AND mpm.charge_to IN ('CUSTOMER', 'PARTNER') 
+        AND mpm.bank = ''
+    UNION
+
+        SELECT
+            partner_key,
+            partner_name,
+            NULL AS partner_accName,
+            NULL AS bank_accNumber,
+            NULL AS bank,
+            NULL AS settled_online_check,
+            NULL AS charge_to,
+            NULL AS charge_sched
+        FROM summary_vol
+
+    UNION
+
+        SELECT
+            partner_key,
+            partner_name,
+            NULL AS partner_accName,
+            NULL AS bank_accNumber,
+            NULL AS bank,
+            NULL AS settled_online_check,
+            NULL AS charge_to,
+            NULL AS charge_sched
+        FROM adjustment_vol
+)
+
+SELECT 
+    ap.partner_name,
+    MAX(ap.partner_accName) AS partner_accName,
+    MAX(ap.bank_accNumber) AS bank_accNumber,
+    MAX(mpm.bank) AS bank,
+    MAX(mpm.settled_online_check) AS settled_online_check,
+    MAX(mpm.charge_to) AS charge_to,
+    MAX(mpm.charge_sched) AS charge_sched,
+    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
+    (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
+    (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges,
+    (SUM(COALESCE(principal_adjustment.principal4, 0))) AS principal_adjustment,
+    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0)) - SUM(COALESCE(principal_adjustment.principal4, 0))) AS amount_for_settlement
+FROM all_partners AS ap
