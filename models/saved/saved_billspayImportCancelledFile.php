@@ -33,6 +33,316 @@ set_time_limit(0);
 // Enable mysqli exceptions for clearer DB errors during import
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
+/**
+ * Simple dispatcher helpers for source types (KPX / KP7).
+ * KP7 is currently under development; KPX uses the existing import flow below.
+ */
+function handleKP7()
+{
+    echo '<script>alert("KP7 import is under development.");window.history.back();</script>';
+    exit;
+}
+
+/**
+ * Handle KPX import (existing cancellation flow).
+ * Kept as a function to separate KPX/KP7 handling.
+ */
+function handleKPXImport($tmpPath, $fileName, $fileExt)
+{
+    global $conn;
+    // replicate the existing KPX cancellation import flow
+    $rows = [];
+    $startRow = 7; // 1-based
+    $startColIndex = 1; // B -> index 1 (0-based)
+    $endColIndex = 16; // Q -> index 16 (0-based), inclusive
+
+    // read partner name from POST (support both 'partner_name' and 'partner')
+    $partnerName = $_POST['partner_name'] ?? $_POST['partner'] ?? '';
+    // get partner_id, partner_id_kpx, gl_code converted based on selected partner name for cancellation
+    $partnerSQL = "SELECT DISTINCT partner_name, partner_id, partner_id_kpx, gl_code FROM masterdata.partner_masterfile WHERE partner_name = ? LIMIT 1";
+    $partnerId = null;
+    $partnerIdKpx = null;
+    $glCode = null;
+    if (!empty($partnerName) && strtoupper($partnerName) !== 'ALL') {
+        $stmt = $conn->prepare($partnerSQL);
+        $stmt->bind_param("s", $partnerName);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $partnerId = $row['partner_id'];
+            $partnerIdKpx = $row['partner_id_kpx'];
+            $glCode = $row['gl_code'];
+        }
+        $stmt->close();
+    }
+
+    // get branch_id, branch_code, zone_code, region_code, region based on reference number provided in POST
+    $referenceNo = $_POST['reference_no'] ?? '';
+    $BranchNameSql = "SELECT DISTINCT branch_id, branch_code, zone_code, region_code, region FROM billspayment_transaction WHERE reference_no = ? LIMIT 1";
+    $branchId = null;
+    $branchCode = null;
+    $zoneCode = null;
+    $regionCode = null;
+    $region = null;
+    if (!empty($referenceNo)) {
+        $stmt = $conn->prepare($BranchNameSql);
+        $stmt->bind_param("s", $referenceNo);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $branchId = $row['branch_id'];
+            $branchCode = $row['branch_code'];
+            $zoneCode = $row['zone_code'];
+            $regionCode = $row['region_code'];
+            $region = $row['region'];
+        }
+        $stmt->close();
+    }
+
+    try {
+        if ($fileExt === 'csv') {
+            // Parse CSV
+            $handle = fopen($tmpPath, 'r');
+            if ($handle === false) throw new Exception('Unable to open uploaded CSV file.');
+
+            $rowIndex = 0;
+            while (($data = fgetcsv($handle)) !== false) {
+                $rowIndex++;
+                if ($rowIndex < $startRow) continue; // skip until start row
+
+                // Ensure the row has enough columns
+                $rowData = [];
+                $allEmpty = true;
+                for ($i = $startColIndex; $i <= $endColIndex; $i++) {
+                    $value = isset($data[$i]) ? trim((string)$data[$i]) : '';
+                    $rowData[] = $value;
+                    if ($value !== '') $allEmpty = false;
+                }
+
+                if ($allEmpty) break;
+                $rows[] = $rowData;
+            }
+            fclose($handle);
+        } elseif (in_array($fileExt, ['xls', 'xlsx'])) {
+            // Use PhpSpreadsheet for Excel files
+            $spreadsheet = IOFactory::load($tmpPath);
+            $worksheet = $spreadsheet->getActiveSheet();
+            $highestRow = $worksheet->getHighestRow();
+
+            for ($r = $startRow; $r <= $highestRow; $r++) {
+                $rowData = [];
+                $allEmpty = true;
+                // Column B..Q correspond to column numbers 2..17
+                for ($c = 2; $c <= 17; $c++) {
+                    $cell = $worksheet->getCellByColumnAndRow($c, $r);
+                    $cellValue = $cell !== null ? $cell->getValue() : '';
+                    $value = trim((string)$cellValue);
+                    $rowData[] = $value;
+                    if ($value !== '') $allEmpty = false;
+                }
+                if ($allEmpty) break;
+                $rows[] = $rowData;
+            }
+            // Free resources
+            if (isset($spreadsheet) && is_object($spreadsheet)) {
+                try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+                unset($worksheet, $spreadsheet);
+                if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+            }
+        } else {
+            throw new Exception('Unsupported file type. Accepted: .csv, .xls, .xlsx');
+        }
+
+        if (empty($rows)) {
+            echo '<script>alert("No data found starting at row 7 in columns B to Q.");window.history.back();</script>';
+            exit;
+        }
+
+        $outDir = __DIR__ . '/temporary';
+        if (!is_dir($outDir)) mkdir($outDir, 0777, true);
+
+        $outFile = $outDir . '/import_cancelled_' . date('Ymd_His') . '_' . bin2hex(random_bytes(6)) . '.json';
+        file_put_contents($outFile, json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+        // store import metadata in session for display on summary
+        $uploadedBy = '';
+        if (isset($_SESSION['user_type'])) {
+            if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_name'])) $uploadedBy = $_SESSION['admin_name'];
+            elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_name'])) $uploadedBy = $_SESSION['user_name'];
+        }
+        $source = $_POST['fileType'] ?? $_POST['source'] ?? '';
+
+        $_SESSION['import_meta'] = [
+            'partner_id' => $partnerId,
+            'partner_id_kpx' => $partnerIdKpx,
+            'gl_code' => $glCode,
+            'partner_name' => $partnerName,
+            'reference_no' => $referenceNo,
+            'source' => $source,
+            'uploaded_date' => date('Y-m-d'),
+            'uploaded_by' => $uploadedBy,
+            'branch_id' => $branchId,
+            'branch_code' => $branchCode,
+            'zone_code' => $zoneCode,
+            'region_code' => $regionCode,
+            'region' => $region,
+            'rows_saved' => count($rows),
+            'json_file' => basename($outFile)
+        ];
+
+        echo '<script>alert("File processed successfully. Rows saved: ' . count($rows) . '");window.location.href = "' . basename(__FILE__) . '";</script>';
+        exit;
+    } catch (Exception $e) {
+        echo '<script>alert("Error processing file: ' . addslashes($e->getMessage()) . '");window.history.back();</script>';
+        exit;
+    }
+}
+
+/**
+ * Insert KPX cancellation rows into DB.
+ * Uses global $conn. Returns array result for JSON response.
+ */
+function insertKPXCancellationRows(array $rowsToInsert, array $meta)
+{
+    global $conn;
+
+    $insertSQL = "INSERT INTO mldb.billspayment_cancellation (
+        cancellation_datetime, 
+        sendout_datetime, 
+        source_file, 
+        control_no, 
+        reference_no, 
+        ir_no,
+        payor, 
+        account_no, 
+        account_name, 
+        principal_amount, 
+        charge_to_customer, 
+        charge_to_partner,
+        cancellation_charge, 
+        resource, 
+        branch_id, 
+        branch_code, 
+        branch_name, 
+        zone_code, 
+        region_code,
+        region, 
+        remote_branch, 
+        remote_operator, 
+        partner_name, 
+        partner_id, 
+        partner_id_kpx, 
+        mpm_gl_code,
+        imported_by, 
+        imported_date
+    ) VALUES (" . rtrim(str_repeat('?,', 28), ',') . ")";
+
+    $stmt = $conn->prepare($insertSQL);
+    if (!$stmt) return ['success' => false, 'error' => 'Prepare failed: ' . $conn->error];
+
+    $types = 'sssssssssddddsssssssssssssss';
+
+    $conn->begin_transaction();
+    $inserted = 0;
+    $errors = [];
+
+    $cleanNumber = function($v) {
+        $s = trim((string)$v);
+        if ($s === '') return 0.0;
+        $s = preg_replace('/[\(\)\$,\s]/', '', $s);
+        $s = preg_replace('/[^0-9.\-]/', '', $s);
+        return is_numeric($s) ? floatval($s) : 0.0;
+    };
+
+    try {
+        foreach ($rowsToInsert as $row) {
+            // same mapping as previous inline logic
+            $cancellation_datetime = date('Y-m-d H:i:s', strtotime($row[0]));
+            $sendout_datetime = date('Y-m-d H:i:s', strtotime($row[1] ?? ''));
+            $source_file = $meta['source'] ?? '';
+            $control_no = $row[3] ?? null;
+            $reference_no = $row[2] ?? null;
+            $ir_no = $row[7] ?? null;
+            $payor = $row[6] ?? null;
+            $account_no = $row[4] ?? null;
+            $account_name = $row[5] ?? null;
+
+            $principal_amount = $cleanNumber($row[8] ?? '');
+            $charge_to_customer = $cleanNumber($row[10] ?? '');
+            $charge_to_partner = $cleanNumber($row[11] ?? '');
+            $cancellation_charge = $cleanNumber($row[9] ?? '');
+
+            $resource = $row[12] ?? null;
+            $branch_id = $meta['branch_id'] ?? null;
+            $branch_code = $meta['branch_code'] ?? null;
+            $branch_name = $row[13] ?? null;
+            $zone_code = $meta['zone_code'] ?? null;
+            $region_code = $meta['region_code'] ?? null;
+            $region = $meta['region'] ?? null;
+            $remote_branch = $row[15] ?? null;
+            $remote_operator = $row[14] ?? null;
+
+            $partner_name = $meta['partner_name'] ?? null;
+            $partner_id = $meta['partner_id'] ?? null;
+            $partner_id_kpx = $meta['partner_id_kpx'] ?? null;
+            $mpm_gl_code = $meta['gl_code'] ?? null;
+
+            $imported_by = $meta['uploaded_by'] ?? null;
+            $imported_date = $meta['uploaded_date'] ?? date('Y-m-d');
+
+            $params = [ $types,
+                $cancellation_datetime, $sendout_datetime, $source_file, $control_no, $reference_no, $ir_no,
+                $payor, $account_no, $account_name, $principal_amount, $charge_to_customer, $charge_to_partner,
+                $cancellation_charge, $resource, $branch_id, $branch_code, $branch_name, $zone_code, $region_code,
+                $region, $remote_branch, $remote_operator, $partner_name, $partner_id, $partner_id_kpx, $mpm_gl_code,
+                $imported_by, $imported_date
+            ];
+
+            $bindParams = [];
+            foreach ($params as $key => $value) $bindParams[$key] = &$params[$key];
+
+            $bindResult = @call_user_func_array([$stmt, 'bind_param'], $bindParams);
+            if ($bindResult === false) {
+                $err = $stmt->error ?: $conn->error;
+                $errors[] = 'bind_param failed: ' . $err;
+                error_log('[IMPORT ERROR] bind_param failed: ' . $err);
+                continue;
+            }
+
+            if (!$stmt->execute()) {
+                $err = $stmt->error ?: $conn->error;
+                $errors[] = 'execute failed: ' . $err;
+                error_log('[IMPORT ERROR] execute failed: ' . $err);
+            } else {
+                $inserted++;
+            }
+        }
+
+        if (empty($errors)) {
+            $conn->commit();
+            return ['success' => true, 'inserted' => $inserted];
+        } else {
+            $conn->rollback();
+            return ['success' => false, 'error' => implode('; ', $errors)];
+        }
+    } catch (Exception $e) {
+        $conn->rollback();
+        return ['success' => false, 'error' => $e->getMessage()];
+    } finally {
+        if (isset($stmt) && $stmt) $stmt->close();
+    }
+}
+
+/**
+ * Stubbed KP7 insert — returns not implemented.
+ */
+function insertKP7CancellationRows(array $rowsToInsert, array $meta)
+{
+    return ['success' => false, 'error' => 'KP7 insertion not implemented yet'];
+}
+
 // Handle cancel action (clear uploaded data / session)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'cancel_import') {
     // Delete temporary JSON files for this import
@@ -76,153 +386,15 @@ if (isset($_POST['upload'])) {
         $fileName = $_FILES['import_file']['name'];
         $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
 
-        $rows = [];
-        $startRow = 7; // 1-based
-        $startColIndex = 1; // B -> index 1 (0-based)
-        $endColIndex = 16; // Q -> index 16 (0-based), inclusive
-
-        // read partner name from POST (support both 'partner_name' and 'partner')
-        $partnerName = $_POST['partner_name'] ?? $_POST['partner'] ?? '';
-        // get partner_id, partner_id_kpx, gl_code converted based on selected partner name for cancellation
-        $partnerSQL = "SELECT DISTINCT partner_name, partner_id, partner_id_kpx, gl_code FROM masterdata.partner_masterfile WHERE partner_name = ? LIMIT 1";
-        $partnerId = null;
-        $partnerIdKpx = null;
-        $glCode = null;
-        if (!empty($partnerName) && strtoupper($partnerName) !== 'ALL') {
-            $stmt = $conn->prepare($partnerSQL);
-            $stmt->bind_param("s", $partnerName);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            if ($result && $result->num_rows > 0) {
-                $row = $result->fetch_assoc();
-                $partnerId = $row['partner_id'];
-                $partnerIdKpx = $row['partner_id_kpx'];
-                $glCode = $row['gl_code'];
-            }
-            $stmt->close();
+        // Determine source/file type selection from the manual form (KPX or KP7)
+        $selectedSource = strtoupper($_POST['fileType'] ?? $_POST['source'] ?? 'KPX');
+        if ($selectedSource === 'KP7') {
+            // KP7 support is not yet implemented — short-circuit with message
+            handleKP7();
         }
 
-        // get branch_id, branch_code, zone_code, region_code, region based on reference number provided in POST
-        $referenceNo = $_POST['reference_no'] ?? '';
-        $BranchNameSql = "SELECT DISTINCT branch_id, branch_code, zone_code, region_code, region FROM billspayment_transaction WHERE reference_no = ? LIMIT 1";
-        $branchId = null;
-        $branchCode = null;
-        $zoneCode = null;
-        $regionCode = null;
-        $region = null;
-        if (!empty($referenceNo)) {
-            $stmt = $conn->prepare($BranchNameSql);
-            $stmt->bind_param("s", $referenceNo);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            if ($result && $result->num_rows > 0) {
-                $row = $result->fetch_assoc();
-                $branchId = $row['branch_id'];
-                $branchCode = $row['branch_code'];
-                $zoneCode = $row['zone_code'];
-                $regionCode = $row['region_code'];
-                $region = $row['region'];
-            }
-            $stmt->close();
-        }
-        
-        try {
-            if ($fileExt === 'csv') {
-                // Parse CSV
-                $handle = fopen($tmpPath, 'r');
-                if ($handle === false) throw new Exception('Unable to open uploaded CSV file.');
-
-                $rowIndex = 0;
-                while (($data = fgetcsv($handle)) !== false) {
-                    $rowIndex++;
-                    if ($rowIndex < $startRow) continue; // skip until start row
-
-                    // Ensure the row has enough columns
-                    $rowData = [];
-                    $allEmpty = true;
-                    for ($i = $startColIndex; $i <= $endColIndex; $i++) {
-                        $value = isset($data[$i]) ? trim((string)$data[$i]) : '';
-                        $rowData[] = $value;
-                        if ($value !== '') $allEmpty = false;
-                    }
-
-                    if ($allEmpty) break;
-                    $rows[] = $rowData;
-                }
-                fclose($handle);
-            } elseif (in_array($fileExt, ['xls', 'xlsx'])) {
-                // Use PhpSpreadsheet for Excel files
-                $spreadsheet = IOFactory::load($tmpPath);
-                $worksheet = $spreadsheet->getActiveSheet();
-                $highestRow = $worksheet->getHighestRow();
-
-                for ($r = $startRow; $r <= $highestRow; $r++) {
-                    $rowData = [];
-                    $allEmpty = true;
-                    // Column B..Q correspond to column numbers 2..17
-                    for ($c = 2; $c <= 17; $c++) {
-                        $cell = $worksheet->getCellByColumnAndRow($c, $r);
-                        $cellValue = $cell !== null ? $cell->getValue() : '';
-                        $value = trim((string)$cellValue);
-                        $rowData[] = $value;
-                        if ($value !== '') $allEmpty = false;
-                    }
-                    if ($allEmpty) break;
-                    $rows[] = $rowData;
-                }
-                // Free resources
-                if (isset($spreadsheet) && is_object($spreadsheet)) {
-                    try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
-                    unset($worksheet, $spreadsheet);
-                    if (function_exists('gc_collect_cycles')) gc_collect_cycles();
-                }
-            } else {
-                throw new Exception('Unsupported file type. Accepted: .csv, .xls, .xlsx');
-            }
-
-            if (empty($rows)) {
-                echo '<script>alert("No data found starting at row 7 in columns B to Q.");window.history.back();</script>';
-                exit;
-            }
-
-            $outDir = __DIR__ . '/temporary';
-            if (!is_dir($outDir)) mkdir($outDir, 0777, true);
-
-            $outFile = $outDir . '/import_cancelled_' . date('Ymd_His') . '_' . bin2hex(random_bytes(6)) . '.json';
-            file_put_contents($outFile, json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-
-            // store import metadata in session for display on summary
-            $uploadedBy = '';
-            if (isset($_SESSION['user_type'])) {
-                if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_name'])) $uploadedBy = $_SESSION['admin_name'];
-                elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_name'])) $uploadedBy = $_SESSION['user_name'];
-            }
-            $source = $_POST['fileType'] ?? $_POST['source'] ?? '';
-
-            $_SESSION['import_meta'] = [
-                'partner_id' => $partnerId,
-                'partner_id_kpx' => $partnerIdKpx,
-                'gl_code' => $glCode,
-                'partner_name' => $partnerName,
-                'reference_no' => $referenceNo,
-                'source' => $source,
-                'uploaded_date' => date('Y-m-d'),
-                'uploaded_by' => $uploadedBy,
-                'branch_id' => $branchId,
-                'branch_code' => $branchCode,
-                'zone_code' => $zoneCode,
-                'region_code' => $regionCode,
-                'region' => $region,
-                'rows_saved' => count($rows),
-                'json_file' => basename($outFile)
-            ];
-
-            echo '<script>alert("File processed successfully. Rows saved: ' . count($rows) . '");window.location.href = "' . basename(__FILE__) . '";</script>';
-            exit;
-        } catch (Exception $e) {
-            echo '<script>alert("Error processing file: ' . addslashes($e->getMessage()) . '");window.history.back();</script>';
-            exit;
-        }
+        // Delegate to source-specific handler. KP7 already short-circuited above.
+        handleKPXImport($tmpPath, $fileName, $fileExt);
     } else {
         echo '<script>alert("No file uploaded or upload error.");window.history.back();</script>';
         exit;
@@ -257,146 +429,16 @@ if ((isset($_POST['action']) && $_POST['action'] === 'confirm_import') || isset(
         exit;
     }
 
-    // Prepare insert statement for cancellation table
-    $insertSQL = "INSERT INTO mldb.billspayment_cancellation (
-        cancellation_datetime, 
-        sendout_datetime, 
-        source_file, 
-        control_no, 
-        reference_no, 
-        ir_no,
-        payor, 
-        account_no, 
-        account_name, 
-        principal_amount, 
-        charge_to_customer, 
-        charge_to_partner,
-        cancellation_charge, 
-        resource, 
-        branch_id, 
-        branch_code, 
-        branch_name, 
-        zone_code, 
-        region_code,
-        region, 
-        remote_branch, 
-        remote_operator, 
-        partner_name, 
-        partner_id, 
-        partner_id_kpx, 
-        mpm_gl_code,
-        imported_by, 
-        imported_date
-    ) VALUES (" . rtrim(str_repeat('?,', 28), ',') . ")";
-
-    if (!($stmt = $conn->prepare($insertSQL))) {
-        echo json_encode(['success' => false, 'error' => 'Prepare failed: ' . $conn->error]);
-        exit;
+    // Dispatch insertion to the appropriate source handler
+    $meta = $_SESSION['import_meta'] ?? [];
+    $source = strtoupper($meta['source'] ?? 'KPX');
+    if ($source === 'KP7') {
+        $result = insertKP7CancellationRows($rowsToInsert, $meta);
+    } else {
+        $result = insertKPXCancellationRows($rowsToInsert, $meta);
     }
 
-    // types: first 9 strings, then 4 doubles, then 15 strings => total 28
-    $types = 'sssssssssddddsssssssssssssss';
-
-    // Start transaction
-    $conn->begin_transaction();
-    $inserted = 0;
-    $errors = [];
-
-    // helper to clean numeric
-    $cleanNumber = function($v) {
-        $s = trim((string)$v);
-        if ($s === '') return 0.0;
-        // remove parentheses, commas, currency symbols
-        $s = preg_replace('/[\(\)\$,\s]/', '', $s);
-        $s = preg_replace('/[^0-9.\-]/', '', $s);
-        return is_numeric($s) ? floatval($s) : 0.0;
-    };
-
-    try {
-        foreach ($rowsToInsert as $row) {
-            $meta = $_SESSION['import_meta'] ?? [];
-            // row indexes: B..Q => 0..15
-            $cancellation_datetime = date('Y-m-d H:i:s', strtotime($row[0])); // B $row[0] ?? null;
-            $sendout_datetime = date('Y-m-d H:i:s', strtotime($row[1] ?? '')); // Q
-            $source_file = $meta['source'] ?? '';
-            $control_no = $row[3] ?? null;
-            $reference_no = $row[2] ?? null;
-            $ir_no = $row[7] ?? null;
-            $payor = $row[6] ?? null;
-            $account_no = $row[4] ?? null;
-            $account_name = $row[5] ?? null;
-
-            // indexes for money
-            $principal_amount = $cleanNumber($row[8] ?? ''); // J
-            $charge_to_customer = $cleanNumber($row[10] ?? ''); // L
-            $charge_to_partner = $cleanNumber($row[11] ?? ''); // M
-            $cancellation_charge = $cleanNumber($row[9] ?? ''); // K
-
-            $resource = $row[12] ?? null;
-            $branch_id = $meta['branch_id'] ?? null;
-            $branch_code = $meta['branch_code'] ?? null;
-            $branch_name = $row[13] ?? null; // P
-            $zone_code = $meta['zone_code'] ?? null;
-            $region_code = $meta['region_code'] ?? null;
-            $region = $meta['region'] ?? null;
-            $remote_branch = $row[15] ?? null; // N
-            $remote_operator = $row[14] ?? null; // O
-
-            $partner_name = $meta['partner_name'] ?? null;
-            $partner_id = $meta['partner_id'] ?? null;
-            $partner_id_kpx = $meta['partner_id_kpx'] ?? null;
-            $mpm_gl_code = $meta['gl_code'] ?? null;
-
-            $imported_by = $meta['uploaded_by'] ?? null;
-            $imported_date = $meta['uploaded_date'] ?? date('Y-m-d');
-
-            // bind params by reference
-            $params = [ $types,
-                $cancellation_datetime, $sendout_datetime, $source_file, $control_no, $reference_no, $ir_no,
-                $payor, $account_no, $account_name, $principal_amount, $charge_to_customer, $charge_to_partner,
-                $cancellation_charge, $resource, $branch_id, $branch_code, $branch_name, $zone_code, $region_code,
-                $region, $remote_branch, $remote_operator, $partner_name, $partner_id, $partner_id_kpx, $mpm_gl_code,
-                $imported_by, $imported_date
-            ];
-
-            // make references
-            $bindParams = [];
-            foreach ($params as $key => $value) {
-                $bindParams[$key] = &$params[$key];
-            }
-
-            // bind parameters and check result
-            $bindResult = @call_user_func_array([$stmt, 'bind_param'], $bindParams);
-            if ($bindResult === false) {
-                $err = $stmt->error ?: $conn->error;
-                $errors[] = 'bind_param failed: ' . $err;
-                error_log('[IMPORT ERROR] bind_param failed: ' . $err);
-                continue;
-            }
-
-            // execute and capture any error
-            if (!$stmt->execute()) {
-                $err = $stmt->error ?: $conn->error;
-                $errors[] = 'execute failed: ' . $err;
-                error_log('[IMPORT ERROR] execute failed: ' . $err);
-            } else {
-                $inserted++;
-            }
-        }
-
-        if (empty($errors)) {
-            $conn->commit();
-            echo json_encode(['success' => true, 'inserted' => $inserted]);
-        } else {
-            $conn->rollback();
-            echo json_encode(['success' => false, 'error' => implode('; ', $errors)]);
-        }
-    } catch (Exception $e) {
-        $conn->rollback();
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-    }
-
-    $stmt->close();
+    echo json_encode($result);
     exit;
 }
 

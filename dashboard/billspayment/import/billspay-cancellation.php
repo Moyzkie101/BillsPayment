@@ -435,11 +435,12 @@ $partnersResult = $conn->query($partnersQuery);
                 <!-- Manual Import Area (hidden by default) - transaction-style -->
                 <div id="manualArea" style="display:none;">
                     <form id="manualUploadForm" action="../../../models/saved/saved_billspayImportCancelledFile.php" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="upload" value="1">
                         <div class="row mt-3">
                             <div class="col-md-5 mb-3">
                                 <div class="d-flex align-items-center">
                                     <label class="form-label me-2 mb-0">Partners Name:</label>
-                                    <input list="manualCompanyList" id="manualCompanyInput" name="company" class="form-control" placeholder="Search or type company name" required />
+                                    <input list="manualCompanyList" id="manualCompanyInput" name="partner_name" class="form-control" placeholder="Search or type company name" required />
                                     <datalist id="manualCompanyList">
                                         <?php
                                             if ($partnersResult && mysqli_num_rows($partnersResult) > 0) {
