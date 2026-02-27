@@ -292,6 +292,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                             END COLLATE utf8mb4_general_ci,
                             bt.partner_name
                 ),
+                    summary_by_partner AS (
+                        SELECT
+                            partner_name,
+                            SUM(vol1) AS vol1,
+                            SUM(principal1) AS principal1,
+                            SUM(charge1) AS charge1
+                        FROM summary_vol
+                        GROUP BY partner_name
+                    ),
                 adjustment_vol AS (
                     SELECT
                         CASE
@@ -316,65 +325,63 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         END COLLATE utf8mb4_general_ci,
                         bt.partner_name
                 ),
-                all_partners AS (
+                adjustment_by_partner AS (
                     SELECT
-                        COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
+                        partner_name,
+                        SUM(vol2) AS vol2,
+                        SUM(principal2) AS principal2,
+                        SUM(charge2) AS charge2
+                    FROM adjustment_vol
+                    GROUP BY partner_name
+                ),
+                partner_master_dedup AS (
+                    SELECT
                         mpm.partner_name,
-                        mpm.partner_accName,
-                        mpm.bank_accNumber,
-                        mpm.bank,
-                        mpm.settled_online_check,
-                        mpm.charge_to,
-                        mpm.charge_sched
+                        MAX(mpm.partner_accName) AS partner_accName,
+                        MAX(mpm.bank_accNumber) AS bank_accNumber,
+                        MAX(mpm.bank) AS bank,
+                        MAX(mpm.settled_online_check) AS settled_online_check,
+                        MAX(mpm.charge_to) AS charge_to,
+                        MAX(mpm.charge_sched) AS charge_sched
                     FROM masterdata.partner_masterfile AS mpm
                     WHERE mpm.status = 'ACTIVE'
                     $allPartnersWhereClause
+                    GROUP BY mpm.partner_name
+                ),
+                all_partners AS (
+                    SELECT
+                        partner_name
+                    FROM partner_master_dedup
 
                     UNION
 
                     SELECT
-                        partner_key,
-                        partner_name,
-                        NULL AS partner_accName,
-                        NULL AS bank_accNumber,
-                        NULL AS bank,
-                        NULL AS settled_online_check,
-                        NULL AS charge_to,
-                        NULL AS charge_sched
-                    FROM summary_vol
+                        partner_name
+                    FROM summary_by_partner
 
                     UNION
 
                     SELECT
-                        partner_key,
-                        partner_name,
-                        NULL AS partner_accName,
-                        NULL AS bank_accNumber,
-                        NULL AS bank,
-                        NULL AS settled_online_check,
-                        NULL AS charge_to,
-                        NULL AS charge_sched
-                    FROM adjustment_vol
+                        partner_name
+                    FROM adjustment_by_partner
                 )
                 SELECT
                     ap.partner_name,
-                    MAX(ap.partner_accName) AS partner_accName,
-                    MAX(ap.bank_accNumber) AS bank_accNumber,
-                    MAX(mpm.bank) AS bank,
-                    MAX(mpm.settled_online_check) AS settled_online_check,
-                    MAX(mpm.charge_to) AS charge_to,
-                    MAX(mpm.charge_sched) AS charge_sched,
-                    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
-                    (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
-                    (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
+                    pmd.partner_accName,
+                    pmd.bank_accNumber,
+                    pmd.bank,
+                    pmd.settled_online_check,
+                    pmd.charge_to,
+                    pmd.charge_sched,
+                    (COALESCE(sv.vol1, 0) - COALESCE(av.vol2, 0)) AS net_vol,
+                    (COALESCE(sv.principal1, 0) - COALESCE(ABS(av.principal2), 0)) AS net_principal,
+                    (COALESCE(sv.charge1, 0) - COALESCE(ABS(av.charge2), 0)) AS net_charges
                 FROM all_partners AS ap
-                LEFT JOIN summary_vol AS sv ON (ap.partner_key = sv.partner_key OR ap.partner_name = sv.partner_name)
-                LEFT JOIN adjustment_vol AS av ON (ap.partner_key = av.partner_key OR ap.partner_name = av.partner_name)
-                LEFT JOIN masterdata.partner_masterfile AS mpm ON (ap.partner_name = mpm.partner_name)
-                WHERE (mpm.status = 'ACTIVE' OR mpm.status IS NULL)
+                LEFT JOIN summary_by_partner AS sv ON ap.partner_name = sv.partner_name
+                LEFT JOIN adjustment_by_partner AS av ON ap.partner_name = av.partner_name
+                LEFT JOIN partner_master_dedup AS pmd ON ap.partner_name = pmd.partner_name
+                WHERE ap.partner_name IS NOT NULL
                 $mainWhereClause
-                GROUP BY ap.partner_name
-                HAVING ap.partner_name IS NOT NULL
                 ORDER BY ap.partner_name";
 
     try {
@@ -1039,7 +1046,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         clearReportTable: function() {
             const tbody = $('#transactionReportTable tbody');
             tbody.empty();
-            tbody.append('<tr><td colspan="9" class="text-center">No data found for the selected criteria</td></tr>');
+            tbody.append('<tr><td colspan="9" class="text-center"><b>CHARGE BY CUSTOMER</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER DAILY</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER WEEKLY</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER MONTHLY</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr>');
 
             $('#totalnetvolume').text('0');
             $('#totalnetprincipal').text('0.00');
@@ -1053,18 +1060,103 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             let totalNetVolume = 0;
             let totalNetPrincipal = 0;
             let totalNetCharge = 0;
+            let runningIndex = 0;
 
             const rows = Array.isArray(data) ? data : [];
 
-            const appendDataRows = function(sectionRows, startIndex) {
-                sectionRows.forEach((row, index) => {
-                    const netVol = parseInt(row.net_vol || 0, 10);
-                    const netPrincipal = parseFloat(row.net_principal || 0);
-                    const netCharge = parseFloat(row.net_charges || 0);
+            const toNumber = function(value) {
+                const numericValue = parseFloat(value);
+                return Number.isFinite(numericValue) ? numericValue : 0;
+            };
+
+            const isEffectivelyZero = function(value) {
+                return Math.abs(value) < 0.0000001;
+            };
+
+            const normalizePartnerName = function(value) {
+                return String(value || '').trim().toUpperCase();
+            };
+
+            const mergedRowsMap = new Map();
+            rows.forEach(function(row) {
+                const partnerKey = normalizePartnerName(row.partner_name);
+                if (!partnerKey) {
+                    return;
+                }
+
+                if (!mergedRowsMap.has(partnerKey)) {
+                    mergedRowsMap.set(partnerKey, {
+                        ...row,
+                        net_vol: toNumber(row.net_vol),
+                        net_principal: toNumber(row.net_principal),
+                        net_charges: toNumber(row.net_charges)
+                    });
+                    return;
+                }
+
+                const existing = mergedRowsMap.get(partnerKey);
+                existing.net_vol = toNumber(existing.net_vol) + toNumber(row.net_vol);
+                existing.net_principal = toNumber(existing.net_principal) + toNumber(row.net_principal);
+                existing.net_charges = toNumber(existing.net_charges) + toNumber(row.net_charges);
+                existing.partner_accName = existing.partner_accName || row.partner_accName || '';
+                existing.bank_accNumber = existing.bank_accNumber || row.bank_accNumber || '';
+                existing.bank = existing.bank || row.bank || '';
+                existing.settled_online_check = existing.settled_online_check || row.settled_online_check || '';
+                existing.charge_to = existing.charge_to || row.charge_to || '';
+                existing.charge_sched = existing.charge_sched || row.charge_sched || '';
+            });
+
+            const mergedRows = Array.from(mergedRowsMap.values());
+
+            const visibleRows = mergedRows.filter(function(row) {
+                const netVol = toNumber(row.net_vol);
+                const netPrincipal = toNumber(row.net_principal);
+                const netCharge = toNumber(row.net_charges);
+
+                return !(isEffectivelyZero(netVol) && isEffectivelyZero(netPrincipal) && isEffectivelyZero(netCharge));
+            });
+
+            const normalizeValue = function(value) {
+                return String(value || '').trim().toUpperCase();
+            };
+
+            const sections = [
+                {
+                    title: 'CHARGE BY CUSTOMER',
+                    matcher: function(row) {
+                        return normalizeValue(row.charge_to) === 'CUSTOMER';
+                    }
+                },
+                {
+                    title: 'CHARGE BY PARTNER DAILY',
+                    matcher: function(row) {
+                        return normalizeValue(row.charge_to) === 'PARTNER' && normalizeValue(row.charge_sched) === 'DAILY';
+                    }
+                },
+                {
+                    title: 'CHARGE BY PARTNER WEEKLY',
+                    matcher: function(row) {
+                        return normalizeValue(row.charge_to) === 'PARTNER' && normalizeValue(row.charge_sched) === 'WEEKLY';
+                    }
+                },
+                {
+                    title: 'CHARGE BY PARTNER MONTHLY',
+                    matcher: function(row) {
+                        return normalizeValue(row.charge_to) === 'PARTNER' && normalizeValue(row.charge_sched) === 'MONTHLY';
+                    }
+                }
+            ];
+
+            const appendDataRows = function(sectionRows) {
+                sectionRows.forEach((row) => {
+                    const netVol = toNumber(row.net_vol);
+                    const netPrincipal = toNumber(row.net_principal);
+                    const netCharge = toNumber(row.net_charges);
 
                     totalNetVolume += netVol;
                     totalNetPrincipal += netPrincipal;
                     totalNetCharge += netCharge;
+                    runningIndex += 1;
 
                     const partnerMeta = [
                         row.bank ? `Bank: ${row.bank}` : '',
@@ -1075,10 +1167,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
                     const tr = `
                         <tr>
-                            <td class="text-center">${startIndex + index + 1}</td>
+                            <td class="text-center">${runningIndex}</td>
                             <td>
                                 ${row.partner_name || ''}
-                                ${partnerMeta ? `<div class="small text-muted">${partnerMeta}</div>` : ''}
                             </td>
                             <td>${row.partner_accName || ''}</td>
                             <td class="text-truncate">${row.bank_accNumber || ''}</td>
@@ -1093,10 +1184,21 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 });
             };
 
-            if (rows.length === 0) {
+            if (visibleRows.length === 0) {
                 tbody.append('<tr><td colspan="9" class="text-center">No data found for the selected criteria</td></tr>');
             } else {
-                appendDataRows(rows, 0);
+                sections.forEach(section => {
+                    const sectionRows = visibleRows.filter(section.matcher);
+
+                    tbody.append(`<tr><td colspan="9" class="text-center"><b>${section.title}</b></td></tr>`);
+
+                    if (sectionRows.length === 0) {
+                        tbody.append('<tr><td colspan="9" class="text-center text-muted">No data found under this section</td></tr>');
+                        return;
+                    }
+
+                    appendDataRows(sectionRows);
+                });
             }
 
             $('#totalnetvolume').text(totalNetVolume.toLocaleString());
