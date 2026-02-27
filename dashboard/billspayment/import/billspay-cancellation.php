@@ -620,6 +620,50 @@ document.addEventListener('DOMContentLoaded', function() {
                         field += ch;
                     }
                 }
+
+                    // Manual form: intercept submit to run duplicate check before uploading
+                    const manualForm = document.getElementById('manualUploadForm');
+                    if (manualForm) {
+                        manualForm.addEventListener('submit', function(e) {
+                            e.preventDefault();
+                            const fileInputManual = manualForm.querySelector('input[name="import_file"]');
+                            if (!fileInputManual || !fileInputManual.files || fileInputManual.files.length === 0) {
+                                Swal.fire({ icon: 'warning', title: 'No file selected', text: 'Please choose a file to upload.' });
+                                return;
+                            }
+                            const f = fileInputManual.files[0];
+                            // Build FormData for duplicate check (server accepts files[] + partner_ids[] + source_types[])
+                            const fd = new FormData();
+                            fd.append('files[]', f);
+                            // partner_name is used by manual form; server duplicate check supports partner_ids[] only, so omit to check globally
+                            const src = manualForm.querySelector('select[name="fileType"]') ? manualForm.querySelector('select[name="fileType"]').value : '';
+                            fd.append('source_types[]', src || 'KPX');
+                            fd.append('check_duplicates', '1');
+
+                            // show loading
+                            $('#loading-overlay').show();
+                            $.ajax({ url: '../../../models/saved/saved_billspayImportCancelledFile.php', type: 'POST', data: fd, processData: false, contentType: false, dataType: 'json' })
+                                .done(function(resp) {
+                                    $('#loading-overlay').hide();
+                                    if (resp && resp.success && Array.isArray(resp.files) && resp.files.length > 0) {
+                                        const files = resp.files;
+                                        const dup = files.filter(x => x.hasDuplicates);
+                                        if (dup.length > 0) {
+                                            // reuse the page-level duplicate modal to inform user; do not submit
+                                            showDuplicateModal(files, dup);
+                                            return;
+                                        }
+                                        // no duplicates — submit the form (will hit server upload handler)
+                                        manualForm.submit();
+                                    } else {
+                                        Swal.fire({ icon: 'error', title: 'Validation Error', text: (resp && resp.error) ? resp.error : 'Unable to validate file.' });
+                                    }
+                                }).fail(function(xhr, status, err) {
+                                    $('#loading-overlay').hide();
+                                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.' });
+                                });
+                        });
+                    }
                 if (field !== '' || row.length > 0) { row.push(field); rows.push(row); }
                 return rows;
             }
@@ -1020,21 +1064,40 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         function showDuplicateModal(allFiles, filesWithDuplicates) {
-            // reuse transaction implementation style: show summary, then offer Override/Skip/Remove
-            let totalDuplicates = 0; let totalNew = 0; let totalRows = 0; let totalPostedMatches = 0; let totalUnpostedMatches = 0;
-            allFiles.forEach(f=>{ totalDuplicates += f.duplicateRows||0; totalNew += f.newRows||0; totalRows += f.totalRows||0; totalPostedMatches += f.postedRows||0; totalUnpostedMatches += f.unpostedRows||0; });
-            let fileListHTML = '<div id="duplicate-details" style="display:none; max-height:250px; overflow-y:auto; margin-top:15px; text-align:left; border-top:1px solid #ddd; padding-top:15px;">';
-            filesWithDuplicates.forEach(file => { fileListHTML += `<div style="padding:10px; border:1px solid #ddd; margin-bottom:10px; border-radius:5px; background-color:#fff8e1;"><strong>📄 ${file.fileName}</strong><br><small style="color:#666;">Partner: ${file.partnerId} | Type: ${file.sourceType}</small><br><small style="color:#d32f2f;">⚠️ ${file.duplicateRows.toLocaleString()} duplicate row(s) found</small><br><small style="color:#388e3c;">✓ ${file.newRows.toLocaleString()} new row(s)</small></div>`; });
+            // For cancellations we enforce Reference No uniqueness — do not allow override.
+            let totalDuplicates = 0; let totalNew = 0; let totalRows = 0;
+            allFiles.forEach(f=>{ totalDuplicates += f.duplicateRows||0; totalNew += f.newRows||0; totalRows += f.totalRows||0; });
+            let fileListHTML = '<div id="duplicate-details" style="max-height:260px; overflow-y:auto; margin-top:12px; text-align:left; border-top:1px solid #eee; padding-top:12px;">';
+            filesWithDuplicates.forEach(file => { fileListHTML += `<div style="padding:10px; border:1px solid #eee; margin-bottom:8px; border-radius:6px; background-color:#fff8f0;"><strong>📄 ${file.fileName}</strong><br><small style="color:#666;">Partner: ${file.partnerId || 'N/A'} | Type: ${file.sourceType || 'N/A'}</small><br><small style="color:#d32f2f;">⚠️ ${file.duplicateRows.toLocaleString()} duplicate reference(s) found</small></div>`; });
             fileListHTML += '</div>';
 
-            const summaryHTML = `<div style="text-align:center;"><div style="background-color:#fff8e1; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #ff9800;"><p style="margin:0; color:#666; font-size:15px;"><strong style="color:#000;">${filesWithDuplicates.length}</strong> file(s) with Partner ID data already exists</p></div><div style="background-color:#f5f5f5; padding:12px; border-radius:5px; margin-bottom:15px;"><p style="margin:5px 0; color:#d32f2f; font-size:14px;"><i class="fa-solid fa-exclamation-triangle"></i> <strong>${totalDuplicates.toLocaleString()}</strong> duplicate row(s) detected</p><p style="margin:5px 0; color:#388e3c; font-size:14px;"><i class="fa-solid fa-check-circle"></i> <strong>${totalNew.toLocaleString()}</strong> new row(s)</p></div><button id="toggle-details-btn" type="button" style="background-color:#1976d2; color:white; border:none; padding:8px 20px; border-radius:5px; cursor:pointer; font-size:13px; margin-bottom:10px;"><i class="fa-solid fa-chevron-down"></i> View All Details</button></div>`;
+            const summaryHTML = `<div style="text-align:center; margin-bottom:12px;"><div style="background-color:#fff3f3; padding:12px; border-radius:8px; margin-bottom:10px; border-left:4px solid #f44336;"><p style="margin:0; color:#000; font-size:15px;"><strong style="color:#000;">${filesWithDuplicates.length}</strong> file(s) contain duplicate Reference No(s)</p></div><div style="background-color:#fafafa; padding:10px; border-radius:6px;"><p style="margin:6px 0; color:#d32f2f; font-size:14px;"><i class="fa-solid fa-exclamation-triangle"></i> <strong>${totalDuplicates.toLocaleString()}</strong> duplicate reference(s) detected</p></div></div>`;
 
-            if (totalDuplicates > 0 && totalUnpostedMatches === 0 && totalPostedMatches > 0) {
-                const altSummary = `<div style="text-align:center;"><div style="background-color:#fff8e1; padding:15px; border-radius:8px; margin-bottom:12px;"><p style="margin:0; color:#000; font-size:16px;"><strong>Data already Existed</strong></p></div><div style="background-color:#f5f5f5; padding:12px; border-radius:5px; margin-bottom:12px; text-align:left;"><p style="margin:4px 0; font-size:14px;"><strong>Partner ID:</strong> ${allFiles[0].partnerId}</p><p style="margin:4px 0; font-size:14px;"><strong>Partner Name:</strong> ${allFiles[0].partnerName || 'Unknown'}</p><p style="margin:4px 0; font-size:14px;"><strong>Status:</strong> <span style="color:#388e3c; font-weight:700;">Posted</span></p><p style="margin:8px 0; color:#d32f2f; font-size:14px;"><strong>Existing rows detected:</strong> ${totalDuplicates.toLocaleString()}</p></div></div>`;
-                Swal.fire({ title: '<i class="fa-solid fa-info-circle" style="color:#388e3c;"></i> Data already Existed', html: altSummary + '<div id="alt-details" style="display:none; margin-top:10px; text-align:left;">' + fileListHTML + '</div>', icon: 'info', showCancelButton: false, showDenyButton: false, showConfirmButton: true, confirmButtonText: '<i class="fa-solid fa-trash"></i> Remove', confirmButtonColor: '#6c757d', allowOutsideClick:false, allowEscapeKey:false, width: '700px' }).then(() => { if (allFiles.length === 1) { window.location.href = '../../../models/saved/saved_billspayImportCancelledFile.php?cancel=1'; } else { filesWithDuplicates.forEach(f => { uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId))); }); renderFileCards(); if (uploadedFiles.length === 0) { Swal.fire({ icon:'info', title:'All Files Removed', text:'No files left to import.' }); } else { proceedWithUpload('skip'); } } }); return; }
-
-            Swal.fire({ title: '<i class="fa-solid fa-triangle-exclamation" style="color:#ff9800;"></i> Duplicate Records Detected', html: summaryHTML + fileListHTML, icon: 'warning', showCancelButton: true, showDenyButton: true, confirmButtonText: '<i class="fa-solid fa-rotate"></i> Override', denyButtonText: '<i class="fa-solid fa-forward"></i> Skip', cancelButtonText: '<i class="fa-solid fa-trash"></i> Remove', confirmButtonColor: '#d33', denyButtonColor: '#3085d6', cancelButtonColor: '#6c757d', allowOutsideClick:false, allowEscapeKey:false, width: '600px', didOpen: () => { const toggleBtn = document.getElementById('toggle-details-btn'); const detailsDiv = document.getElementById('duplicate-details'); let isExpanded=false; toggleBtn.addEventListener('click', function(){ isExpanded=!isExpanded; if (isExpanded) { detailsDiv.style.display='block'; toggleBtn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Hide Details'; } else { detailsDiv.style.display='none'; toggleBtn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> View All Details'; } }); } }).then((result)=>{ if (result.isConfirmed) { proceedWithUpload('override'); } else if (result.isDenied) { proceedWithUpload('skip'); } else { filesWithDuplicates.forEach(f => { uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId))); }); renderFileCards(); if (uploadedFiles.length === 0) { Swal.fire({ icon:'info', title:'All Files Removed', text:'No files left to import.' }); } else { proceedWithUpload('skip'); } } });
-
+            // Only offer removal of offending files — cancellation imports must not insert duplicate Reference Nos
+            Swal.fire({
+                title: '<i class="fa-solid fa-ban" style="color:#d32f2f;"></i> Duplicate Reference Number(s) Detected',
+                html: summaryHTML + fileListHTML + '<p style="margin-top:10px; text-align:left; color:#555;">Duplicates must be removed or fixed. Import will not proceed while duplicate Reference No(s) exist.</p>',
+                icon: 'error',
+                showCancelButton: false,
+                showDenyButton: false,
+                confirmButtonText: '<i class="fa-solid fa-trash"></i> Remove Duplicate Files',
+                confirmButtonColor: '#6c757d',
+                allowOutsideClick:false,
+                allowEscapeKey:false,
+                width: 700,
+                didOpen: () => {}
+            }).then(() => {
+                // Remove offending files from the upload list and refresh UI. Do NOT auto-proceed with upload.
+                filesWithDuplicates.forEach(f => {
+                    uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId)));
+                });
+                renderFileCards();
+                if (uploadedFiles.length === 0) {
+                    Swal.fire({ icon:'info', title:'Duplicates Removed', text:'All duplicate files were removed. No files left to import.' });
+                } else {
+                    Swal.fire({ icon:'info', title:'Duplicates Removed', text:'Duplicate files were removed. Click Proceed to validate remaining files.' });
+                }
+            });
         }
 
         function proceedWithUpload(userDecision) {

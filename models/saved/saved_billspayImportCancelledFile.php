@@ -103,7 +103,10 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                         continue;
                     }
 
-                    // Check DB for duplicates (posted / unposted)
+                    // Check DB for duplicates (transaction table) and also cancellation table
+                    $row_count_total = 0;
+
+                    // First check billspayment_transaction for posted/unposted matches
                     $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction WHERE reference_no = ? AND (`datetime` = ? OR cancellation_date = ? )";
                     if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
                         $sql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
@@ -117,7 +120,6 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                     }
                     $stmt->execute();
                     $result = $stmt->get_result();
-                    $row_count_total = 0;
                     if ($result) {
                         while ($r = $result->fetch_assoc()) {
                             $cnt = intval($r['cnt']);
@@ -127,6 +129,17 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                         }
                     }
                     $stmt->close();
+
+                    // Also check billspayment_cancellation table for existing reference_no
+                    $cSql = "SELECT COUNT(*) as cnt FROM mldb.billspayment_cancellation WHERE reference_no = ?";
+                    if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
+                        $cSql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
+                        $cStmt = $conn->prepare($cSql);
+                        if ($cStmt) { $cStmt->bind_param("sss", $reference_number, $partnerId, $partnerId); $cStmt->execute(); $cRes = $cStmt->get_result(); if ($cRes && ($crow = $cRes->fetch_assoc())) { $ccnt = intval($crow['cnt']); if ($ccnt > 0) { $row_count_total += $ccnt; $postedRows += $ccnt; } } $cStmt->close(); }
+                    } else {
+                        $cStmt = $conn->prepare($cSql);
+                        if ($cStmt) { $cStmt->bind_param("s", $reference_number); $cStmt->execute(); $cRes = $cStmt->get_result(); if ($cRes && ($crow = $cRes->fetch_assoc())) { $ccnt = intval($crow['cnt']); if ($ccnt > 0) { $row_count_total += $ccnt; $postedRows += $ccnt; } } $cStmt->close(); }
+                    }
 
                     if ($row_count_total > 0) $duplicateRows++; else $newRows++;
                 }
@@ -557,6 +570,94 @@ if (isset($_POST['upload'])) {
         if (!is_dir($tmpDir)) @mkdir($tmpDir, 0777, true);
 
         $fileCount = count($_FILES['files']['name']);
+        // Server-side pre-upload duplicate check: ensure no reference_no already exists
+        $precheckResults = [];
+        for ($i = 0; $i < $fileCount; $i++) {
+            if ($_FILES['files']['error'][$i] !== UPLOAD_ERR_OK) continue;
+            $tmpPath = $_FILES['files']['tmp_name'][$i];
+            $fileName = $_FILES['files']['name'][$i];
+            $partnerIdCheck = $_POST['partner_ids'][$i] ?? '';
+
+            try {
+                $spreadsheet = IOFactory::load($tmpPath);
+                $worksheet = $spreadsheet->getActiveSheet();
+                $highestRow = $worksheet->getHighestRow();
+
+                $duplicateRows = 0; $totalRows = 0; $postedRows = 0; $unpostedRows = 0;
+                for ($row = 7; $row <= $highestRow; $row++) {
+                    $cellB = trim((string)$worksheet->getCell('B' . $row)->getValue());
+                    $cellD = trim((string)$worksheet->getCell('D' . $row)->getValue());
+                    if ($cellB === '' && $cellD === '') break;
+                    $totalRows++;
+                    $reference_number = $cellD;
+                    $datetimeValue = $cellB;
+                    $datetime = null;
+                    if (is_numeric($datetimeValue)) {
+                        $datetime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($datetimeValue)->format('Y-m-d H:i:s');
+                    } elseif (!empty($datetimeValue)) {
+                        $datetime = date('Y-m-d H:i:s', strtotime($datetimeValue));
+                    }
+                    if (empty($reference_number) || empty($datetime)) continue;
+
+                    $row_count_total = 0;
+                    // check transactions
+                    $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction WHERE reference_no = ? AND (`datetime` = ? OR cancellation_date = ? )";
+                    if (!empty($partnerIdCheck) && strtoupper($partnerIdCheck) !== 'ALL') {
+                        $sql .= " AND (partner_id = ? OR partner_id_kpx = ?) GROUP BY post_transaction";
+                        $sstmt = $conn->prepare($sql);
+                        $sstmt->bind_param("sssss", $reference_number, $datetime, $datetime, $partnerIdCheck, $partnerIdCheck);
+                    } else {
+                        $sql .= " GROUP BY post_transaction";
+                        $sstmt = $conn->prepare($sql);
+                        $sstmt->bind_param("sss", $reference_number, $datetime, $datetime);
+                    }
+                    $sstmt->execute();
+                    $sres = $sstmt->get_result();
+                    if ($sres) {
+                        while ($r = $sres->fetch_assoc()) {
+                            $cnt = intval($r['cnt']);
+                            $row_count_total += $cnt;
+                            $status = isset($r['post_transaction']) ? strtolower(trim($r['post_transaction'])) : '';
+                            if ($status === 'posted') $postedRows += $cnt; else $unpostedRows += $cnt;
+                        }
+                    }
+                    $sstmt->close();
+
+                    // check cancellations table
+                    $cSql = "SELECT COUNT(*) as cnt FROM mldb.billspayment_cancellation WHERE reference_no = ?";
+                    if (!empty($partnerIdCheck) && strtoupper($partnerIdCheck) !== 'ALL') {
+                        $cSql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
+                        $cstmt = $conn->prepare($cSql);
+                        if ($cstmt) { $cstmt->bind_param("sss", $reference_number, $partnerIdCheck, $partnerIdCheck); $cstmt->execute(); $cRes = $cstmt->get_result(); if ($cRes && ($crow = $cRes->fetch_assoc())) { $ccnt = intval($crow['cnt']); if ($ccnt > 0) { $row_count_total += $ccnt; $postedRows += $ccnt; } } $cstmt->close(); }
+                    } else {
+                        $cstmt = $conn->prepare($cSql);
+                        if ($cstmt) { $cstmt->bind_param("s", $reference_number); $cstmt->execute(); $cRes = $cstmt->get_result(); if ($cRes && ($crow = $cRes->fetch_assoc())) { $ccnt = intval($crow['cnt']); if ($ccnt > 0) { $row_count_total += $ccnt; $postedRows += $ccnt; } } $cstmt->close(); }
+                    }
+
+                    if ($row_count_total > 0) $duplicateRows++;
+                }
+                if (isset($spreadsheet) && is_object($spreadsheet)) { try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {} unset($worksheet,$spreadsheet); }
+
+                $precheckResults[] = [ 'fileName'=>$fileName, 'totalRows'=>$totalRows, 'duplicateRows'=>$duplicateRows, 'postedRows'=>$postedRows, 'unpostedRows'=>$unpostedRows, 'hasDuplicates'=>($duplicateRows>0) ];
+            } catch (Exception $e) {
+                $precheckResults[] = [ 'fileName'=>$fileName, 'error'=>$e->getMessage() ];
+            }
+        }
+
+        // if any duplicates found, abort upload and inform client
+        $anyDup = false; foreach ($precheckResults as $pr) { if (isset($pr['hasDuplicates']) && $pr['hasDuplicates']) { $anyDup = true; break; } }
+        $isAjaxReq = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        if ($anyDup) {
+            if ($isAjaxReq) {
+                header('Content-Type: application/json');
+                echo json_encode(['success'=>false,'error'=>'Duplicate Reference No detected in uploaded files','files'=>$precheckResults]);
+                exit;
+            } else {
+                $msg = 'Duplicate Reference No detected in uploaded files. Upload aborted.';
+                echo '<script>alert("' . addslashes($msg) . '");window.history.back();</script>';
+                exit;
+            }
+        }
         for ($i = 0; $i < $fileCount; $i++) {
             if ($_FILES['files']['error'][$i] !== UPLOAD_ERR_OK) continue;
             $origTmp = $_FILES['files']['tmp_name'][$i];
@@ -905,7 +1006,8 @@ if (is_dir($temporaryDir)) {
     <div id="summary-section">
         <div id="upload-success" class="container-fluid py-4" style="margin-top: 20px;">
             <div class="text-center mb-4">
-                <div class="card shadow-sm border-0 bg-light py-4">
+                <div class="card shadow-sm border-0 bg-light py-4 position-relative">
+                    <button type="button" class="btn-close position-absolute top-0 end-0 m-3" aria-label="Close" onclick="confirmCancel()"></button>
                     <h3 class="text-center fw-bold text-primary">Would you like to proceed inserting the data?</h3>
                     <div class="card-body">
                         <form method="post" id="confirmImportForm" class="d-inline">
@@ -924,7 +1026,8 @@ if (is_dir($temporaryDir)) {
                 <!-- Import Details Card -->
                 <div class="col-md-3">
                     <div class="card shadow border-0 h-100">
-                        <div class="card-header bg-success text-white py-3">
+                        <div class="card-header bg-success text-white py-3 position-relative">
+                            <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-2" aria-label="Close" onclick="confirmCancel()"></button>
                             <h4 class="mb-0 text-center"><i class="fas fa-info-circle me-2"></i>Import Details</h4>
                         </div>
                         <div class="card-body">
@@ -978,7 +1081,8 @@ if (is_dir($temporaryDir)) {
                 <!-- Transaction Summary Table -->
                 <div class="col-md-9">
                     <div class="card shadow border-0">
-                        <div class="card-header bg-danger text-white py-3">
+                        <div class="card-header bg-danger text-white py-3 position-relative">
+                            <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-2" aria-label="Close" onclick="confirmCancel()"></button>
                             <h4 class="mb-0 text-center"><i class="fas fa-chart-line me-2"></i>Cancellation Summary</h4>
                         </div>
                         <div class="card-body">
