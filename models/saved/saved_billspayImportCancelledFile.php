@@ -27,11 +27,138 @@ if (isset($_SESSION['user_type'])) {
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
+/**
+ * Helper: resolve partner name from partner id or partner id kpx
+ */
+function getPartnerName($conn, $partnerId) {
+    if (empty($partnerId)) return 'Unknown Partner';
+    $query = "SELECT partner_name FROM masterdata.partner_masterfile WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1";
+    $stmt = $conn->prepare($query);
+    if (!$stmt) return 'Unknown Partner';
+    $stmt->bind_param("ss", $partnerId, $partnerId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $name = 'Unknown Partner';
+    if ($result && $result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        $name = $row['partner_name'];
+    }
+    $stmt->close();
+    return $name;
+}
+
 
 ini_set('memory_limit', '-1');
 set_time_limit(0);
 // Enable mysqli exceptions for clearer DB errors during import
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+// AJAX Endpoint: Check for Duplicate Records (batch)
+if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
+    header('Content-Type: application/json');
+    $results = [];
+    $fileCount = count($_FILES['files']['name']);
+
+    for ($i = 0; $i < $fileCount; $i++) {
+        if ($_FILES['files']['error'][$i] === UPLOAD_ERR_OK) {
+            $tmpPath = $_FILES['files']['tmp_name'][$i];
+            $fileName = $_FILES['files']['name'][$i];
+            $partnerId = $_POST['partner_ids'][$i] ?? '';
+            $sourceType = $_POST['source_types'][$i] ?? '';
+
+            try {
+                // Load spreadsheet (works with .xls/.xlsx/.csv when Excel-format)
+                $spreadsheet = IOFactory::load($tmpPath);
+                $worksheet = $spreadsheet->getActiveSheet();
+                $highestRow = $worksheet->getHighestRow();
+
+                $totalRows = 0;
+                $duplicateRows = 0;
+                $newRows = 0;
+                $postedRows = 0;
+                $unpostedRows = 0;
+
+                // Cancellation files: data rows start at row 7 (B..Q columns)
+                for ($row = 7; $row <= $highestRow; $row++) {
+                    $cellB = trim((string)$worksheet->getCell('B' . $row)->getValue()); // datetime
+                    $cellD = trim((string)$worksheet->getCell('D' . $row)->getValue()); // reference_no
+
+                    // stop on empty row
+                    if ($cellB === '' && $cellD === '') break;
+
+                    $totalRows++;
+
+                    $reference_number = $cellD;
+                    $datetimeValue = $cellB;
+                    $datetime = null;
+
+                    if (is_numeric($datetimeValue)) {
+                        $datetime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($datetimeValue)->format('Y-m-d H:i:s');
+                    } elseif (!empty($datetimeValue)) {
+                        $datetime = date('Y-m-d H:i:s', strtotime($datetimeValue));
+                    }
+
+                    if (empty($reference_number) || empty($datetime)) {
+                        $newRows++;
+                        continue;
+                    }
+
+                    // Check DB for duplicates (posted / unposted)
+                    $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction WHERE reference_no = ? AND (`datetime` = ? OR cancellation_date = ? )";
+                    if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
+                        $sql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
+                        $sql .= " GROUP BY post_transaction";
+                        $stmt = $conn->prepare($sql);
+                        $stmt->bind_param("sssss", $reference_number, $datetime, $datetime, $partnerId, $partnerId);
+                    } else {
+                        $sql .= " GROUP BY post_transaction";
+                        $stmt = $conn->prepare($sql);
+                        $stmt->bind_param("sss", $reference_number, $datetime, $datetime);
+                    }
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    $row_count_total = 0;
+                    if ($result) {
+                        while ($r = $result->fetch_assoc()) {
+                            $cnt = intval($r['cnt']);
+                            $row_count_total += $cnt;
+                            $status = isset($r['post_transaction']) ? strtolower(trim($r['post_transaction'])) : '';
+                            if ($status === 'posted') $postedRows += $cnt; else $unpostedRows += $cnt;
+                        }
+                    }
+                    $stmt->close();
+
+                    if ($row_count_total > 0) $duplicateRows++; else $newRows++;
+                }
+
+                // Free resources
+                if (isset($spreadsheet) && is_object($spreadsheet)) {
+                    try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+                    unset($worksheet, $spreadsheet);
+                    if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+                }
+
+                $results[] = [
+                    'fileName' => $fileName,
+                    'partnerId' => $partnerId,
+                    'sourceType' => $sourceType,
+                    'totalRows' => $totalRows,
+                    'duplicateRows' => $duplicateRows,
+                    'newRows' => $newRows,
+                    'postedRows' => $postedRows,
+                    'unpostedRows' => $unpostedRows,
+                    'hasDuplicates' => ($duplicateRows > 0)
+                ];
+
+            } catch (Exception $e) {
+                $results[] = [ 'fileName' => $fileName, 'error' => $e->getMessage() ];
+            }
+        }
+    }
+
+    echo json_encode(['success' => true, 'files' => $results]);
+    exit;
+}
 
 /**
  * Simple dispatcher helpers for source types (KPX / KP7).
@@ -125,6 +252,42 @@ function handleKPXImport($tmpPath, $fileName, $fileExt)
                 $rows[] = $rowData;
             }
             fclose($handle);
+
+            // If CSV parse yielded no rows (could be due to unusual delimiters or embedded Excel content),
+            // try loading with PhpSpreadsheet as a fallback (it can handle many CSV variations and Excel-wrapped files).
+            if (empty($rows)) {
+                try {
+                    $spreadsheet = IOFactory::load($tmpPath);
+                    $worksheet = $spreadsheet->getActiveSheet();
+                    $highestRow = $worksheet->getHighestRow();
+
+                    for ($r = $startRow; $r <= $highestRow; $r++) {
+                        $rowData = [];
+                        $allEmpty = true;
+                        for ($c = 2; $c <= 17; $c++) {
+                            if (method_exists($worksheet, 'getCellByColumnAndRow')) {
+                                $cell = $worksheet->getCellByColumnAndRow($c, $r);
+                            } else {
+                                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+                                $cell = $worksheet->getCell($colLetter . $r);
+                            }
+                            $cellValue = $cell !== null ? $cell->getValue() : '';
+                            $value = trim((string)$cellValue);
+                            $rowData[] = $value;
+                            if ($value !== '') $allEmpty = false;
+                        }
+                        if ($allEmpty) break;
+                        $rows[] = $rowData;
+                    }
+                    if (isset($spreadsheet) && is_object($spreadsheet)) {
+                        try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
+                        unset($worksheet, $spreadsheet);
+                        if (function_exists('gc_collect_cycles')) gc_collect_cycles();
+                    }
+                } catch (Exception $e) {
+                    // swallow fallback errors; original check below will show the friendly alert
+                }
+            }
         } elseif (in_array($fileExt, ['xls', 'xlsx'])) {
             // Use PhpSpreadsheet for Excel files
             $spreadsheet = IOFactory::load($tmpPath);
@@ -136,7 +299,12 @@ function handleKPXImport($tmpPath, $fileName, $fileExt)
                 $allEmpty = true;
                 // Column B..Q correspond to column numbers 2..17
                 for ($c = 2; $c <= 17; $c++) {
-                    $cell = $worksheet->getCellByColumnAndRow($c, $r);
+                    if (method_exists($worksheet, 'getCellByColumnAndRow')) {
+                        $cell = $worksheet->getCellByColumnAndRow($c, $r);
+                    } else {
+                        $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+                        $cell = $worksheet->getCell($colLetter . $r);
+                    }
                     $cellValue = $cell !== null ? $cell->getValue() : '';
                     $value = trim((string)$cellValue);
                     $rowData[] = $value;
@@ -380,8 +548,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // Handle uploaded file (supports .csv, .xls, .xlsx)
+// Handle upload: support both Manual single-file (`import_file`) and Auto batch (`files[]`).
 if (isset($_POST['upload'])) {
-    if (isset($_FILES['import_file']) && $_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
+    // Auto batch mode: client posts files[] + partner_ids[] + source_types[]
+    if (isset($_FILES['files']) && is_array($_FILES['files']['name']) && count($_FILES['files']['name']) > 0) {
+        $uploadedFiles = [];
+        $tmpDir = __DIR__ . '/../../admin/temporary/';
+        if (!is_dir($tmpDir)) @mkdir($tmpDir, 0777, true);
+
+        $fileCount = count($_FILES['files']['name']);
+        for ($i = 0; $i < $fileCount; $i++) {
+            if ($_FILES['files']['error'][$i] !== UPLOAD_ERR_OK) continue;
+            $origTmp = $_FILES['files']['tmp_name'][$i];
+            $origName = $_FILES['files']['name'][$i];
+            $partnerIdClient = $_POST['partner_ids'][$i] ?? '';
+            $sourceTypeClient = $_POST['source_types'][$i] ?? '';
+
+            $fileId = uniqid('file_', true);
+            $destName = $fileId . '_' . basename($origName);
+            $destPath = $tmpDir . $destName;
+            if (@move_uploaded_file($origTmp, $destPath) || @copy($origTmp, $destPath)) {
+                // Resolve partner name if available
+                $partnerName = 'Unknown Partner';
+                if (!empty($partnerIdClient)) {
+                    $partnerName = getPartnerName($conn, $partnerIdClient);
+                }
+
+                $uploadedFiles[] = [
+                    'id' => $fileId,
+                    'name' => $origName,
+                    'path' => $destPath,
+                    'partner_id' => $partnerIdClient ?: '',
+                    'partner_name' => $partnerName,
+                    'source_type' => strtoupper($sourceTypeClient ?: 'KPX'),
+                    'status' => 'pending',
+                    'validation_result' => null,
+                    'uploaded_by' => $current_user_email ?? '',
+                    'uploaded_date' => date('Y-m-d H:i:s')
+                ];
+            }
+        }
+
+        if (!empty($uploadedFiles)) {
+            $_SESSION['uploaded_files'] = $uploadedFiles;
+            $_SESSION['batch_upload'] = true;
+            $_SESSION['user_decision'] = $_POST['user_decision'] ?? 'skip';
+            // Ensure session is written before responding so the validator page can read it
+            @session_write_close();
+            // If request is AJAX (X-Requested-With), return JSON so client-side can redirect reliably
+            $isAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true, 'redirect' => '/billspayment/models/saved/saved_billspayImportCancelledFile_NEW.php']);
+                exit;
+            }
+            // Non-AJAX fallback: redirect to the batch validation UI which displays cards (absolute path from webroot)
+            header('Location: /billspayment/models/saved/saved_billspayImportCancelledFile_NEW.php');
+            exit;
+        } else {
+            echo '<script>alert("No file uploaded or upload error.");window.history.back();</script>';
+            exit;
+        }
+    }
+    // Manual single-file mode
+    elseif (isset($_FILES['import_file']) && $_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
         $tmpPath = $_FILES['import_file']['tmp_name'];
         $fileName = $_FILES['import_file']['name'];
         $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
@@ -439,6 +669,122 @@ if ((isset($_POST['action']) && $_POST['action'] === 'confirm_import') || isset(
     }
 
     echo json_encode($result);
+    exit;
+}
+
+// ============================================================================
+// Batch Import: perform_import (process all files stored in session)
+// Expects: POST perform_import=1; optional is_ajax=1
+// ============================================================================
+if (isset($_POST['perform_import']) && isset($_SESSION['uploaded_files']) && is_array($_SESSION['uploaded_files'])) {
+    $isAjax = isset($_POST['is_ajax']) && $_POST['is_ajax'] == '1';
+    $imported = 0; $failed = 0; $errors = [];
+
+    foreach ($_SESSION['uploaded_files'] as $f) {
+        $path = $f['path'] ?? '';
+        $sourceType = strtoupper($f['source_type'] ?? 'KPX');
+        $partnerId = $f['partner_id'] ?? '';
+
+        if (empty($path) || !file_exists($path)) {
+            $failed++; $errors[] = "File missing: {$f['name']}"; continue;
+        }
+
+        // Load rows from file (B..Q starting at row 7) similar to handleKPXImport
+        $rows = [];
+        try {
+            $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+            if ($ext === 'csv') {
+                if (($handle = fopen($path, 'r')) !== false) {
+                    $rowIndex = 0;
+                    while (($data = fgetcsv($handle)) !== false) {
+                        $rowIndex++;
+                        if ($rowIndex < 7) continue;
+                        $rowData = [];$allEmpty=true;
+                        for ($i = 1; $i <= 16; $i++) {
+                            $v = isset($data[$i]) ? trim((string)$data[$i]) : '';
+                            $rowData[] = $v; if ($v !== '') $allEmpty=false;
+                        }
+                        if ($allEmpty) break;
+                        $rows[] = $rowData;
+                    }
+                    fclose($handle);
+                }
+                if (empty($rows)) {
+                    // fallback to PhpSpreadsheet
+                    $spreadsheet = IOFactory::load($path);
+                    $worksheet = $spreadsheet->getActiveSheet();
+                    $highestRow = $worksheet->getHighestRow();
+                    for ($r = 7; $r <= $highestRow; $r++) {
+                        $rowData = []; $allEmpty=true;
+                        for ($c = 2; $c <= 17; $c++) {
+                            if (method_exists($worksheet, 'getCellByColumnAndRow')) {
+                                $cell = $worksheet->getCellByColumnAndRow($c, $r);
+                            } else {
+                                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+                                $cell = $worksheet->getCell($colLetter . $r);
+                            }
+                            $val = $cell !== null ? trim((string)$cell->getValue()) : '';
+                            $rowData[] = $val; if ($val !== '') $allEmpty=false;
+                        }
+                        if ($allEmpty) break; $rows[] = $rowData;
+                    }
+                    if (isset($spreadsheet) && is_object($spreadsheet)) { try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {} unset($worksheet,$spreadsheet); }
+                }
+            } else {
+                $spreadsheet = IOFactory::load($path);
+                $worksheet = $spreadsheet->getActiveSheet();
+                $highestRow = $worksheet->getHighestRow();
+                for ($r = 7; $r <= $highestRow; $r++) {
+                    $rowData = []; $allEmpty=true;
+                    for ($c = 2; $c <= 17; $c++) {
+                        if (method_exists($worksheet, 'getCellByColumnAndRow')) {
+                            $cell = $worksheet->getCellByColumnAndRow($c, $r);
+                        } else {
+                            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+                            $cell = $worksheet->getCell($colLetter . $r);
+                        }
+                        $val = $cell !== null ? trim((string)$cell->getValue()) : '';
+                        $rowData[] = $val; if ($val !== '') $allEmpty=false;
+                    }
+                    if ($allEmpty) break; $rows[] = $rowData;
+                }
+                if (isset($spreadsheet) && is_object($spreadsheet)) { try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {} unset($worksheet,$spreadsheet); }
+            }
+
+            if (empty($rows)) { $failed++; $errors[] = "No data in file: {$f['name']}"; continue; }
+
+            // Build meta
+            $meta = [
+                'partner_id' => $partnerId,
+                'partner_id_kpx' => null,
+                'gl_code' => null,
+                'partner_name' => $f['partner_name'] ?? null,
+                'reference_no' => null,
+                'source' => $sourceType,
+                'uploaded_date' => date('Y-m-d'),
+                'uploaded_by' => $f['uploaded_by'] ?? null,
+                'branch_id' => null,'branch_code'=>null,'zone_code'=>null,'region_code'=>null,'region'=>null
+            ];
+
+            $res = insertKPXCancellationRows($rows, $meta);
+            if ($res['success']) { $imported += ($res['inserted'] ?? 0); } else { $failed++; $errors[] = "{$f['name']}: " . ($res['error'] ?? 'Import failed'); }
+        } catch (Exception $e) { $failed++; $errors[] = "{$f['name']}: " . $e->getMessage(); }
+        // attempt to delete temp file
+        if (!empty($path) && file_exists($path)) @unlink($path);
+    }
+
+    // clear session
+    unset($_SESSION['uploaded_files']); unset($_SESSION['batch_upload']); unset($_SESSION['user_decision']);
+
+    if ($isAjax) {
+        header('Content-Type: application/json');
+        echo json_encode(['success'=>$imported>0,'imported'=>$imported,'failed'=>$failed,'errors'=>$errors]);
+        exit;
+    }
+
+    // non-ajax fallback: show result and redirect back
+    $msg = htmlspecialchars(json_encode(['imported'=>$imported,'failed'=>$failed,'errors'=>$errors]));
+    echo "<script>alert('Import complete. Imported: {$imported} Failed: {$failed}');window.location.href='" . basename(__FILE__) . "';</script>";
     exit;
 }
 

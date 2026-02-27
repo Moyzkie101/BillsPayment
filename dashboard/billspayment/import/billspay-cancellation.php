@@ -430,7 +430,7 @@ $partnersResult = $conn->query($partnersQuery);
                     <h5>Drag &amp; Drop Files Here</h5>
                     <p class="text-muted">or click to browse</p>
                     <p class="text-muted"><small>Supports multiple Excel files (.xls, .xlsx)</small></p>
-                    <input type="file" id="fileInput" accept=".xls,.xlsx" multiple style="display: none;">
+                    <input type="file" id="fileInput" accept=".xls,.xlsx,.csv,.xlsm,.xlsb,.ods,.tsv" multiple style="display: none;">
                 </div>
                 <!-- Manual Import Area (hidden by default) - transaction-style -->
                 <div id="manualArea" style="display:none;">
@@ -473,6 +473,8 @@ $partnersResult = $conn->query($partnersQuery);
                         </div>
                     </form>
                 </div>
+                <!-- Files Container -->
+                <div id="filesContainer" class="files-container"></div>
             </div>
         </div>
     </div>
@@ -547,79 +549,536 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- Drag and Drop File Upload under the Developer Area -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
+    // Adapted Auto / Batch upload logic from billspay-transaction.php
     document.addEventListener('DOMContentLoaded', function() {
-        const fileUploadArea = document.getElementById('fileUploadArea');
-        const fileInput = document.getElementById('fileInput');
+        const fileUploadArea = $('#fileUploadArea');
+        const fileInput = $('#fileInput');
+        const filesContainer = $('#filesContainer');
+        const proceedContainer = $('#proceedContainer');
+        const proceedBtn = $('#proceedBtn');
 
-        if (!fileUploadArea) return;
+        // Global array to store added files
+        var uploadedFiles = window.uploadedFiles || [];
 
-        // Visual drag states
-        ['dragenter', 'dragover'].forEach(evt => {
-            fileUploadArea.addEventListener(evt, function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                fileUploadArea.classList.add('drag-over');
-            });
-        });
-
-        ['dragleave', 'dragend'].forEach(evt => {
-            fileUploadArea.addEventListener(evt, function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                fileUploadArea.classList.remove('drag-over');
-            });
-        });
-
-        // Handle dropped files
-        fileUploadArea.addEventListener('drop', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            fileUploadArea.classList.remove('drag-over');
-
-            const dt = e.dataTransfer;
-            const files = dt ? dt.files : null;
-            if (files && files.length > 0) {
-                // Build a short HTML list of filenames
-                let listHtml = `<p>${files.length} file(s) detected.</p><ul style="text-align:left; margin-left:1.1rem;">`;
-                for (let i = 0; i < files.length; i++) {
-                    listHtml += `<li>${files[i].name}</li>`;
-                }
-                listHtml += `</ul>`;
-
-                // Show SweetAlert2 notice (Under Development)
-                Swal.fire({
-                    title: 'Under Development Area',
-                    html: listHtml + '<p>This import/cancellation drag-and-drop feature is currently under development and is read-only.</p>',
-                    icon: 'info',
-                    confirmButtonText: 'OK'
-                });
+        // Click to open file dialog
+        fileUploadArea.on('click', function() {
+            if (fileInput.length && fileInput[0]) {
+                try { fileInput[0].click(); } catch (e) { fileInput.trigger('click'); }
             }
         });
 
-        // Allow clicking the area to open file picker
-        fileUploadArea.addEventListener('click', function() {
-            if (fileInput) fileInput.click();
+        // File input change
+        fileInput.on('change', function(e) { handleFiles(e.target.files); });
+
+        // Drag/drop visual states
+        fileUploadArea.on('dragover', function(e){ e.preventDefault(); e.stopPropagation(); $(this).addClass('drag-over'); });
+        fileUploadArea.on('dragleave dragend', function(e){ e.preventDefault(); e.stopPropagation(); $(this).removeClass('drag-over'); });
+        fileUploadArea.on('drop', function(e){
+            e.preventDefault(); e.stopPropagation(); $(this).removeClass('drag-over');
+            const files = e.originalEvent.dataTransfer.files; handleFiles(files);
         });
 
-        // If files are selected via the input, show same alert
-        if (fileInput) {
-            fileInput.addEventListener('change', function(e) {
-                const files = e.target.files;
-                if (files && files.length > 0) {
-                    let listHtml = `<p>${files.length} file(s) selected.</p><ul style="text-align:left; margin-left:1.1rem;">`;
-                    for (let i = 0; i < files.length; i++) listHtml += `<li>${files[i].name}</li>`;
-                    listHtml += `</ul>`;
+        function handleFiles(files) {
+            const fileArray = Array.from(files || []);
+            const allowed = ['xls','xlsx','csv','xlsm','xlsb','ods','tsv'];
+            const excelFiles = fileArray.filter(f => {
+                const ext = (f.name.split('.').pop() || '').toLowerCase();
+                return allowed.includes(ext);
+            });
+            if (excelFiles.length === 0) {
+                Swal.fire({ icon: 'warning', title: 'Invalid File Type', text: 'Please select only spreadsheet files (xls, xlsx, csv, xlsm, xlsb, ods, tsv)', confirmButtonText: 'OK' });
+                return;
+            }
+            excelFiles.forEach(f => processFile(f));
+        }
 
-                    Swal.fire({
-                        title: 'Under Development Area',
-                        html: listHtml + '<p>This import/cancellation file selection is currently under development and is read-only.</p>',
-                        icon: 'info',
-                        confirmButtonText: 'OK'
+        // CSV/TSV identifier extractor: returns { partnerId, sourceType, usedDelimiter, rowIndex }
+        function parseCsvIdentifiers(text, ext) {
+            text = (text || '').replace(/^\uFEFF/, '');
+            const delimCandidates = ext === 'tsv' ? ['\t', ',', ';', '|'] : [',', ';', '\t', '|'];
+
+            function parseRows(input, delimiter) {
+                const rows = [];
+                let row = [];
+                let field = '';
+                let inQuotes = false;
+                for (let i = 0; i < input.length; i++) {
+                    const ch = input[i];
+                    const next = input[i+1];
+                    if (ch === '"') {
+                        if (inQuotes && next === '"') { field += '"'; i++; }
+                        else { inQuotes = !inQuotes; }
+                    } else if (!inQuotes && ch === delimiter) {
+                        row.push(field); field = '';
+                    } else if (!inQuotes && (ch === '\n' || ch === '\r')) {
+                        if (ch === '\r' && next === '\n') { i++; }
+                        row.push(field); field = '';
+                        rows.push(row); row = [];
+                    } else {
+                        field += ch;
+                    }
+                }
+                if (field !== '' || row.length > 0) { row.push(field); rows.push(row); }
+                return rows;
+            }
+
+            // helper: mark rows that look suspicious (embedded xml/zip fragments)
+            function isSuspiciousRow(r) {
+                if (!r || !r.length) return false;
+                const joined = r.join(' ').toString();
+                return /<\?xml|<worksheet|<sheetData|<c r=|<a:theme|PK\x03\x04|\x00|xl\//i.test(joined) || /<[^>]+>/.test(joined) && (joined.match(/</g)||[]).length > 3;
+            }
+
+            let rows = [];
+            let usedDelim = null;
+            for (let d of delimCandidates) {
+                rows = parseRows(text, d);
+                const idx = rows.findIndex(r => ((r[6]||'').toString().trim() !== '' || (r[7]||'').toString().trim() !== ''));
+                if (idx !== -1) { usedDelim = d; break; }
+            }
+
+            // prefer row 3 (index 2) when available and not suspicious
+            let finalRow = [];
+            let finalRowIndex = -1;
+            if (rows && rows.length) {
+                if (rows[2] && ((rows[2][6]||'').toString().trim() !== '' || (rows[2][7]||'').toString().trim() !== '') && !isSuspiciousRow(rows[2])) {
+                    finalRow = rows[2]; finalRowIndex = 2;
+                }
+
+                // otherwise prefer top window rows 0..5 that are not suspicious
+                if (finalRowIndex === -1) {
+                    for (let i = 0; i <= Math.min(5, rows.length-1); i++) {
+                        const r = rows[i] || [];
+                        if (((r[6]||'').toString().trim() !== '' || (r[7]||'').toString().trim() !== '') && !isSuspiciousRow(r)) { finalRow = r; finalRowIndex = i; break; }
+                    }
+                }
+
+                // if still not found, scan all rows for non-suspicious G/H
+                if (finalRowIndex === -1) {
+                    for (let i = 0; i < rows.length; i++) {
+                        const r = rows[i] || [];
+                        if (((r[6]||'').toString().trim() !== '' || (r[7]||'').toString().trim() !== '') && !isSuspiciousRow(r)) { finalRow = r; finalRowIndex = i; break; }
+                    }
+                }
+
+                // forgiving search for KPX/KP7 in any column (prefer non-suspicious rows)
+                if (finalRowIndex === -1) {
+                    for (let i = 0; i < rows.length; i++) {
+                        const r = rows[i] || [];
+                        if (isSuspiciousRow(r)) continue;
+                        for (let c = 0; c < r.length; c++) {
+                            const cell = (r[c] || '').toString().trim().toUpperCase();
+                            if (cell === 'KPX' || cell === 'KP7') { finalRow = r; finalRowIndex = i; break; }
+                        }
+                        if (finalRowIndex !== -1) break;
+                    }
+                }
+
+                // as last resort accept suspicious rows (preserve original behaviour)
+                if (finalRowIndex === -1) {
+                    const idx = rows.findIndex(r => ((r[6]||'').toString().trim() !== '' || (r[7]||'').toString().trim() !== ''));
+                    if (idx !== -1) { finalRow = rows[idx]; finalRowIndex = idx; }
+                    else { finalRow = rows[2] || rows[0] || []; finalRowIndex = rows.indexOf(finalRow) >= 0 ? rows.indexOf(finalRow) : 0; }
+                }
+            }
+
+            const finalPartner = (finalRow[6] || '').toString().trim();
+            const finalSource = ((finalRow[7] || '') + '').toString().trim();
+
+            // Determine cell addresses (column letters) for partner/source within finalRow
+            function colLetter(n) {
+                let s = '';
+                let num = n + 1; // make 1-based
+                while (num > 0) {
+                    const m = (num - 1) % 26;
+                    s = String.fromCharCode(65 + m) + s;
+                    num = Math.floor((num - 1) / 26);
+                }
+                return s;
+            }
+
+            let partnerCellCol = null, sourceCellCol = null;
+            if (finalRow && finalRow.length) {
+                for (let c = 0; c < finalRow.length; c++) {
+                    const cell = (finalRow[c] || '').toString();
+                    if (!partnerCellCol && finalPartner) {
+                        if (cell.indexOf(finalPartner) !== -1 || (finalPartner && cell.trim() === finalPartner)) partnerCellCol = c;
+                    }
+                    if (!sourceCellCol && finalSource) {
+                        if (cell.toString().toUpperCase().indexOf(String(finalSource).toUpperCase()) !== -1 || cell.toString().toUpperCase() === String(finalSource).toUpperCase()) sourceCellCol = c;
+                    }
+                }
+            }
+
+            const partnerCellAddr = (partnerCellCol !== null) ? (colLetter(partnerCellCol) + (finalRowIndex + 1)) : null;
+            const sourceCellAddr = (sourceCellCol !== null) ? (colLetter(sourceCellCol) + (finalRowIndex + 1)) : null;
+
+            // Debug log final detection including cell addresses
+            try {
+                console.log('CSV identifier detection', {
+                    usedDelimiter: usedDelim,
+                    rowsCount: rows.length,
+                    finalRowIndex: finalRowIndex,
+                    finalSample: finalRow,
+                    partnerId: finalPartner,
+                    sourceType: finalSource,
+                    partnerCellCol: partnerCellCol,
+                    partnerCellAddr: partnerCellAddr,
+                    sourceCellCol: sourceCellCol,
+                    sourceCellAddr: sourceCellAddr,
+                    suspicious: isSuspiciousRow(finalRow)
+                });
+            } catch(e) { /* ignore */ }
+
+            return { partnerId: finalPartner || '', sourceType: finalSource || '', sampleRow: finalRow, usedDelimiter: usedDelim, rowIndex: finalRowIndex, rowsCount: rows.length, partnerCellCol, partnerCellAddr, sourceCellCol, sourceCellAddr };
+        }
+
+        function processFile(file) {
+            window._filesBeingRead = window._filesBeingRead || 0; window._filesBeingRead++; $('#loading-overlay').css('display','flex'); proceedBtn.prop('disabled', true);
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            const reader = new FileReader();
+
+            // helper to parse workbook and perform validation + enqueue file
+            function parseWorkbook(workbook) {
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+
+                const partnerIdCell = firstSheet['G3'];
+                const partnerId = partnerIdCell ? String(partnerIdCell.v).trim() : '';
+                const sourceTypeCell = firstSheet['H3'];
+                let sourceType = sourceTypeCell ? String(sourceTypeCell.v).trim().toUpperCase() : '';
+
+                // Debug: log exact values read from workbook cells
+                try {
+                    console.log('Parsed workbook identifiers', {
+                        file: file.name,
+                        rawG3: partnerIdCell ? partnerIdCell.v : null,
+                        rawH3: sourceTypeCell ? sourceTypeCell.v : null,
+                        partnerId: partnerId,
+                        sourceType: sourceType
                     });
+                } catch (lerr) { console.log('Workbook log error', lerr); }
 
-                    // Reset input so same file can be re-selected if needed
-                    e.target.value = '';
+                if (sourceType !== 'KPX' && sourceType !== 'KP7') {
+                    Swal.fire({ icon:'error', title:'Invalid Source Type', html:`File: <strong>${file.name}</strong><br>Source Type in H3 must be KPX or KP7. Found: "${sourceType}"` });
+                    window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                    return false;
+                }
+                if (!partnerId) {
+                    Swal.fire({ icon:'error', title:'Missing Partner ID', html:`File: <strong>${file.name}</strong><br>Partner ID not found in G3.` });
+                    window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                    return false;
+                }
+
+                // prevent duplicate filename entries
+                const existing = uploadedFiles.find(u => u.name === file.name);
+                if (existing) {
+                    Swal.fire({ icon:'warning', title:'Duplicate File', text:`"${file.name}" has already been added.`, confirmButtonText:'OK' });
+                    window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                    return false;
+                }
+
+                // fetch partner name
+                $.ajax({ url: '../../../fetch/get_partner_name.php', method: 'POST', data: { partner_id: partnerId }, dataType: 'json', success: function(resp){
+                    const partnerName = resp.success ? resp.partner_name : 'Unknown Partner';
+                    const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: partnerName, sourceType: sourceType, sampleG: partnerId, sampleH: sourceTypeCell ? String(sourceTypeCell.v) : '', sampleRowIndex: 2, usedDelimiter: null, id: Date.now() + Math.random() };
+                    uploadedFiles.push(fileData); renderFileCards();
+                    window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                }, error: function(){
+                    const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: 'Loading...', sourceType: sourceType, sampleG: partnerId, sampleH: sourceTypeCell ? String(sourceTypeCell.v) : '', sampleRowIndex: 2, usedDelimiter: null, id: Date.now() + Math.random() };
+                    uploadedFiles.push(fileData); renderFileCards(); window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                }});
+
+                return true;
+            }
+
+            reader.onload = function(e) {
+                try {
+                    let workbook;
+                    if (ext === 'csv' || ext === 'tsv') {
+                        try {
+                            const text = e.target.result || '';
+                            const parsed = parseCsvIdentifiers(text, ext);
+                            const partnerId = parsed.partnerId;
+                            const sourceType = (parsed.sourceType || '').toString().trim().toUpperCase();
+
+                            // Debug log parsed CSV info
+                            try { console.log('Parsed CSV identifiers', { file: file.name, partnerId: partnerId, sourceType: sourceType, usedDelimiter: parsed.usedDelimiter, rowIndex: parsed.rowIndex, sampleRow: parsed.sampleRow }); } catch (l) { console.log('CSV log error', l); }
+
+                            // Fallback: if the uploaded .csv actually contains binary/xlsx or XML content
+                            const firstCell = (parsed.sampleRow && parsed.sampleRow[0]) ? String(parsed.sampleRow[0]) : '';
+                            // broaden detection: look for zip header, xml markers, or worksheet/sheetData tags commonly embedded
+                            const looksLikeZip = firstCell.indexOf('PK\u0003\u0004') !== -1
+                                || firstCell.startsWith('PK')
+                                || /<a:theme/i.test(firstCell)
+                                || /<\?xml/i.test(firstCell)
+                                || /<worksheet/i.test(firstCell)
+                                || /<sheetData/i.test(firstCell)
+                                || /<c r=/i.test(firstCell)
+                                || /xl\//i.test(firstCell)
+                                || /\x00/.test(firstCell);
+                            if (looksLikeZip) {
+                                console.log('CSV appears to contain binary/xlsx content — retrying as binary workbook for', file.name);
+                                const readerBin = new FileReader();
+                                readerBin.onload = function(ev2) {
+                                    try {
+                                        const data2 = new Uint8Array(ev2.target.result);
+                                        const workbook2 = XLSX.read(data2, { type: 'array' });
+                                        parseWorkbook(workbook2);
+                                    } catch (re) {
+                                        console.error('Binary fallback parse failed for', file.name, re);
+                                        Swal.fire({ icon:'error', title:'File Processing Error', html:`Cannot parse file as CSV or XLSX: <strong>${file.name}</strong><br>${re && re.message ? re.message : re}` });
+                                        window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                                    }
+                                };
+                                try { readerBin.readAsArrayBuffer(file); } catch (rerr) {
+                                    console.error('readAsArrayBuffer failed in fallback for', file.name, rerr);
+                                    Swal.fire({ icon:'error', title:'File Processing Error', html:`Cannot parse file: <strong>${file.name}</strong>.` });
+                                    window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                                }
+                                return;
+                            }
+
+                            if (sourceType !== 'KPX' && sourceType !== 'KP7') {
+                                Swal.fire({ icon:'error', title:'Invalid Source Type', html:`File: <strong>${file.name}</strong><br>Source Type in H3 must be KPX or KP7. Found: "${sourceType}"` });
+                                window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                                return;
+                            }
+                            if (!partnerId) {
+                                Swal.fire({ icon:'error', title:'Missing Partner ID', html:`File: <strong>${file.name}</strong><br>Partner ID not found in G3.` });
+                                window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                                return;
+                            }
+
+                            const existing = uploadedFiles.find(u => u.name === file.name);
+                            if (existing) {
+                                Swal.fire({ icon:'warning', title:'Duplicate File', text:`"${file.name}" has already been added.`, confirmButtonText:'OK' });
+                                window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                                return;
+                            }
+
+                            $.ajax({ url: '../../../fetch/get_partner_name.php', method: 'POST', data: { partner_id: partnerId }, dataType: 'json', success: function(resp){
+                                const partnerName = resp.success ? resp.partner_name : 'Unknown Partner';
+                                const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: partnerName, sourceType: sourceType, sampleG: partnerId, sampleH: parsed.sampleRow && parsed.sampleRow[7] ? parsed.sampleRow[7] : '', sampleRowIndex: parsed.rowIndex, usedDelimiter: parsed.usedDelimiter, id: Date.now() + Math.random() };
+                                uploadedFiles.push(fileData); renderFileCards();
+                                window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                            }, error: function(){
+                                const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: 'Loading...', sourceType: sourceType, sampleG: partnerId, sampleH: parsed.sampleRow && parsed.sampleRow[7] ? parsed.sampleRow[7] : '', sampleRowIndex: parsed.rowIndex, usedDelimiter: parsed.usedDelimiter, id: Date.now() + Math.random() };
+                                uploadedFiles.push(fileData); renderFileCards(); window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                            }});
+                        } catch (parseErr) {
+                            console.error('CSV parse error:', parseErr);
+                            Swal.fire({ icon:'error', title:'File Processing Error', html:`Error parsing CSV: <strong>${file.name}</strong><br>${parseErr && parseErr.message ? parseErr.message : parseErr}` });
+                            window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                        }
+                    } else {
+                        const data = new Uint8Array(e.target.result);
+                        workbook = XLSX.read(data, { type: 'array' });
+                        parseWorkbook(workbook);
+                    }
+                } catch (err) {
+                    console.error('Error processing file:', err);
+                    // try fallback using binary string if not attempted yet
+                    if (!file._binaryTried && ext !== 'csv' && ext !== 'tsv') {
+                        file._binaryTried = true;
+                        const reader2 = new FileReader();
+                        reader2.onload = function(e2) {
+                            try {
+                                const workbook2 = XLSX.read(e2.target.result, { type: 'binary' });
+                                parseWorkbook(workbook2);
+                            } catch (err2) {
+                                console.error('Fallback binary read failed:', err2);
+                                Swal.fire({ icon:'error', title:'File Processing Error', html:`Error reading file: <strong>${file.name}</strong><br>${err2.message}` });
+                                window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                            }
+                        };
+                        try { reader2.readAsBinaryString(file); } catch (rerr) {
+                            console.error('readAsBinaryString not supported:', rerr);
+                            Swal.fire({ icon:'error', title:'File Processing Error', html:`Cannot parse file: <strong>${file.name}</strong>. Browser does not support binary fallback.` });
+                            window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                        }
+                    } else {
+                        Swal.fire({ icon:'error', title:'File Processing Error', html:`Error reading file: <strong>${file.name}</strong><br>${err.message}` });
+                        window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
+                    }
+                }
+            };
+
+            if (ext === 'csv' || ext === 'tsv') {
+                reader.readAsText(file);
+            } else {
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        function renderFileCards() {
+            filesContainer.empty(); if (!uploadedFiles.length) { proceedContainer.hide(); return; }
+            uploadedFiles.forEach(fd => {
+                // Determine status icon based on file state (keep consistent with transaction UI)
+                let statusIcon = '';
+                if (fd.status === 'reading') statusIcon = '<i class="fa-solid fa-spinner fa-spin text-primary"></i>';
+                else if (fd.status === 'valid') statusIcon = '<i class="fa-solid fa-circle-check text-success"></i>';
+                else if (fd.status === 'duplicates') statusIcon = '<i class="fa-solid fa-circle-xmark text-warning"></i>';
+                else if (fd.status === 'error') statusIcon = '<i class="fa-solid fa-circle-exclamation text-danger"></i>';
+
+                const card = $(`
+                    <div class="file-card" data-id="${fd.id}">
+                        <div class="file-card-header">
+                            <div class="file-card-info">
+                                <div class="file-card-label">Filename ${statusIcon ? `<span class="ms-2">${statusIcon}</span>` : ''}</div>
+                                <div class="file-card-value">${fd.name}</div>
+                            </div>
+                            <div class="file-card-delete" title="Remove file"><i class="fa-solid fa-xmark"></i></div>
+                        </div>
+                        <div class="file-card-body"></div>
+                        <div class="file-card-footer">
+                            <div class="file-card-detail">
+                                <div class="file-card-label">Partner ID</div>
+                                <div class="file-card-value partner-tooltip">${fd.partnerId}<span class="tooltip-text">${fd.partnerName}</span></div>
+                            </div>
+                            <div class="file-card-detail">
+                                <div class="file-card-label">Source Type</div>
+                                <div class="file-card-value">
+                                    <span class="badge-source ${fd.sourceType === 'KPX' ? 'badge-kpx' : 'badge-kp7'}">${fd.sourceType}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `);
+                card.find('.file-card-delete').on('click', function(){ removeFile(fd.id); });
+                filesContainer.append(card);
+            });
+            proceedContainer.show();
+        }
+
+        function removeFile(id) { uploadedFiles = uploadedFiles.filter(f => f.id !== id); renderFileCards(); }
+
+        // Proceed button: start duplicate checks similar to transaction page
+        proceedBtn.on('click', function(){
+            if (uploadedFiles.length === 0) { Swal.fire({ icon:'warning', title:'No Files Selected', text:'Please select at least one file to proceed.' }); return; }
+            $('#loading-overlay').css('display','flex'); checkForDuplicates();
+        });
+
+        function checkForDuplicates() {
+            uploadedFiles.forEach(f => f.status = 'reading'); renderFileCards();
+            const BATCH_SIZE = 50; let index = 0; const aggregateResults = [];
+            $('#loading-overlay').css('display','flex'); $('#loading-overlay .loading-spinner').hide();
+
+            var modalHtml = '<div class="duplicate-modal">'
+                + '<div class="duplicate-modal-content">'
+                + '<div class="duplicate-modal-header">'
+                + '<div class="duplicate-modal-header-title">'
+                + '<i class="fa-solid fa-shield-halved"></i>'
+                + '<h4 id="duplicate-check-header">Checking files (0/' + uploadedFiles.length + ')</h4>'
+                + '</div>'
+                + '<div class="duplicate-progress-bar-container">'
+                + '<div class="duplicate-progress-bar" id="duplicate-progress-bar"></div>'
+                + '</div>'
+                + '</div>'
+                + '<div class="duplicate-modal-body">'
+                + '<div id="duplicate-check-list"></div>'
+                + '</div>'
+                + '<div class="duplicate-modal-footer">'
+                + '<div id="duplicate-check-footer">'
+                + '<span class="duplicate-footer-icon"><i class="fa-solid fa-file-circle-check"></i> Validating files</span>'
+                + '<span id="duplicate-progress-text"><strong>0</strong> / ' + uploadedFiles.length + '</span>'
+                + '</div>'
+                + '</div>'
+                + '</div></div>';
+
+            $('body').append(modalHtml);
+            const $list = $('#duplicate-check-list'); $list.empty(); uploadedFiles.forEach((f, idx) => { $list.append($(`<div class="check-item checking" data-idx="${idx}"><div class="name">${f.name}</div><div class="status"><i class="fa-solid fa-spinner fa-spin status-icon-checking"></i></div></div>`)); });
+
+            let processedCount = 0; const totalCount = uploadedFiles.length;
+            function updateHeader(){ $('#duplicate-check-header').text('Checking files (' + processedCount + '/' + totalCount + ')'); $('#duplicate-progress-text').html('<strong>' + processedCount + '</strong> / ' + totalCount); $('#duplicate-progress-bar').css('width', ((processedCount/totalCount)*100) + '%'); }
+
+            function processBatch(start) {
+                const formData = new FormData(); const batch = uploadedFiles.slice(start, start + BATCH_SIZE);
+                batch.forEach(b => { formData.append('files[]', b.file); formData.append('partner_ids[]', b.partnerId); formData.append('source_types[]', b.sourceType); });
+                formData.append('check_duplicates', '1');
+                return $.ajax({ url: '../../../models/saved/saved_billspayImportCancelledFile.php', type: 'POST', data: formData, processData:false, contentType:false, dataType:'json' });
+            }
+
+            function next() {
+                if (index >= uploadedFiles.length) {
+                    $('#loading-overlay .loading-spinner').show(); const flat = [].concat.apply([], aggregateResults);
+                    flat.forEach((res, idx) => { if (uploadedFiles[idx]) { if (res.hasDuplicates) { uploadedFiles[idx].status = 'duplicates'; uploadedFiles[idx].duplicateCount = res.duplicateRows; uploadedFiles[idx].newCount = res.newRows; } else { uploadedFiles[idx].status = 'valid'; } } });
+                    renderFileCards(); $('.duplicate-modal').remove(); $('#loading-overlay').hide(); const filesWithDuplicates = flat.filter(f => f.hasDuplicates);
+                    if (filesWithDuplicates.length > 0) { showDuplicateModal(flat, filesWithDuplicates); } else { proceedWithUpload('skip'); }
+                    return;
+                }
+
+                $('#loading-overlay').css('display','flex');
+                processBatch(index).done(function(response){ if (response && response.success && Array.isArray(response.files)) {
+                    aggregateResults.push(response.files);
+                    response.files.forEach(function(res,j){ var globalIndex = index + j; var $item = $list.find('.check-item[data-idx="' + globalIndex + '"]'); if ($item.length) { if (res.hasDuplicates) { $item.removeClass('checking').addClass('warning'); $item.find('.status').html('<i class="fa-solid fa-circle-exclamation status-icon-warning"></i>'); } else { $item.removeClass('checking').addClass('success'); $item.find('.status').html('<i class="fa-solid fa-circle-check status-icon-success"></i>'); } setTimeout(function(){ $item.addClass('fade-up'); setTimeout(function(){ $item.remove(); processedCount++; updateHeader(); }, 400); }, 300 + (j*60)); } }); index += BATCH_SIZE; setTimeout(next,50);
+                } else { $('#loading-overlay').hide(); uploadedFiles.forEach(f=>f.status='error'); renderFileCards(); Swal.fire({ icon:'error', title:'Validation Error', text:(response && response.error) ? response.error : 'An error occurred while checking for duplicates.' }); } }).fail(function(xhr,status,error){ $('#loading-overlay .loading-spinner').show(); $('.duplicate-modal').remove(); $('#loading-overlay').hide(); uploadedFiles.forEach(f=>f.status='error'); renderFileCards(); Swal.fire({ icon:'error', title:'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.' }); console.error('Duplicate check batch error:', error, xhr.responseText); });
+            }
+
+            next();
+        }
+
+        function showDuplicateModal(allFiles, filesWithDuplicates) {
+            // reuse transaction implementation style: show summary, then offer Override/Skip/Remove
+            let totalDuplicates = 0; let totalNew = 0; let totalRows = 0; let totalPostedMatches = 0; let totalUnpostedMatches = 0;
+            allFiles.forEach(f=>{ totalDuplicates += f.duplicateRows||0; totalNew += f.newRows||0; totalRows += f.totalRows||0; totalPostedMatches += f.postedRows||0; totalUnpostedMatches += f.unpostedRows||0; });
+            let fileListHTML = '<div id="duplicate-details" style="display:none; max-height:250px; overflow-y:auto; margin-top:15px; text-align:left; border-top:1px solid #ddd; padding-top:15px;">';
+            filesWithDuplicates.forEach(file => { fileListHTML += `<div style="padding:10px; border:1px solid #ddd; margin-bottom:10px; border-radius:5px; background-color:#fff8e1;"><strong>📄 ${file.fileName}</strong><br><small style="color:#666;">Partner: ${file.partnerId} | Type: ${file.sourceType}</small><br><small style="color:#d32f2f;">⚠️ ${file.duplicateRows.toLocaleString()} duplicate row(s) found</small><br><small style="color:#388e3c;">✓ ${file.newRows.toLocaleString()} new row(s)</small></div>`; });
+            fileListHTML += '</div>';
+
+            const summaryHTML = `<div style="text-align:center;"><div style="background-color:#fff8e1; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #ff9800;"><p style="margin:0; color:#666; font-size:15px;"><strong style="color:#000;">${filesWithDuplicates.length}</strong> file(s) with Partner ID data already exists</p></div><div style="background-color:#f5f5f5; padding:12px; border-radius:5px; margin-bottom:15px;"><p style="margin:5px 0; color:#d32f2f; font-size:14px;"><i class="fa-solid fa-exclamation-triangle"></i> <strong>${totalDuplicates.toLocaleString()}</strong> duplicate row(s) detected</p><p style="margin:5px 0; color:#388e3c; font-size:14px;"><i class="fa-solid fa-check-circle"></i> <strong>${totalNew.toLocaleString()}</strong> new row(s)</p></div><button id="toggle-details-btn" type="button" style="background-color:#1976d2; color:white; border:none; padding:8px 20px; border-radius:5px; cursor:pointer; font-size:13px; margin-bottom:10px;"><i class="fa-solid fa-chevron-down"></i> View All Details</button></div>`;
+
+            if (totalDuplicates > 0 && totalUnpostedMatches === 0 && totalPostedMatches > 0) {
+                const altSummary = `<div style="text-align:center;"><div style="background-color:#fff8e1; padding:15px; border-radius:8px; margin-bottom:12px;"><p style="margin:0; color:#000; font-size:16px;"><strong>Data already Existed</strong></p></div><div style="background-color:#f5f5f5; padding:12px; border-radius:5px; margin-bottom:12px; text-align:left;"><p style="margin:4px 0; font-size:14px;"><strong>Partner ID:</strong> ${allFiles[0].partnerId}</p><p style="margin:4px 0; font-size:14px;"><strong>Partner Name:</strong> ${allFiles[0].partnerName || 'Unknown'}</p><p style="margin:4px 0; font-size:14px;"><strong>Status:</strong> <span style="color:#388e3c; font-weight:700;">Posted</span></p><p style="margin:8px 0; color:#d32f2f; font-size:14px;"><strong>Existing rows detected:</strong> ${totalDuplicates.toLocaleString()}</p></div></div>`;
+                Swal.fire({ title: '<i class="fa-solid fa-info-circle" style="color:#388e3c;"></i> Data already Existed', html: altSummary + '<div id="alt-details" style="display:none; margin-top:10px; text-align:left;">' + fileListHTML + '</div>', icon: 'info', showCancelButton: false, showDenyButton: false, showConfirmButton: true, confirmButtonText: '<i class="fa-solid fa-trash"></i> Remove', confirmButtonColor: '#6c757d', allowOutsideClick:false, allowEscapeKey:false, width: '700px' }).then(() => { if (allFiles.length === 1) { window.location.href = '../../../models/saved/saved_billspayImportCancelledFile.php?cancel=1'; } else { filesWithDuplicates.forEach(f => { uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId))); }); renderFileCards(); if (uploadedFiles.length === 0) { Swal.fire({ icon:'info', title:'All Files Removed', text:'No files left to import.' }); } else { proceedWithUpload('skip'); } } }); return; }
+
+            Swal.fire({ title: '<i class="fa-solid fa-triangle-exclamation" style="color:#ff9800;"></i> Duplicate Records Detected', html: summaryHTML + fileListHTML, icon: 'warning', showCancelButton: true, showDenyButton: true, confirmButtonText: '<i class="fa-solid fa-rotate"></i> Override', denyButtonText: '<i class="fa-solid fa-forward"></i> Skip', cancelButtonText: '<i class="fa-solid fa-trash"></i> Remove', confirmButtonColor: '#d33', denyButtonColor: '#3085d6', cancelButtonColor: '#6c757d', allowOutsideClick:false, allowEscapeKey:false, width: '600px', didOpen: () => { const toggleBtn = document.getElementById('toggle-details-btn'); const detailsDiv = document.getElementById('duplicate-details'); let isExpanded=false; toggleBtn.addEventListener('click', function(){ isExpanded=!isExpanded; if (isExpanded) { detailsDiv.style.display='block'; toggleBtn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Hide Details'; } else { detailsDiv.style.display='none'; toggleBtn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> View All Details'; } }); } }).then((result)=>{ if (result.isConfirmed) { proceedWithUpload('override'); } else if (result.isDenied) { proceedWithUpload('skip'); } else { filesWithDuplicates.forEach(f => { uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId))); }); renderFileCards(); if (uploadedFiles.length === 0) { Swal.fire({ icon:'info', title:'All Files Removed', text:'No files left to import.' }); } else { proceedWithUpload('skip'); } } });
+
+        }
+
+        function proceedWithUpload(userDecision) {
+            $('#loading-overlay').css('display','flex');
+            const formData = new FormData();
+            uploadedFiles.forEach(f => {
+                formData.append('files[]', f.file);
+                formData.append('partner_ids[]', f.partnerId);
+                formData.append('source_types[]', f.sourceType);
+            });
+            formData.append('upload','1');
+            formData.append('user_decision', userDecision || 'skip');
+            sessionStorage.setItem('uploadedFilesData', JSON.stringify(uploadedFiles.map(f => ({ name: f.name, partnerId: f.partnerId, partnerName: f.partnerName, sourceType: f.sourceType }))));
+
+            $.ajax({
+                url: '../../../models/saved/saved_billspayImportCancelledFile.php',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                dataType: 'json',
+                success: function(resp) {
+                    // If server returned JSON with redirect, trust it; otherwise fallback to known validator path
+                    try {
+                        console.log('Upload response', resp);
+                        if (resp && resp.success && resp.redirect) {
+                            window.location.href = resp.redirect;
+                            return;
+                        }
+                    } catch (e) { console.warn('Response parsing error', e); }
+                    // fallback redirect
+                    window.location.href = '../../../models/saved/saved_billspayImportCancelledFile_NEW.php';
+                },
+                error: function(xhr, status, err) {
+                    $('#loading-overlay').hide();
+                    console.error('Upload failed', status, err, xhr.responseText);
+                    // Try to show server-provided JSON error if available
+                    var msg = 'An error occurred while uploading files. Please try again.';
+                    try {
+                        var json = xhr && xhr.responseText ? JSON.parse(xhr.responseText) : null;
+                        if (json && json.error) msg = json.error;
+                    } catch(e) {}
+                    Swal.fire({ icon:'error', title:'Upload Error', text: msg });
                 }
             });
         }
