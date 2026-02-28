@@ -353,6 +353,26 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     <a href="<?php echo $base_url; ?>billspayment/import/duplicate-transaction.php"><i class="fa-solid fa-receipt"></i> Transaction</a>
                 </div>
             </div>
+
+            <!-- Show/Hide Set masterfile Sub-menu -->
+            <div class="tabcat" id="set-masterfile-btn" style="display: none;">
+                <h6><i class="fa-solid fa-code-compare"></i> Masterfile</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-set-masterfile" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-set-masterfile" style="display: none"></i>
+            </div>
+
+            <!-- Set Masterfile Partner List Buttons -->
+            <div class="onetab-sub" id="set-masterfile-partner-nav" style="display: none;">
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/masterfiles/masterfile-partner-list.php'">
+                    <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-partner-list.php"><i class="fa-solid fa-receipt"></i> Partner List</a>
+                </div>
+            </div>
+            <!-- Set Masterfile Bank List Buttons -->
+            <div class="onetab-sub" id="set-masterfile-bank-nav" style="display: none;">
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php'">
+                    <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php"><i class="fa-solid fa-receipt"></i> Bank List</a>
+                </div>
+            </div>
         <?php endif; ?>
 
         <!-- Logout Button -->
