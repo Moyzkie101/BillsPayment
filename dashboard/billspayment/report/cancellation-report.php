@@ -152,6 +152,26 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_cancellation_data') {
         #resultsTable th, #resultsTable td { font-size: 0.9rem; }
         /* Make the table container scroll horizontally */
         .table-responsive { overflow-x: auto; }
+        /* Pagination: make page links red to match header/theme */
+        #pagination .page-link {
+            color: #b02a37;
+            border-color: #b02a37;
+            background-color: transparent;
+        }
+        #pagination .page-link:hover, #pagination .page-link:focus {
+            color: #fff;
+            background-color: #b02a37;
+            border-color: #b02a37;
+        }
+        #pagination .page-item.active .page-link {
+            color: #fff;
+            background-color: #b02a37;
+            border-color: #b02a37;
+        }
+        #pagination .page-item.disabled .page-link {
+            color: #6c757d;
+            border-color: #dee2e6;
+        }
     </style>
 </head>
 <body>
