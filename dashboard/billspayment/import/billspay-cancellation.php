@@ -1078,24 +1078,41 @@ document.addEventListener('DOMContentLoaded', function() {
                 title: '<i class="fa-solid fa-ban" style="color:#d32f2f;"></i> Duplicate Reference Number(s) Detected',
                 html: summaryHTML + fileListHTML + '<p style="margin-top:10px; text-align:left; color:#555;">Duplicates must be removed or fixed. Import will not proceed while duplicate Reference No(s) exist.</p>',
                 icon: 'error',
-                showCancelButton: false,
-                showDenyButton: false,
+                showCloseButton: true,
+                showCancelButton: true,
+                cancelButtonText: 'Cancel',
+                showDenyButton: true,
+                denyButtonText: 'Skip',
                 confirmButtonText: '<i class="fa-solid fa-trash"></i> Remove Duplicate Files',
                 confirmButtonColor: '#6c757d',
                 allowOutsideClick:false,
                 allowEscapeKey:false,
                 width: 700,
                 didOpen: () => {}
-            }).then(() => {
-                // Remove offending files from the upload list and refresh UI. Do NOT auto-proceed with upload.
-                filesWithDuplicates.forEach(f => {
-                    uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId)));
-                });
-                renderFileCards();
-                if (uploadedFiles.length === 0) {
-                    Swal.fire({ icon:'info', title:'Duplicates Removed', text:'All duplicate files were removed. No files left to import.' });
+            }).then((res) => {
+                // res.isConfirmed => Remove duplicates from the upload list but do NOT auto-proceed
+                // res.isDenied => Remove duplicates and proceed with upload (skip duplicates)
+                // res.isDismissed or Cancel => do nothing
+                if (res && res.isConfirmed) {
+                    filesWithDuplicates.forEach(f => {
+                        uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId)));
+                    });
+                    renderFileCards();
+                    if (uploadedFiles.length === 0) {
+                        Swal.fire({ icon:'info', title:'Duplicates Removed', text:'All duplicate files were removed. No files left to import.' });
+                    } else {
+                        Swal.fire({ icon:'info', title:'Duplicates Removed', text:'Duplicate files were removed. Click Proceed to validate remaining files.' });
+                    }
+                } else if (res && res.isDenied) {
+                    // Remove duplicate files and immediately proceed with upload (skipping duplicates)
+                    filesWithDuplicates.forEach(f => {
+                        uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId)));
+                    });
+                    renderFileCards();
+                    // proceed with upload, passing decision 'skip'
+                    proceedWithUpload('skip');
                 } else {
-                    Swal.fire({ icon:'info', title:'Duplicates Removed', text:'Duplicate files were removed. Click Proceed to validate remaining files.' });
+                    // Cancelled/closed - do nothing
                 }
             });
         }

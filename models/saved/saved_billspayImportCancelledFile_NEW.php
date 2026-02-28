@@ -6,6 +6,76 @@ session_start();
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as PhpSpreadsheetDate;
 
+/**
+ * Resolve a partner search key (G3) to actual partner identifiers.
+ * Priority: partner_id_kpx -> partner_id -> partner_name match.
+ * Returns ['partner_id'=>string|null,'partner_id_kpx'=>string|null,'partner_name'=>string|null,'gl_code'=>string|null]
+ */
+function resolvePartnerRecord($conn, $search)
+{
+    $out = ['partner_id' => null, 'partner_id_kpx' => null, 'partner_name' => null];
+    if (empty($search)) return $out;
+
+    // try partner_id_kpx first
+    $sql = "SELECT partner_id, partner_id_kpx, partner_name, gl_code FROM masterdata.partner_masterfile WHERE partner_id_kpx = ? LIMIT 1";
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param('s', $search);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res && $res->num_rows > 0) {
+            $row = $res->fetch_assoc();
+            $out['partner_id'] = $row['partner_id'] ?? null;
+            $out['partner_id_kpx'] = $row['partner_id_kpx'] ?? null;
+            $out['partner_name'] = $row['partner_name'] ?? null;
+            $out['gl_code'] = $row['gl_code'] ?? null;
+            $stmt->close();
+            return $out;
+        }
+        $stmt->close();
+    }
+
+    // try partner_id
+    $sql = "SELECT partner_id, partner_id_kpx, partner_name, gl_code FROM masterdata.partner_masterfile WHERE partner_id = ? LIMIT 1";
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param('s', $search);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res && $res->num_rows > 0) {
+            $row = $res->fetch_assoc();
+            $out['partner_id'] = $row['partner_id'] ?? null;
+            $out['partner_id_kpx'] = $row['partner_id_kpx'] ?? null;
+            $out['partner_name'] = $row['partner_name'] ?? null;
+            $out['gl_code'] = $row['gl_code'] ?? null;
+            $stmt->close();
+            return $out;
+        }
+        $stmt->close();
+    }
+
+    // lastly try partner_name (case-insensitive)
+    $sql = "SELECT partner_id, partner_id_kpx, partner_name, gl_code FROM masterdata.partner_masterfile WHERE LOWER(partner_name) = LOWER(?) LIMIT 1";
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param('s', $search);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res && $res->num_rows > 0) {
+            $row = $res->fetch_assoc();
+            $out['partner_id'] = $row['partner_id'] ?? null;
+            $out['partner_id_kpx'] = $row['partner_id_kpx'] ?? null;
+            $out['partner_name'] = $row['partner_name'] ?? null;
+            $out['gl_code'] = $row['gl_code'] ?? null;
+            $stmt->close();
+            return $out;
+        }
+        $stmt->close();
+    }
+
+    return $out;
+}
+
 function c_parse_datetime($value)
 {
     if ($value === null) return '';
@@ -42,6 +112,12 @@ function c_validate_file($conn, $file)
     $filePath = $file['path'] ?? '';
     $fileName = $file['name'] ?? '';
     $partnerId = $file['partner_id'] ?? '';
+    // resolve partner search key (G3) to actual partner ids; do not insert raw G3 into partner_id
+    $resolvedPartner = resolvePartnerRecord($conn, $partnerId);
+    $p_resolved_id = $resolvedPartner['partner_id'] ?? null;
+    $p_resolved_kpx = $resolvedPartner['partner_id_kpx'] ?? null;
+    $p_resolved_name = $resolvedPartner['partner_name'] ?? null;
+    $p_resolved_gl = $resolvedPartner['gl_code'] ?? null;
     $sourceType = strtoupper($file['source_type'] ?? 'KPX');
 
     $result = [
@@ -128,9 +204,16 @@ function c_validate_file($conn, $file)
                     WHERE reference_no = ? AND (`datetime` = ? OR cancellation_date = ?)";
 
             if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
-                $sql .= " AND (partner_id = ? OR partner_id_kpx = ?) GROUP BY post_transaction";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param('sssss', $referenceNo, $datetime, $datetime, $partnerId, $partnerId);
+                if (!empty($p_resolved_id) || !empty($p_resolved_kpx)) {
+                    $sql .= " AND (partner_id = ? OR partner_id_kpx = ?) GROUP BY post_transaction";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param('sssss', $referenceNo, $datetime, $datetime, $p_resolved_id, $p_resolved_kpx);
+                } else {
+                    // partner search provided but not resolved; do not apply partner filter
+                    $sql .= " GROUP BY post_transaction";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param('sss', $referenceNo, $datetime, $datetime);
+                }
             } else {
                 $sql .= " GROUP BY post_transaction";
                 $stmt = $conn->prepare($sql);

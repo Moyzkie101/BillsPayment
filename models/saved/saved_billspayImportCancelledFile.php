@@ -47,6 +47,50 @@ function getPartnerName($conn, $partnerId) {
     return $name;
 }
 
+/**
+ * Resolve partner search key (G3 or supplied partner identifier) to partner_id / partner_id_kpx / partner_name
+ */
+function findPartnerRecord($conn, $search)
+{
+    $out = ['partner_id'=>null,'partner_id_kpx'=>null,'partner_name'=>null,'gl_code'=>null];
+    if (empty($search)) return $out;
+
+    // try partner_id_kpx
+    $sql = "SELECT partner_id, partner_id_kpx, partner_name, gl_code FROM masterdata.partner_masterfile WHERE partner_id_kpx = ? LIMIT 1";
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param('s', $search);
+        $stmt->execute();
+        $r = $stmt->get_result();
+        if ($r && $r->num_rows>0) { $row = $r->fetch_assoc(); $out['partner_id']=$row['partner_id']??null; $out['partner_id_kpx']=$row['partner_id_kpx']??null; $out['partner_name']=$row['partner_name']??null; $out['gl_code']=$row['gl_code']??null; $stmt->close(); return $out; }
+        $stmt->close();
+    }
+
+    // try partner_id
+    $sql = "SELECT partner_id, partner_id_kpx, partner_name, gl_code FROM masterdata.partner_masterfile WHERE partner_id = ? LIMIT 1";
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param('s', $search);
+        $stmt->execute();
+        $r = $stmt->get_result();
+        if ($r && $r->num_rows>0) { $row = $r->fetch_assoc(); $out['partner_id']=$row['partner_id']??null; $out['partner_id_kpx']=$row['partner_id_kpx']??null; $out['partner_name']=$row['partner_name']??null; $out['gl_code']=$row['gl_code']??null; $stmt->close(); return $out; }
+        $stmt->close();
+    }
+
+    // try partner_name (case-insensitive)
+    $sql = "SELECT partner_id, partner_id_kpx, partner_name, gl_code FROM masterdata.partner_masterfile WHERE LOWER(partner_name) = LOWER(?) LIMIT 1";
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param('s', $search);
+        $stmt->execute();
+        $r = $stmt->get_result();
+        if ($r && $r->num_rows>0) { $row = $r->fetch_assoc(); $out['partner_id']=$row['partner_id']??null; $out['partner_id_kpx']=$row['partner_id_kpx']??null; $out['partner_name']=$row['partner_name']??null; $out['gl_code']=$row['gl_code']??null; $stmt->close(); return $out; }
+        $stmt->close();
+    }
+
+    return $out;
+}
+
 
 ini_set('memory_limit', '-1');
 set_time_limit(0);
@@ -64,6 +108,10 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
             $tmpPath = $_FILES['files']['tmp_name'][$i];
             $fileName = $_FILES['files']['name'][$i];
             $partnerId = $_POST['partner_ids'][$i] ?? '';
+            // resolve partner search key (G3) to actual partner ids
+            $resolved = findPartnerRecord($conn, $partnerId);
+            $p_resolved_id = $resolved['partner_id'] ?? null;
+            $p_resolved_kpx = $resolved['partner_id_kpx'] ?? null;
             $sourceType = $_POST['source_types'][$i] ?? '';
 
             try {
@@ -108,11 +156,11 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
 
                     // First check billspayment_transaction for posted/unposted matches
                     $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction WHERE reference_no = ? AND (`datetime` = ? OR cancellation_date = ? )";
-                    if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
+                    if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL' && (!empty($p_resolved_id) || !empty($p_resolved_kpx))) {
                         $sql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
                         $sql .= " GROUP BY post_transaction";
                         $stmt = $conn->prepare($sql);
-                        $stmt->bind_param("sssss", $reference_number, $datetime, $datetime, $partnerId, $partnerId);
+                        $stmt->bind_param("sssss", $reference_number, $datetime, $datetime, $p_resolved_id, $p_resolved_kpx);
                     } else {
                         $sql .= " GROUP BY post_transaction";
                         $stmt = $conn->prepare($sql);
@@ -132,10 +180,10 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
 
                     // Also check billspayment_cancellation table for existing reference_no
                     $cSql = "SELECT COUNT(*) as cnt FROM mldb.billspayment_cancellation WHERE reference_no = ?";
-                    if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
+                    if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL' && (!empty($p_resolved_id) || !empty($p_resolved_kpx))) {
                         $cSql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
                         $cStmt = $conn->prepare($cSql);
-                        if ($cStmt) { $cStmt->bind_param("sss", $reference_number, $partnerId, $partnerId); $cStmt->execute(); $cRes = $cStmt->get_result(); if ($cRes && ($crow = $cRes->fetch_assoc())) { $ccnt = intval($crow['cnt']); if ($ccnt > 0) { $row_count_total += $ccnt; $postedRows += $ccnt; } } $cStmt->close(); }
+                        if ($cStmt) { $cStmt->bind_param("sss", $reference_number, $p_resolved_id, $p_resolved_kpx); $cStmt->execute(); $cRes = $cStmt->get_result(); if ($cRes && ($crow = $cRes->fetch_assoc())) { $ccnt = intval($crow['cnt']); if ($ccnt > 0) { $row_count_total += $ccnt; $postedRows += $ccnt; } } $cStmt->close(); }
                     } else {
                         $cStmt = $conn->prepare($cSql);
                         if ($cStmt) { $cStmt->bind_param("s", $reference_number); $cStmt->execute(); $cRes = $cStmt->get_result(); if ($cRes && ($crow = $cRes->fetch_assoc())) { $ccnt = intval($crow['cnt']); if ($ccnt > 0) { $row_count_total += $ccnt; $postedRows += $ccnt; } } $cStmt->close(); }
@@ -278,12 +326,8 @@ function handleKPXImport($tmpPath, $fileName, $fileExt)
                         $rowData = [];
                         $allEmpty = true;
                         for ($c = 2; $c <= 17; $c++) {
-                            if (method_exists($worksheet, 'getCellByColumnAndRow')) {
-                                $cell = $worksheet->getCellByColumnAndRow($c, $r);
-                            } else {
-                                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
-                                $cell = $worksheet->getCell($colLetter . $r);
-                            }
+                            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+                            $cell = $worksheet->getCell($colLetter . $r);
                             $cellValue = $cell !== null ? $cell->getValue() : '';
                             $value = trim((string)$cellValue);
                             $rowData[] = $value;
@@ -312,12 +356,8 @@ function handleKPXImport($tmpPath, $fileName, $fileExt)
                 $allEmpty = true;
                 // Column B..Q correspond to column numbers 2..17
                 for ($c = 2; $c <= 17; $c++) {
-                    if (method_exists($worksheet, 'getCellByColumnAndRow')) {
-                        $cell = $worksheet->getCellByColumnAndRow($c, $r);
-                    } else {
-                        $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
-                        $cell = $worksheet->getCell($colLetter . $r);
-                    }
+                    $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+                    $cell = $worksheet->getCell($colLetter . $r);
                     $cellValue = $cell !== null ? $cell->getValue() : '';
                     $value = trim((string)$cellValue);
                     $rowData[] = $value;
@@ -577,6 +617,10 @@ if (isset($_POST['upload'])) {
             $tmpPath = $_FILES['files']['tmp_name'][$i];
             $fileName = $_FILES['files']['name'][$i];
             $partnerIdCheck = $_POST['partner_ids'][$i] ?? '';
+            // Resolve partner search key to actual partner identifiers (do not treat raw G3 as partner_id)
+            $resolvedPartner = findPartnerRecord($conn, $partnerIdCheck);
+            $p_resolved_id = $resolvedPartner['partner_id'] ?? null;
+            $p_resolved_kpx = $resolvedPartner['partner_id_kpx'] ?? null;
 
             try {
                 $spreadsheet = IOFactory::load($tmpPath);
@@ -602,10 +646,10 @@ if (isset($_POST['upload'])) {
                     $row_count_total = 0;
                     // check transactions
                     $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction WHERE reference_no = ? AND (`datetime` = ? OR cancellation_date = ? )";
-                    if (!empty($partnerIdCheck) && strtoupper($partnerIdCheck) !== 'ALL') {
+                    if (!empty($partnerIdCheck) && strtoupper($partnerIdCheck) !== 'ALL' && (!empty($p_resolved_id) || !empty($p_resolved_kpx))) {
                         $sql .= " AND (partner_id = ? OR partner_id_kpx = ?) GROUP BY post_transaction";
                         $sstmt = $conn->prepare($sql);
-                        $sstmt->bind_param("sssss", $reference_number, $datetime, $datetime, $partnerIdCheck, $partnerIdCheck);
+                        $sstmt->bind_param("sssss", $reference_number, $datetime, $datetime, $p_resolved_id, $p_resolved_kpx);
                     } else {
                         $sql .= " GROUP BY post_transaction";
                         $sstmt = $conn->prepare($sql);
@@ -625,10 +669,10 @@ if (isset($_POST['upload'])) {
 
                     // check cancellations table
                     $cSql = "SELECT COUNT(*) as cnt FROM mldb.billspayment_cancellation WHERE reference_no = ?";
-                    if (!empty($partnerIdCheck) && strtoupper($partnerIdCheck) !== 'ALL') {
+                    if (!empty($partnerIdCheck) && strtoupper($partnerIdCheck) !== 'ALL' && (!empty($p_resolved_id) || !empty($p_resolved_kpx))) {
                         $cSql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
                         $cstmt = $conn->prepare($cSql);
-                        if ($cstmt) { $cstmt->bind_param("sss", $reference_number, $partnerIdCheck, $partnerIdCheck); $cstmt->execute(); $cRes = $cstmt->get_result(); if ($cRes && ($crow = $cRes->fetch_assoc())) { $ccnt = intval($crow['cnt']); if ($ccnt > 0) { $row_count_total += $ccnt; $postedRows += $ccnt; } } $cstmt->close(); }
+                        if ($cstmt) { $cstmt->bind_param("sss", $reference_number, $p_resolved_id, $p_resolved_kpx); $cstmt->execute(); $cRes = $cstmt->get_result(); if ($cRes && ($crow = $cRes->fetch_assoc())) { $ccnt = intval($crow['cnt']); if ($ccnt > 0) { $row_count_total += $ccnt; $postedRows += $ccnt; } } $cstmt->close(); }
                     } else {
                         $cstmt = $conn->prepare($cSql);
                         if ($cstmt) { $cstmt->bind_param("s", $reference_number); $cstmt->execute(); $cRes = $cstmt->get_result(); if ($cRes && ($crow = $cRes->fetch_assoc())) { $ccnt = intval($crow['cnt']); if ($ccnt > 0) { $row_count_total += $ccnt; $postedRows += $ccnt; } } $cstmt->close(); }
@@ -817,16 +861,12 @@ if (isset($_POST['perform_import']) && isset($_SESSION['uploaded_files']) && is_
                     $highestRow = $worksheet->getHighestRow();
                     for ($r = 7; $r <= $highestRow; $r++) {
                         $rowData = []; $allEmpty=true;
-                        for ($c = 2; $c <= 17; $c++) {
-                            if (method_exists($worksheet, 'getCellByColumnAndRow')) {
-                                $cell = $worksheet->getCellByColumnAndRow($c, $r);
-                            } else {
+                            for ($c = 2; $c <= 17; $c++) {
                                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
                                 $cell = $worksheet->getCell($colLetter . $r);
+                                $val = $cell !== null ? trim((string)$cell->getValue()) : '';
+                                $rowData[] = $val; if ($val !== '') $allEmpty=false;
                             }
-                            $val = $cell !== null ? trim((string)$cell->getValue()) : '';
-                            $rowData[] = $val; if ($val !== '') $allEmpty=false;
-                        }
                         if ($allEmpty) break; $rows[] = $rowData;
                     }
                     if (isset($spreadsheet) && is_object($spreadsheet)) { try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {} unset($worksheet,$spreadsheet); }
@@ -838,12 +878,8 @@ if (isset($_POST['perform_import']) && isset($_SESSION['uploaded_files']) && is_
                 for ($r = 7; $r <= $highestRow; $r++) {
                     $rowData = []; $allEmpty=true;
                     for ($c = 2; $c <= 17; $c++) {
-                        if (method_exists($worksheet, 'getCellByColumnAndRow')) {
-                            $cell = $worksheet->getCellByColumnAndRow($c, $r);
-                        } else {
-                            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
-                            $cell = $worksheet->getCell($colLetter . $r);
-                        }
+                        $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+                        $cell = $worksheet->getCell($colLetter . $r);
                         $val = $cell !== null ? trim((string)$cell->getValue()) : '';
                         $rowData[] = $val; if ($val !== '') $allEmpty=false;
                     }
@@ -854,12 +890,13 @@ if (isset($_POST['perform_import']) && isset($_SESSION['uploaded_files']) && is_
 
             if (empty($rows)) { $failed++; $errors[] = "No data in file: {$f['name']}"; continue; }
 
-            // Build meta
+            // Build meta - resolve partner search key to actual ids
+            $resolved = findPartnerRecord($conn, $partnerId);
             $meta = [
-                'partner_id' => $partnerId,
-                'partner_id_kpx' => null,
-                'gl_code' => null,
-                'partner_name' => $f['partner_name'] ?? null,
+                'partner_id' => $resolved['partner_id'] ?? null,
+                'partner_id_kpx' => $resolved['partner_id_kpx'] ?? null,
+                'gl_code' => $resolved['gl_code'] ?? null,
+                'partner_name' => $resolved['partner_name'] ?? ($f['partner_name'] ?? null),
                 'reference_no' => null,
                 'source' => $sourceType,
                 'uploaded_date' => date('Y-m-d'),
