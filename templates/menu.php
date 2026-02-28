@@ -177,8 +177,8 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="#" id="transaction-report-summary-link">Transaction Report (Summary)</a>
             </div> -->
             
-            <div class="sub">
-                <a href="#" id="cancellation-report-link"><i class="fa-solid fa-circle-xmark"></i> Cancellation Report</a>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/cancellation-report.php'">
+                <a href="<?php echo $base_url; ?>billspayment/report/cancellation-report.php" id="cancellation-report-link"><i class="fa-solid fa-circle-xmark"></i> Cancellation Report</a>
             </div>
             <?php if ($current_user_email === 'cill17098209' || $_SESSION['user_type'] === 'admin'):?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/balance-sheet-report.php'">
@@ -403,7 +403,6 @@ const underConstructionIds = [
     'post-transaction-link',
     'settle-transaction-link',
     'transaction-report-summary-link',
-    'cancellation-report-link',
     'service-charge-automate-link'
 ];
 
