@@ -250,7 +250,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_cancellation_data') {
                     <label class="form-label small text-muted mb-1">Rows</label>
                     <select id="rowsPerPage" class="form-select form-select-sm" style="width:auto;"><option value="5" selected>5</option><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select>
                 </div>
-                <div class="col-md-10 text-end"><strong>Totals:</strong> <span id="totalsDisplay">-</span></div>
             </div>
         </div>
     </div>
@@ -325,7 +324,7 @@ function loadCancellations(page=1){
         const total = resp.pagination.total; const rpp = resp.pagination.rows_per_page; const pages = Math.ceil(total / rpp);
         const pg = $('#pagination'); pg.empty();
         for(let i=1;i<=pages;i++){ pg.append(`<li class="page-item ${i===resp.pagination.page?'active':''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`); }
-        $('#totalsDisplay').text('Principal: ' + formatPHP(resp.totals.principal) + ' • Partner: ' + formatPHP(resp.totals.partner) + ' • Customer: ' + formatPHP(resp.totals.customer));
+        // totals display removed per UI request
     }, 'json');
 }
 $(document).on('click', '#pagination .page-link', function(e){ e.preventDefault(); loadCancellations(parseInt($(this).data('page'))); });
