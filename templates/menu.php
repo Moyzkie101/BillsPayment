@@ -224,14 +224,14 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <h6>Bookkeeper</h6>
         </div> -->
 
-        <div class="onetab-sub" id="maa-nav" style="display: none;">
+        <!-- <div class="onetab-sub" id="maa-nav" style="display: none;">
         <div class="sub" onclick="parent.location='#'">
             <a href="#">Bookkeeper Import</a>
         </div>
         <div class="sub" onclick="parent.location='#'">
             <a href="#">Book keeper Report</a>
         </div>
-        </div>
+        </div> -->
 
         
         <!-- Show/Hide Paramount -->
@@ -318,6 +318,33 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div>
         </div>
 
+        <!-- Show/Hide Set Masterfiles Main-menu -->
+        <div class="onetab" id="masterfiles-btn">
+            <h6><i class="fa-solid fa-layer-group"></i> Masterfiles</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-masterfiles" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-masterfiles" style="display: none"></i>
+        </div>
+
+        <!-- Show/Hide Set Masterfiles Sub-menu -->
+        <div class="tabcat" id="set-masterfiles-btn" style="display: none;">
+            <h6><i class="fa-solid fa-eye"></i> View</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-set-masterfiles" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-set-masterfiles" style="display: none"></i>
+        </div>
+
+        <!-- Set Masterfiles Partner List Buttons -->
+        <!-- <div class="onetab-sub" id="set-masterfile-partner-nav" style="display: none;">
+            <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>masterfiles/masterfiles/masterfile-partner-list.php'">
+                <a href="<?php //echo $base_url; ?>masterfiles/masterfiles/masterfile-partner-list.php"><i class="fa-solid fa-receipt"></i> Partner List</a>
+            </div>
+        </div> -->
+        <!-- Set Masterfiles Bank List Buttons -->
+        <div class="onetab-sub" id="set-masterfile-bank-nav" style="display: none;">
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>masterfiles/view/view-bank-list.php'">
+                <a href="<?php echo $base_url; ?>masterfiles/view/view-bank-list.php"><i class="fa-solid fa-receipt"></i> Bank List</a>
+            </div>
+        </div>
+
         <?php if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin')): ?>
             <!-- Show/Hide Set Maintenance Main-menu -->
             <div class="onetab" id="set-btn">
@@ -354,20 +381,20 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 </div>
             </div>
 
-            <!-- Show/Hide Set masterfile Sub-menu -->
+            <!-- Show/Hide Set masterfiles Sub-menu -->
             <div class="tabcat" id="set-masterfile-btn" style="display: none;">
-                <h6><i class="fa-solid fa-code-compare"></i> Masterfile</h6>
+                <h6><i class="fa-solid fa-code-compare"></i> Masterfiles</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-set-masterfile" style="display: block"></i>
                 <i class="fa-solid fa-chevron-down" id="open-set-masterfile" style="display: none"></i>
             </div>
 
-            <!-- Set Masterfile Partner List Buttons -->
+            <!-- Set Masterfiles Partner List Buttons -->
             <div class="onetab-sub" id="set-masterfile-partner-nav" style="display: none;">
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/masterfiles/masterfile-partner-list.php'">
                     <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-partner-list.php"><i class="fa-solid fa-receipt"></i> Partner List</a>
                 </div>
             </div>
-            <!-- Set Masterfile Bank List Buttons -->
+            <!-- Set Masterfiles Bank List Buttons -->
             <div class="onetab-sub" id="set-masterfile-bank-nav" style="display: none;">
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php'">
                     <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php"><i class="fa-solid fa-receipt"></i> Bank List</a>
@@ -433,63 +460,141 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Active state management based on current URL
     const currentPath = window.location.pathname;
-    const currentPage = currentPath.split('/').pop();
-    
-    // Highlight active menu items
-    document.querySelectorAll('.sub a').forEach(function(link) {
-        const linkHref = link.getAttribute('href');
-        if (linkHref && linkHref.includes(currentPage) && currentPage !== '') {
-            // Add active class to the sub menu item
-            link.closest('.sub').classList.add('active');
-            
-            // Find and expand parent categories
-            let parent = link.closest('.onetab-sub');
-            if (parent) {
-                parent.style.display = 'block';
-                
-                // Find the parent tabcat button and mark it active
-                const parentId = parent.id.replace('-nav', '-btn');
-                const parentBtn = document.getElementById(parentId);
-                if (parentBtn) {
-                    parentBtn.classList.add('active');
-                    // Show the down arrow, hide the right arrow
-                    const openIcon = parentBtn.querySelector('[id^="open-"]');
-                    const closedIcon = parentBtn.querySelector('[id^="closed-"]');
-                    if (openIcon) openIcon.style.display = 'block';
-                    if (closedIcon) closedIcon.style.display = 'none';
-                }
-                
-                // Find the main menu parent and mark it active
-                let mainParent = parent.previousElementSibling;
-                while (mainParent && !mainParent.classList.contains('onetab')) {
-                    mainParent = mainParent.previousElementSibling;
-                }
-                if (mainParent && mainParent.classList.contains('onetab')) {
-                    mainParent.classList.add('active');
-                    // Show the down arrow, hide the right arrow
-                    const openIcon = mainParent.querySelector('[id^="open-"]');
-                    const closedIcon = mainParent.querySelector('[id^="closed-"]');
-                    if (openIcon) openIcon.style.display = 'block';
-                    if (closedIcon) closedIcon.style.display = 'none';
-                }
+
+    function normalizePath(path) {
+        if (!path) return '/';
+        return path
+            .replace(/\/+/g, '/')
+            .replace(/\/$/, '')
+            .toLowerCase() || '/';
+    }
+
+    function setArrowExpanded(menuElement, expanded) {
+        if (!menuElement) {
+            return;
+        }
+        const openIcon = menuElement.querySelector('[id^="open-"]');
+        const closedIcon = menuElement.querySelector('[id^="closed-"]');
+        if (openIcon) openIcon.style.display = expanded ? 'block' : 'none';
+        if (closedIcon) closedIcon.style.display = expanded ? 'none' : 'block';
+    }
+
+    function findPreviousByClass(startNode, className) {
+        let pointer = startNode ? startNode.previousElementSibling : null;
+        while (pointer) {
+            if (pointer.classList && pointer.classList.contains(className)) {
+                return pointer;
             }
+            pointer = pointer.previousElementSibling;
         }
-    });
+        return null;
+    }
 
-    // Check for direct onetab links (like Home)
-    document.querySelectorAll('.onetab a').forEach(function(link) {
-        const linkHref = link.getAttribute('href');
-        if (linkHref && linkHref.includes(currentPage) && currentPage !== '') {
-            link.closest('.onetab').classList.add('active');
+    function clearAllActiveStates() {
+        document.querySelectorAll('.sub.active, .tabcat.active, .onetab.active').forEach(function(node) {
+            node.classList.remove('active');
+        });
+    }
+
+    function activateMatchedSubLink(link) {
+        if (!link) {
+            return;
         }
-    });
 
-    // Special case for home.php
-    if (currentPage === 'home.php' || currentPage === '') {
-        const homeBtn = document.querySelector('.onetab a[href*="home.php"]');
-        if (homeBtn) {
-            homeBtn.closest('.onetab').classList.add('active');
+        const subItem = link.closest('.sub');
+        const parentNav = link.closest('.onetab-sub');
+
+        if (subItem) {
+            subItem.classList.add('active');
+        }
+
+        if (parentNav) {
+            parentNav.style.display = 'block';
+        }
+
+        const parentTab = findPreviousByClass(parentNav, 'tabcat');
+        if (parentTab) {
+            parentTab.style.display = 'flex';
+            parentTab.classList.add('active');
+            setArrowExpanded(parentTab, true);
+        }
+
+        const mainParent = findPreviousByClass(parentNav, 'onetab');
+        if (mainParent) {
+            mainParent.classList.add('active');
+            setArrowExpanded(mainParent, true);
         }
     }
+
+    const normalizedCurrentPath = normalizePath(currentPath);
+
+    setTimeout(function() {
+        clearAllActiveStates();
+
+        const subMatches = [];
+
+        document.querySelectorAll('.sub a').forEach(function(link) {
+            const rawHref = (link.getAttribute('href') || '').trim();
+            if (!rawHref || rawHref === '#' || rawHref.toLowerCase().startsWith('javascript:')) {
+                return;
+            }
+
+            let normalizedLinkPath = '';
+            try {
+                normalizedLinkPath = normalizePath(new URL(link.href, window.location.origin).pathname);
+            } catch (e) {
+                return;
+            }
+
+            if (normalizedLinkPath === normalizedCurrentPath) {
+                subMatches.push({ link: link, path: normalizedLinkPath });
+            }
+        });
+
+        if (subMatches.length > 0) {
+            subMatches.sort(function(a, b) {
+                return b.path.length - a.path.length;
+            });
+            activateMatchedSubLink(subMatches[0].link);
+            return;
+        }
+
+        // Check for direct onetab links (like Home) only when no sub-link matched
+        let directMatchFound = false;
+        document.querySelectorAll('.onetab a').forEach(function(link) {
+            if (directMatchFound) {
+                return;
+            }
+
+            const rawHref = (link.getAttribute('href') || '').trim();
+            if (!rawHref || rawHref === '#' || rawHref.toLowerCase().startsWith('javascript:')) {
+                return;
+            }
+
+            let normalizedLinkPath = '';
+            try {
+                normalizedLinkPath = normalizePath(new URL(link.href, window.location.origin).pathname);
+            } catch (e) {
+                return;
+            }
+
+            if (normalizedLinkPath === normalizedCurrentPath) {
+                const onetab = link.closest('.onetab');
+                if (onetab) {
+                    onetab.classList.add('active');
+                    setArrowExpanded(onetab, true);
+                    directMatchFound = true;
+                }
+            }
+        });
+
+        // Special case for home.php
+        if (!directMatchFound && (normalizedCurrentPath.endsWith('/home.php') || normalizedCurrentPath === '/')) {
+            const homeBtn = document.querySelector('.onetab a[href*="home.php"]');
+            if (homeBtn && homeBtn.closest('.onetab')) {
+                homeBtn.closest('.onetab').classList.add('active');
+            }
+        }
+    }, 0);
 });
 </script>
