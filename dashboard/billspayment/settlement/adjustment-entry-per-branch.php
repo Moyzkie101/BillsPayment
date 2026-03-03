@@ -296,6 +296,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'submit_changes') {
             'reference_number' => $referenceNumber,
             'transaction_datetime' => $transactionDatetime,
             'reason_note' => $reasonNote,
+            'posting_date' => isset($item['posting_date']) ? trim((string)$item['posting_date']) : '',
             'payor' => isset($item['payor']) ? trim((string)$item['payor']) : '',
             'address' => isset($item['address']) ? trim((string)$item['address']) : '',
             'account_no' => isset($item['account_no']) ? trim((string)$item['account_no']) : '',
@@ -399,6 +400,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         prev_outlet,
                                         prev_operator,
                                         partner_name, partner_id, partner_id_kpx,
+                                        posting_date,
                                         reason_note, modified_by, modified_date
                                 )
                                 SELECT
@@ -415,6 +417,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         bt.outlet,
                                         bt.operator,
                                         bt.partner_name, bt.partner_id, bt.partner_id_kpx,
+                                        ?,
                                         ?, ?, NOW()
                                 FROM mldb.billspayment_transaction bt
                                 WHERE bt.reference_no = ?
@@ -476,9 +479,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                                                         LIMIT 1";
 
         $updateLatePostingSql = "UPDATE mldb.billspayment_transaction
-                                                                SET settle_unsettle = 'settle'
-                                                            WHERE post_transaction = 'unposted'
-                                                                AND datetime = ?
+                                                                SET settle_unsettle = 'settle',
+                                                                        settlement_date = ?
+                                                            WHERE datetime = ?
                                                                 AND reference_no = ?
                                                                 AND (partner_id = ? OR partner_id_kpx = ?)
                                                             LIMIT 1";
@@ -488,8 +491,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                                                         amount_paid = ?,
                                                                         charge_to_customer = ?,
                                                                         charge_to_partner = ?
-                                                            WHERE post_transaction = 'unposted'
-                                                                AND datetime = ?
+                                                            WHERE datetime = ?
                                                                 AND reference_no = ?
                                                                 AND (partner_id = ? OR partner_id_kpx = ?)
                                                             LIMIT 1";
@@ -575,10 +577,16 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             $editedOutlet = trim((string)($item['outlet'] ?? ''));
             $editedOperator = trim((string)($item['operator'] ?? ''));
             $reasonNote = trim((string)($item['reason_note'] ?? ''));
+            $postingDate = trim((string)($item['posting_date'] ?? ''));
 
             if ($reasonNote === 'late-posting') {
+                if ($postingDate === '') {
+                    throw new Exception('Posting date is required for late-posting.');
+                }
+
                 $lateInsertStmt->bind_param(
-                    str_repeat('s', 4),
+                    str_repeat('s', 5),
+                    $postingDate,
                     $reasonNote,
                     $modifiedBy,
                     $referenceNumber,
@@ -610,7 +618,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
                 if ($partnerId !== '' || $partnerIdKpx !== '') {
                     $lateUpdateStmt->bind_param(
-                        str_repeat('s', 4),
+                        str_repeat('s', 5),
+                        $postingDate,
                         $transactionDatetime,
                         $referenceNumber,
                         $partnerId,
@@ -1961,6 +1970,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                             <div class="col-lg-6 settlement-edit-col">
                                 <div class="border rounded p-3 h-100 bg-white settlement-edit-field-panel">
                                     <h6 class="mb-3 text-center">Edit Field</h6>
+                                    <div class="mb-2 edit-field-row posting-date-row" data-field="posting_date"><label class="form-label mb-1">Posting Date</label><input type="date" class="form-control edit-posting-date" data-reference="${referenceKey}" value="${escapeModalValue(row.postingDate || '')}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="payor"><label class="form-label mb-1">Payor Name</label><input type="text" class="form-control edit-payor" data-reference="${referenceKey}" value="${escapeModalValue(row.payor)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="address"><label class="form-label mb-1">Payor Address</label><input type="text" class="form-control edit-address" data-reference="${referenceKey}" value="${escapeModalValue(row.address)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="account_no"><label class="form-label mb-1">Account Number</label><input type="text" class="form-control edit-account-no" data-reference="${referenceKey}" value="${escapeModalValue(row.accountNo)}" disabled></div>
@@ -2014,18 +2024,32 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             const $prevCol = $container.find('.settlement-prev-col');
             const $editCol = $container.find('.settlement-edit-col');
             const $editPanel = $container.find('.settlement-edit-field-panel');
+            const $postingDateRow = $container.find('.posting-date-row');
+            const $postingDateInput = $postingDateRow.find('input');
             const $prevRows = $container.find('.prev-field-row');
             const $editRows = $container.find('.edit-field-row');
             const $editInputs = $editRows.find('input');
 
             $editInputs.prop('readonly', false).prop('disabled', true).removeClass('bg-light');
 
-            if (!hasReason || isLatePosting) {
+            if (!hasReason) {
                 $prevCol.removeClass('col-lg-6').addClass('col-lg-12');
                 $editCol.hide();
                 $editPanel.hide();
                 $prevRows.show();
                 $editRows.show();
+                $postingDateRow.hide();
+                return;
+            }
+
+            if (isLatePosting) {
+                $prevCol.removeClass('col-lg-12').addClass('col-lg-6');
+                $editCol.show();
+                $editPanel.show();
+                $prevRows.show();
+                $editRows.hide();
+                $postingDateRow.show();
+                $postingDateInput.prop('disabled', false).prop('readonly', false).addClass('bg-light');
                 return;
             }
 
@@ -2035,6 +2059,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
             $prevRows.show();
             $editRows.hide();
+            $postingDateRow.hide();
 
             if (visibleSet.size > 0) {
                 $prevRows.filter(function () {
@@ -2094,6 +2119,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     reference_number: splitKey.referenceNumber,
                     transaction_datetime: splitKey.transactionDatetime,
                     reason_note: reasonNote,
+                    posting_date: String($container.find('.edit-posting-date').val() || '').trim(),
                     payor: String($container.find('.edit-payor').val() || '').trim(),
                     address: String($container.find('.edit-address').val() || '').trim(),
                     account_no: String($container.find('.edit-account-no').val() || '').trim(),
@@ -2277,6 +2303,19 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     icon: 'warning',
                     title: 'No Changes Found',
                     text: 'Please select transaction rows and edit details first.'
+                });
+                return;
+            }
+
+            const missingPostingDate = changes.find(function (item) {
+                return item.reason_note === 'late-posting' && String(item.posting_date || '').trim() === '';
+            });
+
+            if (missingPostingDate) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Posting Date Required',
+                    text: 'Please provide Posting Date for Late Posting reason.'
                 });
                 return;
             }
