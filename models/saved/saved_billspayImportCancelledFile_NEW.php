@@ -587,6 +587,7 @@ function viewTransactionSummary(fileId) {
                 <div><strong>File:</strong> ${fileData.name || ''}</div>
                 <div><strong>Partner:</strong> ${fileData.partner_name || ''} (${fileData.partner_id || ''})</div>
                 <div><strong>Source Type:</strong> ${fileData.source_type || ''}</div>
+                <div><strong>Report Date:</strong> ${fileData.validation_result && (fileData.validation_result.report_date ? fileData.validation_result.report_date : (fileData.validation_result.report_date_raw || fileData.report_date || fileData.report_date_raw || '')) || ''}</div>
                 <div><strong>Duplicate Rows:</strong> ${fileData.validation_result.duplicate_rows || 0}</div>
                 <div><strong>New Rows:</strong> ${fileData.validation_result.new_rows || 0}</div>
             </div>
