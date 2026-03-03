@@ -436,6 +436,8 @@ $partnersResult = $conn->query($partnersQuery);
                 <div id="manualArea" style="display:none;">
                     <form id="manualUploadForm" action="../../../models/saved/saved_billspayImportCancelledFile.php" method="post" enctype="multipart/form-data">
                         <input type="hidden" name="upload" value="1">
+                        <input type="hidden" name="report_date" id="manualReportDate" value="">
+                        <input type="hidden" name="report_date_raw" id="manualReportDateRaw" value="">
                         <div class="row mt-3">
                             <div class="col-md-5 mb-3">
                                 <div class="d-flex align-items-center">
@@ -624,6 +626,59 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Manual form: intercept submit to run duplicate check before uploading
                     const manualForm = document.getElementById('manualUploadForm');
                     if (manualForm) {
+                        // helper: extract report date from uploaded file (A3 cell) and return {raw, iso}
+                        function extractReportDateFromFile(file, cb) {
+                            const ext = (file.name.split('.').pop() || '').toLowerCase();
+                            try {
+                                if (ext === 'csv' || ext === 'tsv' || ext === 'txt') {
+                                    const r = new FileReader();
+                                    r.onload = function(ev) {
+                                        try {
+                                            const txt = (ev.target.result || '').toString();
+                                            const lines = txt.split(/\r?\n/);
+                                            // prefer line 3 (index 2) then fallback to first non-empty
+                                            const candidate = (lines[2] || lines.find(l => l.trim() !== '') || '').toString();
+                                            const m = candidate.match(/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i);
+                                            if (m && m[1]) {
+                                                const raw = m[1].trim();
+                                                const ts = Date.parse(raw);
+                                                const iso = !isNaN(ts) ? (new Date(ts).toISOString().slice(0,10)) : '';
+                                                return cb(raw, iso);
+                                            }
+                                            // fallback: try entire candidate
+                                            const ts2 = Date.parse(candidate);
+                                            if (!isNaN(ts2)) return cb(candidate.trim(), new Date(ts2).toISOString().slice(0,10));
+                                        } catch(e) {}
+                                        return cb('', '');
+                                    };
+                                    r.readAsText(file);
+                                } else {
+                                    const r2 = new FileReader();
+                                    r2.onload = function(ev2) {
+                                        try {
+                                            const data = new Uint8Array(ev2.target.result);
+                                            const wb = XLSX.read(data, { type: 'array' });
+                                            const sh = wb.Sheets[wb.SheetNames[0]];
+                                            const a3 = sh && sh['A3'] ? String(sh['A3'].v || '').trim() : '';
+                                            if (a3) {
+                                                const mm = a3.match(/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i);
+                                                if (mm && mm[1]) {
+                                                    const raw = mm[1].trim();
+                                                    const ts = Date.parse(raw);
+                                                    const iso = !isNaN(ts) ? (new Date(ts).toISOString().slice(0,10)) : '';
+                                                    return cb(raw, iso);
+                                                }
+                                                const ts2 = Date.parse(a3);
+                                                if (!isNaN(ts2)) return cb(a3.trim(), new Date(ts2).toISOString().slice(0,10));
+                                            }
+                                        } catch(e) {}
+                                        return cb('', '');
+                                    };
+                                    r2.readAsArrayBuffer(file);
+                                }
+                            } catch (ex) { return cb('', ''); }
+                        }
+
                         manualForm.addEventListener('submit', function(e) {
                             e.preventDefault();
                             const fileInputManual = manualForm.querySelector('input[name="import_file"]');
@@ -632,36 +687,51 @@ document.addEventListener('DOMContentLoaded', function() {
                                 return;
                             }
                             const f = fileInputManual.files[0];
-                            // Build FormData for duplicate check (server accepts files[] + partner_ids[] + source_types[])
-                            const fd = new FormData();
-                            fd.append('files[]', f);
-                            // partner_name is used by manual form; server duplicate check supports partner_ids[] only, so omit to check globally
-                            const src = manualForm.querySelector('select[name="fileType"]') ? manualForm.querySelector('select[name="fileType"]').value : '';
-                            fd.append('source_types[]', src || 'KPX');
-                            fd.append('check_duplicates', '1');
 
-                            // show loading
+                            // extract report date first, then run duplicate check
                             $('#loading-overlay').show();
-                            $.ajax({ url: '../../../models/saved/saved_billspayImportCancelledFile.php', type: 'POST', data: fd, processData: false, contentType: false, dataType: 'json' })
-                                .done(function(resp) {
-                                    $('#loading-overlay').hide();
-                                    if (resp && resp.success && Array.isArray(resp.files) && resp.files.length > 0) {
-                                        const files = resp.files;
-                                        const dup = files.filter(x => x.hasDuplicates);
-                                        if (dup.length > 0) {
-                                            // reuse the page-level duplicate modal to inform user; do not submit
-                                            showDuplicateModal(files, dup);
-                                            return;
+                            extractReportDateFromFile(f, function(raw, iso) {
+                                try {
+                                    // set hidden inputs so normal form submit includes them
+                                    let hid = document.getElementById('manualReportDate');
+                                    if (!hid) { hid = document.createElement('input'); hid.type='hidden'; hid.name='report_date'; hid.id='manualReportDate'; manualForm.appendChild(hid); }
+                                    let hid2 = document.getElementById('manualReportDateRaw');
+                                    if (!hid2) { hid2 = document.createElement('input'); hid2.type='hidden'; hid2.name='report_date_raw'; hid2.id='manualReportDateRaw'; manualForm.appendChild(hid2); }
+                                    hid.value = iso || '';
+                                    hid2.value = raw || '';
+                                } catch(e) {}
+
+                                // Build FormData for duplicate check (server accepts files[] + partner_ids[] + source_types[])
+                                const fd = new FormData();
+                                fd.append('files[]', f);
+                                const src = manualForm.querySelector('select[name="fileType"]') ? manualForm.querySelector('select[name="fileType"]').value : '';
+                                fd.append('source_types[]', src || 'KPX');
+                                // include extracted report date for server-side use in pre-check if desired
+                                if ((iso || '') !== '') fd.append('report_dates[]', iso);
+                                else fd.append('report_dates[]', '');
+                                fd.append('check_duplicates', '1');
+
+                                // send duplicate check
+                                $.ajax({ url: '../../../models/saved/saved_billspayImportCancelledFile.php', type: 'POST', data: fd, processData: false, contentType: false, dataType: 'json' })
+                                    .done(function(resp) {
+                                        $('#loading-overlay').hide();
+                                        if (resp && resp.success && Array.isArray(resp.files) && resp.files.length > 0) {
+                                            const files = resp.files;
+                                            const dup = files.filter(x => x.hasDuplicates);
+                                            if (dup.length > 0) {
+                                                showDuplicateModal(files, dup);
+                                                return;
+                                            }
+                                            // no duplicates — submit the form (will hit server upload handler)
+                                            manualForm.submit();
+                                        } else {
+                                            Swal.fire({ icon: 'error', title: 'Validation Error', text: (resp && resp.error) ? resp.error : 'Unable to validate file.' });
                                         }
-                                        // no duplicates — submit the form (will hit server upload handler)
-                                        manualForm.submit();
-                                    } else {
-                                        Swal.fire({ icon: 'error', title: 'Validation Error', text: (resp && resp.error) ? resp.error : 'Unable to validate file.' });
-                                    }
-                                }).fail(function(xhr, status, err) {
-                                    $('#loading-overlay').hide();
-                                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.' });
-                                });
+                                    }).fail(function(xhr, status, err) {
+                                        $('#loading-overlay').hide();
+                                        Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.' });
+                                    });
+                            });
                         });
                     }
                 if (field !== '' || row.length > 0) { row.push(field); rows.push(row); }
@@ -826,11 +896,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 // fetch partner name
                 $.ajax({ url: '../../../fetch/get_partner_name.php', method: 'POST', data: { partner_id: partnerId }, dataType: 'json', success: function(resp){
                     const partnerName = resp.success ? resp.partner_name : 'Unknown Partner';
-                    const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: partnerName, sourceType: sourceType, sampleG: partnerId, sampleH: sourceTypeCell ? String(sourceTypeCell.v) : '', sampleRowIndex: 2, usedDelimiter: null, id: Date.now() + Math.random() };
+                    const reportCell = firstSheet['A3'];
+                    const reportRaw = reportCell ? String(reportCell.v).trim() : '';
+                    let reportDateRaw = '';
+                    let reportDate = null;
+                    if (reportRaw) {
+                        const m = reportRaw.match(/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i);
+                        if (m && m[1]) {
+                            reportDateRaw = m[1].trim();
+                            const ts = Date.parse(reportDateRaw);
+                            if (!isNaN(ts)) reportDate = new Date(ts).toISOString().slice(0,10);
+                        } else {
+                            const ts2 = Date.parse(reportRaw);
+                            if (!isNaN(ts2)) { reportDateRaw = reportRaw; reportDate = new Date(ts2).toISOString().slice(0,10); }
+                        }
+                    }
+                    const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: partnerName, sourceType: sourceType, sampleG: partnerId, sampleH: sourceTypeCell ? String(sourceTypeCell.v) : '', sampleRowIndex: 2, usedDelimiter: null, reportDateRaw: reportDateRaw, reportDate: reportDate, id: Date.now() + Math.random() };
                     uploadedFiles.push(fileData); renderFileCards();
                     window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
                 }, error: function(){
-                    const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: 'Loading...', sourceType: sourceType, sampleG: partnerId, sampleH: sourceTypeCell ? String(sourceTypeCell.v) : '', sampleRowIndex: 2, usedDelimiter: null, id: Date.now() + Math.random() };
+                    const reportCell = firstSheet && firstSheet['A3'] ? String(firstSheet['A3'].v).trim() : '';
+                    let reportDateRawErr = '';
+                    let reportDateErr = null;
+                    if (reportCell) {
+                        const mm = reportCell.match(/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i);
+                        if (mm && mm[1]) {
+                            reportDateRawErr = mm[1].trim();
+                            const tss = Date.parse(reportDateRawErr);
+                            if (!isNaN(tss)) reportDateErr = new Date(tss).toISOString().slice(0,10);
+                        }
+                    }
+                    const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: 'Loading...', sourceType: sourceType, sampleG: partnerId, sampleH: sourceTypeCell ? String(sourceTypeCell.v) : '', sampleRowIndex: 2, usedDelimiter: null, reportDateRaw: reportDateRawErr, reportDate: reportDateErr, id: Date.now() + Math.random() };
                     uploadedFiles.push(fileData); renderFileCards(); window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
                 }});
 
@@ -904,11 +1000,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
                             $.ajax({ url: '../../../fetch/get_partner_name.php', method: 'POST', data: { partner_id: partnerId }, dataType: 'json', success: function(resp){
                                 const partnerName = resp.success ? resp.partner_name : 'Unknown Partner';
-                                const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: partnerName, sourceType: sourceType, sampleG: partnerId, sampleH: parsed.sampleRow && parsed.sampleRow[7] ? parsed.sampleRow[7] : '', sampleRowIndex: parsed.rowIndex, usedDelimiter: parsed.usedDelimiter, id: Date.now() + Math.random() };
+                                // attempt to read report date from row/column if available (CSV/TSV forgiving)
+                                let reportDateRawParsed = '';
+                                let reportDateParsed = null;
+                                try {
+                                    if (parsed && parsed.rowIndex === 2 && parsed.sampleRow && parsed.sampleRow[0]) {
+                                        const candidate = String(parsed.sampleRow[0]).trim();
+                                        const mm = candidate.match(/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i);
+                                        if (mm && mm[1]) {
+                                            reportDateRawParsed = mm[1].trim();
+                                            const ts = Date.parse(reportDateRawParsed);
+                                            if (!isNaN(ts)) reportDateParsed = new Date(ts).toISOString().slice(0,10);
+                                        }
+                                    }
+                                } catch(e) {}
+                                const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: partnerName, sourceType: sourceType, sampleG: partnerId, sampleH: parsed.sampleRow && parsed.sampleRow[7] ? parsed.sampleRow[7] : '', sampleRowIndex: parsed.rowIndex, usedDelimiter: parsed.usedDelimiter, reportDateRaw: reportDateRawParsed, reportDate: reportDateParsed, id: Date.now() + Math.random() };
                                 uploadedFiles.push(fileData); renderFileCards();
                                 window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
                             }, error: function(){
-                                const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: 'Loading...', sourceType: sourceType, sampleG: partnerId, sampleH: parsed.sampleRow && parsed.sampleRow[7] ? parsed.sampleRow[7] : '', sampleRowIndex: parsed.rowIndex, usedDelimiter: parsed.usedDelimiter, id: Date.now() + Math.random() };
+                                let reportDateRawParsedErr = '';
+                                let reportDateParsedErr = null;
+                                try {
+                                    if (parsed && parsed.rowIndex === 2 && parsed.sampleRow && parsed.sampleRow[0]) {
+                                        const candidate = String(parsed.sampleRow[0]).trim();
+                                        const mm = candidate.match(/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i);
+                                        if (mm && mm[1]) {
+                                            reportDateRawParsedErr = mm[1].trim();
+                                            const ts = Date.parse(reportDateRawParsedErr);
+                                            if (!isNaN(ts)) reportDateParsedErr = new Date(ts).toISOString().slice(0,10);
+                                        }
+                                    }
+                                } catch(e) {}
+                                const fileData = { file: file, name: file.name, partnerId: partnerId, partnerName: 'Loading...', sourceType: sourceType, sampleG: partnerId, sampleH: parsed.sampleRow && parsed.sampleRow[7] ? parsed.sampleRow[7] : '', sampleRowIndex: parsed.rowIndex, usedDelimiter: parsed.usedDelimiter, reportDateRaw: reportDateRawParsedErr, reportDate: reportDateParsedErr, id: Date.now() + Math.random() };
                                 uploadedFiles.push(fileData); renderFileCards(); window._filesBeingRead--; if (window._filesBeingRead <= 0) { window._filesBeingRead = 0; $('#loading-overlay').hide(); proceedBtn.prop('disabled', false); }
                             }});
                         } catch (parseErr) {
@@ -1124,10 +1247,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 formData.append('files[]', f.file);
                 formData.append('partner_ids[]', f.partnerId);
                 formData.append('source_types[]', f.sourceType);
+                formData.append('report_dates[]', f.reportDate || '');
             });
             formData.append('upload','1');
             formData.append('user_decision', userDecision || 'skip');
-            sessionStorage.setItem('uploadedFilesData', JSON.stringify(uploadedFiles.map(f => ({ name: f.name, partnerId: f.partnerId, partnerName: f.partnerName, sourceType: f.sourceType }))));
+            sessionStorage.setItem('uploadedFilesData', JSON.stringify(uploadedFiles.map(f => ({ name: f.name, partnerId: f.partnerId, partnerName: f.partnerName, sourceType: f.sourceType, reportDate: f.reportDate || '', reportDateRaw: f.reportDateRaw || '' }))));
 
             $.ajax({
                 url: '../../../models/saved/saved_billspayImportCancelledFile.php',

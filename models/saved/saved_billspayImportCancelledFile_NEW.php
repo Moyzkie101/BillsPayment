@@ -151,6 +151,28 @@ function c_validate_file($conn, $file)
     try {
         $spreadsheet = IOFactory::load($filePath);
         $worksheet = $spreadsheet->getActiveSheet();
+
+        // Extract report date from cell A3 if present. Expect formats like:
+        // "REPORT DATE :\t JANUARY 05 2026" or simply "JANUARY 05 2026"
+        $rawA3 = trim((string)$worksheet->getCell('A3')->getValue());
+        $report_date_raw = '';
+        $report_date = null;
+        if ($rawA3 !== '') {
+            if (preg_match('/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i', $rawA3, $m)) {
+                $report_date_raw = trim($m[1]);
+                $ts = strtotime($report_date_raw);
+                if ($ts !== false) {
+                    $report_date = date('Y-m-d', $ts);
+                }
+            } else {
+                // fallback: try direct parse of entire A3
+                $ts = strtotime($rawA3);
+                if ($ts !== false) {
+                    $report_date_raw = trim($rawA3);
+                    $report_date = date('Y-m-d', $ts);
+                }
+            }
+        }
         $highestRow = $worksheet->getHighestRow();
 
         for ($row = 7; $row <= $highestRow; $row++) {
@@ -237,6 +259,10 @@ function c_validate_file($conn, $file)
             if ($found > 0) $result['duplicate_rows']++;
             else $result['new_rows']++;
         }
+
+        // attach report date info to the result for UI and downstream import
+        $result['report_date_raw'] = $report_date_raw;
+        $result['report_date'] = $report_date; // Y-m-d or null
 
         if ($result['row_count'] === 0) {
             $result['valid'] = false;
@@ -465,6 +491,7 @@ function viewDetails(fileId) {
                     <tr><th width="30%">File Name</th><td>${fileData.name || ''}</td></tr>
                     <tr><th>Partner</th><td>${fileData.partner_name || ''}</td></tr>
                     <tr><th>Partner ID</th><td>${fileData.partner_id || ''}</td></tr>
+                    <tr><th>Report Date</th><td>${fileData.validation_result && (fileData.validation_result.report_date ? fileData.validation_result.report_date : (fileData.validation_result.report_date_raw || '')) || ''}</td></tr>
                     <tr><th>Source Type</th><td>${fileData.source_type || ''}</td></tr>
                     <tr><th>Total Rows</th><td>${vr.row_count || 0}</td></tr>
                     <tr><th>Status</th><td>${formatStatusLabel(fileData.status || 'pending')}</td></tr>

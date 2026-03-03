@@ -282,7 +282,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_cancellation_data') {
                     <thead class="table-light">
                         <tr>
                             <th style="width:48px;">No.</th>
-                            <th style="width:160px;">Cancellation Date/Time</th>
+                                            <th style="width:160px;">Report Date</th>
+                                            <th style="width:160px;">Cancellation Date/Time</th>
                             <th style="width:160px;">Sendout Date/Time</th>
                             <th style="width:220px;">Partner Name</th>
                             <th style="width:160px;">Reference No.</th>
@@ -313,6 +314,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_cancellation_data') {
 <?php include '../../../templates/footer.php'; ?>
 <script>
 function formatPHP(n){ return '₱ ' + (parseFloat(n||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})); }
+function formatLongDate(d) {
+    if (!d) return '';
+    try {
+        // accept YYYY-MM-DD or full datetime
+        const dt = new Date(d);
+        if (isNaN(dt)) return d;
+        return dt.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' });
+    } catch (e) { return d; }
+}
 function loadCancellations(page=1){
     const post = { action: 'get_cancellation_data', page: page, rows_per_page: parseInt($('#rowsPerPage').val()||5), start_date: $('#start_date').val(), end_date: $('#end_date').val(), partner: $('#partnerlistDropdown').val(), search: $('#search_input').val() };
     $.post(location.href, post, function(resp){
@@ -322,6 +332,7 @@ function loadCancellations(page=1){
             const no = ((resp.pagination.page-1) * resp.pagination.rows_per_page) + idx + 1;
             tbody.append(`<tr>
                 <td>${no}</td>
+                <td>${formatLongDate(r.report_date)}</td>
                 <td>${r.cancellation_datetime||''}</td>
                 <td>${r.sendout_datetime||''}</td>
                 <td>${r.partner_name||''}</td>

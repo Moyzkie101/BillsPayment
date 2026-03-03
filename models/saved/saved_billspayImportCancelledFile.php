@@ -290,6 +290,27 @@ function handleKPXImport($tmpPath, $fileName, $fileExt)
     }
 
     try {
+        // Attempt to extract report date from cell A3 (common to both CSV and XLSX)
+        $report_date_raw = '';
+        $report_date = null;
+        try {
+            $tmpSp = IOFactory::load($tmpPath);
+            $tmpWs = $tmpSp->getActiveSheet();
+            $a3 = trim((string)$tmpWs->getCell('A3')->getValue());
+            if ($a3 !== '') {
+                if (preg_match('/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i', $a3, $mm)) {
+                    $report_date_raw = trim($mm[1]);
+                    $ts = strtotime($report_date_raw);
+                    if ($ts !== false) $report_date = date('Y-m-d', $ts);
+                } else {
+                    $ts2 = strtotime($a3);
+                    if ($ts2 !== false) { $report_date_raw = trim($a3); $report_date = date('Y-m-d', $ts2); }
+                }
+            }
+            if (isset($tmpSp) && is_object($tmpSp)) { try { $tmpSp->disconnectWorksheets(); } catch (Exception $e) {} unset($tmpWs,$tmpSp); }
+        } catch (Exception $e) {
+            // ignore extraction errors
+        }
         if ($fileExt === 'csv') {
             // Parse CSV
             $handle = fopen($tmpPath, 'r');
@@ -402,6 +423,8 @@ function handleKPXImport($tmpPath, $fileName, $fileExt)
             'partner_name' => $partnerName,
             'reference_no' => $referenceNo,
             'source' => $source,
+            'report_date' => $report_date,
+            'report_date_raw' => $report_date_raw,
             'uploaded_date' => date('Y-m-d'),
             'uploaded_by' => $uploadedBy,
             'branch_id' => $branchId,
@@ -430,9 +453,10 @@ function insertKPXCancellationRows(array $rowsToInsert, array $meta)
     global $conn;
 
     $insertSQL = "INSERT INTO mldb.billspayment_cancellation (
-        cancellation_datetime, 
-        sendout_datetime, 
-        source_file, 
+        cancellation_datetime,
+        report_date,
+        sendout_datetime,
+        source_file,
         control_no, 
         reference_no, 
         ir_no,
@@ -458,12 +482,15 @@ function insertKPXCancellationRows(array $rowsToInsert, array $meta)
         mpm_gl_code,
         imported_by, 
         imported_date
-    ) VALUES (" . rtrim(str_repeat('?,', 28), ',') . ")";
+    ) VALUES (" . rtrim(str_repeat('?,', 29), ',') . ")";
 
     $stmt = $conn->prepare($insertSQL);
     if (!$stmt) return ['success' => false, 'error' => 'Prepare failed: ' . $conn->error];
 
-    $types = 'sssssssssddddsssssssssssssss';
+    // types: cancellation_datetime(s), report_date(s), sendout_datetime(s), source_file(s), control_no(s), reference_no(s), ir_no(s), payor(s), account_no(s), account_name(s),
+    // principal_amount(d), charge_to_customer(d), charge_to_partner(d), cancellation_charge(d),
+    // resource(s), branch_id(s), branch_code(s), branch_name(s), zone_code(s), region_code(s), region(s), remote_branch(s), remote_operator(s), partner_name(s), partner_id(s), partner_id_kpx(s), mpm_gl_code(s), imported_by(s), imported_date(s)
+    $types = str_repeat('s', 10) . 'dddd' . str_repeat('s', 15); // 10s + 4d + 15s = 29
 
     $conn->begin_transaction();
     $inserted = 0;
@@ -481,6 +508,8 @@ function insertKPXCancellationRows(array $rowsToInsert, array $meta)
         foreach ($rowsToInsert as $row) {
             // same mapping as previous inline logic
             $cancellation_datetime = date('Y-m-d H:i:s', strtotime($row[0]));
+            // report_date may be supplied in meta as Y-m-d; normalize or null
+            $report_date = isset($meta['report_date']) && $meta['report_date'] !== '' ? $meta['report_date'] : null;
             $sendout_datetime = date('Y-m-d H:i:s', strtotime($row[1] ?? ''));
             $source_file = $meta['source'] ?? '';
             $control_no = $row[3] ?? null;
@@ -514,7 +543,7 @@ function insertKPXCancellationRows(array $rowsToInsert, array $meta)
             $imported_date = $meta['uploaded_date'] ?? date('Y-m-d');
 
             $params = [ $types,
-                $cancellation_datetime, $sendout_datetime, $source_file, $control_no, $reference_no, $ir_no,
+                $cancellation_datetime, $report_date, $sendout_datetime, $source_file, $control_no, $reference_no, $ir_no,
                 $payor, $account_no, $account_name, $principal_amount, $charge_to_customer, $charge_to_partner,
                 $cancellation_charge, $resource, $branch_id, $branch_code, $branch_name, $zone_code, $region_code,
                 $region, $remote_branch, $remote_operator, $partner_name, $partner_id, $partner_id_kpx, $mpm_gl_code,
@@ -729,7 +758,8 @@ if (isset($_POST['upload'])) {
                     'status' => 'pending',
                     'validation_result' => null,
                     'uploaded_by' => $current_user_email ?? '',
-                    'uploaded_date' => date('Y-m-d H:i:s')
+                    'uploaded_date' => date('Y-m-d H:i:s'),
+                    'report_date' => isset($_POST['report_dates'][$i]) ? trim($_POST['report_dates'][$i]) : null
                 ];
             }
         }
@@ -901,6 +931,7 @@ if (isset($_POST['perform_import']) && isset($_SESSION['uploaded_files']) && is_
                 'source' => $sourceType,
                 'uploaded_date' => date('Y-m-d'),
                 'uploaded_by' => $f['uploaded_by'] ?? null,
+                'report_date' => $f['report_date'] ?? null,
                 'branch_id' => null,'branch_code'=>null,'zone_code'=>null,'region_code'=>null,'region'=>null
             ];
 
@@ -1100,6 +1131,10 @@ if (is_dir($temporaryDir)) {
                                         <tr>
                                             <td><i class="fas fa-file-import text-primary me-2"></i>Source</td>
                                             <td class="fw-semibold"><?php echo htmlspecialchars($_SESSION['import_meta']['source'] ?? '—'); ?></td>
+                                        </tr>
+                                        <tr>
+                                            <td><i class="fas fa-calendar-day text-primary me-2"></i>Report Date</td>
+                                            <td class="fw-semibold"><?php echo !empty($_SESSION['import_meta']['report_date']) ? htmlspecialchars(date('F d, Y', strtotime($_SESSION['import_meta']['report_date']))) : (htmlspecialchars($_SESSION['import_meta']['report_date_raw'] ?? '—')); ?></td>
                                         </tr>
                                         <tr>
                                             <td><i class="fas fa-calendar-alt text-primary me-2"></i>Uploaded Date</td>
