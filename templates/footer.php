@@ -176,9 +176,87 @@ document.addEventListener('DOMContentLoaded', function () {
     var setopenduplicate = document.getElementById("open-set-duplicate"); // duplicate down arrow
     var setclosedduplicate = document.getElementById("closed-set-duplicate"); // duplicate right arrow
 
+    var masterfilesbtn = document.getElementById("masterfiles-btn"); // Main Masterfiles Button
+    var openmasterfiles = document.getElementById("open-masterfiles"); // main masterfiles down arrow
+    var closedmasterfiles = document.getElementById("closed-masterfiles"); // main masterfiles right arrow
+
+    var setmasterfilesbtn = document.getElementById("set-masterfiles-btn"); // Masterfiles View Button
+    var opensetmasterfiles = document.getElementById("open-set-masterfiles"); // masterfiles view down arrow
+    var closedsetmasterfiles = document.getElementById("closed-set-masterfiles"); // masterfiles view right arrow
+
+    var setmasterfilebtn = document.getElementById("set-masterfile-btn"); // Set Masterfile Btn
+    var setopenmasterfile = document.getElementById("open-set-masterfile"); // masterfile down arrow
+    var setclosedmasterfile = document.getElementById("closed-set-masterfile"); // masterfile right arrow
+
     // Set Sub-elements
     var setopenmaintenance = document.getElementById("open-set-maintenance"); // set maintenance Div Down Arrow or Expanded
     var setclosedmaintenance = document.getElementById("closed-set-maintenance"); // set maintenance Div Right Arrow or Minimized
+
+    function getMasterfileNavGroup(triggerBtn) {
+        var group = {
+            partnerNavs: [],
+            bankNavs: []
+        };
+
+        if (!triggerBtn) {
+            return group;
+        }
+
+        var sibling = triggerBtn.nextElementSibling;
+
+        while (sibling) {
+            if (sibling.classList.contains('onetab') || sibling.classList.contains('tabcat')) {
+                break;
+            }
+
+            if (sibling.id === 'set-masterfile-partner-nav') {
+                group.partnerNavs.push(sibling);
+            }
+
+            if (sibling.id === 'set-masterfile-bank-nav') {
+                group.bankNavs.push(sibling);
+            }
+
+            sibling = sibling.nextElementSibling;
+        }
+
+        return group;
+    }
+
+    var mainMasterfileNavGroup = getMasterfileNavGroup(setmasterfilesbtn);
+    var maintenanceMasterfileNavGroup = getMasterfileNavGroup(setmasterfilebtn);
+
+    function toggleMenuListDisplay(nodeList, display, animation) {
+        if (!nodeList || !nodeList.length) {
+            return;
+        }
+
+        nodeList.forEach(function(nav) {
+            if (!nav) {
+                return;
+            }
+
+            if (animation) {
+                nav.style.animation = animation;
+            }
+            nav.style.display = display;
+        });
+    }
+
+    function isMenuListHidden(nodeList) {
+        if (!nodeList || !nodeList.length) {
+            return true;
+        }
+
+        for (var i = 0; i < nodeList.length; i++) {
+            var nav = nodeList[i];
+            if (nav && nav.style.display !== "none" && nav.style.display !== "") {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     // Initialize all dropdown states
     function initializeDropdowns() {
@@ -209,6 +287,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (setduplicatebtn) setduplicatebtn.style.display = "none";
         if (setduplicatenav) setduplicatenav.style.display = "none";
+
+        if (setmasterfilesbtn) setmasterfilesbtn.style.display = "none";
+
+        if (setmasterfilebtn) setmasterfilebtn.style.display = "none";
+        toggleMenuListDisplay(mainMasterfileNavGroup.partnerNavs, "none");
+        toggleMenuListDisplay(mainMasterfileNavGroup.bankNavs, "none");
+        toggleMenuListDisplay(maintenanceMasterfileNavGroup.partnerNavs, "none");
+        toggleMenuListDisplay(maintenanceMasterfileNavGroup.bankNavs, "none");
 
         if (actionreportbtn) actionreportbtn.style.display = "none";
         if (actionreportnav) actionreportnav.style.display = "none";
@@ -244,6 +330,13 @@ document.addEventListener('DOMContentLoaded', function () {
         if (setclosedmaintenance) setclosedmaintenance.style.display = "block";
         if (setopenduplicate) setopenduplicate.style.display = "none";
         if (setclosedduplicate) setclosedduplicate.style.display = "block";
+        if (setopenmasterfile) setopenmasterfile.style.display = "none";
+        if (setclosedmasterfile) setclosedmasterfile.style.display = "block";
+
+        if (openmasterfiles) openmasterfiles.style.display = "none";
+        if (closedmasterfiles) closedmasterfiles.style.display = "block";
+        if (opensetmasterfiles) opensetmasterfiles.style.display = "none";
+        if (closedsetmasterfiles) closedsetmasterfiles.style.display = "block";
 
         if (actionopenreport) actionopenreport.style.display = "none";
         if (actionclosedreport) actionclosedreport.style.display = "block";
@@ -777,6 +870,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 availableSubMenus.push(setduplicatebtn);
                 if (setduplicatenav) availableSubNavs.push(setduplicatenav);
             }
+            if (setmasterfilebtn) {
+                availableSubMenus.push(setmasterfilebtn);
+                if (maintenanceMasterfileNavGroup.partnerNavs && maintenanceMasterfileNavGroup.partnerNavs.length) {
+                    maintenanceMasterfileNavGroup.partnerNavs.forEach(function(nav) { availableSubNavs.push(nav); });
+                }
+                if (maintenanceMasterfileNavGroup.bankNavs && maintenanceMasterfileNavGroup.bankNavs.length) {
+                    maintenanceMasterfileNavGroup.bankNavs.forEach(function(nav) { availableSubNavs.push(nav); });
+                }
+            }
             
             // Check if any sub-menu is currently visible
             var isAnyVisible = false;
@@ -813,6 +915,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (setclosedmaintenance) setclosedmaintenance.style.display = "block";
                 if (setopenduplicate) setopenduplicate.style.display = "none";
                 if (setclosedduplicate) setclosedduplicate.style.display = "block";
+                if (setopenmasterfile) setopenmasterfile.style.display = "none";
+                if (setclosedmasterfile) setclosedmasterfile.style.display = "block";
                 
                 // Animate out parent menus
                 availableSubMenus.forEach(function(menu) {
@@ -874,6 +978,90 @@ document.addEventListener('DOMContentLoaded', function () {
                         setduplicatenav.style.display = "none";
                     }, 450);
                 }
+            }
+        });
+    }
+
+    // Sub-menu Masterfile dropdown handler
+    if (setmasterfilebtn) {
+        setmasterfilebtn.addEventListener("click", function(){ 
+            var isPartnerHidden = isMenuListHidden(maintenanceMasterfileNavGroup.partnerNavs);
+            var isBankHidden = isMenuListHidden(maintenanceMasterfileNavGroup.bankNavs);
+            var isHidden = isPartnerHidden && isBankHidden;
+            
+            if (isHidden) {
+                toggleMenuListDisplay(maintenanceMasterfileNavGroup.partnerNavs, "block", "slide-in-from-top 0.8s ease");
+                toggleMenuListDisplay(maintenanceMasterfileNavGroup.bankNavs, "block", "slide-in-from-top 0.8s ease");
+                if (setopenmasterfile) setopenmasterfile.style.display = "block";
+                if (setclosedmasterfile) setclosedmasterfile.style.display = "none";
+            } else {
+                if (setopenmasterfile) setopenmasterfile.style.display = "none";
+                if (setclosedmasterfile) setclosedmasterfile.style.display = "block";
+                
+                toggleMenuListDisplay(maintenanceMasterfileNavGroup.partnerNavs, "block", "slide-out-to-top 0.5s ease");
+                toggleMenuListDisplay(maintenanceMasterfileNavGroup.bankNavs, "block", "slide-out-to-top 0.5s ease");
+                setTimeout(function() {
+                    toggleMenuListDisplay(maintenanceMasterfileNavGroup.partnerNavs, "none");
+                    toggleMenuListDisplay(maintenanceMasterfileNavGroup.bankNavs, "none");
+                }, 450);
+            }
+        });
+    }
+
+    // Main-menu Masterfiles dropdown handler
+    if (masterfilesbtn) {
+        masterfilesbtn.addEventListener("click", function(){
+            var isHidden = !setmasterfilesbtn || setmasterfilesbtn.style.display === "none" || setmasterfilesbtn.style.display === "";
+
+            if (isHidden) {
+                if (setmasterfilesbtn) {
+                    setmasterfilesbtn.style.animation = "slide-in-from-top 0.8s ease";
+                    setmasterfilesbtn.style.display = "flex";
+                }
+                if (openmasterfiles) openmasterfiles.style.display = "block";
+                if (closedmasterfiles) closedmasterfiles.style.display = "none";
+            } else {
+                if (opensetmasterfiles) opensetmasterfiles.style.display = "none";
+                if (closedsetmasterfiles) closedsetmasterfiles.style.display = "block";
+
+                toggleMenuListDisplay(mainMasterfileNavGroup.partnerNavs, "none");
+                toggleMenuListDisplay(mainMasterfileNavGroup.bankNavs, "none");
+
+                if (setmasterfilesbtn) {
+                    setmasterfilesbtn.style.animation = "slide-out-to-top 0.5s ease";
+                    setTimeout(function() {
+                        setmasterfilesbtn.style.display = "none";
+                    }, 450);
+                }
+
+                if (openmasterfiles) openmasterfiles.style.display = "none";
+                if (closedmasterfiles) closedmasterfiles.style.display = "block";
+            }
+        });
+    }
+
+    // Masterfiles View dropdown handler
+    if (setmasterfilesbtn) {
+        setmasterfilesbtn.addEventListener("click", function(){
+            var isPartnerHidden = isMenuListHidden(mainMasterfileNavGroup.partnerNavs);
+            var isBankHidden = isMenuListHidden(mainMasterfileNavGroup.bankNavs);
+            var isHidden = isPartnerHidden && isBankHidden;
+
+            if (isHidden) {
+                toggleMenuListDisplay(mainMasterfileNavGroup.partnerNavs, "block", "slide-in-from-top 0.8s ease");
+                toggleMenuListDisplay(mainMasterfileNavGroup.bankNavs, "block", "slide-in-from-top 0.8s ease");
+                if (opensetmasterfiles) opensetmasterfiles.style.display = "block";
+                if (closedsetmasterfiles) closedsetmasterfiles.style.display = "none";
+            } else {
+                if (opensetmasterfiles) opensetmasterfiles.style.display = "none";
+                if (closedsetmasterfiles) closedsetmasterfiles.style.display = "block";
+
+                toggleMenuListDisplay(mainMasterfileNavGroup.partnerNavs, "block", "slide-out-to-top 0.5s ease");
+                toggleMenuListDisplay(mainMasterfileNavGroup.bankNavs, "block", "slide-out-to-top 0.5s ease");
+                setTimeout(function() {
+                    toggleMenuListDisplay(mainMasterfileNavGroup.partnerNavs, "none");
+                    toggleMenuListDisplay(mainMasterfileNavGroup.bankNavs, "none");
+                }, 450);
             }
         });
     }

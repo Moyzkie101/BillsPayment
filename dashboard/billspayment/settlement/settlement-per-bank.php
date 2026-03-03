@@ -156,7 +156,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
     $partner = $_POST['partner'] ?? '';
     $settlementType = $_POST['settlementType'] ?? '';
     $bankName = $_POST['bankName'] ?? '';
-    $chargeBy = $_POST['chargeBy'] ?? '';
     $filterType = $_POST['filterType'] ?? '';
     $startDate = $_POST['startDate'] ?? '';
     $endDate = $_POST['endDate'] ?? '';
@@ -206,7 +205,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         $cteFilterConditions[] = "EXISTS (
             SELECT 1
                         FROM masterdata.partner_masterfile pm
-            WHERE (pm.partner_id = bt.partner_id OR pm.partner_id_kpx = bt.partner_id_kpx OR pm.partner_name = bt.partner_name)
+                        WHERE (
+                                (NULLIF(TRIM(pm.partner_id), '') IS NOT NULL AND NULLIF(TRIM(pm.partner_id), '') = NULLIF(TRIM(bt.partner_id), ''))
+                                OR (NULLIF(TRIM(pm.partner_id_kpx), '') IS NOT NULL AND NULLIF(TRIM(pm.partner_id_kpx), '') = NULLIF(TRIM(bt.partner_id_kpx), ''))
+                                OR (UPPER(TRIM(pm.partner_name)) = UPPER(TRIM(bt.partner_name)))
+                        )
               AND pm.settled_online_check = ?
         )";
         $cteFilterTypes .= 's';
@@ -217,37 +220,24 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         $cteFilterConditions[] = "EXISTS (
             SELECT 1
                         FROM masterdata.partner_masterfile pm
-            INNER JOIN mldb.partner_bank pb ON pb.partner_id = pm.partner_id
-            WHERE (pm.partner_id = bt.partner_id OR pm.partner_id_kpx = bt.partner_id_kpx OR pm.partner_name = bt.partner_name)
-              AND pb.bank = ?
+                        WHERE (
+                                (NULLIF(TRIM(pm.partner_id), '') IS NOT NULL AND NULLIF(TRIM(pm.partner_id), '') = NULLIF(TRIM(bt.partner_id), ''))
+                                OR (NULLIF(TRIM(pm.partner_id_kpx), '') IS NOT NULL AND NULLIF(TRIM(pm.partner_id_kpx), '') = NULLIF(TRIM(bt.partner_id_kpx), ''))
+                                OR (UPPER(TRIM(pm.partner_name)) = UPPER(TRIM(bt.partner_name)))
+                        )
+                            AND (
+                                UPPER(TRIM(pm.bank)) = UPPER(TRIM(?))
+                                OR EXISTS (
+                                        SELECT 1
+                                        FROM mldb.partner_bank pb
+                                        WHERE pb.partner_id = pm.partner_id
+                                            AND UPPER(TRIM(pb.bank)) = UPPER(TRIM(?))
+                                )
+                            )
         )";
-        $cteFilterTypes .= 's';
+                $cteFilterTypes .= 'ss';
+                $cteFilterParams[] = $bankName;
         $cteFilterParams[] = $bankName;
-    }
-
-    if (!empty($chargeBy) && strtoupper($chargeBy) !== 'ALL') {
-        if (strtoupper($chargeBy) === 'CUSTOMER') {
-            $cteFilterConditions[] = "EXISTS (
-                SELECT 1
-                FROM masterdata.partner_masterfile pm
-                WHERE (pm.partner_id = bt.partner_id OR pm.partner_id_kpx = bt.partner_id_kpx OR pm.partner_name = bt.partner_name)
-                  AND pm.charge_to IN ('CUSTOMER', 'CUSTOMER&PARTNER')
-            )";
-        } elseif (strtoupper($chargeBy) === 'PARTNER') {
-            $cteFilterConditions[] = "EXISTS (
-                SELECT 1
-                FROM masterdata.partner_masterfile pm
-                WHERE (pm.partner_id = bt.partner_id OR pm.partner_id_kpx = bt.partner_id_kpx OR pm.partner_name = bt.partner_name)
-                  AND pm.charge_to IN ('PARTNER', 'CUSTOMER&PARTNER')
-            )";
-        } elseif (strtoupper($chargeBy) === 'BOTH') {
-            $cteFilterConditions[] = "EXISTS (
-                SELECT 1
-                FROM masterdata.partner_masterfile pm
-                WHERE (pm.partner_id = bt.partner_id OR pm.partner_id_kpx = bt.partner_id_kpx OR pm.partner_name = bt.partner_name)
-                  AND pm.charge_to = 'CUSTOMER&PARTNER'
-            )";
-        }
     }
 
     $allPartnersFilterConditions = [];
@@ -261,24 +251,18 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
     }
 
     if (!empty($bankName) && strtoupper($bankName) !== 'ALL') {
-        $allPartnersFilterConditions[] = "EXISTS (
-            SELECT 1
-            FROM mldb.partner_bank pb
-            WHERE pb.partner_id = mpm.partner_id
-              AND pb.bank = ?
+        $allPartnersFilterConditions[] = "(
+            UPPER(TRIM(mpm.bank)) = UPPER(TRIM(?))
+            OR EXISTS (
+                SELECT 1
+                FROM mldb.partner_bank pb
+                WHERE pb.partner_id = mpm.partner_id
+                  AND UPPER(TRIM(pb.bank)) = UPPER(TRIM(?))
+            )
         )";
-        $allPartnersFilterTypes .= 's';
+        $allPartnersFilterTypes .= 'ss';
         $allPartnersFilterParams[] = $bankName;
-    }
-
-    if (!empty($chargeBy) && strtoupper($chargeBy) !== 'ALL') {
-        if (strtoupper($chargeBy) === 'CUSTOMER') {
-            $allPartnersFilterConditions[] = "mpm.charge_to IN ('CUSTOMER', 'CUSTOMER&PARTNER')";
-        } elseif (strtoupper($chargeBy) === 'PARTNER') {
-            $allPartnersFilterConditions[] = "mpm.charge_to IN ('PARTNER', 'CUSTOMER&PARTNER')";
-        } elseif (strtoupper($chargeBy) === 'BOTH') {
-            $allPartnersFilterConditions[] = "mpm.charge_to = 'CUSTOMER&PARTNER'";
-        }
+        $allPartnersFilterParams[] = $bankName;
     }
 
     $cteFilterClause = '';
@@ -304,87 +288,212 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         $params[] = $partner;
     }
 
-    $dataQuery = "WITH summary_vol AS (
-                        SELECT
-                            CASE
-                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                                ELSE CONCAT('temp_', bt.partner_name)
-                            END COLLATE utf8mb4_general_ci AS partner_key,
-                            bt.partner_name,
-                            COUNT(*) AS vol1,
-                            SUM(bt.amount_paid) AS principal1,
-                            SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
-                        FROM mldb.billspayment_transaction AS bt
-                        WHERE $dateCondition
-                            AND bt.status IS NULL
-                            AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                            $cteFilterClause
-                        GROUP BY
-                            CASE
-                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                                ELSE CONCAT('temp_', bt.partner_name)
-                            END COLLATE utf8mb4_general_ci,
-                            bt.partner_name
+    $dataQuery = "WITH partner_lookup_by_id AS (
+                    SELECT
+                        NULLIF(TRIM(mpm.partner_id), '') AS partner_id,
+                        MAX(mpm.partner_name) AS canonical_partner_name
+                    FROM masterdata.partner_masterfile AS mpm
+                    WHERE mpm.status = 'ACTIVE'
+                      AND mpm.partner_id IS NOT NULL
+                      AND TRIM(mpm.partner_id) <> ''
+                    GROUP BY NULLIF(TRIM(mpm.partner_id), '')
+                ),
+                partner_lookup_by_kpx AS (
+                    SELECT
+                        NULLIF(TRIM(mpm.partner_id_kpx), '') AS partner_id_kpx,
+                        MAX(mpm.partner_name) AS canonical_partner_name
+                    FROM masterdata.partner_masterfile AS mpm
+                    WHERE mpm.status = 'ACTIVE'
+                      AND mpm.partner_id_kpx IS NOT NULL
+                      AND TRIM(mpm.partner_id_kpx) <> ''
+                    GROUP BY NULLIF(TRIM(mpm.partner_id_kpx), '')
+                ),
+                partner_lookup_by_name AS (
+                    SELECT
+                        UPPER(TRIM(mpm.partner_name)) COLLATE utf8mb4_general_ci AS partner_name_norm,
+                        MAX(mpm.partner_name) AS canonical_partner_name
+                    FROM masterdata.partner_masterfile AS mpm
+                    WHERE mpm.status = 'ACTIVE'
+                      AND mpm.partner_name IS NOT NULL
+                      AND TRIM(mpm.partner_name) <> ''
+                    GROUP BY UPPER(TRIM(mpm.partner_name)) COLLATE utf8mb4_general_ci
+                ),
+                summary_vol AS (
+                    SELECT
+                        COALESCE(
+                            pid.canonical_partner_name,
+                            pkpx.canonical_partner_name,
+                            pname.canonical_partner_name,
+                            NULLIF(TRIM(bt.partner_name), ''),
+                            CONCAT(
+                                'UNMAPPED-',
+                                COALESCE(
+                                    NULLIF(TRIM(bt.partner_id), ''),
+                                    NULLIF(TRIM(bt.partner_id_kpx), ''),
+                                    'UNKNOWN'
+                                )
+                            )
+                        ) AS partner_name,
+                        MAX(NULLIF(TRIM(bt.partner_id), '')) AS partner_id,
+                        MAX(NULLIF(TRIM(bt.partner_id_kpx), '')) AS partner_id_kpx,
+                        COUNT(*) AS vol1,
+                        SUM(bt.amount_paid) AS principal1,
+                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
+                    FROM mldb.billspayment_transaction AS bt
+                    LEFT JOIN partner_lookup_by_id AS pid ON NULLIF(TRIM(bt.partner_id), '') = pid.partner_id
+                    LEFT JOIN partner_lookup_by_kpx AS pkpx ON NULLIF(TRIM(bt.partner_id_kpx), '') = pkpx.partner_id_kpx
+                    LEFT JOIN partner_lookup_by_name AS pname ON UPPER(TRIM(bt.partner_name)) COLLATE utf8mb4_general_ci = pname.partner_name_norm
+                    WHERE $dateCondition
+                        AND bt.status IS NULL
+                        AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                        $cteFilterClause
+                    GROUP BY COALESCE(
+                        pid.canonical_partner_name,
+                        pkpx.canonical_partner_name,
+                        pname.canonical_partner_name,
+                        NULLIF(TRIM(bt.partner_name), ''),
+                        CONCAT(
+                            'UNMAPPED-',
+                            COALESCE(
+                                NULLIF(TRIM(bt.partner_id), ''),
+                                NULLIF(TRIM(bt.partner_id_kpx), ''),
+                                'UNKNOWN'
+                            )
+                        )
+                    )
+                ),
+                summary_by_partner AS (
+                    SELECT
+                        partner_name,
+                        MAX(partner_id) AS partner_id,
+                        MAX(partner_id_kpx) AS partner_id_kpx,
+                        SUM(vol1) AS vol1,
+                        SUM(principal1) AS principal1,
+                        SUM(charge1) AS charge1
+                    FROM summary_vol
+                    GROUP BY partner_name
                 ),
                 adjustment_vol AS (
                     SELECT
-                        CASE
-                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                            ELSE CONCAT('temp_', bt.partner_name)
-                        END COLLATE utf8mb4_general_ci AS partner_key,
-                        bt.partner_name,
+                        COALESCE(
+                            pid.canonical_partner_name,
+                            pkpx.canonical_partner_name,
+                            pname.canonical_partner_name,
+                            NULLIF(TRIM(bt.partner_name), ''),
+                            CONCAT(
+                                'UNMAPPED-',
+                                COALESCE(
+                                    NULLIF(TRIM(bt.partner_id), ''),
+                                    NULLIF(TRIM(bt.partner_id_kpx), ''),
+                                    'UNKNOWN'
+                                )
+                            )
+                        ) AS partner_name,
+                        MAX(NULLIF(TRIM(bt.partner_id), '')) AS partner_id,
+                        MAX(NULLIF(TRIM(bt.partner_id_kpx), '')) AS partner_id_kpx,
                         COUNT(*) AS vol2,
                         SUM(bt.amount_paid) AS principal2,
                         SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
                     FROM mldb.billspayment_transaction AS bt
+                    LEFT JOIN partner_lookup_by_id AS pid ON NULLIF(TRIM(bt.partner_id), '') = pid.partner_id
+                    LEFT JOIN partner_lookup_by_kpx AS pkpx ON NULLIF(TRIM(bt.partner_id_kpx), '') = pkpx.partner_id_kpx
+                    LEFT JOIN partner_lookup_by_name AS pname ON UPPER(TRIM(bt.partner_name)) COLLATE utf8mb4_general_ci = pname.partner_name_norm
                     WHERE $dateCondition
                         AND bt.status = '*'
                         AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
                         $cteFilterClause
-                    GROUP BY
-                        CASE
-                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                            ELSE CONCAT('temp_', bt.partner_name)
-                        END COLLATE utf8mb4_general_ci,
-                        bt.partner_name
+                    GROUP BY COALESCE(
+                        pid.canonical_partner_name,
+                        pkpx.canonical_partner_name,
+                        pname.canonical_partner_name,
+                        NULLIF(TRIM(bt.partner_name), ''),
+                        CONCAT(
+                            'UNMAPPED-',
+                            COALESCE(
+                                NULLIF(TRIM(bt.partner_id), ''),
+                                NULLIF(TRIM(bt.partner_id_kpx), ''),
+                                'UNKNOWN'
+                            )
+                        )
+                    )
                 ),
-                all_partners AS (
+                adjustment_by_partner AS (
                     SELECT
-                        COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
+                        partner_name,
+                        MAX(partner_id) AS partner_id,
+                        MAX(partner_id_kpx) AS partner_id_kpx,
+                        SUM(vol2) AS vol2,
+                        SUM(principal2) AS principal2,
+                        SUM(charge2) AS charge2
+                    FROM adjustment_vol
+                    GROUP BY partner_name
+                ),
+                partner_master_dedup AS (
+                    SELECT
                         mpm.partner_name,
-                        mpm.partner_accName,
-                        mpm.bank_accNumber
+                        MAX(NULLIF(TRIM(mpm.partner_id), '')) AS partner_id,
+                        MAX(NULLIF(TRIM(mpm.partner_id_kpx), '')) AS partner_id_kpx,
+                        MAX(mpm.partner_accName) AS partner_accName,
+                        MAX(mpm.bank_accNumber) AS bank_accNumber,
+                        MAX(mpm.bank) AS bank,
+                        MAX(mpm.settled_online_check) AS settled_online_check,
+                        MAX(mpm.charge_to) AS charge_to,
+                        MAX(mpm.charge_sched) AS charge_sched
                     FROM masterdata.partner_masterfile AS mpm
                     WHERE mpm.status = 'ACTIVE'
                     $allPartnersWhereClause
+                    GROUP BY mpm.partner_name
+                ),
+                all_partners_union AS (
+                    SELECT
+                        CONVERT(partner_name USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_name,
+                        CONVERT(partner_id USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id,
+                        CONVERT(partner_id_kpx USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id_kpx
+                    FROM partner_master_dedup
 
-                    UNION
+                    UNION ALL
 
-                    SELECT partner_key, partner_name, NULL AS partner_accName, NULL AS bank_accNumber FROM summary_vol
+                    SELECT
+                        CONVERT(partner_name USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_name,
+                        CONVERT(partner_id USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id,
+                        CONVERT(partner_id_kpx USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id_kpx
+                    FROM summary_by_partner
 
-                    UNION
+                    UNION ALL
 
-                    SELECT partner_key, partner_name, NULL AS partner_accName, NULL AS bank_accNumber FROM adjustment_vol
+                    SELECT
+                        CONVERT(partner_name USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_name,
+                        CONVERT(partner_id USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id,
+                        CONVERT(partner_id_kpx USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id_kpx
+                    FROM adjustment_by_partner
+                ),
+                all_partners AS (
+                    SELECT
+                        partner_name,
+                        MAX(partner_id) AS partner_id,
+                        MAX(partner_id_kpx) AS partner_id_kpx
+                    FROM all_partners_union
+                    GROUP BY partner_name
                 )
                 SELECT
                     ap.partner_name,
-                    MAX(ap.partner_accName) AS partner_accName,
-                    MAX(ap.bank_accNumber) AS bank_accNumber,
-                    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
-                    (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
-                    (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
+                    COALESCE(ap.partner_id, pmd.partner_id) AS partner_id,
+                    COALESCE(ap.partner_id_kpx, pmd.partner_id_kpx) AS partner_id_kpx,
+                    pmd.partner_accName,
+                    pmd.bank_accNumber,
+                    pmd.bank,
+                    pmd.settled_online_check,
+                    pmd.charge_to,
+                    pmd.charge_sched,
+                    (COALESCE(sv.vol1, 0) - COALESCE(av.vol2, 0)) AS net_vol,
+                    (COALESCE(sv.principal1, 0) - COALESCE(ABS(av.principal2), 0)) AS net_principal,
+                    (COALESCE(sv.charge1, 0) - COALESCE(ABS(av.charge2), 0)) AS net_charges
                 FROM all_partners AS ap
-                LEFT JOIN summary_vol AS sv ON (ap.partner_key = sv.partner_key OR ap.partner_name = sv.partner_name)
-                LEFT JOIN adjustment_vol AS av ON (ap.partner_key = av.partner_key OR ap.partner_name = av.partner_name)
-                LEFT JOIN masterdata.partner_masterfile AS mpm ON (ap.partner_name = mpm.partner_name)
-                WHERE (mpm.status = 'ACTIVE' OR mpm.status IS NULL)
+                LEFT JOIN summary_by_partner AS sv ON ap.partner_name = sv.partner_name
+                LEFT JOIN adjustment_by_partner AS av ON ap.partner_name = av.partner_name
+                LEFT JOIN partner_master_dedup AS pmd ON ap.partner_name = pmd.partner_name
+                WHERE ap.partner_name IS NOT NULL
                 $mainWhereClause
-                GROUP BY ap.partner_name
-                HAVING ap.partner_name IS NOT NULL
                 ORDER BY ap.partner_name";
 
     try {
@@ -510,7 +619,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                     <label class="form-label">Bank Name:</label>
                                     <select class="form-select" name="bankName" required>
                                         <option value="">Select Bank</option>
-                                        <option value="ALL">ALL</option>
+                                        <!-- <option value="ALL">ALL</option> -->
                                         <!-- options will be populated by JS -->
                                     </select>
                                 </div>
@@ -526,27 +635,25 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                 </div>
 
                                 <!-- Charge By -->
-                                <div class="col-md-2 col-sm-6">
+                                <!-- <div class="col-md-2 col-sm-6">
                                     <label class="form-label">Charge By:</label>
                                     <select class="form-select" name="chargeBy" required>
                                         <option value="">Select Charge By</option>
                                         <option value="ALL">ALL</option>
                                         <option value="CUSTOMER">CUSTOMER</option>
                                         <option value="PARTNER">PARTNER</option>
-                                        <!-- <option value="BOTH">BOTH</option> -->
+                                        <option value="BOTH">BOTH</option>
                                     </select>
-                                </div>
+                                </div> -->
 
                                 <!-- Time Frame -->
                                 <div class="col-md-2 col-sm-6">
-                                    <label class="form-label mb-0">Transaction Date</label>
-                                    <br>
                                     <label class="form-label">Time Frame:</label>
                                     <select class="form-select" name="filterType" required>
                                         <option value="">Select Time Frame</option>
-                                        <option value="daily">Per Day</option>
+                                        <option value="daily">Daily</option>
+                                        <option value="monthly">Monthly</option>
                                         <option value="date-range">Date Range</option>
-                                        <option value="monthly">Per Month</option>
                                         <!-- <option value="monthly-range">Monthly Range</option>
                                         <option value="yearly">Per Year</option>
                                         <option value="yearly-range">Yearly Range</option> -->
@@ -555,11 +662,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
                                 <!-- Date Range based on selected Time Frame -->
                                 <div class="col-md-2" style="display: none;">
-                                    <label class="form-label">Start Date:</label>
+                                    <label class="form-label mb-0 transaction-date-label">Transaction Date</label>
+                                    <br>
+                                    <label class="form-label start-date-label">Start Date:</label>
                                     <input type="date" class="form-control" name="startDate" required>
                                 </div>
                                 <div class="col-md-2" style="display: none;">
-                                    <label class="form-label">End Date:</label>
+                                    <label class="form-label end-date-label">End Date:</label>
                                     <input type="date" class="form-control" name="endDate" required>
                                 </div>
 
@@ -572,7 +681,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                 <!-- Action Button -->
                                 <div class="col-md-1 col-sm-6">
                                     <div class="col-md-3 d-flex align-items-end">
-                                        <button type="button" class="btn btn-secondary" id="generateReport" disabled>Generate</button>
+                                        <button type="button" class="btn btn-danger" id="generateReport">Generate</button>
                                     </div>
                                     
                                 </div>
@@ -618,7 +727,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Account Number</th>
                                             <th colspan="3" class='text-truncate text-center align-middle'>Net Total Transaction</th>
                                             <th class='text-truncate text-center align-middle'>Principal Adjustment</th>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>Account for Settlement</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>Amount for Settlement</th>
                                         </tr>
                                         <tr>
                                             <!-- Column header for Net -->
@@ -677,7 +786,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         const $partner = $('#partnerlistDropdown');
         const $settlementType = $('select[name="settlementType"]');
         const $bankName = $('select[name="bankName"]');
-        const $chargeBy = $('select[name="chargeBy"]');
         const $filterType = $('select[name="filterType"]');
         const $startDate = $('input[name="startDate"]');
         const $endDate = $('input[name="endDate"]');
@@ -736,7 +844,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             $partner,
             $settlementType,
             $bankName,
-            $chargeBy,
             $startDate,
             $endDate,
             $startWrap,
@@ -768,10 +875,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         });
 
         $partner.on('change', function() {
-            window.SettlementPerBankTimeFrame.toggleGenerateButton(timeFrameRefs);
-        });
-
-        $chargeBy.on('change', function() {
             window.SettlementPerBankTimeFrame.toggleGenerateButton(timeFrameRefs);
         });
 
@@ -955,8 +1058,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             const $startWrap = refs.$startWrap;
             const $endWrap = refs.$endWrap;
 
-            const startLabel = $startWrap.find('label');
-            const endLabel = $endWrap.find('label');
+            const $transactionDateLabel = $startWrap.find('.transaction-date-label');
+            const $startLabel = $startWrap.find('.start-date-label');
+            const $endLabel = $endWrap.find('.end-date-label');
 
             $startDate.val('');
             $endDate.val('');
@@ -966,8 +1070,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             if (filterType === 'date-range') {
                 $startDate.attr('type', 'date');
                 $endDate.attr('type', 'date');
-                startLabel.text('Start Date:');
-                endLabel.text('End Date:');
+                $transactionDateLabel.text('Transaction Date').show();
+                $startLabel.text('Start Date:');
+                $endLabel.text('End Date:');
                 $startWrap.show();
                 $endWrap.show();
                 return;
@@ -975,7 +1080,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
             if (filterType === 'daily') {
                 $startDate.attr('type', 'date');
-                startLabel.text('Select Date:');
+                $transactionDateLabel.text('Transaction Date').show();
+                $startLabel.text('Select Date:');
                 $startWrap.show();
                 $endWrap.hide();
                 return;
@@ -984,8 +1090,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             if (filterType === 'monthly' || filterType === 'monthly-range') {
                 $startDate.attr('type', 'month');
                 $endDate.attr('type', 'month');
-                startLabel.text(filterType === 'monthly' ? 'Select Month:' : 'Start Month:');
-                endLabel.text('End Month:');
+                $transactionDateLabel.text('Transaction Date').show();
+                $startLabel.text(filterType === 'monthly' ? 'Select Month:' : 'Start Month:');
+                $endLabel.text('End Month:');
                 $startWrap.show();
                 $endWrap.toggle(filterType === 'monthly-range');
                 return;
@@ -996,8 +1103,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 $endDate.attr('type', 'number');
                 $startDate.attr({ min: '2020', max: '2035', placeholder: 'YYYY' });
                 $endDate.attr({ min: '2020', max: '2035', placeholder: 'YYYY' });
-                startLabel.text(filterType === 'yearly' ? 'Select Year:' : 'Start Year:');
-                endLabel.text('End Year:');
+                $transactionDateLabel.text('Transaction Date').show();
+                $startLabel.text(filterType === 'yearly' ? 'Select Year:' : 'Start Year:');
+                $endLabel.text('End Year:');
                 $startWrap.show();
                 $endWrap.toggle(filterType === 'yearly-range');
                 return;
@@ -1012,7 +1120,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             const partner = refs.$partner.val();
             const settlementType = refs.$settlementType ? refs.$settlementType.val() : '';
             const bankName = refs.$bankName ? refs.$bankName.val() : '';
-            const chargeBy = refs.$chargeBy ? refs.$chargeBy.val() : '';
             const startDate = refs.$startDate.val();
             const endDate = refs.$endDate.val();
             const $generateReport = refs.$generateReport;
@@ -1024,12 +1131,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 datesValid = startDate !== '' && endDate !== '';
             }
 
-            const enable = !!(filterType && partner && settlementType && bankName && chargeBy && datesValid);
-            if (enable) {
-                $generateReport.prop('disabled', false).removeClass('btn-secondary').addClass('btn-danger');
-            } else {
-                $generateReport.prop('disabled', true).removeClass('btn-danger').addClass('btn-secondary');
-            }
+            // const enable = !!(filterType && partner && settlementType && bankName && datesValid);
+            // if (enable) {
+            //     $generateReport.prop('disabled', false).removeClass('btn-secondary').addClass('btn-danger');
+            // } else {
+            //     $generateReport.prop('disabled', true).removeClass('btn-danger').addClass('btn-secondary');
+            // }
         }
     };
 </script>
@@ -1051,38 +1158,218 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         clearReportTable: function() {
             const tbody = $('#transactionReportTable tbody');
             tbody.empty();
-            tbody.append('<tr><td colspan="9" class="text-center"></td></tr>');
+            tbody.append('<tr><td colspan="9" class="text-center"><b>CHARGE BY CUSTOMER</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER DAILY</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER WEEKLY</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER MONTHLY</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr>');
 
             $('#totalnetvolume').text('0');
             $('#totalnetprincipal').text('0.00');
             $('#totalnetcharge').text('0.00');
         },
 
-        populateReportTable: function(data) {
+        populateReportTable: function(data, refs) {
             const tbody = $('#transactionReportTable tbody');
             tbody.empty();
 
             let totalNetVolume = 0;
             let totalNetPrincipal = 0;
             let totalNetCharge = 0;
+            let runningIndex = 0;
 
             const rows = Array.isArray(data) ? data : [];
-            if (rows.length === 0) {
-                tbody.append('<tr><td colspan="9" class="text-center">No data found for the selected criteria</td></tr>');
-            } else {
-                rows.forEach((row, index) => {
-                    const netVol = parseInt(row.net_vol || 0, 10);
-                    const netPrincipal = parseFloat(row.net_principal || 0);
-                    const netCharge = parseFloat(row.net_charges || 0);
+
+            const toNumber = function(value) {
+                const numericValue = parseFloat(value);
+                return Number.isFinite(numericValue) ? numericValue : 0;
+            };
+
+            const isEffectivelyZero = function(value) {
+                return Math.abs(value) < 0.0000001;
+            };
+
+            const normalizePartnerName = function(value) {
+                return String(value || '').trim().toUpperCase();
+            };
+
+            const normalizePartnerRef = function(value) {
+                return String(value || '').trim().toUpperCase();
+            };
+
+            const getPartnerReferences = function(row) {
+                const refs = [];
+                const partnerIdRef = normalizePartnerRef(row.partner_id);
+                const partnerIdKpxRef = normalizePartnerRef(row.partner_id_kpx);
+                const partnerNameRef = normalizePartnerName(row.partner_name);
+
+                if (partnerIdRef) {
+                    refs.push(`PID:${partnerIdRef}`);
+                }
+
+                if (partnerIdKpxRef) {
+                    refs.push(`KPX:${partnerIdKpxRef}`);
+                }
+
+                if (partnerNameRef) {
+                    refs.push(`PNAME:${partnerNameRef}`);
+                }
+
+                return refs;
+            };
+
+            const applyRowIntoTarget = function(target, source) {
+                target.net_vol = toNumber(target.net_vol) + toNumber(source.net_vol);
+                target.net_principal = toNumber(target.net_principal) + toNumber(source.net_principal);
+                target.net_charges = toNumber(target.net_charges) + toNumber(source.net_charges);
+                target.partner_name = target.partner_name || source.partner_name || '';
+                target.partner_id = target.partner_id || source.partner_id || '';
+                target.partner_id_kpx = target.partner_id_kpx || source.partner_id_kpx || '';
+                target.partner_accName = target.partner_accName || source.partner_accName || '';
+                target.bank_accNumber = target.bank_accNumber || source.bank_accNumber || '';
+                target.bank = target.bank || source.bank || '';
+                target.settled_online_check = target.settled_online_check || source.settled_online_check || '';
+                target.charge_to = target.charge_to || source.charge_to || '';
+                target.charge_sched = target.charge_sched || source.charge_sched || '';
+            };
+
+            const referenceToKeyMap = new Map();
+            const mergedRowsMap = new Map();
+            rows.forEach(function(row) {
+                const rowRefs = getPartnerReferences(row);
+                if (rowRefs.length === 0) {
+                    return;
+                }
+
+                const matchedKeys = Array.from(new Set(
+                    rowRefs
+                        .map(function(ref) { return referenceToKeyMap.get(ref); })
+                        .filter(Boolean)
+                ));
+
+                let partnerKey = matchedKeys.length > 0 ? matchedKeys[0] : rowRefs[0];
+
+                if (matchedKeys.length > 1) {
+                    const primaryRow = mergedRowsMap.get(partnerKey);
+                    for (let index = 1; index < matchedKeys.length; index += 1) {
+                        const secondaryKey = matchedKeys[index];
+                        if (secondaryKey === partnerKey) {
+                            continue;
+                        }
+
+                        const secondaryRow = mergedRowsMap.get(secondaryKey);
+                        if (secondaryRow && primaryRow) {
+                            applyRowIntoTarget(primaryRow, secondaryRow);
+                        }
+
+                        mergedRowsMap.delete(secondaryKey);
+
+                        referenceToKeyMap.forEach(function(mappedKey, ref) {
+                            if (mappedKey === secondaryKey) {
+                                referenceToKeyMap.set(ref, partnerKey);
+                            }
+                        });
+                    }
+                }
+
+                rowRefs.forEach(function(ref) {
+                    referenceToKeyMap.set(ref, partnerKey);
+                });
+
+                if (!mergedRowsMap.has(partnerKey)) {
+                    mergedRowsMap.set(partnerKey, {
+                        ...row,
+                        net_vol: toNumber(row.net_vol),
+                        net_principal: toNumber(row.net_principal),
+                        net_charges: toNumber(row.net_charges)
+                    });
+                    return;
+                }
+
+                const existing = mergedRowsMap.get(partnerKey);
+                applyRowIntoTarget(existing, row);
+            });
+
+            const mergedRows = Array.from(mergedRowsMap.values());
+
+            const visibleRows = mergedRows.filter(function(row) {
+                const netVol = toNumber(row.net_vol);
+                const netPrincipal = toNumber(row.net_principal);
+                const netCharge = toNumber(row.net_charges);
+
+                return !(isEffectivelyZero(netVol) && isEffectivelyZero(netPrincipal) && isEffectivelyZero(netCharge));
+            });
+
+            const normalizeValue = function(value) {
+                return String(value || '').trim().toUpperCase();
+            };
+
+            const getEffectiveChargeTo = function(row) {
+                const chargeTo = normalizeValue(row.charge_to);
+                const chargeSched = normalizeValue(row.charge_sched);
+
+                if (chargeTo) {
+                    return chargeTo;
+                }
+
+                if (chargeSched === 'PER TRANSACTION') {
+                    return 'CUSTOMER';
+                }
+
+                return '';
+            };
+
+            const sections = [
+                {
+                    title: 'CHARGE BY CUSTOMER',
+                    matcher: function(row) {
+                        return getEffectiveChargeTo(row) === 'CUSTOMER';
+                    }
+                },
+                {
+                    title: 'CHARGE BY PARTNER DAILY',
+                    matcher: function(row) {
+                        return getEffectiveChargeTo(row) === 'PARTNER' && normalizeValue(row.charge_sched) === 'DAILY';
+                    }
+                },
+                {
+                    title: 'CHARGE BY PARTNER WEEKLY',
+                    matcher: function(row) {
+                        return getEffectiveChargeTo(row) === 'PARTNER' && normalizeValue(row.charge_sched) === 'WEEKLY';
+                    }
+                },
+                {
+                    title: 'CHARGE BY PARTNER MONTHLY',
+                    matcher: function(row) {
+                        return getEffectiveChargeTo(row) === 'PARTNER' && normalizeValue(row.charge_sched) === 'MONTHLY';
+                    }
+                }
+            ];
+
+            const displayedRows = new Set();
+
+            const appendDataRows = function(sectionRows) {
+                sectionRows.forEach((row) => {
+                    const netVol = toNumber(row.net_vol);
+                    const netPrincipal = toNumber(row.net_principal);
+                    const netCharge = toNumber(row.net_charges);
+
+                    displayedRows.add(row);
 
                     totalNetVolume += netVol;
                     totalNetPrincipal += netPrincipal;
                     totalNetCharge += netCharge;
+                    runningIndex += 1;
+
+                    const partnerMeta = [
+                        row.bank ? `Bank: ${row.bank}` : '',
+                        row.settled_online_check ? `Settlement: ${row.settled_online_check}` : '',
+                        row.charge_to ? `Charge To: ${row.charge_to}` : '',
+                        row.charge_sched ? `Charge Sched: ${row.charge_sched}` : ''
+                    ].filter(Boolean).join(' | ');
 
                     const tr = `
                         <tr>
-                            <td class="text-center">${index + 1}</td>
-                            <td>${row.partner_name || ''}</td>
+                            <td class="text-center">${runningIndex}</td>
+                            <td>
+                                ${row.partner_name || ''}
+                            </td>
                             <td>${row.partner_accName || ''}</td>
                             <td class="text-truncate">${row.bank_accNumber || ''}</td>
                             <td class="text-end">${netVol.toLocaleString()}</td>
@@ -1094,6 +1381,32 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     `;
                     tbody.append(tr);
                 });
+            };
+
+            if (visibleRows.length === 0) {
+                tbody.append('<tr><td colspan="9" class="text-center">No data found for the selected criteria</td></tr>');
+            } else {
+                sections.forEach(section => {
+                    const sectionRows = visibleRows.filter(section.matcher);
+
+                    tbody.append(`<tr><td colspan="9" class="text-center"><b>${section.title}</b></td></tr>`);
+
+                    if (sectionRows.length === 0) {
+                        tbody.append('<tr><td colspan="9" class="text-center text-muted">No data found under this section</td></tr>');
+                        return;
+                    }
+
+                    appendDataRows(sectionRows);
+                });
+
+                const uncategorizedRows = visibleRows.filter(function(row) {
+                    return !displayedRows.has(row);
+                });
+
+                if (uncategorizedRows.length > 0) {
+                    tbody.append('<tr><td colspan="9" class="text-center"><b>UNMAPPED CHARGE CATEGORY</b></td></tr>');
+                    appendDataRows(uncategorizedRows);
+                }
             }
 
             $('#totalnetvolume').text(totalNetVolume.toLocaleString());
@@ -1121,18 +1434,17 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             const partner = refs.$partner.val();
             const settlementType = refs.$settlementType.val();
             const bankName = refs.$bankName.val();
-            const chargeBy = refs.$chargeBy.val();
             const startDate = refs.$startDate.val();
             const endDate = refs.$endDate.val();
 
-            if (!partner || !settlementType || !bankName || !chargeBy || !filterType || !startDate) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Missing Information',
-                    text: 'Please complete all required filters.'
-                });
-                return;
-            }
+            // if (!partner || !settlementType || !bankName || !filterType || !startDate) {
+            //     Swal.fire({
+            //         icon: 'warning',
+            //         title: 'Missing Information',
+            //         text: 'Please complete all required filters.'
+            //     });
+            //     return;
+            // }
 
             if (filterType === 'date-range' && !endDate) {
                 Swal.fire({
@@ -1159,7 +1471,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     partner: refs.$partner.val(),
                     settlementType: refs.$settlementType.val(),
                     bankName: refs.$bankName.val(),
-                    chargeBy: refs.$chargeBy.val(),
                     filterType: refs.$filterType.val(),
                     startDate: startDate,
                     endDate: endDate
@@ -1171,11 +1482,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     try {
                         const result = JSON.parse(response);
                         if (result.status === 'success') {
-                            self.populateReportTable(result.data || []);
+                            self.populateReportTable(result.data || [], refs);
                         } else {
                             Swal.fire({
                                 icon: 'error',
-                                title: 'Server Error',
+                                title: 'Error',
                                 text: result.message || 'Unable to generate report.'
                             });
                         }
