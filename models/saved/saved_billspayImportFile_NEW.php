@@ -697,7 +697,14 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
             if (move_uploaded_file($tmpPath, $tempPath)) {
                 // Get partner name from database
                 $partnerName = getPartnerName($conn, $partnerId);
-                
+                // capture report date if client provided one
+                $reportDateRaw = $_POST['report_dates'][$i] ?? '';
+                $reportDate = null;
+                if (!empty($reportDateRaw)) {
+                    $ts = strtotime($reportDateRaw);
+                    if ($ts !== false) $reportDate = date('Y-m-d', $ts);
+                }
+
                 $uploadedFiles[] = [
                     'id' => $fileId,
                     'name' => $fileName,
@@ -705,6 +712,8 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
                     'partner_id' => $partnerId,
                     'partner_name' => $partnerName,
                     'source_type' => $sourceType,
+                    'report_date_raw' => $reportDateRaw,
+                    'report_date' => $reportDate,
                     'status' => 'pending',
                     'validation_result' => null,
                     'uploaded_by' => $current_user_email,
@@ -801,7 +810,7 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
                 $userDecision = $_SESSION['user_decision'] ?? 'skip';
 
                 // Import file with user decision
-                $result = importFileData($conn, $file['path'], $file['source_type'], $file['partner_id'], $current_user_email, null, null, $userDecision);
+                $result = importFileData($conn, $file['path'], $file['source_type'], $file['partner_id'], $current_user_email, null, null, $userDecision, $file);
 
                 if ($result['success']) {
                     $imported++;
@@ -1727,7 +1736,7 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     ];
 }
 
-function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserEmail, $progressToken = null, $cachedData = null, $userDecision = 'skip') {
+function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserEmail, $progressToken = null, $cachedData = null, $userDecision = 'skip', $fileMeta = null) {
     try {
         // Always parse Excel (simple and reliable like old code)
         $spreadsheet = loadSpreadsheet($filePath, true);
@@ -1768,28 +1777,32 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $getColumnLabels[] = trim(strval($cell->getValue()));
         }
 
-        // KP7 report date is stored in cell B3
-        $kp7ReportDate = null;
-        if ($sourceType === 'KP7') {
-            $kp7ReportDate = trim(strval($worksheet->getCell('B3')->getValue()));
+        // Extract header report date from cell B3 (commonly present for KP7/KPX)
+        $headerReportRaw = trim(strval($worksheet->getCell('B3')->getValue()));
+        $headerReport = null;
+        if ($headerReportRaw !== '') {
+            $ts = strtotime($headerReportRaw);
+            if ($ts !== false) $headerReport = date('Y-m-d', $ts);
         }
 
-        // If user provided a report date from the UI, use it for all inserted rows (format YYYY-MM-DD)
-        $userReportDate = null;
-        if (isset($_POST['report_date']) && trim($_POST['report_date']) !== '') {
-            $tmp = trim($_POST['report_date']);
-            $dt = strtotime($tmp);
-            if ($dt !== false) $userReportDate = date('Y-m-d', $dt);
+        // Prefer file metadata report date (from upload client) if provided
+        $reportDateCandidate = null;
+        if (is_array($fileMeta)) {
+            if (!empty($fileMeta['report_date'])) {
+                $reportDateCandidate = $fileMeta['report_date'];
+            } elseif (!empty($fileMeta['report_date_raw'])) {
+                $tmp = trim($fileMeta['report_date_raw']);
+                $ts = strtotime($tmp);
+                $reportDateCandidate = ($ts !== false) ? date('Y-m-d', $ts) : $tmp;
+            }
         }
 
-        // Require a report date to be provided by the UI. Client hides Import button
-        // when empty, but enforce it server-side to avoid JS bypass.
-        if (empty($userReportDate)) {
-            return [
-                'success' => false,
-                'error' => 'Report date is required. Please select a report date before importing.'
-            ];
+        // If still not set, use header report
+        if (empty($reportDateCandidate) && !empty($headerReport)) {
+            $reportDateCandidate = $headerReport;
         }
+
+        // $reportDateCandidate may remain null; downstream logic will decide per-row fallback.
 
         // Helper functions (duplicate and override checks)
         $checkDuplicateData = function($referenceNumber, $datetime, $partnerIdParam = null) use ($conn) {
@@ -1896,8 +1909,8 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $person_operator = '';
             $remote_branch = null;
             $remote_operator = null;
-            // Use the user-selected report date for all rows (server enforces presence).
-            $report_date = $userReportDate;
+            // Use the best available report date for all rows: prefer file-level candidate, then header, then transaction date later
+            $report_date = $reportDateCandidate;
 
             if ($getColumnLabels[0] === 'STATUS' && (strtoupper($sourceType) === 'KP7')) {
                 $cellAValue = $worksheet->getCell('A' . $row)->getValue();
@@ -2935,8 +2948,6 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <form method="post" id="performImportForm" style="display: inline; margin-right:8px;">
                                 <input type="hidden" name="progress_token" value="<?php echo htmlspecialchars($progressToken); ?>">
                                 <input type="hidden" name="perform_import" value="1">
-                                <!-- Hidden field to receive the selected report date from the UI -->
-                                <input type="hidden" name="report_date" id="hiddenReportDate" value="">
                                 <button type="submit" name="perform_import" class="btn btn-success btn-sm" id="importBtn">
                                     <i class="fa-solid fa-file-import me-1"></i>
                                     <?php echo $validCount === 1 ? 'Import File' : 'Import All (' . $validCount . ')'; ?>
@@ -2960,8 +2971,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <option value="invalid">Invalid</option>
                             <option value="valid">Valid</option>
                         </select>
-                        <label for="reportDateInput" class="me-2 ms-3" style="font-weight:600;">Report Date</label>
-                        <input type="date" id="reportDateInput" class="form-control form-control-sm" style="display:inline-block; width:140px;" />
+                        <!-- Report Date will be extracted from uploaded files automatically (B3) -->
                     </div>
                 </div>
                 
@@ -3233,6 +3243,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <tr><th>KPX Partner ID:</th><td>${partnerData.partner_id_kpx || 'N/A'}</td></tr>
                             <tr><th>GL Code:</th><td>${partnerData.gl_code || 'N/A'}</td></tr>
                             <tr><th>Source Type:</th><td><span class="badge badge-${(sourceType || 'unknown').toLowerCase()}">${sourceType}</span></td></tr>
+                            <tr><th>Report Date:</th><td>${(validation && (validation.report_date || validation.report_date_raw)) ? (validation.report_date || validation.report_date_raw) : (fileData.report_date || fileData.report_date_raw || '')}</td></tr>
                             <tr><th>Transaction Date:</th><td>${validation.transaction_start_date ? ('Start Date: ' + validation.transaction_start_date + (validation.transaction_end_date ? ' - End Date: ' + validation.transaction_end_date : '')) : transactionDate}</td></tr>
                             <tr><th>Total Rows:</th><td>${validation.row_count || 0}</td></tr>
                             <tr><th>Status:</th><td><span class="badge badge-${fileData.status || 'pending'}">${formatStatusLabel(fileData.status || 'pending')}</span></td></tr>
@@ -3591,6 +3602,10 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                     <td><span class="badge badge-${sourceType.toLowerCase()}" style="font-size: 14px;">${sourceType} System</span></td>
                                 </tr>
                                 <tr>
+                                    <th style="background-color: #f8f9fa;"><i class="fa-solid fa-calendar-day" style="color: #6f42c1;"></i> Report Date</th>
+                                    <td><strong>${(validation && (validation.report_date || validation.report_date_raw)) ? (validation.report_date || validation.report_date_raw) : (fileData.report_date || fileData.report_date_raw || '')}</strong></td>
+                                </tr>
+                                <tr>
                                     <th style="background-color: #f8f9fa;"><i class="fa-solid fa-calendar-day" style="color: #0dcaf0;"></i> Start Date</th>
                                     <td><strong>${validation.transaction_start_date || 'N/A'}</strong></td>
                                 </tr>
@@ -3693,26 +3708,10 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             const form = document.getElementById('performImportForm');
             if (!form) return;
 
-            // Report Date control: show/hide import button and sync hidden input
-            const reportDateInput = document.getElementById('reportDateInput');
+            // Import button is always available when there are valid files; report date is
+            // extracted from each uploaded file (B3) and persisted per-file. No UI selector.
             const importBtnEl = document.getElementById('importBtn');
-            const hiddenReportDateEl = document.getElementById('hiddenReportDate');
-            function updateImportBtnVisibility(){
-                if (!importBtnEl) return;
-                const val = reportDateInput ? reportDateInput.value : '';
-                if (!val || val.trim() === '') {
-                    importBtnEl.style.display = 'none';
-                    if (hiddenReportDateEl) hiddenReportDateEl.value = '';
-                } else {
-                    importBtnEl.style.display = '';
-                    if (hiddenReportDateEl) hiddenReportDateEl.value = val;
-                }
-            }
-            // initialize visibility
-            try { updateImportBtnVisibility(); } catch(e){}
-            if (reportDateInput) reportDateInput.addEventListener('change', updateImportBtnVisibility);
-            // Ensure hidden field set before submit
-            if (form) form.addEventListener('submit', function(e){ if (reportDateInput && hiddenReportDateEl) hiddenReportDateEl.value = reportDateInput.value || ''; });
+            try { if (importBtnEl) importBtnEl.style.display = ''; } catch(e){}
 
             const overlay = document.getElementById('importOverlay');
             const progressBar = document.getElementById('importProgressBar');

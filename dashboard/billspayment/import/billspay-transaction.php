@@ -925,6 +925,36 @@ if (isset($_SESSION['user_type'])) {
                         // Auto-detect Source Type from Column H, Row 3 (H3)
                         const sourceTypeCell = firstSheet['H3'];
                         let sourceType = sourceTypeCell ? String(sourceTypeCell.v).trim().toUpperCase() : '';
+
+                        // Auto-detect Report Date from Column B, Row 3 (B3) - parse to YYYY-MM-DD when possible
+                        const reportDateCell = firstSheet['B3'];
+                        const reportDateRaw = reportDateCell ? String(reportDateCell.v).trim() : '';
+                        let reportDate = '';
+                        if (reportDateRaw) {
+                            // Try to extract patterns like "FEBRUARY 03 2026" or "January 5 2026"
+                            const m = reportDateRaw.match(/([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})/);
+                            if (m) {
+                                const monthName = m[1].toUpperCase();
+                                const day = parseInt(m[2], 10);
+                                const year = parseInt(m[3], 10);
+                                const months = {JAN:1,JANUARY:1,FEB:2,FEBRUARY:2,MAR:3,MARCH:3,APR:4,APRIL:4,MAY:5,JUN:6,JUNE:6,JUL:7,JULY:7,AUG:8,AUGUST:8,SEP:9,SEPTEMBER:9,OCT:10,OCTOBER:10,NOV:11,NOVEMBER:11,DEC:12,DECEMBER:12};
+                                const mm = months[monthName] || months[monthName.slice(0,3)];
+                                if (mm) {
+                                    const mmStr = String(mm).padStart(2, '0');
+                                    const ddStr = String(day).padStart(2, '0');
+                                    reportDate = `${year}-${mmStr}-${ddStr}`;
+                                }
+                            } else {
+                                // fallback: try Date parser
+                                const ds = new Date(reportDateRaw);
+                                if (!isNaN(ds.getTime())) {
+                                    const y = ds.getFullYear();
+                                    const m = String(ds.getMonth() + 1).padStart(2, '0');
+                                    const d = String(ds.getDate()).padStart(2, '0');
+                                    reportDate = `${y}-${m}-${d}`;
+                                }
+                            }
+                        }
                         
                         // Validate source type
                         if (sourceType !== 'KPX' && sourceType !== 'KP7') {
@@ -975,6 +1005,8 @@ if (isset($_SESSION['user_type'])) {
                                     partnerId: partnerId,
                                     partnerName: partnerName,
                                     sourceType: sourceType,
+                                    report_date_raw: reportDateRaw,
+                                    report_date: reportDate,
                                     id: Date.now() + Math.random()
                                 };
 
@@ -1238,6 +1270,7 @@ if (isset($_SESSION['user_type'])) {
                         formData.append('files[]', fileData.file);
                         formData.append('partner_ids[]', fileData.partnerId);
                         formData.append('source_types[]', fileData.sourceType);
+                        formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
                     });
                     formData.append('check_duplicates', '1');
 
@@ -1541,6 +1574,7 @@ if (isset($_SESSION['user_type'])) {
                     formData.append('files[]', fileData.file);
                     formData.append('partner_ids[]', fileData.partnerId);
                     formData.append('source_types[]', fileData.sourceType);
+                    formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
                 });
                 formData.append('upload', '1');
                 formData.append('user_decision', userDecision); // Pass user decision
@@ -1551,6 +1585,7 @@ if (isset($_SESSION['user_type'])) {
                     partnerId: f.partnerId,
                     partnerName: f.partnerName,
                     sourceType: f.sourceType
+                    , report_date: f.report_date || f.report_date_raw || ''
                 }))));
 
                 // Send to checker page
@@ -1899,8 +1934,40 @@ if (isset($_SESSION['user_type'])) {
                 });
             }
 
+            async function extractReportDateFromManualFile(file) {
+                if (!file) return '';
+                try {
+                    const buffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const reportDateCell = firstSheet['B3'];
+                    const raw = reportDateCell ? String(reportDateCell.v).trim() : '';
+                    if (!raw) return '';
+
+                    const m = raw.match(/([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})/);
+                    if (m) {
+                        const monthName = m[1].toUpperCase();
+                        const day = parseInt(m[2], 10);
+                        const year = parseInt(m[3], 10);
+                        const months = {JAN:1,JANUARY:1,FEB:2,FEBRUARY:2,MAR:3,MARCH:3,APR:4,APRIL:4,MAY:5,JUN:6,JUNE:6,JUL:7,JULY:7,AUG:8,AUGUST:8,SEP:9,SEPTEMBER:9,OCT:10,OCTOBER:10,NOV:11,NOVEMBER:11,DEC:12,DECEMBER:12};
+                        const mm = months[monthName] || months[monthName.slice(0,3)];
+                        if (mm) {
+                            return `${year}-${String(mm).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        }
+                    }
+
+                    const ds = new Date(raw);
+                    if (!isNaN(ds.getTime())) {
+                        return `${ds.getFullYear()}-${String(ds.getMonth() + 1).padStart(2, '0')}-${String(ds.getDate()).padStart(2, '0')}`;
+                    }
+                } catch (err) {
+                    console.warn('Manual report date extraction failed:', err);
+                }
+                return '';
+            }
+
             // Function to proceed with manual upload based on user decision
-            function proceedWithManualUpload(form, userDecision) {
+            async function proceedWithManualUpload(form, userDecision) {
                 $('#loading-overlay').css('display', 'flex');
 
                 var fileInput = form.querySelector('input[name="import_file"]');
@@ -1916,8 +1983,10 @@ if (isset($_SESSION['user_type'])) {
 
                 var hasNativeFile = !!(fileInput && fileInput.files && fileInput.files.length > 0);
                 var appendedFile = false;
+                var submittedFile = null;
 
                 if (hasNativeFile) {
+                    submittedFile = fileInput.files[0] || null;
                     var originalParent = fileInput.parentNode;
                     var nextSibling = fileInput.nextSibling;
                     tempForm.appendChild(fileInput);
@@ -1937,6 +2006,7 @@ if (isset($_SESSION['user_type'])) {
                         var firstDropped = window.uploadedFiles[0];
                         var droppedFile = firstDropped && firstDropped.file ? firstDropped.file : firstDropped;
                         if (droppedFile) {
+                            submittedFile = droppedFile;
                             var dt = new DataTransfer();
                             dt.items.add(droppedFile);
                             var syntheticInput = document.createElement('input');
@@ -1979,6 +2049,22 @@ if (isset($_SESSION['user_type'])) {
                 hiddenFileType.name = 'fileType';
                 hiddenFileType.value = fileTypeSelect ? fileTypeSelect.value : '';
                 tempForm.appendChild(hiddenFileType);
+
+                // Extract Report Date from B3 and pass it to manual handler
+                var extractedReportDate = '';
+                if (submittedFile) {
+                    extractedReportDate = await extractReportDateFromManualFile(submittedFile);
+                }
+                if (!extractedReportDate && window.uploadedFiles && window.uploadedFiles.length > 0) {
+                    var firstMeta = window.uploadedFiles[0];
+                    extractedReportDate = (firstMeta && (firstMeta.report_date || firstMeta.report_date_raw)) ? (firstMeta.report_date || firstMeta.report_date_raw) : '';
+                }
+
+                var hiddenReportDate = document.createElement('input');
+                hiddenReportDate.type = 'hidden';
+                hiddenReportDate.name = 'report_date';
+                hiddenReportDate.value = extractedReportDate || '';
+                tempForm.appendChild(hiddenReportDate);
 
                 document.body.appendChild(tempForm);
                 tempForm.submit();

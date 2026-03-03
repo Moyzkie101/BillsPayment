@@ -399,6 +399,7 @@
                     // $post_transaction = '';
 
                     //column headers
+                    $extracted_report_date = null;
                     foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
                         $getColumnLabels = [];
                         
@@ -413,9 +414,18 @@
                             }
                         }
 
-                        if($fileType === 'KP7'){
-                            $report_date = $conn->real_escape_string(strval($worksheet->getCell('B' . '3')->getValue()));
-
+                        if($fileType === 'KP7' || $fileType === 'KPX'){
+                            $report_date_raw = strval($worksheet->getCell('B' . '3')->getValue());
+                            $extracted_report_date = normalizeReportDate($report_date_raw);
+                            if (empty($extracted_report_date) && !empty($report_date_raw)) {
+                                $report_date_raw_trim = trim($report_date_raw);
+                                if (preg_match('/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i', $report_date_raw_trim, $m)) {
+                                    $extracted_report_date = normalizeReportDate($m[1]);
+                                }
+                            }
+                            if (!empty($extracted_report_date)) {
+                                $_SESSION['extracted_report_date'] = $extracted_report_date;
+                            }
                         }
 
                         // Break after first worksheet since we only need headers once
@@ -583,8 +593,8 @@
                         elseif($getColumnLabels[0] === 'No'){
                             if($fileType === 'KPX'){
 
-                                // Initialize variables to prevent undefined variable warnings
-                                $report_date = null; // Add this line for KPX files (they don't have report_date)
+                                // Use extracted report date for KPX as well (cell B3)
+                                $report_date = $extracted_report_date;
                                 // Reset variables for each row
                                 $cancellStatus = '';
                                 $is_cancellation = strpos($worksheet->getCell('A' . $row)->getValue(), '*') !== false;
@@ -1144,22 +1154,15 @@
     if(isset($_POST['confirm_import'])) {
         $Matched_BranchID_data = $_SESSION['Matched_BranchID_data'] ?? [];
         $cancellation_BranchID_data = $_SESSION['cancellation_BranchID_data'] ?? [];
-        $selected_report_date = normalizeReportDate($_POST['report_date'] ?? ($_SESSION['manual_report_date'] ?? null));
+        $selected_report_date = normalizeReportDate($_POST['report_date'] ?? ($_SESSION['manual_report_date'] ?? ($_SESSION['extracted_report_date'] ?? null)));
 
         if (empty($selected_report_date)) {
-            echo '<script>
-                document.addEventListener("DOMContentLoaded", function() {
-                    Swal.fire({
-                        icon: "warning",
-                        title: "Report Date Required",
-                        text: "Please select a Report Date before confirming import.",
-                        confirmButtonText: "OK"
-                    }).then(() => {
-                        window.location.href = "../../dashboard/billspayment/import/billspay-transaction.php";
-                    });
-                });
-            </script>';
-            exit;
+            $firstMatched = $Matched_BranchID_data[0]['report_date'] ?? null;
+            $firstCancelled = $cancellation_BranchID_data[0]['report_date'] ?? null;
+            $selected_report_date = normalizeReportDate($firstMatched ?? $firstCancelled);
+        }
+        if (empty($selected_report_date)) {
+            $selected_report_date = date('Y-m-d');
         }
 
         $_SESSION['manual_report_date'] = $selected_report_date;
@@ -1425,6 +1428,7 @@
                 unset($_SESSION['source_file_type']);
                 unset($_SESSION['transactionDate']);
                 unset($_SESSION['manual_report_date']);
+                unset($_SESSION['extracted_report_date']);
                 
                 echo '<script>
                     document.addEventListener("DOMContentLoaded", function() {
@@ -1663,20 +1667,16 @@
         $processed_override_data = $_SESSION['processed_override_data'] ?? [];
         $matched_data = $_SESSION['Matched_BranchID_data'] ?? [];
         $cancellation_data = $_SESSION['cancellation_BranchID_data'] ?? [];
-        $selected_report_date = normalizeReportDate($_POST['report_date'] ?? ($_SESSION['manual_report_date'] ?? null));
+        $selected_report_date = normalizeReportDate($_POST['report_date'] ?? ($_SESSION['manual_report_date'] ?? ($_SESSION['extracted_report_date'] ?? null)));
 
         if (empty($selected_report_date)) {
-            echo '<script>
-                Swal.fire({
-                    icon: "warning",
-                    title: "Report Date Required",
-                    text: "Please select a Report Date before processing import.",
-                    confirmButtonText: "OK"
-                }).then(() => {
-                    window.location.href = "../../dashboard/billspayment/import/billspay-transaction.php";
-                });
-            </script>';
-            exit;
+            $firstOverride = $processed_override_data[0]['report_date'] ?? null;
+            $firstMatched = $matched_data[0]['report_date'] ?? null;
+            $firstCancelled = $cancellation_data[0]['report_date'] ?? null;
+            $selected_report_date = normalizeReportDate($firstOverride ?? $firstMatched ?? $firstCancelled);
+        }
+        if (empty($selected_report_date)) {
+            $selected_report_date = date('Y-m-d');
         }
 
         $_SESSION['manual_report_date'] = $selected_report_date;
@@ -2066,6 +2066,7 @@
             unset($_SESSION['source_file_type']);
             unset($_SESSION['transactionDate']);
             unset($_SESSION['manual_report_date']);
+            unset($_SESSION['extracted_report_date']);
             
             $totalProcessed = $processedCount + $insertedCount;
             
@@ -2459,6 +2460,14 @@
                         // Calculate all summaries
                         $summaries = calculateTransactionSummary($matchedData, $cancellationData);
 
+                        // Resolve display report date (extracted from file/session)
+                        $displayReportDateRaw = normalizeReportDate($_SESSION['manual_report_date'] ?? ($_SESSION['extracted_report_date'] ?? null));
+                        if (empty($displayReportDateRaw)) {
+                            $firstMatched = $matchedData[0]['report_date'] ?? null;
+                            $firstCancelled = $cancellationData[0]['report_date'] ?? null;
+                            $displayReportDateRaw = normalizeReportDate($firstMatched ?? $firstCancelled);
+                        }
+
                         // Get display variables
                         $displayData = [
                             'company' => htmlspecialchars(strval($partnerSelection[0]['companys_name'] ?? '')),
@@ -2469,7 +2478,9 @@
                             'GLCodes' => htmlspecialchars(strval($partnerSelection[0]['gl_code'] ?? '')),
                             'rowCount' => number_format($summaries['summary']['count']),
                             'sourceType' => htmlspecialchars(strval(($_POST['fileType'] ?? '') . " System")),
-                            'transactionDate' => htmlspecialchars(strval(date('F d, Y', strtotime($_POST['datePicker'] ?? date('Y-m-d')))))
+                            'reportDateRaw' => htmlspecialchars(strval($displayReportDateRaw ?? '')),
+                            'reportDate' => htmlspecialchars(strval(!empty($displayReportDateRaw) ? date('F d, Y', strtotime($displayReportDateRaw)) : 'N/A')),
+                            'transactionDate' => htmlspecialchars(strval(date('F d, Y')))
                         ];
 
                         // Define table rows data
@@ -2489,8 +2500,8 @@
                                         <div class="card-body">
                                             <form method="post" id="confirmImportForm" class="d-inline">
                                                 <input type="hidden" name="confirm_import" value="1">
-                                                <input type="hidden" name="report_date" id="hiddenReportDate" value="">
-                                                <button type="submit" class="btn btn-success btn-lg me-3 shadow-sm" id="confirmImportButton" style="display:none;">
+                                                <input type="hidden" name="report_date" id="hiddenReportDate" value="' . $displayData['reportDateRaw'] . '">
+                                                <button type="submit" class="btn btn-success btn-lg me-3 shadow-sm" id="confirmImportButton">
                                                     <i class="fas fa-check-circle me-2"></i>Confirm Import
                                                 </button>
                                             </form>
@@ -2551,7 +2562,7 @@
                                                             </tr>
                                                             <tr>
                                                                 <td><i class="fas fa-calendar-day text-primary me-2"></i>Report Date</td>
-                                                                <td><input type="date" id="reportDateInput" class="form-control form-control-sm" value=""></td>
+                                                                <td class="fw-semibold" id="reportDateText">' . $displayData['reportDate'] . '</td>
                                                             </tr>
                                                             <tr>
                                                                 <td><i class="fas fa-calendar-alt text-primary me-2"></i>Uploaded Date</td>
@@ -2639,39 +2650,10 @@
                             </div>
                         </div>
                         <script>
-                            // Require Report Date selection before showing Confirm Import
                             document.addEventListener("DOMContentLoaded", function() {
-                                var reportDateInput = document.getElementById("reportDateInput");
-                                var hiddenReportDate = document.getElementById("hiddenReportDate");
-                                var confirmButton = document.getElementById("confirmImportButton");
                                 var confirmForm = document.getElementById("confirmImportForm");
-
-                                function toggleConfirmButton() {
-                                    if (!reportDateInput || !confirmButton || !hiddenReportDate) return;
-                                    var selectedDate = (reportDateInput.value || "").trim();
-                                    hiddenReportDate.value = selectedDate;
-                                    confirmButton.style.display = selectedDate ? "inline-block" : "none";
-                                }
-
-                                if (reportDateInput) {
-                                    reportDateInput.addEventListener("change", toggleConfirmButton);
-                                    reportDateInput.addEventListener("input", toggleConfirmButton);
-                                    toggleConfirmButton();
-                                }
-
                                 if (confirmForm) {
-                                    confirmForm.addEventListener("submit", function(e) {
-                                        if (!hiddenReportDate || !hiddenReportDate.value) {
-                                            e.preventDefault();
-                                            Swal.fire({
-                                                icon: "warning",
-                                                title: "Report Date Required",
-                                                text: "Please select a Report Date before confirming import.",
-                                                confirmButtonText: "OK"
-                                            });
-                                            return;
-                                        }
-
+                                    confirmForm.addEventListener("submit", function() {
                                         var uploadSuccess = document.getElementById("upload-success");
                                         if (uploadSuccess) {
                                             uploadSuccess.style.display = "none";
