@@ -38,6 +38,24 @@
     function formatCurrency($amount) {
         return '₱ ' . number_format((float)$amount, 2);
     }
+
+    function normalizeReportDate($value) {
+        if (!isset($value)) {
+            return null;
+        }
+
+        $value = trim((string)$value);
+        if ($value === '') {
+            return null;
+        }
+
+        $timestamp = strtotime($value);
+        if ($timestamp === false) {
+            return null;
+        }
+
+        return date('Y-m-d', $timestamp);
+    }
     
     if (isset($_POST['upload'])){
         if(isset($_FILES['import_file']) && $_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
@@ -75,6 +93,8 @@
             if ($partner === 'All') {
                 $PartnerID = 'All';
                 $PartnerName = 'All';
+                $PartnerID_KPX = 'All';
+                $GLCode = 'All';
             } else {
                 $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name FROM masterdata.partner_masterfile where partner_name = ? LIMIT 1";
                 // if ($fileType === 'KPX') {
@@ -326,22 +346,22 @@
                     //     return !$partnerGLCodeExists;
                     // }
 
-                    function checkHadBranchID($conn, $branch_id) {
-                        $sql = "SELECT COUNT(*) as count FROM masterdata.branch_profile WHERE branch_id = ? LIMIT 1";
-                            $stmt = $conn->prepare($sql);
-                            $stmt->bind_param("i", $branch_id);
-                            $stmt->execute();
-                            $result = $stmt->get_result();
+                    // function checkHadBranchID($conn, $branch_id) {
+                    //     $sql = "SELECT COUNT(*) as count FROM masterdata.branch_profile WHERE branch_id = ? LIMIT 1";
+                    //         $stmt = $conn->prepare($sql);
+                    //         $stmt->bind_param("i", $branch_id);
+                    //         $stmt->execute();
+                    //         $result = $stmt->get_result();
                             
-                            if ($result) {
-                                $row = $result->fetch_assoc();
-                                if ($row && $row['count'] > 0) {
-                                    $branchID = true;
-                                }
-                            }
-                        $stmt->close();
-                        return !$branchID;
-                    }
+                    //         if ($result) {
+                    //             $row = $result->fetch_assoc();
+                    //             if ($row && $row['count'] > 0) {
+                    //                 $branchID = true;
+                    //             }
+                    //         }
+                    //     $stmt->close();
+                    //     return !$branchID;
+                    // }
 
                     // Initialize variables before loops
                     // $cancellStatus = '';
@@ -379,6 +399,7 @@
                     // $post_transaction = '';
 
                     //column headers
+                    $extracted_report_date = null;
                     foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
                         $getColumnLabels = [];
                         
@@ -393,9 +414,18 @@
                             }
                         }
 
-                        if($fileType === 'KP7'){
-                            $report_date = $conn->real_escape_string(strval($worksheet->getCell('B' . '3')->getValue()));
-
+                        if($fileType === 'KP7' || $fileType === 'KPX'){
+                            $report_date_raw = strval($worksheet->getCell('B' . '3')->getValue());
+                            $extracted_report_date = normalizeReportDate($report_date_raw);
+                            if (empty($extracted_report_date) && !empty($report_date_raw)) {
+                                $report_date_raw_trim = trim($report_date_raw);
+                                if (preg_match('/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i', $report_date_raw_trim, $m)) {
+                                    $extracted_report_date = normalizeReportDate($m[1]);
+                                }
+                            }
+                            if (!empty($extracted_report_date)) {
+                                $_SESSION['extracted_report_date'] = $extracted_report_date;
+                            }
                         }
 
                         // Break after first worksheet since we only need headers once
@@ -563,8 +593,8 @@
                         elseif($getColumnLabels[0] === 'No'){
                             if($fileType === 'KPX'){
 
-                                // Initialize variables to prevent undefined variable warnings
-                                $report_date = null; // Add this line for KPX files (they don't have report_date)
+                                // Use extracted report date for KPX as well (cell B3)
+                                $report_date = $extracted_report_date;
                                 // Reset variables for each row
                                 $cancellStatus = '';
                                 $is_cancellation = strpos($worksheet->getCell('A' . $row)->getValue(), '*') !== false;
@@ -1027,29 +1057,29 @@
                             //         'file_type' => $fileType
                             //     ];
                             // } 
-                            elseif (checkHadBranchID($conn, $branch_id)) {
-                                // Branch ID not found - add to missing branch IDs array
-                                $branchID_notFoundData[] = [
-                                    'row' => $row,
-                                    'branch_id' => $branch_id,
-                                    'region_description' => $region_description,
-                                    'reference_number' => $reference_number,
-                                    'payor_name' => $payor_name,
-                                    'amount_paid' => $amount_paid,
-                                    'amount_charge_customer' => $amount_charge_customer,
-                                    'amount_charge_partner' => $amount_charge_partner,
-                                    'datetime' => $datetime,
-                                    'control_number' => $control_number,
-                                    'region_code' => $region_code,
-                                    'person_operator' => $person_operator,
-                                    'partner_name' => $partnerName,
-                                    'partner_id' => $partnerId,
-                                    'account_number' => $account_number,
-                                    'account_name' => $account_name,
-                                    'contact_number' => $contact_number,
-                                    'other_details' => $other_details
-                                ];
-                            }
+                            // elseif (checkHadBranchID($conn, $branch_id)) {
+                            //     // Branch ID not found - add to missing branch IDs array
+                            //     $branchID_notFoundData[] = [
+                            //         'row' => $row,
+                            //         'branch_id' => $branch_id,
+                            //         'region_description' => $region_description,
+                            //         'reference_number' => $reference_number,
+                            //         'payor_name' => $payor_name,
+                            //         'amount_paid' => $amount_paid,
+                            //         'amount_charge_customer' => $amount_charge_customer,
+                            //         'amount_charge_partner' => $amount_charge_partner,
+                            //         'datetime' => $datetime,
+                            //         'control_number' => $control_number,
+                            //         'region_code' => $region_code,
+                            //         'person_operator' => $person_operator,
+                            //         'partner_name' => $partnerName,
+                            //         'partner_id' => $partnerId,
+                            //         'account_number' => $account_number,
+                            //         'account_name' => $account_name,
+                            //         'contact_number' => $contact_number,
+                            //         'other_details' => $other_details
+                            //     ];
+                            // }
                             else{
                                 $rawData[] = [
                                     'numeric_number' => $cancellStatus,
@@ -1124,6 +1154,18 @@
     if(isset($_POST['confirm_import'])) {
         $Matched_BranchID_data = $_SESSION['Matched_BranchID_data'] ?? [];
         $cancellation_BranchID_data = $_SESSION['cancellation_BranchID_data'] ?? [];
+        $selected_report_date = normalizeReportDate($_POST['report_date'] ?? ($_SESSION['manual_report_date'] ?? ($_SESSION['extracted_report_date'] ?? null)));
+
+        if (empty($selected_report_date)) {
+            $firstMatched = $Matched_BranchID_data[0]['report_date'] ?? null;
+            $firstCancelled = $cancellation_BranchID_data[0]['report_date'] ?? null;
+            $selected_report_date = normalizeReportDate($firstMatched ?? $firstCancelled);
+        }
+        if (empty($selected_report_date)) {
+            $selected_report_date = date('Y-m-d');
+        }
+
+        $_SESSION['manual_report_date'] = $selected_report_date;
 
         // Add this debug code INSIDE the confirm_import block
         error_log("Debug - Matched data count: " . count($Matched_BranchID_data));
@@ -1244,6 +1286,7 @@
                 $imported_date = $row['date_uploaded'];
                 $remote_branch = $row['remote_branch'];
                 $remote_operator = $row['remote_operator'];
+                $report_date = $conn->real_escape_string($selected_report_date);
                 
                 // NEW LOGIC: Handle datetime based on whether it's a matched cancellation
                 $datetime_value = null;
@@ -1280,6 +1323,7 @@
                     `status`, 
                     `datetime`, 
                     cancellation_date, 
+                    report_date,
                     source_file, 
                     control_no, 
                     reference_no, 
@@ -1317,6 +1361,7 @@
                     " . ($status ? "'$status'" : "NULL") . ",
                     " . ($datetime_value ? "'$datetime_value'" : "NULL") . ",
                     " . ($cancellation_date ? "'$cancellation_date'" : "NULL") . ",
+                    '$report_date',
                     '$source_file',
                     '$control_number',
                     '$reference_number',
@@ -1382,6 +1427,8 @@
                 unset($_SESSION['original_file_name']);
                 unset($_SESSION['source_file_type']);
                 unset($_SESSION['transactionDate']);
+                unset($_SESSION['manual_report_date']);
+                unset($_SESSION['extracted_report_date']);
                 
                 echo '<script>
                     document.addEventListener("DOMContentLoaded", function() {
@@ -1613,447 +1660,486 @@
             }
         </script>';
     
-    // Store processed data back to session
-    $_SESSION['processed_override_data'] = $processed_override_data;
-    
-} elseif (isset($_POST['process_override'])) {
-    $processed_override_data = $_SESSION['processed_override_data'] ?? [];
-    $matched_data = $_SESSION['Matched_BranchID_data'] ?? [];
-    $cancellation_data = $_SESSION['cancellation_BranchID_data'] ?? [];
-
-    // Increase memory limit and execution time for large files
-    ini_set('memory_limit', '100000M');
-    ini_set('max_execution_time', 900); // 15 minutes
-    
-    if (empty($processed_override_data) && empty($matched_data) && empty($cancellation_data)) {
-        echo '<script>
-            Swal.fire({
-                icon: "error",
-                title: "No Data to Process",
-                text: "No override data found to process.",
-                confirmButtonText: "OK"
-            }).then(() => {
-                window.location.href = "../../dashboard/billspayment/import/billspay-transaction.php";
-            });
-        </script>';
-        exit;
-    }
-
-    // Start transaction for better data integrity
-    $conn->autocommit(FALSE);
-    
-    $processedCount = 0;
-    $insertedCount = 0;
-    $deletedCount = 0;
-    $errors = [];
-    
-    try {
-        // Step 1: Process override data (records that match existing data)
-        // FIXED: First create reference map for datetime sharing
-        $reference_datetime_map = [];
+        // Store processed data back to session
+        $_SESSION['processed_override_data'] = $processed_override_data;
         
-        // Build map from ALL sources: override data, matched data, and cancellation data
-        $all_data_sources = [
-            $processed_override_data,
-            $matched_data,
-            $cancellation_data
-        ];
-        
-        // Build map of regular transaction datetimes by reference number
-        foreach($all_data_sources as $data_source) {
-            foreach($data_source as $row) {
-                $is_cancellation = isset($row['numeric_number']) && $row['numeric_number'] === '*';
-                if (!$is_cancellation) {
-                    // This is a regular transaction, store its datetime
-                    $reference_datetime_map[$row['reference_number']] = $row['datetime'];
-                }
-            }
+    } elseif (isset($_POST['process_override'])) {
+        $processed_override_data = $_SESSION['processed_override_data'] ?? [];
+        $matched_data = $_SESSION['Matched_BranchID_data'] ?? [];
+        $cancellation_data = $_SESSION['cancellation_BranchID_data'] ?? [];
+        $selected_report_date = normalizeReportDate($_POST['report_date'] ?? ($_SESSION['manual_report_date'] ?? ($_SESSION['extracted_report_date'] ?? null)));
+
+        if (empty($selected_report_date)) {
+            $firstOverride = $processed_override_data[0]['report_date'] ?? null;
+            $firstMatched = $matched_data[0]['report_date'] ?? null;
+            $firstCancelled = $cancellation_data[0]['report_date'] ?? null;
+            $selected_report_date = normalizeReportDate($firstOverride ?? $firstMatched ?? $firstCancelled);
         }
-        
-        foreach($processed_override_data as $row) {
-            // Get source file from session or use default
-            $source_file = $_SESSION['source_file_type'] ?? 'Unknown';
-
-            // First, clean up existing data using your specified DELETE criteria
-            $deleteSQL = "DELETE FROM `mldb`.`billspayment_transaction` 
-                        WHERE post_transaction = ? 
-                        AND reference_no = ? 
-                        AND (`datetime` = ? OR cancellation_date = ?)";
-            if (isset($source_file) && $source_file === 'KP7'){
-                $deleteSQL .= " AND partner_id = ?";
-
-                $deleteStmt = $conn->prepare($deleteSQL);
-                $deleteStmt->bind_param("sssss", 
-                    $row['post_transaction'], 
-                    $row['reference_number'], 
-                    $row['datetime'], 
-                    $row['datetime'], 
-                    $row['partner_id']
-                );
-            }elseif (isset($source_file) && $source_file === 'KPX'){
-                $deleteSQL .= " AND partner_id_kpx = ?";
-
-                $deleteStmt = $conn->prepare($deleteSQL);
-                $deleteStmt->bind_param("sssss", 
-                    $row['post_transaction'], 
-                    $row['reference_number'], 
-                    $row['datetime'], 
-                    $row['datetime'], 
-                    $row['PartnerID_KPX']
-                );
-            }
-            
-            if (!$deleteStmt->execute()) {
-                throw new Exception("Failed to delete existing record for reference: " . $row['reference_number'] . " - Error: " . $deleteStmt->error);
-            }
-            
-            $deletedCount += $deleteStmt->affected_rows;
-            
-            // Then insert new record - handle cancellation matching
-            $is_cancellation = isset($row['numeric_number']) && $row['numeric_number'] === '*';
-            $status = $is_cancellation ? '*' : null;
-            
-            // COMPLETELY FIXED LOGIC: Handle datetime properly for cancellations
-            $datetime_value = null;
-            $cancellation_date = null;
-            
-            if ($is_cancellation) {
-                // This is a cancellation - ALWAYS try to find matching regular transaction datetime
-                if (isset($reference_datetime_map[$row['reference_number']])) {
-                    // Found matching regular transaction - use its datetime for main datetime field
-                    $datetime_value = $reference_datetime_map[$row['reference_number']];
-                    $cancellation_date = $row['datetime']; // Cancellation's own datetime goes to cancellation_date
-                } else {
-                    // No matching regular transaction found - handle based on file type
-                    if ($_SESSION['source_file_type'] === 'KP7') {
-                        // For KP7, use cancellation datetime as main datetime
-                        $datetime_value = $row['datetime'];
-                        $cancellation_date = null;
-                    } elseif ($_SESSION['source_file_type'] === 'KPX') {
-                        // For KPX, put datetime in cancellation_date field, keep main datetime null
-                        $datetime_value = null;
-                        $cancellation_date = $row['datetime'];
-                    }
-                }
-            } else {
-                // This is a regular transaction - always use its own datetime
-                $datetime_value = $row['datetime'];
-                $cancellation_date = null;
-            }
-            
-            // Debug logging to verify the logic
-            error_log("Processing override for ref: " . $row['reference_number'] . 
-                    ", is_cancellation: " . ($is_cancellation ? 'true' : 'false') . 
-                    ", datetime_value: " . ($datetime_value ?? 'null') . 
-                    ", cancellation_date: " . ($cancellation_date ?? 'null'));
-            
-            $insertSQL = "INSERT INTO mldb.billspayment_transaction (
-                        status, 
-                        datetime, 
-                        cancellation_date, 
-                        source_file, 
-                        control_no, 
-                        reference_no, 
-                        payor, 
-                        address, 
-                        account_no, 
-                        account_name, 
-                        amount_paid, 
-                        charge_to_partner, 
-                        charge_to_customer, 
-                        contact_no, 
-                        other_details, 
-                        branch_id, 
-                        branch_code,
-                        outlet, 
-                        zone_code,
-                        region_code, 
-                        region, 
-                        operator, 
-                        partner_name, 
-                        partner_id, 
-                        partner_id_kpx,
-                        mpm_gl_code,
-                        settle_unsettle, 
-                        claim_unclaim, 
-                        imported_by, 
-                        imported_date, 
-                        rfp_no, 
-                        cad_no, 
-                        hold_status, 
-                        remote_branch, 
-                        remote_operator, 
-                        post_transaction
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?)";
-
-            $insertStmt = $conn->prepare($insertSQL);
-            
-            $insertStmt->bind_param("ssssssssssdddssissssssssssssssssssss", //36
-                $status,
-                $datetime_value,
-                $cancellation_date,
-                $source_file,
-                $row['control_number'],
-                $row['reference_number'],
-                $row['payor_name'],
-                $row['payor_address'],
-                $row['account_number'],
-                $row['account_name'],
-                $row['amount_paid'],
-                $row['amount_charge_partner'],
-                $row['amount_charge_customer'],
-                $row['contact_number'],
-                $row['other_details'],
-                $row['branch_id'],
-                $row['branch_code'],
-                $row['branch_outlet'],
-                $row['zone_code'],
-                $row['region_code'],
-                $row['region_description'],
-                $row['person_operator'],
-                $row['partner_name'],
-                $row['partner_id'],
-                $row['PartnerID_KPX'],
-                $row['GLCode'],
-                $row['settle_unsettle'],
-                $row['claim_unclaim'],
-                $row['imported_by'],
-                $row['date_uploaded'],
-                $row['rfp_no'],
-                $row['cad_no'],
-                $row['hold_status'],
-                $row['remote_branch'],
-                $row['remote_operator'],
-                $row['post_transaction']
-            );
-            
-            if (!$insertStmt->execute()) {
-                throw new Exception("Failed to insert override record for reference: " . $row['reference_number'] . " - Error: " . $insertStmt->error);
-            }
-            
-            $deleteStmt->close();
-            $insertStmt->close();
-            $processedCount++;
+        if (empty($selected_report_date)) {
+            $selected_report_date = date('Y-m-d');
         }
 
-        // Step 2: Process unmatched data (records that don't exist in database)
-        $all_unmatched_data = array_merge($matched_data, $cancellation_data);
-        
-        
-        // Insert all unmatched data individually
-        foreach($all_unmatched_data as $row) {
-            $is_cancellation = isset($row['numeric_number']) && $row['numeric_number'] === '*';
-            $status = $is_cancellation ? '*' : null;
-            
-            // SAME FIXED LOGIC: Handle datetime properly for unmatched cancellations
-            $datetime_value = null;
-            $cancellation_date = null;
-            
-            if ($is_cancellation) {
-                // This is a cancellation - use the complete reference map
-                if (isset($reference_datetime_map[$row['reference_number']])) {
-                    // Found matching regular transaction - use its datetime for main datetime field
-                    $datetime_value = $reference_datetime_map[$row['reference_number']];
-                    $cancellation_date = $row['datetime']; // Cancellation's own datetime goes to cancellation_date
-                } else {
-                    // No matching regular transaction found - handle based on file type
-                    if ($_SESSION['source_file_type'] === 'KP7') {
-                        // For KP7, use cancellation datetime as main datetime
-                        $datetime_value = $row['datetime'];
-                        $cancellation_date = null;
-                    } elseif ($_SESSION['source_file_type'] === 'KPX') {
-                        // For KPX, put datetime in cancellation_date field, keep main datetime null
-                        $datetime_value = null;
-                        $cancellation_date = $row['datetime'];
-                    }
-                }
-            } else {
-                // This is a regular transaction - always use its own datetime
-                $datetime_value = $row['datetime'];
-                $cancellation_date = null;
-            }
-            
-            // Debug logging for unmatched data too
-            error_log("Processing unmatched for ref: " . $row['reference_number'] . 
-                    ", is_cancellation: " . ($is_cancellation ? 'true' : 'false') . 
-                    ", datetime_value: " . ($datetime_value ?? 'null') . 
-                    ", cancellation_date: " . ($cancellation_date ?? 'null'));
-            
-            $insertSQL = "INSERT INTO mldb.billspayment_transaction (
-                status, 
-                datetime, 
-                cancellation_date, 
-                source_file, 
-                control_no, 
-                reference_no, 
-                payor, 
-                address, 
-                account_no, 
-                account_name, 
-                amount_paid, 
-                charge_to_partner, 
-                charge_to_customer, 
-                contact_no, 
-                other_details, 
-                branch_id, 
-                branch_code,
-                outlet, 
-                zone_code,
-                region_code, 
-                region, 
-                operator, 
-                partner_name, 
-                partner_id, 
-                partner_id_kpx,
-                mpm_gl_code,
-                settle_unsettle, 
-                claim_unclaim, 
-                imported_by, 
-                imported_date, 
-                rfp_no, 
-                cad_no, 
-                hold_status, 
-                remote_branch, 
-                remote_operator, 
-                post_transaction
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $_SESSION['manual_report_date'] = $selected_report_date;
 
-            $insertStmt = $conn->prepare($insertSQL);
-            
-            // Get source file from session or use default
-            $source_file = $_SESSION['source_file_type'] ?? 'Unknown';
-
-            $insertStmt->bind_param("ssssssssssdddssiisssssssssssssssssss", //36
-                $status,
-                $datetime_value,
-                $cancellation_date,
-                $source_file,
-                $row['control_number'],
-                $row['reference_number'],
-                $row['payor_name'],
-                $row['payor_address'],
-                $row['account_number'],
-                $row['account_name'],
-                $row['amount_paid'],
-                $row['amount_charge_partner'],
-                $row['amount_charge_customer'],
-                $row['contact_number'],
-                $row['other_details'],
-                $row['branch_id'],
-                $row['branch_code'],
-                $row['branch_outlet'],
-                $row['zone_code'],
-                $row['region_code'],
-                $row['region_description'],
-                $row['person_operator'],
-                $row['partner_name'],
-                $row['partner_id'],
-                $row['PartnerID_KPX'],
-                $row['GLCode'],
-                $row['settle_unsettle'],
-                $row['claim_unclaim'],
-                $row['imported_by'],
-                $row['date_uploaded'],
-                $row['rfp_no'],
-                $row['cad_no'],
-                $row['hold_status'],
-                $row['remote_branch'],
-                $row['remote_operator'],
-                $row['post_transaction']
-            );
-            
-            if (!$insertStmt->execute()) {
-                throw new Exception("Failed to insert new record for reference: " . $row['reference_number'] . " - Error: " . $insertStmt->error);
-            }
-            
-            $insertStmt->close();
-            $insertedCount++;
-        }
-
-        // Commit transaction if all operations successful
-        $conn->commit();
+        // Increase memory limit and execution time for large files
+        ini_set('memory_limit', '100000M');
+        ini_set('max_execution_time', 900); // 15 minutes
         
-        // Clear session data after successful override
-        unset($_SESSION['ready_to_override_data']);
-        unset($_SESSION['processed_override_data']);
-        unset($_SESSION['Matched_BranchID_data']);
-        unset($_SESSION['cancellation_BranchID_data']);
-        unset($_SESSION['original_file_name']);
-        unset($_SESSION['source_file_type']);
-        unset($_SESSION['transactionDate']);
-        
-        $totalProcessed = $processedCount + $insertedCount;
-        
-        echo '<script>
-            document.addEventListener("DOMContentLoaded", function() {
-                Swal.fire({
-                    icon: "success",
-                    title: "Override Successful!",
-                    html: `
-                        <div class="text-center">
-                            <i class="fas fa-check-circle text-success mb-3" style="font-size: 3rem;"></i>
-                            <h4 class="text-success mb-3">Data Successfully Processed</h4>
-                            <div class="alert alert-success">
-                                <strong>Processing Summary:</strong><br>
-                                • <strong>' . $deletedCount . '</strong> existing records deleted<br>
-                                • <strong>' . $processedCount . '</strong> records overridden<br>
-                                • <strong>' . $insertedCount . '</strong> new records inserted<br>
-                                • <strong>' . $totalProcessed . '</strong> total records processed
-                            </div>
-                            <p class="text-muted">Cancellation records (*) with matching reference numbers now inherit datetime from regular transactions.</p>
-                        </div>
-                    `,
-                    showConfirmButton: true,
-                    confirmButtonText: "Continue",
-                    confirmButtonColor: "#28a745",
-                    allowOutsideClick: false,
-                    allowEscapeKey: false
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        window.location.href = "../../dashboard/billspayment/import/billspay-transaction.php";
-                    }
-                });
-            });
-        </script>';
-        
-    } 
-    catch (Exception $e) {
-        // Rollback transaction if there were errors
-        $conn->rollback();
-        
-        error_log("Override transaction failed: " . $e->getMessage());
-        
-        echo '<script>
-            document.addEventListener("DOMContentLoaded", function() {
+        if (empty($processed_override_data) && empty($matched_data) && empty($cancellation_data)) {
+            echo '<script>
                 Swal.fire({
                     icon: "error",
-                    title: "Override Failed",
-                    html: `
-                        <div class="text-center">
-                            <i class="fas fa-exclamation-triangle text-danger mb-3" style="font-size: 3rem;"></i>
-                            <h4 class="text-danger mb-3">Override Error Occurred</h4>
-                            <div class="alert alert-danger">
-                                <strong>Error:</strong> ' . addslashes($e->getMessage()) . '
-                            </div>
-                            <p class="text-muted">Please try again or contact system administrator.</p>
-                        </div>
-                    `,
-                    showConfirmButton: true,
-                    confirmButtonText: "Try Again",
-                    confirmButtonColor: "#dc3545",
-                    allowOutsideClick: true
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        window.location.href = "../../dashboard/billspayment/import/billspay-transaction.php";
-                    }
+                    title: "No Data to Process",
+                    text: "No override data found to process.",
+                    confirmButtonText: "OK"
+                }).then(() => {
+                    window.location.href = "../../dashboard/billspayment/import/billspay-transaction.php";
                 });
-            });
-        </script>';
-    } finally {
-        // Always restore autocommit regardless of success or failure
-        $conn->autocommit(TRUE);
+            </script>';
+            exit;
+        }
+
+        // Start transaction for better data integrity
+        $conn->autocommit(FALSE);
+        
+        $processedCount = 0;
+        $insertedCount = 0;
+        $deletedCount = 0;
+        $errors = [];
+        
+        try {
+            // Step 1: Process override data (records that match existing data)
+            // FIXED: First create reference map for datetime sharing
+            $reference_datetime_map = [];
+            
+            // Build map from ALL sources: override data, matched data, and cancellation data
+            $all_data_sources = [
+                $processed_override_data,
+                $matched_data,
+                $cancellation_data
+            ];
+            
+            // Build map of regular transaction datetimes by reference number
+            foreach($all_data_sources as $data_source) {
+                foreach($data_source as $row) {
+                    $is_cancellation = isset($row['numeric_number']) && $row['numeric_number'] === '*';
+                    if (!$is_cancellation) {
+                        // This is a regular transaction, store its datetime
+                        $reference_datetime_map[$row['reference_number']] = $row['datetime'];
+                    }
+                }
+            }
+            
+            foreach($processed_override_data as $row) {
+                // Get source file from session or use default
+                $source_file = $_SESSION['source_file_type'] ?? 'Unknown';
+
+                // Normalize nullable fields so DB accepts NULLs (allow branch_id to be NULL)
+                $row['branch_id'] = isset($row['branch_id']) && $row['branch_id'] !== '' ? $row['branch_id'] : null;
+                $row['partner_id'] = isset($row['partner_id']) && $row['partner_id'] !== '' ? $row['partner_id'] : null;
+                $row['PartnerID_KPX'] = isset($row['PartnerID_KPX']) && $row['PartnerID_KPX'] !== '' ? $row['PartnerID_KPX'] : null;
+                $row['post_transaction'] = $row['post_transaction'] ?? 'unposted';
+                $row['datetime'] = $row['datetime'] ?? null;
+
+                // First, clean up existing data using DELETE criteria
+                $deleteSQL = "DELETE FROM `mldb`.`billspayment_transaction` 
+                            WHERE post_transaction = ? 
+                            AND reference_no = ? 
+                            AND (`datetime` = ? OR cancellation_date = ?)";
+
+                // Build dynamic params and types so we only add partner filter when partner id is present
+                $types = "ssss";
+                $params = [
+                    &$row['post_transaction'],
+                    &$row['reference_number'],
+                    &$row['datetime'],
+                    &$row['datetime']
+                ];
+
+                if ($source_file === 'KP7' && !empty($row['partner_id'])) {
+                    $deleteSQL .= " AND partner_id = ?";
+                    $types .= "s";
+                    $params[] = &$row['partner_id'];
+                } elseif ($source_file === 'KPX' && !empty($row['PartnerID_KPX'])) {
+                    $deleteSQL .= " AND partner_id_kpx = ?";
+                    $types .= "s";
+                    $params[] = &$row['PartnerID_KPX'];
+                }
+
+                $deleteStmt = $conn->prepare($deleteSQL);
+                if (!$deleteStmt) {
+                    throw new Exception("Failed to prepare delete statement: " . $conn->error);
+                }
+
+                // Bind params dynamically (preserving references)
+                array_unshift($params, $types);
+                call_user_func_array([$deleteStmt, 'bind_param'], $params);
+
+                if (!$deleteStmt->execute()) {
+                    throw new Exception("Failed to delete existing record for reference: " . $row['reference_number'] . " - Error: " . $deleteStmt->error);
+                }
+
+                $deletedCount += $deleteStmt->affected_rows;
+                
+                // Then insert new record - handle cancellation matching
+                $is_cancellation = isset($row['numeric_number']) && $row['numeric_number'] === '*';
+                $status = $is_cancellation ? '*' : null;
+
+                // COMPLETELY FIXED LOGIC: Handle datetime properly for cancellations
+                $datetime_value = null;
+                $cancellation_date = null;
+                
+                if ($is_cancellation) {
+                    // This is a cancellation - ALWAYS try to find matching regular transaction datetime
+                    if (isset($reference_datetime_map[$row['reference_number']])) {
+                        // Found matching regular transaction - use its datetime for main datetime field
+                        $datetime_value = $reference_datetime_map[$row['reference_number']];
+                        $cancellation_date = $row['datetime']; // Cancellation's own datetime goes to cancellation_date
+                    } else {
+                        // No matching regular transaction found - handle based on file type
+                        if ($_SESSION['source_file_type'] === 'KP7') {
+                            // For KP7, use cancellation datetime as main datetime
+                            $datetime_value = $row['datetime'];
+                            $cancellation_date = null;
+                        } elseif ($_SESSION['source_file_type'] === 'KPX') {
+                            // For KPX, put datetime in cancellation_date field, keep main datetime null
+                            $datetime_value = null;
+                            $cancellation_date = $row['datetime'];
+                        }
+                    }
+                } else {
+                    // This is a regular transaction - always use its own datetime
+                    $datetime_value = $row['datetime'];
+                    $cancellation_date = null;
+                }
+
+                // Ensure branch_id remains NULL if not provided so INSERT accepts it
+                if ($row['branch_id'] === null || $row['branch_id'] === '') {
+                    $row['branch_id'] = '';
+                }
+
+                $insertSQL = "INSERT INTO mldb.billspayment_transaction (
+                            status, 
+                            datetime, 
+                            cancellation_date, 
+                            report_date,
+                            source_file, 
+                            control_no, 
+                            reference_no, 
+                            payor, 
+                            address, 
+                            account_no, 
+                            account_name, 
+                            amount_paid, 
+                            charge_to_partner, 
+                            charge_to_customer, 
+                            contact_no, 
+                            other_details, 
+                            branch_id, 
+                            branch_code,
+                            outlet, 
+                            zone_code,
+                            region_code, 
+                            region, 
+                            operator, 
+                            partner_name, 
+                            partner_id, 
+                            partner_id_kpx,
+                            mpm_gl_code,
+                            settle_unsettle, 
+                            claim_unclaim, 
+                            imported_by, 
+                            imported_date, 
+                            rfp_no, 
+                            cad_no, 
+                            hold_status, 
+                            remote_branch, 
+                            remote_operator, 
+                            post_transaction
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?)";
+
+                $insertStmt = $conn->prepare($insertSQL);
+                if (!$insertStmt) {
+                    throw new Exception("Failed to prepare insert statement: " . $conn->error);
+                }
+
+                // Bind params; nulls in $row will be sent as SQL NULL
+                $insertStmt->bind_param("sssssssssssdddssissssssssssssssssssss",
+                    $status,
+                    $datetime_value,
+                    $cancellation_date,
+                    $selected_report_date,
+                    $source_file,
+                    $row['control_number'],
+                    $row['reference_number'],
+                    $row['payor_name'],
+                    $row['payor_address'],
+                    $row['account_number'],
+                    $row['account_name'],
+                    $row['amount_paid'],
+                    $row['amount_charge_partner'],
+                    $row['amount_charge_customer'],
+                    $row['contact_number'],
+                    $row['other_details'],
+                    $row['branch_id'],
+                    $row['branch_code'],
+                    $row['branch_outlet'],
+                    $row['zone_code'],
+                    $row['region_code'],
+                    $row['region_description'],
+                    $row['person_operator'],
+                    $row['partner_name'],
+                    $row['partner_id'],
+                    $row['PartnerID_KPX'],
+                    $row['GLCode'],
+                    $row['settle_unsettle'],
+                    $row['claim_unclaim'],
+                    $row['imported_by'],
+                    $row['date_uploaded'],
+                    $row['rfp_no'],
+                    $row['cad_no'],
+                    $row['hold_status'],
+                    $row['remote_branch'],
+                    $row['remote_operator'],
+                    $row['post_transaction']
+                );
+                
+                if (!$insertStmt->execute()) {
+                    throw new Exception("Failed to insert override record for reference: " . $row['reference_number'] . " - Error: " . $insertStmt->error);
+                }
+                
+                $deleteStmt->close();
+                $insertStmt->close();
+                $processedCount++;
+            }
+
+            // Step 2: Process unmatched data (records that don't exist in database)
+            $all_unmatched_data = array_merge($matched_data, $cancellation_data);
+            
+            
+            // Insert all unmatched data individually
+            foreach($all_unmatched_data as $row) {
+                $is_cancellation = isset($row['numeric_number']) && $row['numeric_number'] === '*';
+                $status = $is_cancellation ? '*' : null;
+                
+                // SAME FIXED LOGIC: Handle datetime properly for unmatched cancellations
+                $datetime_value = null;
+                $cancellation_date = null;
+                
+                if ($is_cancellation) {
+                    // This is a cancellation - use the complete reference map
+                    if (isset($reference_datetime_map[$row['reference_number']])) {
+                        // Found matching regular transaction - use its datetime for main datetime field
+                        $datetime_value = $reference_datetime_map[$row['reference_number']];
+                        $cancellation_date = $row['datetime']; // Cancellation's own datetime goes to cancellation_date
+                    } else {
+                        // No matching regular transaction found - handle based on file type
+                        if ($_SESSION['source_file_type'] === 'KP7') {
+                            // For KP7, use cancellation datetime as main datetime
+                            $datetime_value = $row['datetime'];
+                            $cancellation_date = null;
+                        } elseif ($_SESSION['source_file_type'] === 'KPX') {
+                            // For KPX, put datetime in cancellation_date field, keep main datetime null
+                            $datetime_value = null;
+                            $cancellation_date = $row['datetime'];
+                        }
+                    }
+                } else {
+                    // This is a regular transaction - always use its own datetime
+                    $datetime_value = $row['datetime'];
+                    $cancellation_date = null;
+                }
+                
+                // Ensure branch_id remains NULL if not provided so INSERT accepts it
+                if ($row['branch_id'] === null || $row['branch_id'] === '') {
+                    $row['branch_id'] = '';
+                }
+                
+                // Debug logging for unmatched data too
+                error_log("Processing unmatched for ref: " . $row['reference_number'] . 
+                        ", is_cancellation: " . ($is_cancellation ? 'true' : 'false') . 
+                        ", datetime_value: " . ($datetime_value ?? 'null') . 
+                        ", cancellation_date: " . ($cancellation_date ?? 'null'));
+                
+                $insertSQL = "INSERT INTO mldb.billspayment_transaction (
+                    status, 
+                    datetime, 
+                    cancellation_date, 
+                    report_date,
+                    source_file, 
+                    control_no, 
+                    reference_no, 
+                    payor, 
+                    address, 
+                    account_no, 
+                    account_name, 
+                    amount_paid, 
+                    charge_to_partner, 
+                    charge_to_customer, 
+                    contact_no, 
+                    other_details, 
+                    branch_id, 
+                    branch_code,
+                    outlet, 
+                    zone_code,
+                    region_code, 
+                    region, 
+                    operator, 
+                    partner_name, 
+                    partner_id, 
+                    partner_id_kpx,
+                    mpm_gl_code,
+                    settle_unsettle, 
+                    claim_unclaim, 
+                    imported_by, 
+                    imported_date, 
+                    rfp_no, 
+                    cad_no, 
+                    hold_status, 
+                    remote_branch, 
+                    remote_operator, 
+                    post_transaction
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+                $insertStmt = $conn->prepare($insertSQL);
+                
+                // Get source file from session or use default
+                $source_file = $_SESSION['source_file_type'] ?? 'Unknown';
+
+                $insertStmt->bind_param("sssssssssssdddssiisssssssssssssssssss", //37
+                    $status,
+                    $datetime_value,
+                    $cancellation_date,
+                    $selected_report_date,
+                    $source_file,
+                    $row['control_number'],
+                    $row['reference_number'],
+                    $row['payor_name'],
+                    $row['payor_address'],
+                    $row['account_number'],
+                    $row['account_name'],
+                    $row['amount_paid'],
+                    $row['amount_charge_partner'],
+                    $row['amount_charge_customer'],
+                    $row['contact_number'],
+                    $row['other_details'],
+                    $row['branch_id'],
+                    $row['branch_code'],
+                    $row['branch_outlet'],
+                    $row['zone_code'],
+                    $row['region_code'],
+                    $row['region_description'],
+                    $row['person_operator'],
+                    $row['partner_name'],
+                    $row['partner_id'],
+                    $row['PartnerID_KPX'],
+                    $row['GLCode'],
+                    $row['settle_unsettle'],
+                    $row['claim_unclaim'],
+                    $row['imported_by'],
+                    $row['date_uploaded'],
+                    $row['rfp_no'],
+                    $row['cad_no'],
+                    $row['hold_status'],
+                    $row['remote_branch'],
+                    $row['remote_operator'],
+                    $row['post_transaction']
+                );
+                
+                if (!$insertStmt->execute()) {
+                    throw new Exception("Failed to insert new record for reference: " . $row['reference_number'] . " - Error: " . $insertStmt->error);
+                }
+                
+                $insertStmt->close();
+                $insertedCount++;
+            }
+
+            // Commit transaction if all operations successful
+            $conn->commit();
+            
+            // Clear session data after successful override
+            unset($_SESSION['ready_to_override_data']);
+            unset($_SESSION['processed_override_data']);
+            unset($_SESSION['Matched_BranchID_data']);
+            unset($_SESSION['cancellation_BranchID_data']);
+            unset($_SESSION['original_file_name']);
+            unset($_SESSION['source_file_type']);
+            unset($_SESSION['transactionDate']);
+            unset($_SESSION['manual_report_date']);
+            unset($_SESSION['extracted_report_date']);
+            
+            $totalProcessed = $processedCount + $insertedCount;
+            
+            echo '<script>
+                document.addEventListener("DOMContentLoaded", function() {
+                    Swal.fire({
+                        icon: "success",
+                        title: "Override Successful!",
+                        html: `
+                            <div class="text-center">
+                                <i class="fas fa-check-circle text-success mb-3" style="font-size: 3rem;"></i>
+                                <h4 class="text-success mb-3">Data Successfully Processed</h4>
+                                <div class="alert alert-success">
+                                    <strong>Processing Summary:</strong><br>
+                                    • <strong>' . $deletedCount . '</strong> existing records deleted<br>
+                                    • <strong>' . $processedCount . '</strong> records overridden<br>
+                                    • <strong>' . $insertedCount . '</strong> new records inserted<br>
+                                    • <strong>' . $totalProcessed . '</strong> total records processed
+                                </div>
+                                <p class="text-muted">Cancellation records (*) with matching reference numbers now inherit datetime from regular transactions.</p>
+                            </div>
+                        `,
+                        showConfirmButton: true,
+                        confirmButtonText: "Continue",
+                        confirmButtonColor: "#28a745",
+                        allowOutsideClick: false,
+                        allowEscapeKey: false
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = "../../dashboard/billspayment/import/billspay-transaction.php";
+                        }
+                    });
+                });
+            </script>';
+            
+        } 
+        catch (Exception $e) {
+            // Rollback transaction if there were errors
+            $conn->rollback();
+            
+            error_log("Override transaction failed: " . $e->getMessage());
+            
+            echo '<script>
+                document.addEventListener("DOMContentLoaded", function() {
+                    Swal.fire({
+                        icon: "error",
+                        title: "Override Failed",
+                        html: `
+                            <div class="text-center">
+                                <i class="fas fa-exclamation-triangle text-danger mb-3" style="font-size: 3rem;"></i>
+                                <h4 class="text-danger mb-3">Override Error Occurred</h4>
+                                <div class="alert alert-danger">
+                                    <strong>Error:</strong> ' . addslashes($e->getMessage()) . '
+                                </div>
+                                <p class="text-muted">Please try again or contact system administrator.</p>
+                            </div>
+                        `,
+                        showConfirmButton: true,
+                        confirmButtonText: "Try Again",
+                        confirmButtonColor: "#dc3545",
+                        allowOutsideClick: true
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = "../../dashboard/billspayment/import/billspay-transaction.php";
+                        }
+                    });
+                });
+            </script>';
+        } finally {
+            // Always restore autocommit regardless of success or failure
+            $conn->autocommit(TRUE);
+        }
     }
-}
 ?>
 
 <!DOCTYPE html>
@@ -2374,17 +2460,27 @@
                         // Calculate all summaries
                         $summaries = calculateTransactionSummary($matchedData, $cancellationData);
 
+                        // Resolve display report date (extracted from file/session)
+                        $displayReportDateRaw = normalizeReportDate($_SESSION['manual_report_date'] ?? ($_SESSION['extracted_report_date'] ?? null));
+                        if (empty($displayReportDateRaw)) {
+                            $firstMatched = $matchedData[0]['report_date'] ?? null;
+                            $firstCancelled = $cancellationData[0]['report_date'] ?? null;
+                            $displayReportDateRaw = normalizeReportDate($firstMatched ?? $firstCancelled);
+                        }
+
                         // Get display variables
                         $displayData = [
-                            'company' => htmlspecialchars($partnerSelection[0]['companys_name']),
+                            'company' => htmlspecialchars(strval($partnerSelection[0]['companys_name'] ?? '')),
                             // 'company' => htmlspecialchars($_POST['company'] ?? ''),
                             // 'partnerId' => htmlspecialchars($partners_id ?? ''),
-                            'partnerId' => htmlspecialchars($partnerSelection[0]['partners_id']),
-                            'partnerIdKPX' => htmlspecialchars($partnerSelection[0]['partners_id_kpx']),
-                            'GLCodes' => htmlspecialchars($partnerSelection[0]['gl_code']),
+                            'partnerId' => htmlspecialchars(strval($partnerSelection[0]['partners_id'] ?? '')),
+                            'partnerIdKPX' => htmlspecialchars(strval($partnerSelection[0]['partners_id_kpx'] ?? '')),
+                            'GLCodes' => htmlspecialchars(strval($partnerSelection[0]['gl_code'] ?? '')),
                             'rowCount' => number_format($summaries['summary']['count']),
-                            'sourceType' => htmlspecialchars(($_POST['fileType'] ?? '') . " System"),
-                            'transactionDate' => htmlspecialchars(date('F d, Y', strtotime($_POST['datePicker'] ?? date('Y-m-d'))))
+                            'sourceType' => htmlspecialchars(strval(($_POST['fileType'] ?? '') . " System")),
+                            'reportDateRaw' => htmlspecialchars(strval($displayReportDateRaw ?? '')),
+                            'reportDate' => htmlspecialchars(strval(!empty($displayReportDateRaw) ? date('F d, Y', strtotime($displayReportDateRaw)) : 'N/A')),
+                            'transactionDate' => htmlspecialchars(strval(date('F d, Y')))
                         ];
 
                         // Define table rows data
@@ -2404,7 +2500,8 @@
                                         <div class="card-body">
                                             <form method="post" id="confirmImportForm" class="d-inline">
                                                 <input type="hidden" name="confirm_import" value="1">
-                                                <button type="submit" class="btn btn-success btn-lg me-3 shadow-sm">
+                                                <input type="hidden" name="report_date" id="hiddenReportDate" value="' . $displayData['reportDateRaw'] . '">
+                                                <button type="submit" class="btn btn-success btn-lg me-3 shadow-sm" id="confirmImportButton">
                                                     <i class="fas fa-check-circle me-2"></i>Confirm Import
                                                 </button>
                                             </form>
@@ -2462,6 +2559,10 @@
                                                             <tr>
                                                                 <td><i class="fas fa-file-import text-primary me-2"></i>Source</td>
                                                                 <td class="fw-semibold">' . $displayData['sourceType'] . '</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td><i class="fas fa-calendar-day text-primary me-2"></i>Report Date</td>
+                                                                <td class="fw-semibold" id="reportDateText">' . $displayData['reportDate'] . '</td>
                                                             </tr>
                                                             <tr>
                                                                 <td><i class="fas fa-calendar-alt text-primary me-2"></i>Uploaded Date</td>
@@ -2549,7 +2650,6 @@
                             </div>
                         </div>
                         <script>
-                            // Hide the confirmation/summary section after clicking Confirm Import
                             document.addEventListener("DOMContentLoaded", function() {
                                 var confirmForm = document.getElementById("confirmImportForm");
                                 if (confirmForm) {
@@ -2647,14 +2747,23 @@
         </script>
         <script>
             // script.js or within <script> tags in <head> or before </body>
-            document.getElementById('uploadForm').addEventListener('submit', function() {
-                // Show loading overlay when form is submitted
-                document.getElementById('loading-overlay').style.display = 'block';
-            });
-             // Loop through each element and set its display style to "block"
-            for (var i = 0; i < elements.length; i++) {
-                elements[i].style.display = "block";
-            }
+            (function(){
+                var _uploadForm = document.getElementById('uploadForm');
+                if (_uploadForm) {
+                    _uploadForm.addEventListener('submit', function() {
+                        // Show loading overlay when form is submitted
+                        var _loading = document.getElementById('loading-overlay');
+                        if (_loading) _loading.style.display = 'block';
+                    });
+                }
+
+                // Loop through each element and set its display style to "block" (guarded)
+                if (typeof elements !== 'undefined' && elements && elements.length) {
+                    for (var i = 0; i < elements.length; i++) {
+                        if (elements[i]) elements[i].style.display = "block";
+                    }
+                }
+            })();
 
             $(document).ready(function() {
                 $('#companyDropdown').select2({

@@ -63,14 +63,14 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
     <div id="sidemenu" class="sidemenu" style="display: none;">
         <!-- Home Button -->
         <div class="onetab" onclick="parent.location='<?php echo $base_url; ?>home.php'">
-        <a href="<?php echo $base_url; ?>home.php">Home</a>
+        <a href="<?php echo $base_url; ?>home.php"><i class="fa-solid fa-house"></i> Home</a>
         </div>
 
         <!-- Show/Hide Paramount -->
         <div class="onetab" id="para-btn">
-            <i class="fa-solid fa-caret-right" id="closed-para" style="display: block"></i>
-            <i class="fa-solid fa-caret-down" id="open-para" style="display: none"></i>
-            <h6>Bills Payment Transaction</h6>
+            <h6><i class="fa-solid fa-money-bill-wave"></i> Bills Payment Transaction</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-para" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-para" style="display: none"></i>
         </div>
 
         <?php if ($current_user_email === 'balb01013333' || $current_user_email === 'pera94005055' || $current_user_email === 'cill17098209'):
@@ -79,19 +79,23 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
 
         <!-- Show/Hide Paramount Import -->
         <div class="tabcat" id="para-import-btn" style="display: none;">
+            <h6><i class="fa-solid fa-file-import"></i> Import</h6>
             <i class="fa-solid fa-chevron-right" id="closed-para-import" style="display: block"></i>
             <i class="fa-solid fa-chevron-down" id="open-para-import" style="display: none"></i>
-            <h6>Import</h6>
         </div>
         <?php endif; ?>
 
             <!-- Paramount Import Buttons -->
             <div class="onetab-sub" id="para-import-nav" style="display: none;">
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-transaction.php'">
-                    <a href="<?php echo $base_url; ?>billspayment/import/billspay-transaction.php">Transaction</a>
+                    <a href="<?php echo $base_url; ?>billspayment/import/billspay-transaction.php"><i class="fa-solid fa-receipt"></i> Transaction</a>
                 </div>
-                <div class="sub">
-                    <a href="#" id="cancellation-link">Cancellation</a>
+                <!-- <div class="sub">
+                    <a href="#" id="cancellation-link"><i class="fa-solid fa-ban"></i> Cancellation</a>
+                </div> -->
+
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php'">
+                    <a href="<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php">Cancellation</a>
                 </div>
 
                 <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billsFeedback.php'">
@@ -102,9 +106,9 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <?php if ($_SESSION['user_type'] === 'admin'):?>
             <!-- Show/Hide Paramount Post -->
             <div class="tabcat" id="para-post-btn" style="display: none;">
+                <h6><i class="fa-solid fa-paper-plane"></i> Post</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-para-post" style="display: block"></i>
                 <i class="fa-solid fa-chevron-down" id="open-para-post" style="display: none"></i>
-                <h6>Post</h6>
             </div>
     
                 <!-- Paramount Post Buttons -->
@@ -115,7 +119,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
 
                     <!-- recycle if needed -->
                     <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/post/billspay-post-transaction.php'">
-                        <a href="<?php echo $base_url; ?>billspayment/post/billspay-post-transaction.php">Transaction</a>
+                        <a href="<?php echo $base_url; ?>billspayment/post/billspay-post-transaction.php"><i class="fa-solid fa-check-to-slot"></i> Transaction</a>
                     </div>
 
                     <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billsFeedback.php'">
@@ -123,12 +127,33 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     </div> -->
                 </div>
         <?php endif; ?>
+        <?php //if( $_SESSION['user_type'] === 'admin' || $current_user_email === 'cill17098209'):?>
+            <!-- Show/Hide Paramount Settlement -->
+        <div class="tabcat" id="para-settlement-btn" style="display: none;">
+            <h6><i class="fa-solid fa-chart-line"></i> Settlement</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-para-settlement" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-para-settlement" style="display: none"></i>
+        </div>
+
+        <!-- Paramount Settlement Buttons -->
+        <div class="onetab-sub" id="para-settlement-nav" style="display: none;">
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/adjustment-entry-per-branch.php'">
+                <a href="<?php echo $base_url; ?>billspayment/settlement/adjustment-entry-per-branch.php"><i class="fa-solid fa-chart-column"></i> Adjustment Entry</a>
+            </div>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/settlement-per-bank.php'">
+                <a href="<?php echo $base_url; ?>billspayment/settlement/settlement-per-bank.php"><i class="fa-solid fa-chart-column"></i> Per Bank</a>
+            </div>
+            <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/settlement/adjustment-transaction-per-partner.php'">
+                <a href="<?php //echo $base_url; ?>billspayment/settlement/adjustment-transaction-per-partner.php"><i class="fa-solid fa-chart-column"></i> Per Partner</a>
+            </div> -->
+        </div>
+        <?php //endif; ?>
 
         <!-- Show/Hide Paramount Report -->
         <div class="tabcat" id="para-report-btn" style="display: none;">
+            <h6><i class="fa-solid fa-chart-line"></i> Report</h6>
             <i class="fa-solid fa-chevron-right" id="closed-para-report" style="display: block"></i>
             <i class="fa-solid fa-chevron-down" id="open-para-report" style="display: none"></i>
-            <h6>Report</h6>
         </div>
 
         <!-- Paramount Report Buttons -->
@@ -137,23 +162,29 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="<?php //echo $base_url; ?>billspayment/report/daily-volume.php">Volume Report</a>
             </div> -->
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/volume-report.php'">
-                <a href="<?php echo $base_url; ?>billspayment/report/volume-report.php">Volume Report</a>
+                <a href="<?php echo $base_url; ?>billspayment/report/volume-report.php"><i class="fa-solid fa-chart-column"></i> Volume Report</a>
             </div>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/edi-report.php'">
-                <a href="<?php echo $base_url; ?>billspayment/report/edi-report.php">EDI Report</a>
+                <a href="<?php echo $base_url; ?>billspayment/report/edi-report.php"><i class="fa-solid fa-file-lines"></i> EDI Report</a>
             </div>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/transaction-report.php'">
-                <a href="<?php echo $base_url; ?>billspayment/report/transaction-report.php">Transaction Report (Details)</a>
+                <a href="<?php echo $base_url; ?>billspayment/report/transaction-report.php"><i class="fa-solid fa-list-check"></i> Transaction Report (Details)</a>
             </div>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/transaction-summary.php'">
-                <a href="<?php echo $base_url; ?>billspayment/report/transaction-summary.php">Transaction Report (Summary)</a>
+                <a href="<?php echo $base_url; ?>billspayment/report/transaction-summary.php"><i class="fa-solid fa-table"></i> Transaction Report (Summary)</a>
             </div>
             <!-- <div class="sub">
                 <a href="#" id="transaction-report-summary-link">Transaction Report (Summary)</a>
             </div> -->
-            <div class="sub">
-                <a href="#" id="cancellation-report-link">Cancellation Report</a>
+            
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/cancellation-report.php'">
+                <a href="<?php echo $base_url; ?>billspayment/report/cancellation-report.php" id="cancellation-report-link"><i class="fa-solid fa-circle-xmark"></i> Cancellation Report</a>
             </div>
+            <?php if ($current_user_email === 'cill17098209' || $_SESSION['user_type'] === 'admin'):?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/balance-sheet-report.php'">
+                    <a href="<?php echo $base_url; ?>billspayment/report/balance-sheet-report.php" id="balance-sheet-report-link"><i class="fa-solid fa-chart-bar"></i> Balance Sheet Report</a>
+                </div>
+            <?php endif;?>
             <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/report/monthly-volume.php'">
                 <a href="<?php //echo $base_url; ?>billspayment/report/monthly-volume.php">Monthly Volume Report</a>
             </div> -->
@@ -193,37 +224,37 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <h6>Bookkeeper</h6>
         </div> -->
 
-        <div class="onetab-sub" id="maa-nav" style="display: none;">
+        <!-- <div class="onetab-sub" id="maa-nav" style="display: none;">
         <div class="sub" onclick="parent.location='#'">
             <a href="#">Bookkeeper Import</a>
         </div>
         <div class="sub" onclick="parent.location='#'">
             <a href="#">Book keeper Report</a>
         </div>
-        </div>
+        </div> -->
 
         
         <!-- Show/Hide Paramount -->
         <div class="onetab" id="soa-btn">
-            <i class="fa-solid fa-caret-right" id="closed-soa" style="display: block"></i>
-            <i class="fa-solid fa-caret-down" id="open-soa" style="display: none"></i>
-            <h6>Billing Invoice</h6>
+            <h6><i class="fa-solid fa-file-invoice-dollar"></i> Billing Invoice</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-soa" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-soa" style="display: none"></i>
         </div>
         <!-- Show/Hide soa create Sub-menu -->
         <?php if ($current_user_email === 'balb01013333' || $current_user_email === 'pera94005055' || $current_user_email === 'cill17098209'):
         else:
         ?>
             <div class="tabcat" id="soa-create-btn" style="display: none;">
+                <h6><i class="fa-solid fa-plus-circle"></i> Create</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-soa-create" style="display: block"></i>
                 <i class="fa-solid fa-chevron-down" id="open-soa-create" style="display: none"></i>
-                <h6>Create</h6>
             </div>
         <?php endif; ?>
 
         <!-- soa create Buttons -->
         <div class="onetab-sub" id="soa-create-nav" style="display: none;">
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment-soa/create/billing-service-charge.php'">
-                <a href="<?php echo $base_url; ?>billspayment-soa/create/billing-service-charge.php">Service Charge (MANUAL)</a>
+                <a href="<?php echo $base_url; ?>billspayment-soa/create/billing-service-charge.php"><i class="fa-solid fa-hand-holding-dollar"></i> Service Charge (MANUAL)</a>
             </div>
             <!-- recycle if needed -->
             <!-- <div class="sub">
@@ -231,7 +262,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div> -->
 			
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment-soa/create/billing-invoice-service-charge_automated.php'">
-                <a href="<?php echo $base_url; ?>billspayment-soa/create/billing-invoice-service-charge_automated.php">Service Charge (AUTOMATED)</a>
+                <a href="<?php echo $base_url; ?>billspayment-soa/create/billing-invoice-service-charge_automated.php"><i class="fa-solid fa-gears"></i> Service Charge (AUTOMATED)</a>
             </div>
 
         </div>
@@ -242,9 +273,9 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <?php if ($current_user_email === 'cill17098209' || $_SESSION['user_type'] === 'admin'):?>
                 <!-- Show/Hide soa review Sub-menu -->
                 <div class="tabcat" id="soa-review-btn" style="display: none;">
+                    <h6><i class="fa-solid fa-clipboard-check"></i> Review</h6>
                     <i class="fa-solid fa-chevron-right" id="closed-soa-review" style="display: block"></i>
                     <i class="fa-solid fa-chevron-down" id="open-soa-review" style="display: none"></i>
-                    <h6>Review</h6>
                 </div>
             <?php endif; ?>
         <?php endif; ?>
@@ -252,7 +283,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <!-- soa review Buttons -->
         <div class="onetab-sub" id="soa-review-nav" style="display: none;">
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment-soa/review/for-checking-review.php'">
-                <a href="<?php echo $base_url; ?>billspayment-soa/review/for-checking-review.php">For Checking / Review</a>
+                <a href="<?php echo $base_url; ?>billspayment-soa/review/for-checking-review.php"><i class="fa-solid fa-magnifying-glass-chart"></i> For Checking / Review</a>
             </div>
         </div>
 
@@ -260,59 +291,140 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
 
             <!-- Show/Hide soa approval Sub-menu -->
             <div class="tabcat" id="soa-approval-btn" style="display: none;">
+                <h6><i class="fa-solid fa-certificate"></i> Approval</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-soa-approval" style="display: block"></i>
                 <i class="fa-solid fa-chevron-down" id="open-soa-approval" style="display: none"></i>
-                <h6>Approval</h6>
             </div>
         <?php endif; ?>
 
         <!-- soa approval Buttons -->
         <div class="onetab-sub" id="soa-approval-nav" style="display: none;">
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment-soa/approval/soa-approval.php'">
-                <a href="<?php echo $base_url; ?>billspayment-soa/approval/soa-approval.php">Billing Invoice Approval</a>
+                <a href="<?php echo $base_url; ?>billspayment-soa/approval/soa-approval.php"><i class="fa-solid fa-check-double"></i> Billing Invoice Approval</a>
             </div>
         </div>
 
         <!-- Show/Hide soa report Sub-menu -->
         <div class="tabcat" id="soa-report-btn" style="display: none;">
+            <h6><i class="fa-solid fa-chart-pie"></i> Report</h6>
             <i class="fa-solid fa-chevron-right" id="closed-soa-report" style="display: block"></i>
             <i class="fa-solid fa-chevron-down" id="open-soa-report" style="display: none"></i>
-            <h6>Report</h6>
         </div>
 
         <!-- soa report Buttons -->
         <div class="onetab-sub" id="soa-report-nav" style="display: none;">
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment-soa/report/soa-report.php'">
-                <a href="<?php echo $base_url; ?>billspayment-soa/report/soa-report.php">Billing Invoice Report</a>
+                <a href="<?php echo $base_url; ?>billspayment-soa/report/soa-report.php"><i class="fa-solid fa-file-contract"></i> Billing Invoice Report</a>
+            </div>
+        </div>
+
+        <!-- Show/Hide Set Masterfiles Main-menu -->
+        <div class="onetab" id="masterfiles-btn">
+            <h6><i class="fa-solid fa-layer-group"></i> Masterfiles</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-masterfiles" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-masterfiles" style="display: none"></i>
+        </div>
+
+        <!-- Show/Hide Set Masterfiles Sub-menu -->
+        <div class="tabcat" id="set-masterfiles-btn" style="display: none;">
+            <h6><i class="fa-solid fa-eye"></i> View</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-set-masterfiles" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-set-masterfiles" style="display: none"></i>
+        </div>
+
+        <!-- Set Masterfiles Partner List Buttons -->
+        <!-- <div class="onetab-sub" id="set-masterfile-partner-nav" style="display: none;">
+            <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>masterfiles/masterfiles/masterfile-partner-list.php'">
+                <a href="<?php //echo $base_url; ?>masterfiles/masterfiles/masterfile-partner-list.php"><i class="fa-solid fa-receipt"></i> Partner List</a>
+            </div>
+        </div> -->
+        <!-- Set Masterfiles Bank List Buttons -->
+        <div class="onetab-sub" id="set-masterfile-bank-nav" style="display: none;">
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>masterfiles/view/view-bank-list.php'">
+                <a href="<?php echo $base_url; ?>masterfiles/view/view-bank-list.php"><i class="fa-solid fa-receipt"></i> Bank List</a>
             </div>
         </div>
 
         <?php if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin')): ?>
             <!-- Show/Hide Set Maintenance Main-menu -->
             <div class="onetab" id="set-btn">
-            <i class="fa-solid fa-caret-right" id="closed-set" style="display: block"></i>
-            <i class="fa-solid fa-caret-down" id="open-set" style="display: none"></i>
-            <h6>Maintenance</h6>
+            <h6><i class="fa-solid fa-wrench"></i> Maintenance</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-set" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-set" style="display: none"></i>
             </div>
 
             <!-- Show/Hide Set maintenance Sub-menu -->
             <div class="tabcat" id="set-maintenance-btn" style="display: none;">
+                <h6><i class="fa-solid fa-users-gear"></i> Accounts</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-set-maintenance" style="display: block"></i>
                 <i class="fa-solid fa-chevron-down" id="open-set-maintenance" style="display: none"></i>
-                <h6>Accounts</h6>
             </div>
 
             <!-- Set Maintenance Buttons -->
             <div class="onetab-sub" id="set-maintenance-nav" style="display: none;">
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/accounts/user-management.php'">
-                    <a href="<?php echo $base_url; ?>maintenance/accounts/user-management.php">User Management</a>
+                    <a href="<?php echo $base_url; ?>maintenance/accounts/user-management.php"><i class="fa-solid fa-user-cog"></i> User Management</a>
+                </div>
+            </div>
+
+            <!-- Show/Hide Set duplicates Sub-menu -->
+            <div class="tabcat" id="set-duplicate-btn" style="display: none;">
+                <h6><i class="fa-solid fa-code-compare"></i> Duplicate</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-set-duplicate" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-set-duplicate" style="display: none"></i>
+            </div>
+
+            <!-- Set Duplicate Buttons -->
+            <div class="onetab-sub" id="set-duplicate-nav" style="display: none;">
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/duplicate-transaction.php'">
+                    <a href="<?php echo $base_url; ?>billspayment/import/duplicate-transaction.php"><i class="fa-solid fa-receipt"></i> Transaction</a>
+                </div>
+            </div>
+
+            <!-- Show/Hide Set masterfiles Sub-menu -->
+            <div class="tabcat" id="set-masterfile-btn" style="display: none;">
+                <h6><i class="fa-solid fa-code-compare"></i> Masterfiles</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-set-masterfile" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-set-masterfile" style="display: none"></i>
+            </div>
+
+            <!-- Set Masterfiles Partner List Buttons -->
+            <div class="onetab-sub" id="set-masterfile-partner-nav" style="display: none;">
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/masterfiles/masterfile-partner-list.php'">
+                    <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-partner-list.php"><i class="fa-solid fa-receipt"></i> Partner List</a>
+                </div>
+            </div>
+            <!-- Set Masterfiles Bank List Buttons -->
+            <div class="onetab-sub" id="set-masterfile-bank-nav" style="display: none;">
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php'">
+                    <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php"><i class="fa-solid fa-receipt"></i> Bank List</a>
                 </div>
             </div>
         <?php endif; ?>
 
+        <!-- Tools Menu -->
+        <div class="onetab" id="tools-btn">
+            <h6><i class="fa-solid fa-tools"></i> Tools</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-tools" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-tools" style="display: none"></i>
+        </div>
+
+        <!-- Tools Submenu -->
+        <div class="onetab-sub" id="tools-nav" style="display: none;">
+                <div class="sub" onclick="window.open('<?php echo $auth_url; ?>mlauto/index.html', '_blank')">
+                    <a href="<?php echo $auth_url; ?>mlauto/index.html" target="_blank" rel="noopener noreferrer">KPX/KP7 Generator</a>
+            </div>
+                <div class="sub" onclick="window.open('<?php echo $auth_url; ?>mlbranchmaker/convert.html', '_blank')">
+                    <a href="<?php echo $auth_url; ?>mlbranchmaker/convert.html" target="_blank" rel="noopener noreferrer">Branch Maker</a>
+            </div>
+                <div class="sub" onclick="window.open('<?php echo $auth_url; ?>recontool/sample.html', '_blank')">
+                    <a href="<?php echo $auth_url; ?>recontool/sample.html" target="_blank" rel="noopener noreferrer">File Fetch</a>
+            </div>
+        </div>
+
         <!-- Logout Button -->
         <div class="onetab" onclick="parent.location='<?php echo $auth_url; ?>logout.php'">
-        <a href="<?php echo $auth_url; ?>logout.php">Logout</a>
+        <a href="<?php echo $auth_url; ?>logout.php"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
         </div>
     </div>
 <?php else: ?>
@@ -336,8 +448,8 @@ function showUnderConstructionAlert() {
 const underConstructionIds = [
     'cancellation-link',
     'post-transaction-link',
+    'settle-transaction-link',
     'transaction-report-summary-link',
-    'cancellation-report-link',
     'service-charge-automate-link'
 ];
 
@@ -364,5 +476,165 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+
+    // Active state management based on current URL
+    const currentPath = window.location.pathname;
+
+    function normalizePath(path) {
+        if (!path) return '/';
+        return path
+            .replace(/\/+/g, '/')
+            .replace(/\/$/, '')
+            .toLowerCase() || '/';
+    }
+
+    function setArrowExpanded(menuElement, expanded) {
+        if (!menuElement) {
+            return;
+        }
+        const openIcon = menuElement.querySelector('[id^="open-"]');
+        const closedIcon = menuElement.querySelector('[id^="closed-"]');
+        if (openIcon) openIcon.style.display = expanded ? 'block' : 'none';
+        if (closedIcon) closedIcon.style.display = expanded ? 'none' : 'block';
+    }
+
+    function findPreviousByClass(startNode, className) {
+        let pointer = startNode ? startNode.previousElementSibling : null;
+        while (pointer) {
+            if (pointer.classList && pointer.classList.contains(className)) {
+                return pointer;
+            }
+            pointer = pointer.previousElementSibling;
+        }
+        return null;
+    }
+
+    function clearAllActiveStates() {
+        document.querySelectorAll('.sub.active, .tabcat.active, .onetab.active').forEach(function(node) {
+            node.classList.remove('active');
+        });
+    }
+
+    function activateMatchedSubLink(link) {
+        if (!link) {
+            return;
+        }
+
+        const subItem = link.closest('.sub');
+        const parentNav = link.closest('.onetab-sub');
+
+        if (subItem) {
+            subItem.classList.add('active');
+        }
+
+        if (parentNav) {
+            parentNav.style.display = 'block';
+        }
+
+        const parentTab = findPreviousByClass(parentNav, 'tabcat');
+        if (parentTab) {
+            parentTab.style.display = 'flex';
+            parentTab.classList.add('active');
+            setArrowExpanded(parentTab, true);
+        }
+
+        const mainParent = findPreviousByClass(parentNav, 'onetab');
+        if (mainParent) {
+            mainParent.classList.add('active');
+            setArrowExpanded(mainParent, true);
+        }
+    }
+
+    const normalizedCurrentPath = normalizePath(currentPath);
+
+    setTimeout(function() {
+        clearAllActiveStates();
+
+        const subMatches = [];
+
+        document.querySelectorAll('.sub a').forEach(function(link) {
+            const rawHref = (link.getAttribute('href') || '').trim();
+            if (!rawHref || rawHref === '#' || rawHref.toLowerCase().startsWith('javascript:')) {
+                return;
+            }
+
+            let normalizedLinkPath = '';
+            try {
+                normalizedLinkPath = normalizePath(new URL(link.href, window.location.origin).pathname);
+            } catch (e) {
+                return;
+            }
+
+            if (normalizedLinkPath === normalizedCurrentPath) {
+                subMatches.push({ link: link, path: normalizedLinkPath });
+            }
+        });
+
+        if (subMatches.length > 0) {
+            subMatches.sort(function(a, b) {
+                return b.path.length - a.path.length;
+            });
+            activateMatchedSubLink(subMatches[0].link);
+            return;
+        }
+
+        // Check for direct onetab links (like Home) only when no sub-link matched
+        let directMatchFound = false;
+        document.querySelectorAll('.onetab a').forEach(function(link) {
+            if (directMatchFound) {
+                return;
+            }
+
+            const rawHref = (link.getAttribute('href') || '').trim();
+            if (!rawHref || rawHref === '#' || rawHref.toLowerCase().startsWith('javascript:')) {
+                return;
+            }
+
+            let normalizedLinkPath = '';
+            try {
+                normalizedLinkPath = normalizePath(new URL(link.href, window.location.origin).pathname);
+            } catch (e) {
+                return;
+            }
+
+            if (normalizedLinkPath === normalizedCurrentPath) {
+                const onetab = link.closest('.onetab');
+                if (onetab) {
+                    onetab.classList.add('active');
+                    setArrowExpanded(onetab, true);
+                    directMatchFound = true;
+                }
+            }
+        });
+
+        // Special case for home.php
+        if (!directMatchFound && (normalizedCurrentPath.endsWith('/home.php') || normalizedCurrentPath === '/')) {
+            const homeBtn = document.querySelector('.onetab a[href*="home.php"]');
+            if (homeBtn && homeBtn.closest('.onetab')) {
+                homeBtn.closest('.onetab').classList.add('active');
+            }
+        }
+    }, 0);
+});
+</script>
+<script>
+// Tools menu toggle: simple show/hide for the Tools submenu
+document.addEventListener('DOMContentLoaded', function() {
+    var toolsBtn = document.getElementById('tools-btn');
+    var toolsNav = document.getElementById('tools-nav');
+    var closedTools = document.getElementById('closed-tools');
+    var openTools = document.getElementById('open-tools');
+    if (toolsBtn && toolsNav) {
+        toolsBtn.addEventListener('click', function() {
+            var isHidden = window.getComputedStyle(toolsNav).display === 'none';
+            if (isHidden) {
+                toolsNav.style.display = 'block';
+                if (closedTools && openTools) { closedTools.style.display = 'none'; openTools.style.display = 'block'; }
+            } else {
+                toolsNav.style.display = 'none';
+                if (closedTools && openTools) { closedTools.style.display = 'block'; openTools.style.display = 'none'; }
+            }
+        });
+    }
 });
 </script>

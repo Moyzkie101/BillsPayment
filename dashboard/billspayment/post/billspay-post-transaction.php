@@ -527,39 +527,30 @@ if(isset($_POST['posted'])) {
             text-align: center;
             margin-top: 0;
         }
+
+        /* Section header matching new header_ui style: white with red left accent */
+        .bp-section-header {
+            background: #ffffff;
+            border-left: 6px solid #dc3545;
+            padding: 12px 16px;
+            margin: 10px 0 18px 0;
+            box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.04);
+        }
+        .bp-section-header h2 {
+            margin: 0;
+            font-size: 1.25rem;
+            color: #212529;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <i id="menu-btn" class="fa-solid fa-bars"></i>
-                <div class="usernav">
-                    <h6><?php 
-                            if($_SESSION['user_type'] === 'admin'){
-                                echo $_SESSION['admin_name'];
-                            }elseif($_SESSION['user_type'] === 'user'){
-                                echo $_SESSION['user_name']; 
-                            }else{
-                                echo "GUEST";
-                            }
-                    ?></h6>
-                    <h6 style="margin-left:5px;"><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo "(".$_SESSION['admin_email'].")";
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo "(".$_SESSION['user_email'].")";
-                        }else{
-                            echo "GUEST";
-                        }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
+
         <?php
-            // Determine if POST button should be shown initially (after a previous Proceed)
             $showPostButton = false;
             if (!empty($_SESSION['startdate']) && !empty($_SESSION['enddate'])) {
                 $psql = "SELECT COUNT(*) as cnt FROM mldb.billspayment_transaction WHERE post_transaction = 'unposted' AND (datetime BETWEEN ? AND ? OR cancellation_date BETWEEN ? AND ? )";
@@ -580,7 +571,15 @@ if(isset($_POST['posted'])) {
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h1>Post Transaction</h1></center>
+        <div class="bp-section-header" role="region" aria-label="Page title">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-check-to-slot" aria-hidden="true"></i>
+                <div>
+                    <h2>Post Transaction</h2>
+                    <p class="bp-section-sub">Post unposted transactions for the selected month</p>
+                </div>
+            </div>
+        </div>
 
         <div class="container-fluid border border-danger rounded mt-3">
             <div class="container-fluid">

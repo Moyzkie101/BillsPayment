@@ -49,33 +49,51 @@ document.addEventListener('DOMContentLoaded', function () {
 <!-- under observation end -->
 
 <script>
-   // Hide and Show Side Menu
+    // Hide and Show Side Menu
     var menubtn = document.getElementById("menu-btn"); // Menu Button
     var sidemenu = document.getElementById("sidemenu"); // Side Menu Div
 
-    // Add a click event listener to the document object
+    // Click outside handler: ignore clicks on the menubtn or its children
     document.addEventListener("click", function(event) {
-        // Check if the clicked element is outside of the sidemenu and is not the button
-        if (!sidemenu.contains(event.target) && event.target !== menubtn) {
-            // Hide the sidemenu
-            sidemenu.style.animation = "slide-out-to-left 0.5s ease";
-            setTimeout(function() {
-                sidemenu.style.display = "none";
-            }, 450);
+        try {
+            var clickedInsideMenuBtn = menubtn && menubtn.contains(event.target);
+            var clickedInsideSidemenu = sidemenu && sidemenu.contains(event.target);
+
+            if (!clickedInsideSidemenu && !clickedInsideMenuBtn) {
+                if (sidemenu) {
+                    sidemenu.style.animation = "slide-out-to-left 0.5s ease";
+                    setTimeout(function() {
+                        sidemenu.style.display = "none";
+                    }, 450);
+                }
+            }
+        } catch (e) {
+            // Fail silently if elements not present
+            console.error(e);
         }
     });
 
-    menubtn.addEventListener("click", function(){
-        if(sidemenu.style.display == "none" || sidemenu.style.display == ""){
-            sidemenu.style.animation = "slide-in-from-left 0.5s ease";
-            sidemenu.style.display = "block";
-        }else{
-            sidemenu.style.animation = "slide-out-to-left 0.5s ease";
-            setTimeout(function() {
-                sidemenu.style.display = "none";
-            }, 450);
-        }
-    });
+    if (menubtn) {
+        menubtn.addEventListener("click", function(e){
+            // Prevent the document click handler from immediately hiding the menu
+            e.stopPropagation();
+            try {
+                if (!sidemenu || sidemenu.style.display == "none" || sidemenu.style.display == ""){
+                    if (sidemenu) {
+                        sidemenu.style.animation = "slide-in-from-left 0.5s ease";
+                        sidemenu.style.display = "block";
+                    }
+                } else {
+                    sidemenu.style.animation = "slide-out-to-left 0.5s ease";
+                    setTimeout(function() {
+                        sidemenu.style.display = "none";
+                    }, 450);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        });
+    }
 
     // Get all the elements (with null checks)
     var parabtn = document.getElementById("para-btn"); // Main Para Button
@@ -86,11 +104,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var paraimportnav = document.getElementById("para-import-nav"); // Para Import Div
     var parapostnav = document.getElementById("para-post-nav"); // Para Post Div
+    var parasettlementnav = document.getElementById("para-settlement-nav"); // Para Settlement Div
     var parareportnav = document.getElementById("para-report-nav"); // Para Report Div
     
 
     var paraimportbtn = document.getElementById("para-import-btn"); // Para Import Btn
     var parapostbtn = document.getElementById("para-post-btn"); // Para Post Btn
+    var parasettlementbtn = document.getElementById("para-settlement-btn"); // Para Settlement Btn
     var parareportbtn = document.getElementById("para-report-btn"); // Para Report Btn
     
 
@@ -104,6 +124,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var paraclosedpost = document.getElementById("closed-para-post"); // Para Post Div Right Arrow or Minimized
     var paraopenreport = document.getElementById("open-para-report"); // Para Report Div Down Arrow or Expanded
     var paraclosedreport = document.getElementById("closed-para-report"); // Para Report Div Right Arrow or Minimized
+    var paraopensettlement = document.getElementById("open-para-settlement"); // Para Settlement Div Down Arrow or Expanded
+    var paraclosedsettlement = document.getElementById("closed-para-settlement"); // Para Settlement Div Right Arrow or Minimized
     var actionopenreport = document.getElementById("open-action-report"); // Action Report Div Down Arrow or Expanded
     var actionclosedreport = document.getElementById("closed-action-report"); // Action Report Div Right Arrow or Minimized
 
@@ -149,9 +171,92 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var setmaintenancebtn = document.getElementById("set-maintenance-btn"); // Set Maintenance Btn
 
+    var setduplicatebtn = document.getElementById("set-duplicate-btn"); // Set Duplicate Btn
+    var setduplicatenav = document.getElementById("set-duplicate-nav"); // Set Duplicate Nav
+    var setopenduplicate = document.getElementById("open-set-duplicate"); // duplicate down arrow
+    var setclosedduplicate = document.getElementById("closed-set-duplicate"); // duplicate right arrow
+
+    var masterfilesbtn = document.getElementById("masterfiles-btn"); // Main Masterfiles Button
+    var openmasterfiles = document.getElementById("open-masterfiles"); // main masterfiles down arrow
+    var closedmasterfiles = document.getElementById("closed-masterfiles"); // main masterfiles right arrow
+
+    var setmasterfilesbtn = document.getElementById("set-masterfiles-btn"); // Masterfiles View Button
+    var opensetmasterfiles = document.getElementById("open-set-masterfiles"); // masterfiles view down arrow
+    var closedsetmasterfiles = document.getElementById("closed-set-masterfiles"); // masterfiles view right arrow
+
+    var setmasterfilebtn = document.getElementById("set-masterfile-btn"); // Set Masterfile Btn
+    var setopenmasterfile = document.getElementById("open-set-masterfile"); // masterfile down arrow
+    var setclosedmasterfile = document.getElementById("closed-set-masterfile"); // masterfile right arrow
+
     // Set Sub-elements
     var setopenmaintenance = document.getElementById("open-set-maintenance"); // set maintenance Div Down Arrow or Expanded
     var setclosedmaintenance = document.getElementById("closed-set-maintenance"); // set maintenance Div Right Arrow or Minimized
+
+    function getMasterfileNavGroup(triggerBtn) {
+        var group = {
+            partnerNavs: [],
+            bankNavs: []
+        };
+
+        if (!triggerBtn) {
+            return group;
+        }
+
+        var sibling = triggerBtn.nextElementSibling;
+
+        while (sibling) {
+            if (sibling.classList.contains('onetab') || sibling.classList.contains('tabcat')) {
+                break;
+            }
+
+            if (sibling.id === 'set-masterfile-partner-nav') {
+                group.partnerNavs.push(sibling);
+            }
+
+            if (sibling.id === 'set-masterfile-bank-nav') {
+                group.bankNavs.push(sibling);
+            }
+
+            sibling = sibling.nextElementSibling;
+        }
+
+        return group;
+    }
+
+    var mainMasterfileNavGroup = getMasterfileNavGroup(setmasterfilesbtn);
+    var maintenanceMasterfileNavGroup = getMasterfileNavGroup(setmasterfilebtn);
+
+    function toggleMenuListDisplay(nodeList, display, animation) {
+        if (!nodeList || !nodeList.length) {
+            return;
+        }
+
+        nodeList.forEach(function(nav) {
+            if (!nav) {
+                return;
+            }
+
+            if (animation) {
+                nav.style.animation = animation;
+            }
+            nav.style.display = display;
+        });
+    }
+
+    function isMenuListHidden(nodeList) {
+        if (!nodeList || !nodeList.length) {
+            return true;
+        }
+
+        for (var i = 0; i < nodeList.length; i++) {
+            var nav = nodeList[i];
+            if (nav && nav.style.display !== "none" && nav.style.display !== "") {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     // Initialize all dropdown states
     function initializeDropdowns() {
@@ -161,6 +266,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (parapostbtn) parapostbtn.style.display = "none";
         if (parapostnav) parapostnav.style.display = "none";
+
+        if (parasettlementbtn) parasettlementbtn.style.display = "none";
+        if (parasettlementnav) parasettlementnav.style.display = "none";
 
         if (parareportbtn) parareportbtn.style.display = "none";
         if (parareportnav) parareportnav.style.display = "none";
@@ -177,6 +285,17 @@ document.addEventListener('DOMContentLoaded', function () {
         if (setmaintenancebtn) setmaintenancebtn.style.display = "none";
         if (setmaintenancenav) setmaintenancenav.style.display = "none";
 
+        if (setduplicatebtn) setduplicatebtn.style.display = "none";
+        if (setduplicatenav) setduplicatenav.style.display = "none";
+
+        if (setmasterfilesbtn) setmasterfilesbtn.style.display = "none";
+
+        if (setmasterfilebtn) setmasterfilebtn.style.display = "none";
+        toggleMenuListDisplay(mainMasterfileNavGroup.partnerNavs, "none");
+        toggleMenuListDisplay(mainMasterfileNavGroup.bankNavs, "none");
+        toggleMenuListDisplay(maintenanceMasterfileNavGroup.partnerNavs, "none");
+        toggleMenuListDisplay(maintenanceMasterfileNavGroup.bankNavs, "none");
+
         if (actionreportbtn) actionreportbtn.style.display = "none";
         if (actionreportnav) actionreportnav.style.display = "none";
         
@@ -187,6 +306,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (paraclosedimport) paraclosedimport.style.display = "block";
         if (paraopenpost) paraopenpost.style.display = "none";
         if (paraclosedpost) paraclosedpost.style.display = "block";
+        if (paraopensettlement) paraopensettlement.style.display = "none";
+        if (paraclosedsettlement) paraclosedsettlement.style.display = "block";
         if (paraopenreport) paraopenreport.style.display = "none";
         if (paraclosedreport) paraclosedreport.style.display = "block";
 
@@ -207,6 +328,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (setclosed) setclosed.style.display = "block";
         if (setopenmaintenance) setopenmaintenance.style.display = "none";
         if (setclosedmaintenance) setclosedmaintenance.style.display = "block";
+        if (setopenduplicate) setopenduplicate.style.display = "none";
+        if (setclosedduplicate) setclosedduplicate.style.display = "block";
+        if (setopenmasterfile) setopenmasterfile.style.display = "none";
+        if (setclosedmasterfile) setclosedmasterfile.style.display = "block";
+
+        if (openmasterfiles) openmasterfiles.style.display = "none";
+        if (closedmasterfiles) closedmasterfiles.style.display = "block";
+        if (opensetmasterfiles) opensetmasterfiles.style.display = "none";
+        if (closedsetmasterfiles) closedsetmasterfiles.style.display = "block";
 
         if (actionopenreport) actionopenreport.style.display = "none";
         if (actionclosedreport) actionclosedreport.style.display = "block";
@@ -232,6 +362,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (parapostbtn) {
                 availableSubMenus.push(parapostbtn);
                 if (parapostnav) availableSubNavs.push(parapostnav);
+            }
+            if (parasettlementbtn) {
+                availableSubMenus.push(parasettlementbtn);
+                if (parasettlementnav) availableSubNavs.push(parasettlementnav);
             }
             if (parareportbtn) {
                 availableSubMenus.push(parareportbtn);
@@ -277,6 +411,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (paraclosedimport) paraclosedimport.style.display = "block";
                 if (paraopenpost) paraopenpost.style.display = "none";
                 if (paraclosedpost) paraclosedpost.style.display = "block";
+                if (paraopensettlement) paraopensettlement.style.display = "none";
+                if (paraclosedsettlement) paraclosedsettlement.style.display = "block";
                 if (paraopenreport) paraopenreport.style.display = "none";
                 if (paraclosedreport) paraclosedreport.style.display = "block";
                 if (actionopenreport) actionopenreport.style.display = "none";
@@ -345,6 +481,32 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    // Billspayment Settlement dropdown handler
+    if (parasettlementbtn) {
+        parasettlementbtn.addEventListener("click", function(){
+            var isHidden = !parasettlementnav || parasettlementnav.style.display === "none" || parasettlementnav.style.display === "";
+
+            if (isHidden) {
+                if (parasettlementnav) {
+                    parasettlementnav.style.animation = "slide-in-from-top 0.8s ease";
+                    parasettlementnav.style.display = "block";
+                }
+                if (paraopensettlement) paraopensettlement.style.display = "block";
+                if (paraclosedsettlement) paraclosedsettlement.style.display = "none";
+            } else {
+                if (paraopensettlement) paraopensettlement.style.display = "none";
+                if (paraclosedsettlement) paraclosedsettlement.style.display = "block";
+                if (parasettlementnav) {
+                    parasettlementnav.style.animation = "slide-out-to-top 0.5s ease";
+                    setTimeout(function() {
+                        parasettlementnav.style.display = "none";
+                    }, 450);
+                }
+            }
+        });
+    }
+
     // Billspayment Report dropdown handler
     if (parareportbtn) {
         parareportbtn.addEventListener("click", function(){ 
@@ -704,6 +866,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 availableSubMenus.push(setmaintenancebtn);
                 if (setmaintenancenav) availableSubNavs.push(setmaintenancenav);
             }
+            if (setduplicatebtn) {
+                availableSubMenus.push(setduplicatebtn);
+                if (setduplicatenav) availableSubNavs.push(setduplicatenav);
+            }
+            if (setmasterfilebtn) {
+                availableSubMenus.push(setmasterfilebtn);
+                if (maintenanceMasterfileNavGroup.partnerNavs && maintenanceMasterfileNavGroup.partnerNavs.length) {
+                    maintenanceMasterfileNavGroup.partnerNavs.forEach(function(nav) { availableSubNavs.push(nav); });
+                }
+                if (maintenanceMasterfileNavGroup.bankNavs && maintenanceMasterfileNavGroup.bankNavs.length) {
+                    maintenanceMasterfileNavGroup.bankNavs.forEach(function(nav) { availableSubNavs.push(nav); });
+                }
+            }
             
             // Check if any sub-menu is currently visible
             var isAnyVisible = false;
@@ -738,6 +913,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Reset child arrows
                 if (setopenmaintenance) setopenmaintenance.style.display = "none";
                 if (setclosedmaintenance) setclosedmaintenance.style.display = "block";
+                if (setopenduplicate) setopenduplicate.style.display = "none";
+                if (setclosedduplicate) setclosedduplicate.style.display = "block";
+                if (setopenmasterfile) setopenmasterfile.style.display = "none";
+                if (setclosedmasterfile) setclosedmasterfile.style.display = "block";
                 
                 // Animate out parent menus
                 availableSubMenus.forEach(function(menu) {
@@ -774,6 +953,115 @@ document.addEventListener('DOMContentLoaded', function () {
                         setmaintenancenav.style.display = "none";
                     }, 450);
                 }
+            }
+        });
+    }
+
+    // Sub-menu Duplicates dropdown handler
+    if (setduplicatebtn) {
+        setduplicatebtn.addEventListener("click", function(){ 
+            var isHidden = !setduplicatenav || setduplicatenav.style.display === "none" || setduplicatenav.style.display === "";
+            
+            if (isHidden) {
+                if (setduplicatenav) {
+                    setduplicatenav.style.animation = "slide-in-from-top 0.8s ease";
+                    setduplicatenav.style.display = "block";
+                }
+                if (setopenduplicate) setopenduplicate.style.display = "block";
+                if (setclosedduplicate) setclosedduplicate.style.display = "none";
+            } else {
+                if (setopenduplicate) setopenduplicate.style.display = "none";
+                if (setclosedduplicate) setclosedduplicate.style.display = "block";
+                if (setduplicatenav) {
+                    setduplicatenav.style.animation = "slide-out-to-top 0.5s ease";
+                    setTimeout(function() {
+                        setduplicatenav.style.display = "none";
+                    }, 450);
+                }
+            }
+        });
+    }
+
+    // Sub-menu Masterfile dropdown handler
+    if (setmasterfilebtn) {
+        setmasterfilebtn.addEventListener("click", function(){ 
+            var isPartnerHidden = isMenuListHidden(maintenanceMasterfileNavGroup.partnerNavs);
+            var isBankHidden = isMenuListHidden(maintenanceMasterfileNavGroup.bankNavs);
+            var isHidden = isPartnerHidden && isBankHidden;
+            
+            if (isHidden) {
+                toggleMenuListDisplay(maintenanceMasterfileNavGroup.partnerNavs, "block", "slide-in-from-top 0.8s ease");
+                toggleMenuListDisplay(maintenanceMasterfileNavGroup.bankNavs, "block", "slide-in-from-top 0.8s ease");
+                if (setopenmasterfile) setopenmasterfile.style.display = "block";
+                if (setclosedmasterfile) setclosedmasterfile.style.display = "none";
+            } else {
+                if (setopenmasterfile) setopenmasterfile.style.display = "none";
+                if (setclosedmasterfile) setclosedmasterfile.style.display = "block";
+                
+                toggleMenuListDisplay(maintenanceMasterfileNavGroup.partnerNavs, "block", "slide-out-to-top 0.5s ease");
+                toggleMenuListDisplay(maintenanceMasterfileNavGroup.bankNavs, "block", "slide-out-to-top 0.5s ease");
+                setTimeout(function() {
+                    toggleMenuListDisplay(maintenanceMasterfileNavGroup.partnerNavs, "none");
+                    toggleMenuListDisplay(maintenanceMasterfileNavGroup.bankNavs, "none");
+                }, 450);
+            }
+        });
+    }
+
+    // Main-menu Masterfiles dropdown handler
+    if (masterfilesbtn) {
+        masterfilesbtn.addEventListener("click", function(){
+            var isHidden = !setmasterfilesbtn || setmasterfilesbtn.style.display === "none" || setmasterfilesbtn.style.display === "";
+
+            if (isHidden) {
+                if (setmasterfilesbtn) {
+                    setmasterfilesbtn.style.animation = "slide-in-from-top 0.8s ease";
+                    setmasterfilesbtn.style.display = "flex";
+                }
+                if (openmasterfiles) openmasterfiles.style.display = "block";
+                if (closedmasterfiles) closedmasterfiles.style.display = "none";
+            } else {
+                if (opensetmasterfiles) opensetmasterfiles.style.display = "none";
+                if (closedsetmasterfiles) closedsetmasterfiles.style.display = "block";
+
+                toggleMenuListDisplay(mainMasterfileNavGroup.partnerNavs, "none");
+                toggleMenuListDisplay(mainMasterfileNavGroup.bankNavs, "none");
+
+                if (setmasterfilesbtn) {
+                    setmasterfilesbtn.style.animation = "slide-out-to-top 0.5s ease";
+                    setTimeout(function() {
+                        setmasterfilesbtn.style.display = "none";
+                    }, 450);
+                }
+
+                if (openmasterfiles) openmasterfiles.style.display = "none";
+                if (closedmasterfiles) closedmasterfiles.style.display = "block";
+            }
+        });
+    }
+
+    // Masterfiles View dropdown handler
+    if (setmasterfilesbtn) {
+        setmasterfilesbtn.addEventListener("click", function(){
+            var isPartnerHidden = isMenuListHidden(mainMasterfileNavGroup.partnerNavs);
+            var isBankHidden = isMenuListHidden(mainMasterfileNavGroup.bankNavs);
+            var isHidden = isPartnerHidden && isBankHidden;
+
+            if (isHidden) {
+                toggleMenuListDisplay(mainMasterfileNavGroup.partnerNavs, "block", "slide-in-from-top 0.8s ease");
+                toggleMenuListDisplay(mainMasterfileNavGroup.bankNavs, "block", "slide-in-from-top 0.8s ease");
+                if (opensetmasterfiles) opensetmasterfiles.style.display = "block";
+                if (closedsetmasterfiles) closedsetmasterfiles.style.display = "none";
+            } else {
+                if (opensetmasterfiles) opensetmasterfiles.style.display = "none";
+                if (closedsetmasterfiles) closedsetmasterfiles.style.display = "block";
+
+                toggleMenuListDisplay(mainMasterfileNavGroup.partnerNavs, "block", "slide-out-to-top 0.5s ease");
+                toggleMenuListDisplay(mainMasterfileNavGroup.bankNavs, "block", "slide-out-to-top 0.5s ease");
+                setTimeout(function() {
+                    toggleMenuListDisplay(mainMasterfileNavGroup.partnerNavs, "none");
+                    toggleMenuListDisplay(mainMasterfileNavGroup.bankNavs, "none");
+                }, 450);
             }
         });
     }

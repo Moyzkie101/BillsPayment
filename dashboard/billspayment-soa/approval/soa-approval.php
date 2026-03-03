@@ -40,12 +40,12 @@ function displayModal($message, $isError = false)
         var message = document.getElementById("modalMessage");
         
         if (' . ($isError ? 'true' : 'false') . ') {
-            message.innerHTML = \'<div class="icon-container"><div class="icon">&#10060;</div></div> \' + "' . $message . '";
+            message.innerHTML = \'<div class="icon-container"><div class="err-icon">&#10060;</div></div> \' + "' . $message . '";
         } else {
             message.innerHTML = \'<div class="icon-container"><div class="icon">&#10003;</div></div> \' + "' . $message . '";
         }
         
-        modal.style.display = "block";
+        modal.classList.add("active");
     }
     </script>
     ';
@@ -56,87 +56,62 @@ $result = mysqli_query($conn, $query);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['confirmBtn'])) {
-        $referenceNumber = $_POST['reference'];
+        $referenceNumber = $_POST['reference'] ?? '';
         $approvedby = $_SESSION['user_name'];
         $approvedSignature = 'electronically signed';
-        $currentDate = date("m-d-Y"); // Get the current date
+        $currentDate = date("m-d-Y");
         $notedFix_signature = 'LUELLA PERALTA';
-        // Update the status and reviewed_by columns in the database
+
         $updateQuery = "UPDATE soa_transaction SET status = 'Approved', noted_signature = '$approvedSignature', noted_by = '$approvedby', notedDate_signature = '$currentDate', notedFix_signature = '$notedFix_signature' WHERE reference_number = '$referenceNumber'";
         if (mysqli_query($conn, $updateQuery)) {
-            // Successful update, redirect or display a success message
-            $successMessage = "Selected row(s) updated to 'Approved'.";
+            displayModal("Selected row(s) updated to 'Approved'.");
+        } else {
+            displayModal("Error updating transaction: " . mysqli_error($conn), true);
+        }
+    } elseif (isset($_POST['approved'])) {
+        if (isset($_POST['selectedRows'])) {
+            $selectedRows = $_POST['selectedRows'];
+            $approvedby = $_SESSION['user_name'];
+            $approvedSignature = 'electronically signed';
+            $currentDate = date("m-d-Y");
+            $notedFix_signature = 'LUELLA PERALTA';
+
+            $updateQuery = "UPDATE soa_transaction SET status = 'Approved', noted_signature = '$approvedSignature', noted_by = '$approvedby', notedDate_signature = '$currentDate', notedFix_signature = '$notedFix_signature' WHERE reference_number IN ('" . implode("','", $selectedRows) . "')";
+            if (mysqli_query($conn, $updateQuery)) {
+                displayModal("Selected row(s) updated to 'Approved'.");
+            } else {
+                displayModal("Error updating selected row(s): " . mysqli_error($conn), true);
+            }
+        }
+    } elseif (isset($_POST['multipleCancelConfirmBtn']) && !empty($_POST['cancelledBy'])) {
+        if (isset($_POST['selectedRows'])) {
+            $selectedRows = $_POST['selectedRows'];
+            $cancelledBy = $_POST['cancelledBy'];
+            $reasonOf_cancellation = $_POST['cancellationReason'];
+            $cancelled_date = $_POST['cancel_date'];
+
+            $updateQuery = "UPDATE soa_transaction SET status = 'Cancelled', reasonOf_cancellation = '$reasonOf_cancellation', cancelled_by = '$cancelledBy', cancelled_date = '$cancelled_date' WHERE reference_number IN ('" . implode("','", $selectedRows) . "')";
+            if (mysqli_query($conn, $updateQuery)) {
+                $successMessage = "Selected row(s) updated to 'Cancelled'.<br>";
+                $successMessage .= "Cancelled by: " . $cancelledBy;
+                displayModal($successMessage);
+            } else {
+                displayModal("Error updating selected row(s): " . mysqli_error($conn), true);
+            }
+        }
+    } elseif (isset($_POST['cancelConfirmBtn']) && !empty($_POST['cancelledBy'])) {
+        $referenceNumber = $_POST['reference'] ?? '';
+        $cancelledBy = $_POST['cancelledBy'];
+        $reasonOf_cancellation = $_POST['cancellationReason'];
+        $cancelled_date = $_POST['cancel_date'];
+
+        $updateQuery = "UPDATE soa_transaction SET status = 'Cancelled', reasonOf_cancellation = '$reasonOf_cancellation', cancelled_by = '$cancelledBy', cancelled_date = '$cancelled_date' WHERE reference_number = '$referenceNumber'";
+        if (mysqli_query($conn, $updateQuery)) {
+            $successMessage = "Selected row(s) updated to 'Cancelled'.<br>";
+            $successMessage .= "Cancelled by: " . $cancelledBy;
             displayModal($successMessage);
         } else {
-            // Failed to update, handle the error
-            $errorMessage = "Error updating transaction: " . mysqli_error($conn);
-            displayModal($errorMessage);
-        }
-    }
-}
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approved']) && isset($_POST['selectedRows'])) {
-    // Process the selected rows
-    $selectedRows = $_POST['selectedRows'];
-    $approvedby = $_SESSION['user_name'];
-    $approvedSignature = 'electronically signed';
-    $currentDate = date("m-d-Y"); // Get the current date
-    $notedFix_signature = 'LUELLA PERALTA';
-
-    // Update the status of selected rows to "Approved"
-    foreach ($selectedRows as $referenceNumber) {
-        // Perform the necessary database update operation to set the status to "Approved"
-        $updateQuery = "UPDATE soa_transaction SET status = 'Approved' , noted_signature = '$approvedSignature', noted_by = '$approvedby', notedDate_signature = '$currentDate',  notedFix_signature = '$notedFix_signature' WHERE reference_number = '$referenceNumber'";
-        mysqli_query($conn, $updateQuery);
-    }
-
-    $successMessage = "Selected row(s) updated to 'Approved'.";
-    displayModal($successMessage);
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['multipleCancelConfirmBtn']) && !empty($_POST['cancelledBy'])) {
-        // Check if any rows are selected
-        if (isset($_POST['selectedRows'])) {
-            // Process the selected rows
-            $selectedRows = $_POST['selectedRows'];
-            $cancelledBy = $_POST['cancelledBy'];
-            $reasonOf_cancellation = $_POST['cancellationReason'];
-            $cancelled_date = $_POST['cancel_date'];
-
-            // Update the status of selected rows to "Cancelled" and set cancelled_by value
-            $updateQuery = "UPDATE soa_transaction SET status = 'Cancelled',reasonOf_cancellation = '$reasonOf_cancellation', cancelled_by = '$cancelledBy', cancelled_date = '$cancelled_date' WHERE reference_number IN ('" . implode("','", $selectedRows) . "')";
-            if (mysqli_query($conn, $updateQuery)) {
-                $successMessage = "Selected row(s) updated to 'Cancelled'.<br>";
-                $successMessage .= "Cancelled by: " . $cancelledBy;
-                displayModal($successMessage);
-            } else {
-                $errorMessage = "Error updating selected row(s): " . mysqli_error($conn);
-                displayModal($errorMessage, true);
-            }
-        }
-    }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['cancelConfirmBtn']) && !empty($_POST['cancelledBy'])) {
-        // Check if any rows are selected
-        if (isset($_POST['selectedRows'])) {
-            // Process the selected rows
-            $selectedRows = $_POST['selectedRows'];
-            $cancelledBy = $_POST['cancelledBy'];
-            $reasonOf_cancellation = $_POST['cancellationReason'];
-            $cancelled_date = $_POST['cancel_date'];
-
-            // Update the status of selected rows to "Cancelled" and set cancelled_by value
-            $updateQuery = "UPDATE soa_transaction SET status = 'Cancelled',reasonOf_cancellation = '$reasonOf_cancellation', cancelled_by = '$cancelledBy', , cancelled_date = '$cancelled_date' WHERE reference_number IN ('" . implode("','", $selectedRows) . "')";
-            if (mysqli_query($conn, $updateQuery)) {
-                $successMessage = "Selected row(s) updated to 'Cancelled'.<br>";
-                $successMessage .= "Cancelled by: " . $cancelledBy;
-                displayModal($successMessage);
-            } else {
-                $errorMessage = "Error updating selected row(s): " . mysqli_error($conn);
-                displayModal($errorMessage, true);
-            }
+            displayModal("Error updating selected row(s): " . mysqli_error($conn), true);
         }
     }
 }
@@ -156,480 +131,676 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="../../../assets/js/sweetalert2.all.min.js"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 
     <link rel="icon" href="../../../images/MLW logo.png" type="image/png">
+
+    <style>
+        :root {
+            --brand: #C62828; --brand-hover: #B71C1C; --brand-light: #FFEBEE; --brand-dark: #8E0000;
+            --success: #2E7D32; --n-50: #FAFAFA; --n-100: #F5F5F5; --n-200: #EEEEEE;
+            --n-300: #E0E0E0; --n-400: #BDBDBD; --n-500: #9E9E9E; --n-600: #757575;
+            --n-700: #616161; --n-800: #424242; --n-900: #212121;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,.10), 0 1px 2px rgba(0,0,0,.06);
+            --shadow: 0 4px 6px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06);
+            --shadow-xl: 0 25px 50px rgba(0,0,0,.15);
+            --radius-sm: 6px; --radius: 10px; --radius-lg: 14px;
+            --ease: cubic-bezier(.4,0,.2,1); --row-h: 40px; --hdr-h: 44px;
+        }
+
+        .micon, .material-icons-round { font-family: 'Material Icons Round'; font-style: normal; font-size: 18px; line-height: 1; vertical-align: middle; }
+        .micon-sm { font-size: 16px; }
+        .micon-hdr { font-size: 22px; vertical-align: middle; }
+
+        .tbl-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+        .btn-action {
+            display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border: none;
+            border-radius: var(--radius-sm); font-weight: 600; font-size: 13.5px; cursor: pointer;
+            transition: background .18s var(--ease), transform .1s var(--ease), box-shadow .18s var(--ease);
+            box-shadow: var(--shadow-sm); letter-spacing: .01em;
+        }
+        .btn-action:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+        .btn-action:active { transform: translateY(0); }
+
+        #forapproved { background: var(--n-400); color: #fff; pointer-events: none; opacity: .7; cursor: not-allowed; }
+        #forapproved.enabled { background: var(--success); pointer-events: auto; opacity: 1; cursor: pointer; }
+        #forapproved.enabled:hover { background: #1b5e20; }
+        #forcancelled { background: var(--brand); color: #fff; }
+        #forcancelled:hover { background: var(--brand-hover); }
+
+        .pagination-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; flex-wrap: wrap; gap: 8px; }
+        .pagination-info { font-size: 12.5px; color: var(--n-600); }
+        .pagination-btns { display: flex; gap: 4px; }
+        .pg-btn {
+            display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+            border: 1px solid var(--n-300); border-radius: var(--radius-sm); background: #fff;
+            cursor: pointer; font-size: 13px; color: var(--n-700);
+        }
+        .pg-btn:hover { background: var(--brand-light); border-color: var(--brand); color: var(--brand); }
+        .pg-btn.active { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 700; }
+        .pg-btn[disabled] { opacity: .4; pointer-events: none; }
+
+        .cbx { appearance: none; -webkit-appearance: none; display: inline-grid; place-items: center; width: 16px; height: 16px;
+            border: 2px solid var(--n-400); border-radius: 3px; background: #fff; cursor: pointer; transition: background .12s, border-color .12s; }
+        .cbx::before { content: ""; width: 9px; height: 9px; clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); transform: scale(0); background: #fff; transition: transform .1s var(--ease); }
+        .cbx:hover { border-color: var(--brand); }
+        .cbx:checked { background: var(--brand); border-color: var(--brand); }
+        .cbx:checked::before { transform: scale(1); }
+        .cbx-lg { width: 17px; height: 17px; }
+        .cbx-lg::before { width: 10px; height: 10px; }
+
+        .select-all-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+        .select-all-label { font-size: 9px; font-weight: 700; color: var(--n-600); text-transform: uppercase; letter-spacing: .05em; line-height: 1; }
+
+        .tbl-scroll-wrapper { overflow: auto; border: 1px solid var(--n-200); border-radius: var(--radius); box-shadow: var(--shadow-sm); max-height: calc(10 * var(--row-h) + var(--hdr-h) + 16px); }
+        table.soa-table { width: 100%; min-width: max-content; border-collapse: collapse; white-space: nowrap; table-layout: auto !important; }
+        table.soa-table th, table.soa-table td { width: auto !important; max-width: none !important; min-width: 0; white-space: nowrap !important; overflow: visible !important; }
+        table.soa-table thead th {
+            position: sticky; top: 0; z-index: 2; background: var(--n-50); padding: 0 14px; height: var(--hdr-h);
+            font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--n-700);
+            border-bottom: 2px solid var(--n-200); border-right: 1px solid var(--n-200); text-align: center;
+            display: table-cell !important; visibility: visible !important; opacity: 1 !important; line-height: 1.2 !important;
+        }
+        table.soa-table thead th:last-child { border-right: none; }
+        table.soa-table thead th.th-check { padding: 0 8px; min-width: 60px; width: 60px; }
+        table.soa-table tbody tr { height: var(--row-h); cursor: pointer; transition: background .12s; }
+        table.soa-table tbody tr:hover { background: var(--brand-light); }
+        table.soa-table tbody tr.selected-row { background: #FFCDD2; }
+        table.soa-table tbody tr.selected-row td { color: var(--brand-dark); }
+        table.soa-table tbody td {
+            padding: 0 14px; font-size: 13px; color: var(--n-800); border-bottom: 1px solid var(--n-100); border-right: 1px solid var(--n-100);
+            vertical-align: middle; display: table-cell !important; visibility: visible !important; opacity: 1 !important; line-height: 1.25 !important;
+        }
+        table.soa-table tbody td:last-child { border-right: none; }
+        table.soa-table tbody td.td-check { text-align: center; }
+        table.soa-table td.soa-ta-num, table.soa-table th.soa-ta-num { text-align: right; }
+        table.soa-table td.soa-ta-center, table.soa-table th.soa-ta-center { text-align: center; }
+        table.soa-table td.soa-ta-left, table.soa-table th.soa-ta-left { text-align: left; }
+        .bp-card table.soa-table thead th, .bp-card table.soa-table tbody td { color: #424242 !important; text-indent: 0 !important; font-size: inherit !important; }
+
+        .col-ref { min-width: 140px; } .col-partner { min-width: 250px; } .col-tin { min-width: 150px; }
+        .col-address { min-width: 260px; } .col-business { min-width: 190px; } .col-service { min-width: 120px; }
+        .col-date { min-width: 120px; } .col-po { min-width: 140px; } .col-count { min-width: 110px; }
+        .col-amount { min-width: 130px; } .col-user { min-width: 150px; }
+
+        .container-fluid { padding: 12px; margin: 0; }
+
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(10,10,10,.5);
+            backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+            z-index: 1050;
+            align-items: center; justify-content: center; padding: 16px;
+        }
+        .modal-overlay.active { display: flex; }
+
+        .modal-card {
+            background: #fff; border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xl);
+            width: 100%; max-width: 520px;
+            animation: mcSlide .2s var(--ease);
+            overflow: hidden;
+        }
+        .modal-card-wide { max-width: 880px; }
+        @keyframes mcSlide { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .modal-card-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 20px;
+            background: var(--brand);
+            color: #fff;
+        }
+        .modal-card-header h3 {
+            margin: 0; font-size: 15px; font-weight: 600;
+            color: #fff; display: flex; align-items: center; gap: 8px;
+        }
+        .modal-close-btn {
+            background: none; border: none; cursor: pointer;
+            color: rgba(255,255,255,.8); font-size: 22px; line-height: 1;
+            padding: 2px 6px; border-radius: 4px;
+            transition: color .12s, background .12s;
+        }
+        .modal-close-btn:hover { color: #fff; background: rgba(255,255,255,.15); }
+
+        .modal-card-body  { padding: 20px 22px; }
+        .modal-card-footer {
+            padding: 12px 20px 16px;
+            display: flex; align-items: center; justify-content: flex-end;
+            gap: 8px; flex-wrap: wrap;
+            border-top: 1px solid var(--n-200);
+        }
+
+        .rv-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+        .rv-col { padding: 18px 22px; }
+        .rv-col + .rv-col { border-left: 1px solid var(--n-200); background: var(--n-50); }
+        .rv-section-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid var(--brand-light); }
+        .rv-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; font-size: 13px; }
+        .rv-lbl { min-width: 110px; font-size: 11px; font-weight: 600; color: var(--n-600); text-transform: uppercase; letter-spacing: .03em; flex-shrink: 0; padding-top: 1px; }
+        .rv-val { flex: 1; color: var(--n-900); font-weight: 500; word-break: break-word; }
+        .rv-amt, .peso-inline { font-variant-numeric: tabular-nums; }
+        .peso-inline { display: inline-flex; align-items: center; gap: 4px; }
+
+        .btn-modal {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 18px; border: none; border-radius: var(--radius-sm);
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: background .14s var(--ease), transform .1s, box-shadow .14s;
+            box-shadow: var(--shadow-sm);
+        }
+        .btn-modal:hover  { transform: translateY(-1px); box-shadow: var(--shadow); }
+        .btn-modal:active { transform: translateY(0); }
+        .btn-green { background: var(--success); color: #fff; }
+        .btn-green:hover { background: #1b5e20; }
+        .btn-red { background: var(--brand); color: #fff; }
+        .btn-red:hover { background: var(--brand-hover); }
+        .btn-outline-red { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); }
+        .btn-outline-red:hover { background: var(--brand-light); }
+        .btn-ghost { background: var(--n-100); color: var(--n-800); border: 1px solid var(--n-300); }
+        .btn-ghost:hover { background: var(--n-200); }
+
+        .cancel-textarea { width: 100%; min-height: 100px; border: 1.5px solid var(--n-200); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13.5px; color: var(--n-900); resize: vertical; outline: none; font-family: inherit; line-height: 1.5; transition: border-color .14s, box-shadow .14s; box-sizing: border-box; }
+        .cancel-textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-light); }
+        .cancel-textarea.error { border-color: var(--brand); }
+        .char-count { font-size: 11px; color: var(--n-500); text-align: right; margin-top: 4px; }
+
+        .confirm-body { padding: 24px 24px 16px; text-align: center; }
+        .confirm-body h4 { margin: 0 0 8px; font-size: 17px; font-weight: 700; color: var(--n-900); }
+        .confirm-body p { margin: 0; font-size: 13px; color: var(--n-600); line-height: 1.6; }
+
+        .message-modal { display: none; position: fixed; inset: 0; background: rgba(10,10,10,.5); backdrop-filter: blur(3px); z-index: 1100; align-items: center; justify-content: center; }
+        .message-modal.active { display: flex; }
+        .message-modal-content { background: #fff; border-radius: var(--radius-lg); padding: 30px 36px; text-align: center; max-width: 380px; width: 90%; box-shadow: var(--shadow-xl); }
+        #modalMessage { font-size: 14px; color: var(--n-700); line-height: 1.6; display: block; margin-bottom: 16px; }
+        .icon-container { margin-bottom: 10px; }
+        .icon { font-size: 40px; color: var(--success); }
+        .err-icon { font-size: 40px; color: var(--brand); }
+        .close-button { background: var(--brand); color: #fff; border: none; padding: 8px 28px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; }
+
+        @media (max-width: 960px) {
+            .rv-body { grid-template-columns: 1fr; }
+            .rv-col + .rv-col { border-left: none; border-top: 1px solid var(--n-200); }
+        }
+    </style>
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <i id="menu-btn" class="fa-solid fa-bars"></i>
-                <div class="usernav">
-                    <h6><?php 
-                            if($_SESSION['user_type'] === 'admin'){
-                                echo $_SESSION['admin_name'];
-                            }elseif($_SESSION['user_type'] === 'user'){
-                                echo $_SESSION['user_name']; 
-                            }else{
-                                echo "GUEST";
-                            }
-                    ?></h6>
-                    <h6 style="margin-left:5px;"><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo "(".$_SESSION['admin_email'].")";
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo "(".$_SESSION['user_email'].")";
-                        }else{
-                            echo "GUEST";
-                        }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>SOA Approval</h3></center>
-        <center><h5>List of Transaction(s)</h5></center>
+        <div class="bp-section-header" role="region" aria-label="Page title">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-check-to-slot" aria-hidden="true"></i>
+                <div>
+                    <h2>SOA Approval</h2>
+                    <div class="bp-section-sub">List of Transaction(s)</div>
+                </div>
+            </div>
+        </div>
         <form action="" method="POST">
-            <div class="data-table">
-                <div class="approved-btn">
-                    <button type="submit" id="forapproved" class="approved" name="approved">Approve</button>
-                    <button type="button" id="forcancelled" name="cancelled">Cancel</button>
+            <div class="bp-card container-fluid mt-3 p-4">
+                <div class="tbl-toolbar">
+                    <button type="submit" id="forapproved" class="btn-action" name="approved" disabled>
+                        <span class="micon micon-sm">done_all</span> Bulk Approve
+                    </button>
+                    <button type="button" id="forcancelled" class="btn-action" name="cancelled">
+                        <span class="micon micon-sm">block</span> Cancel Selected
+                    </button>
                 </div>
-                <table>
-                    <tr>
-                        <!-- Table header code -->
-                        <th><input type="checkbox" id="selectAllCheckbox"></th>
-                        <th>Date</th>
-                        <th>Reference Number</th>
-                        <th>Partner Name</th>
-                        <th style="display:none;">Partner Tin</th>
-                        <th style="display:none;">Address</th>
-                        <th style="display:none;">Business Style</th>
-                        <th>Service Charge</th>
-                        <th>From Date</th>
-                        <th>To Date</th>
-                        <th style="display:none;">PO Number</th>
-                        <th>Number of <br> Transactions</th>
-                        <th>Amount</th>
-                        <th>VAT <br> Amount</th>
-                        <th>Net of VAT</th>
-                        <th>Withholding <br> Tax</th>
-                        <th>Net Amount <br> Due</th>
-                        <!-- <th>Prepared By</th> -->
-                        <th>Created By</th>
-                        <th>Reviewed By</th>
-                        <!-- <th>Noted By</th>original -->
-                        <th>Approved By</th>
-                    </tr>
-                    <?php while ($row = mysqli_fetch_assoc($result)): ?>
-                        <?php if ($row['status'] === 'Reviewed' && $row['status'] !== 'Cancelled') { ?>
-                            <?php
-                            $referenceNumber = $row['reference_number'];
-                            $isSelected = isset($_GET['reference_number']) && $_GET['reference_number'] === $referenceNumber;
-                            $rowClass = $isSelected ? "selected-row" : "";
-                            ?>
 
-                            <tr class="table-row <?php echo $rowClass; ?>" onclick="selectRow(this, '<?php echo $referenceNumber; ?>')">
-                                <td><input type="checkbox" class="row-checkbox" name="selectedRows[]" value="<?php echo $referenceNumber; ?>"></td>
-                                <td style="text-align:left;"><?php echo date('F j, Y', strtotime($row['date'])); ?></td>
-                                <td style="text-align:left;"><?php echo $row['reference_number']; ?></td>
-                                <td style="text-align:left;"><?php echo $row['partner_Name']; ?></td>
-                                <td style="display:none;"><?php echo $row['partner_Tin']; ?></td>
-                                <td style="display:none;"><?php echo $row['address']; ?></td>
-                                <td style="display:none;"><?php echo $row['business_style']; ?></td>
-                                <td style="text-align:right;"><?php echo $row['service_charge']; ?></td>
-                                <td style="text-align:left;"><?php echo date('F j, Y', strtotime($row['from_date'])); ?></td>
-                                <td style="text-align:left;"><?php echo date('F j, Y', strtotime($row['to_date'])); ?></td>
-                                <td style="display:none;"><?php echo $row['po_number']; ?></td>
-                                <td style="text-align:right;"><?php echo number_format($row['number_of_transactions']); ?></td>
-                                <td style="text-align:right;"><?php echo number_format($row['amount'], 2); ?></td>
-                                <td style="display:none;"><?php echo $row['add_amount']; ?></td>
-                                <td style="display:none;"><?php echo $row['formula']; ?></td>
-                                <td style="text-align:right;"><?php echo $row['vat_amount']; ?></td>
-                                <td style="text-align:right;"><?php echo $row['net_of_vat']; ?></td>
-                                <td style="text-align:right;"><?php echo $row['withholding_tax']; ?></td>
-                                <td style="text-align:right;"><?php echo $row['net_amount_due']; ?></td>
-                                <td style="text-align:left;"><?php echo $row['prepared_by']; ?></td>
-                                <td style="text-align:left;"><?php echo $row['reviewed_by']; ?></td>
-                                <td style="text-align:left;"><?php echo $row['noted_by']; ?></td>
+                <div class="tbl-scroll-wrapper">
+                    <table class="soa-table">
+                        <thead>
+                            <tr>
+                                <th class="th-check">
+                                    <label class="select-all-wrap" title="Select all transactions">
+                                        <input type="checkbox" id="selectAllCheckbox" class="cbx cbx-lg" aria-label="Select all">
+                                        <span class="select-all-label">All</span>
+                                    </label>
+                                </th>
+                                <th class="soa-ta-center col-date">Date</th>
+                                <th class="soa-ta-left col-ref">Reference #</th>
+                                <th class="soa-ta-left col-partner">Partner Name</th>
+                                <th class="soa-ta-left col-tin">Partner TIN</th>
+                                <th class="soa-ta-left col-address">Address</th>
+                                <th class="soa-ta-left col-business">Business Style</th>
+                                <th class="soa-ta-left col-service">Service Charge</th>
+                                <th class="soa-ta-center col-date">From Date</th>
+                                <th class="soa-ta-center col-date">To Date</th>
+                                <th class="soa-ta-left col-po">PO Number</th>
+                                <th class="soa-ta-num col-count">No. of Transactions</th>
+                                <th class="soa-ta-num col-amount">Amount</th>
+                                <th class="soa-ta-num col-amount">VAT Amount</th>
+                                <th class="soa-ta-num col-amount">Net of VAT</th>
+                                <th class="soa-ta-num col-amount">Withholding Tax</th>
+                                <th class="soa-ta-num col-amount">Net Amount Due</th>
+                                <th class="soa-ta-left col-user">Created By</th>
+                                <th class="soa-ta-left col-user">Reviewed By</th>
+                                <th class="soa-ta-left col-user">Approved By</th>
                             </tr>
-
-                    <?php }
-                    endwhile; ?>
-                </table>
-            </div>
-            <!-- Add the confirm modal -->
-            <div id="confirmModal" class="modal">
-                <div class="modal-content">
-                    <input type="hidden" id="cancelledBy" name="cancelledBy" value="<?php echo $_SESSION['user_name'] ?>">
-                    <div class="modal-header">
-                        <h3>REVIEW THE TRANSACTION</h3>
-                    </div>
-                    <hr class="header-line">
-                    <div class="modal-fields">
-                        <div class="t-date">
-                            <label for="date">Date:</label>
-                            <input type="text" id="date" name="date" value="" readonly><br>
-                        </div>
-                        <div class="reference-div">
-                            <label for="reference">Reference Number:</label>
-                            <input type="text" id="reference" name="reference" value="<?php if (isset($_POST['reference_number'])) echo $_POST['reference_number']; ?>" readonly><br>
-                        </div>
-                        <div class="customer-div">
-                            <label for="customerName">Partner Name:</label>
-                            <input type="text" id="customerName" name="customerName" value="<?php if (isset($_POST['partnerName'])) echo $_POST['partnerName'] ?>" readonly><br>
-                        </div>
-                        <div class="customerTin-div">
-                            <label for="customerTIN">Partner TIN:</label>
-                            <input type="text" id="customerTIN" name="customerTIN" value="" readonly><br>
-                        </div>
-                        <div class="serviceCharge-div">
-                            <label for="serviceCharge">Service Charge:</label>
-                            <input type="text" id="serviceCharge" name="serviceCharge" value="<?php echo isset($_POST['service_Type']) ? $_POST['service_Type'] : ''; ?>" readonly><br>
-                        </div>
-                        <div class="transactionDate-div">
-                            <label for="transactionDate">Transaction Date:</label>
-                            <input type="text" id="transactionFromDate" name="transactionFromDate" value="From:  <?php echo isset($_POST['fromDate']) ? date('F d, Y', strtotime($_POST['fromDate'])) : ''; ?>" readonly>
-                            <input type="text" id="transactionToDate" name="transactionToDate" value="To:  <?php echo isset($_POST['toDate']) ? date('F d, Y', strtotime($_POST['toDate'])) : ''; ?>" readonly>
-                        </div>
-                        <div class="numberOfTransaction-div">
-                            <label for="numTransactions">Number of Transactions:</label>
-                            <input type="text" id="numTransactions" name="numTransactions" value="" readonly><br>
-                        </div>
-                        <hr class="header-line">
-                        <div class="addAmountDue-div" id="addAmountDue-div" style="display:none;">
-                            <label for="addAmount">Add Amount:</label>
-                            <span class="peso-sign">₱</span>
-                            <input type="text" id="addAmountInp" name="addAmount" value="" readonly>
-                            <br>
-                        </div>
-                        <div class="amount-content">
-                            <label for="amount">Amount:</label>
-                            <span class="peso-sign">₱</span>
-                            <input type="text" id="amount-modal" name="amount-modal" value="" readonly>
-                            <br>
-                        </div>
-
-                        <div class="vat-div">
-                            <label for="vatAmount">VAT Amount:</label>
-                            <span class="peso-sign">₱</span>
-                            <input type="text" id="vatAmount" name="vatAmount" value="" readonly>
-                            <br>
-                        </div>
-                        <div class="netvat-div">
-                            <label for="netOfVAT">Net of VAT:</label>
-                            <span class="peso-sign">₱</span>
-                            <input type="text" id="netOfVAT" name="netOfVAT" value="" readonly>
-                            <br>
-                        </div>
-                        <div class="wthax-div">
-                            <label for="withholdingTax">Withholding Tax:</label>
-                            <span class="peso-sign">₱</span>
-                            <input type="text" id="withholdingTax" name="withholdingTax" value="" readonly>
-                            <br>
-                        </div>
-                        <div class="netamountDue-div">
-                            <label for="netAmountDue">Net Amount Due:</label>
-                            <span class="peso-sign">₱</span>
-                            <input type="text" id="netAmountDue" name="netAmountDue" value="" readonly>
-                            <br>
-                        </div>
-                        <hr class="header-line">
-                    </div>
-                    <div class="modal-buttons">
-                        <div class="submit-btn">
-                            <button type="submit" id="confirmBtn" name="confirmBtn" class="confirmBtn" value="<?php echo $referenceNumber; ?>">Approve</button>
-                            <button type="button" id="cancelled-one" name="cancelled-one">Cancel</button>
-                        </div>
-                        <div class="modal-close">
-                            <button class="closeBtn" onclick="closeModal()">Close</button>
-                        </div>
-                    </div>
+                        </thead>
+                        <tbody id="tableBody">
+                            <?php while ($row = mysqli_fetch_assoc($result)): ?>
+                                <?php if ($row['status'] === 'Reviewed') { ?>
+                                    <?php
+                                    $referenceNumber = $row['reference_number'];
+                                    $isSelected = isset($_GET['reference_number']) && $_GET['reference_number'] === $referenceNumber;
+                                    $rowClass = $isSelected ? "selected-row" : "";
+                                    ?>
+                                    <tr class="table-row <?php echo $rowClass; ?>"
+                                        data-add-amount="<?php echo htmlspecialchars($row['add_amount'] ?? '', ENT_QUOTES); ?>"
+                                        data-formula="<?php echo htmlspecialchars($row['formula'] ?? '', ENT_QUOTES); ?>"
+                                        data-formula-withheld="<?php echo htmlspecialchars($row['formula_withheld'] ?? '', ENT_QUOTES); ?>"
+                                        onclick="handleRowClick(event, this, '<?php echo htmlspecialchars($referenceNumber, ENT_QUOTES); ?>')"
+                                        title="Click to approve">
+                                        <td class="td-check" onclick="event.stopPropagation()">
+                                            <input type="checkbox" class="cbx row-checkbox" name="selectedRows[]" value="<?php echo htmlspecialchars($referenceNumber, ENT_QUOTES); ?>">
+                                        </td>
+                                        <td class="soa-ta-center"><?php echo date('M j, Y', strtotime($row['date'])); ?></td>
+                                        <td class="soa-ta-left"><?php echo htmlspecialchars($row['reference_number'] ?? ''); ?></td>
+                                        <td class="soa-ta-left"><?php echo htmlspecialchars($row['partner_Name'] ?? ''); ?></td>
+                                        <td class="soa-ta-left"><?php echo htmlspecialchars($row['partner_Tin'] ?? ''); ?></td>
+                                        <td class="soa-ta-left"><?php echo htmlspecialchars($row['address'] ?? ''); ?></td>
+                                        <td class="soa-ta-left"><?php echo htmlspecialchars($row['business_style'] ?? ''); ?></td>
+                                        <td class="soa-ta-left"><?php echo htmlspecialchars($row['service_charge'] ?? ''); ?></td>
+                                        <td class="soa-ta-center"><?php echo date('M j, Y', strtotime($row['from_date'])); ?></td>
+                                        <td class="soa-ta-center"><?php echo date('M j, Y', strtotime($row['to_date'])); ?></td>
+                                        <td class="soa-ta-left"><?php echo htmlspecialchars($row['po_number'] ?? ''); ?></td>
+                                        <td class="soa-ta-num"><?php echo number_format($row['number_of_transactions']); ?></td>
+                                        <td class="soa-ta-num"><?php echo number_format($row['amount'], 2); ?></td>
+                                        <td class="soa-ta-num"><?php echo number_format((float)$row['vat_amount'], 2); ?></td>
+                                        <td class="soa-ta-num"><?php echo number_format((float)$row['net_of_vat'], 2); ?></td>
+                                        <td class="soa-ta-num"><?php echo number_format((float)$row['withholding_tax'], 2); ?></td>
+                                        <td class="soa-ta-num"><?php echo number_format((float)$row['net_amount_due'], 2); ?></td>
+                                        <td class="soa-ta-left"><?php echo htmlspecialchars($row['prepared_by'] ?? ''); ?></td>
+                                        <td class="soa-ta-left"><?php echo htmlspecialchars($row['reviewed_by'] ?? ''); ?></td>
+                                        <td class="soa-ta-left"><?php echo htmlspecialchars($row['noted_by'] ?? ''); ?></td>
+                                    </tr>
+                            <?php }
+                            endwhile; ?>
+                        </tbody>
+                    </table>
                 </div>
-            </div>
-            <!-- Modal for reasons of cancellation -->
-            <div id="cancellationModal" class="cancel-modal">
-                <div class="cancel-modal-content">
-                    <span class="cancel-close">&times;</span>
-                    <h3>Reasons of Cancellation</h3>
-                    <input style="display:none;" type="date" name="cancel_date" id="cancel_date" value="<?php echo date('Y-m-d'); ?>">
-                    <textarea id="cancellationReason" rows="4" name="cancellationReason" cols="50" maxlength="500" placeholder="Please provide a reason for cancellation..."></textarea><br>
-                    <center>
-                        <button type="submit" id="cancelConfirmBtn" name="cancelConfirmBtn">Confirm</button>
-                    </center>
+
+                <div class="pagination-bar" id="paginationBar">
+                    <span class="pagination-info" id="paginationInfo"></span>
+                    <div class="pagination-btns" id="paginationBtns"></div>
                 </div>
             </div>
 
-            <!-- Modal for reasons of Multiple cancellation -->
-            <div id="multipleCancellationModal" class="multipleCancel-modal">
-                <div class="multipleCancel-modal-content">
-                    <span class="multipleCancel-close">&times;</span>
-                    <h3>Reasons of Cancellation</h3>
-                    <input style="display:none;" type="date" name="cancel_date" id="cancel_date" value="<?php echo date('Y-m-d'); ?>">
-                    <textarea id="cancellationReason" name="cancellationReason" rows="4" cols="50" maxlength="500" placeholder="Please provide a reason for cancellation..."></textarea><br>
-                    <center>
-                        <button type="submit" id="multipleCancelConfirmBtn" name="multipleCancelConfirmBtn">Confirm</button>
-                    </center>
+            <div id="confirmModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="approveModalTitle">
+                <div class="modal-card modal-card-wide">
+                    <div class="modal-card-header">
+                        <h3 id="approveModalTitle">
+                            <span class="material-icons-round micon-hdr" aria-hidden="true">fact_check</span>
+                            Approve Transaction
+                        </h3>
+                        <button type="button" class="modal-close-btn" onclick="closeApprovalModal()" aria-label="Close">&times;</button>
+                    </div>
+                    <div class="rv-body">
+                        <input type="hidden" id="cancelledBy" name="cancelledBy" value="<?php echo htmlspecialchars($_SESSION['user_name'] ?? $_SESSION['admin_name'] ?? ''); ?>">
+                        <div class="rv-col">
+                            <div class="rv-section-label">
+                                <span class="material-icons-round micon-sm" aria-hidden="true">description</span> Transaction Details
+                            </div>
+                            <div class="rv-row"><span class="rv-lbl">Date</span><span class="rv-val" id="fv-date"></span></div>
+                            <div class="rv-row"><span class="rv-lbl">Reference #</span><input type="hidden" id="reference" name="reference" value=""><span class="rv-val" id="fv-reference"></span></div>
+                            <div class="rv-row"><span class="rv-lbl">Partner Name</span><span class="rv-val" id="fv-partnerName"></span></div>
+                            <div class="rv-row"><span class="rv-lbl">Partner TIN</span><span class="rv-val" id="fv-tin"></span></div>
+                            <div class="rv-row"><span class="rv-lbl">Service Charge</span><span class="rv-val" id="fv-serviceCharge"></span></div>
+                            <div class="rv-row"><span class="rv-lbl">From Date</span><span class="rv-val" id="fv-fromDate"></span></div>
+                            <div class="rv-row"><span class="rv-lbl">To Date</span><span class="rv-val" id="fv-toDate"></span></div>
+                            <div class="rv-row"><span class="rv-lbl">No. of Transactions</span><span class="rv-val" id="fv-numTxn"></span></div>
+                        </div>
+                        <div class="rv-col">
+                            <div class="rv-section-label">
+                                <span class="material-icons-round micon-sm" aria-hidden="true">payments</span> Financial Summary
+                            </div>
+                            <div class="rv-row" id="addAmountDue-div" style="display:none;"><span class="rv-lbl">Add Amount</span><span class="rv-val rv-amt"><span class="peso-inline"><span>₱</span><span id="fv-addAmountVal"></span></span><input type="hidden" id="addAmountInp" name="addAmount" value=""></span></div>
+                            <div class="rv-row"><span class="rv-lbl">Amount</span><span class="rv-val rv-amt"><span class="peso-inline"><span>₱</span><span id="fv-amount"></span></span><input type="hidden" id="amount-modal" name="amount-modal" value=""></span></div>
+                            <div class="rv-row"><span class="rv-lbl">VAT Amount</span><span class="rv-val rv-amt"><span class="peso-inline"><span>₱</span><span id="fv-vat"></span></span><input type="hidden" id="vatAmount" name="vatAmount" value=""></span></div>
+                            <div class="rv-row"><span class="rv-lbl">Net of VAT</span><span class="rv-val rv-amt"><span class="peso-inline"><span>₱</span><span id="fv-netVat"></span></span><input type="hidden" id="netOfVAT" name="netOfVAT" value=""></span></div>
+                            <div class="rv-row"><span class="rv-lbl">Withholding Tax</span><span class="rv-val rv-amt"><span class="peso-inline"><span>₱</span><span id="fv-wtax"></span></span><input type="hidden" id="withholdingTax" name="withholdingTax" value=""></span></div>
+                            <div class="rv-row"><span class="rv-lbl">Net Amount Due</span><span class="rv-val rv-amt"><span class="peso-inline"><span>₱</span><span id="fv-netAmtDue"></span></span><input type="hidden" id="netAmountDue" name="netAmountDue" value=""></span></div>
+                        </div>
+                    </div>
+                    <div class="modal-card-footer">
+                        <button type="button" id="triggerApproveConfirm" class="btn-modal btn-green"><span class="micon micon-sm">verified</span> Approve</button>
+                        <button type="button" id="cancelled-one" class="btn-modal btn-outline-red"><span class="micon micon-sm">block</span> Cancel Txn</button>
+                        <button type="button" class="btn-modal btn-ghost" onclick="closeApprovalModal()">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Single Cancellation Modal -->
+            <div id="cancellationModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cancelTitle1">
+                <div class="modal-card">
+                    <div class="modal-card-header">
+                        <h3 id="cancelTitle1">
+                            <span class="micon micon-hdr">cancel</span>
+                            Reason for Cancellation
+                        </h3>
+                        <button type="button" class="modal-close-btn" onclick="closeCancelModal('cancellationModal')" aria-label="Close">&times;</button>
+                    </div>
+                    <div class="modal-card-body">
+                        <input type="hidden" name="cancel_date" id="cancel_date" value="<?php echo date('Y-m-d'); ?>">
+                        <label style="display:block;font-size:13px;font-weight:600;color:var(--n-600);margin-bottom:8px;">
+                            Please describe the reason for cancellation <span style="color:var(--brand);">*</span>
+                        </label>
+                        <textarea id="cancellationReason" name="cancellationReason" maxlength="500"
+                            class="cancel-textarea" placeholder="Enter your reason here..."></textarea>
+                        <div class="char-count"><span id="charCount1">0</span> / 500</div>
+                    </div>
+                    <div class="modal-card-footer">
+                        <button type="submit" id="cancelConfirmBtn" name="cancelConfirmBtn" class="btn-modal btn-red">
+                            <span class="micon micon-sm">check_circle</span> Confirm Cancellation
+                        </button>
+                        <button type="button" class="btn-modal btn-ghost" onclick="closeCancelModal('cancellationModal')">
+                            Go Back
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Multiple Cancellation Modal -->
+            <div id="multipleCancellationModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cancelTitle2">
+                <div class="modal-card">
+                    <div class="modal-card-header">
+                        <h3 id="cancelTitle2">
+                            <span class="micon micon-hdr">cancel</span>
+                            Reason for Bulk Cancellation
+                        </h3>
+                        <button type="button" class="modal-close-btn" onclick="closeCancelModal('multipleCancellationModal')" aria-label="Close">&times;</button>
+                    </div>
+                    <div class="modal-card-body">
+                        <input type="hidden" name="cancel_date" id="cancel_date_multi" value="<?php echo date('Y-m-d'); ?>">
+                        <label style="display:block;font-size:13px;font-weight:600;color:var(--n-600);margin-bottom:8px;">
+                            Please describe the reason for cancellation <span style="color:var(--brand);">*</span>
+                        </label>
+                        <textarea id="multipleCancellationReason" name="cancellationReason" maxlength="500"
+                            class="cancel-textarea" placeholder="Enter your reason here..."></textarea>
+                        <div class="char-count"><span id="charCount2">0</span> / 500</div>
+                    </div>
+                    <div class="modal-card-footer">
+                        <button type="submit" id="multipleCancelConfirmBtn" name="multipleCancelConfirmBtn" class="btn-modal btn-red">
+                            <span class="micon micon-sm">check_circle</span> Confirm Cancellation
+                        </button>
+                        <button type="button" class="btn-modal btn-ghost" onclick="closeCancelModal('multipleCancellationModal')">
+                            Go Back
+                        </button>
+                    </div>
                 </div>
             </div>
         </form>
     </div>
-    <!-- Modal for displaying messages -->
-    <div id="messageModal" class="message-modal">
-        <form action="" method="POST">
-        <div class="message-modal-content">
-            <span id="modalMessage"></span><br>
-            <button type="submit" class="close-button">CLOSE</button>
+
+    <div id="approveConfirmModal" class="modal-overlay" role="dialog" aria-modal="true" style="z-index:1060;">
+        <div class="modal-card">
+            <div class="confirm-body">
+                <div class="confirm-icon"><span class="material-icons-round" style="color:var(--success);font-size:36px;">verified</span></div>
+                <h4>Approve This Transaction?</h4>
+                <p>This action will mark the transaction as <strong>Approved</strong>. It cannot be undone.</p>
+            </div>
+            <div class="modal-card-footer" style="justify-content:center;gap:12px;">
+                <button type="button" id="confirmApproveYes" class="btn-modal btn-green"><span class="micon micon-sm">check_circle</span> Confirm</button>
+                <button type="button" class="btn-modal btn-ghost" onclick="closeConfirmModal('approveConfirmModal')">Cancel</button>
+            </div>
         </div>
-        </form>
+    </div>
+
+    <div id="messageModal" class="message-modal" role="alertdialog">
+        <div class="message-modal-content">
+            <span id="modalMessage"></span>
+            <button class="close-button" id="msgCloseBtn">CLOSE</button>
+        </div>
     </div>
     <script>
+        var ROWS_PER_PAGE = 10;
+        var currentPage = 1;
+        var tableRows = document.getElementsByClassName('table-row');
 
-        var tableRows = document.getElementsByClassName("table-row");
-        var selectedRow;
-        var clickCount = 0;
-        var doubleClickDelayMs = 300; // Adjust this value for desired double click delay
+        function getAllRows() {
+            return Array.from(document.querySelectorAll('#tableBody .table-row'));
+        }
 
-        // Function to handle row selection
-        function selectRow(row, referenceNumber) {
-            const checkbox = row.querySelector("input[type='checkbox']");
-            if (selectedRow === row && checkbox.checked) {
-                clickCount++;
-                if (clickCount === 2) {
-                    // Row is clicked twice, open the modal
-                    openModal(referenceNumber);
-                    clickCount = 0; // Reset the click count
-                }
+        function renderPage(page) {
+            var rows = getAllRows();
+            var total = rows.length;
+            var pages = Math.max(1, Math.ceil(total / ROWS_PER_PAGE));
+            currentPage = Math.min(Math.max(1, page), pages);
+
+            rows.forEach(function (r, i) {
+                r.style.display = (i >= (currentPage - 1) * ROWS_PER_PAGE && i < currentPage * ROWS_PER_PAGE) ? '' : 'none';
+            });
+
+            var from = total === 0 ? 0 : (currentPage - 1) * ROWS_PER_PAGE + 1;
+            var to = Math.min(currentPage * ROWS_PER_PAGE, total);
+            var info = document.getElementById('paginationInfo');
+            if (info) info.textContent = total === 0 ? 'No records found' : 'Showing ' + from + '–' + to + ' of ' + total + ' records';
+
+            var btns = document.getElementById('paginationBtns');
+            if (!btns) return;
+            btns.innerHTML = '';
+            if (pages <= 1) return;
+
+            function mkBtn(label, p, active, disabled) {
+                var button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = label;
+                button.className = 'pg-btn' + (active ? ' active' : '');
+                button.disabled = disabled;
+                button.addEventListener('click', function () { renderPage(p); });
+                btns.appendChild(button);
+            }
+
+            mkBtn('«', 1, false, currentPage === 1);
+            mkBtn('‹', currentPage - 1, false, currentPage === 1);
+            for (var p = 1; p <= pages; p++) mkBtn(p, p, p === currentPage, false);
+            mkBtn('›', currentPage + 1, false, currentPage === pages);
+            mkBtn('»', pages, false, currentPage === pages);
+        }
+
+        function updateBulkApprove() {
+            var checked = document.querySelectorAll('.row-checkbox:checked').length;
+            var btn = document.getElementById('forapproved');
+            if (checked > 0) {
+                btn.classList.add('enabled');
+                btn.disabled = false;
             } else {
-                clickCount = 1; // Reset the click count
-
-                // Remove previous selection
-                if (selectedRow && !checkbox.checked) {
-                    selectedRow.classList.remove("selected-row");
-                }
-
-                // Highlight the clicked row
-                row.classList.toggle("selected-row");
-                selectedRow = row;
+                btn.classList.remove('enabled');
+                btn.disabled = true;
             }
         }
 
-        // Function to handle selecting/deselecting all rows
-        document.getElementById("selectAllCheckbox").addEventListener("change", function() {
-            const checkboxes = document.querySelectorAll(".row-checkbox");
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = this.checked;
-                const row = checkbox.closest(".table-row");
-                if (this.checked) {
-                    row.classList.add("selected-row");
-                } else {
-                    row.classList.remove("selected-row");
-                }
+        function openOverlay(id) {
+            var el = document.getElementById(id);
+            if (el) { el.classList.add('active'); document.body.style.overflow = 'hidden'; }
+        }
+
+        function closeOverlay(id) {
+            var el = document.getElementById(id);
+            if (el) el.classList.remove('active');
+            if (!document.querySelector('.modal-overlay.active')) document.body.style.overflow = '';
+        }
+
+        document.getElementById('selectAllCheckbox').addEventListener('change', function () {
+            var checkboxes = document.querySelectorAll('.row-checkbox');
+            checkboxes.forEach(function (cb) {
+                cb.checked = this.checked;
+                var row = cb.closest('.table-row');
+                if (this.checked) row.classList.add('selected-row');
+                else row.classList.remove('selected-row');
+            }, this);
+            updateBulkApprove();
+        });
+
+        document.querySelectorAll('.row-checkbox').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                var all = document.querySelectorAll('.row-checkbox');
+                var chkd = document.querySelectorAll('.row-checkbox:checked');
+                document.getElementById('selectAllCheckbox').checked = (all.length === chkd.length);
+                var row = this.closest('.table-row');
+                if (this.checked) row.classList.add('selected-row');
+                else row.classList.remove('selected-row');
+                updateBulkApprove();
             });
         });
 
-        // Function to open the modal
+        function handleRowClick(event, row, referenceNumber) {
+            if (event.target.classList.contains('row-checkbox') ||
+                (event.target.closest && event.target.closest('td') === row.querySelector('td:first-child'))) {
+                return;
+            }
+            openModal(referenceNumber);
+        }
+
         function openModal(referenceNumber) {
-            // Find the corresponding row in the table
-            var rowData = Array.from(tableRows).find(function(row) {
-                return row.querySelector("td:nth-child(3)").textContent === referenceNumber;
+            var rowData = Array.from(tableRows).find(function (row) {
+                return row.querySelector('td:nth-child(3)').textContent.trim() === referenceNumber.trim();
             });
+            if (!rowData) return;
 
-            if (rowData) {
-                // Extract the values from the row
-                var date = rowData.querySelector("td:nth-child(2)").textContent;
-                var referenceNumber = rowData.querySelector("td:nth-child(3)").textContent;
-                var partnerName = rowData.querySelector("td:nth-child(4)").textContent;
-                var partnerTIN = rowData.querySelector("td:nth-child(5)").textContent;
-                var serviceCharge = rowData.querySelector("td:nth-child(8)").textContent;
-                var transactionFromDate = rowData.querySelector("td:nth-child(9)").textContent;
-                var transactionToDate = rowData.querySelector("td:nth-child(10)").textContent;
-                var numTransactions = rowData.querySelector("td:nth-child(12)").textContent;
-                var amount = rowData.querySelector("td:nth-child(13)").textContent;
-                var addAmount = rowData.querySelector("td:nth-child(14)").textContent;
-                var formula = rowData.querySelector("td:nth-child(15)").textContent;
-                var vatAmount = rowData.querySelector("td:nth-child(16)").textContent;
-                var netOfVAT = rowData.querySelector("td:nth-child(17)").textContent;
-                var withholdingTax = rowData.querySelector("td:nth-child(18)").textContent;
-                var netAmountDue = rowData.querySelector("td:nth-child(19)").textContent;
+            var td = function (n) { return rowData.querySelector('td:nth-child(' + n + ')').textContent.trim(); };
 
-                // Populate the input fields in the modal
-                var dateInput = document.getElementById("date");
-                dateInput.value = date;
-                var referenceNumberInput = document.getElementById("reference");
-                referenceNumberInput.value = referenceNumber;
-                var customerNameInput = document.getElementById("customerName");
-                customerNameInput.value = partnerName;
-                var customerTINInput = document.getElementById("customerTIN");
-                customerTINInput.value = partnerTIN;
-                var serviceChargeInput = document.getElementById("serviceCharge");
-                serviceChargeInput.value = serviceCharge;
-                var transactionFromDateInput = document.getElementById("transactionFromDate");
-                transactionFromDateInput.value = transactionFromDate;
-                var transactionToDateInput = document.getElementById("transactionToDate");
-                transactionToDateInput.value = transactionToDate;
-                var numTransactionsInput = document.getElementById("numTransactions");
-                numTransactionsInput.value = numTransactions;
-                var amountInput = document.getElementById("amount-modal");
-                amountInput.value = amount;
-                var addAmountInput = document.getElementById("addAmountInp");
-                addAmountInput.value = addAmount;
-                var vatAmountInput = document.getElementById("vatAmount");
-                vatAmountInput.value = vatAmount;
-                var netOfVATInput = document.getElementById("netOfVAT");
-                netOfVATInput.value = netOfVAT;
-                var withholdingTaxInput = document.getElementById("withholdingTax");
-                withholdingTaxInput.value = withholdingTax;
-                if (partnerTIN === '005-519-158-000') {
-                    document.getElementById("addAmountDue-div").style.display = "block";
-                }
-                if (formula === 'INCLUSIVE') {
-                    var netAmountDueInput = document.getElementById("netAmountDue");
-                    netAmountDueInput.value = netAmountDue;
-                } else if (formula === 'EXCLUSIVE') {
-                    var netAmountDueInput = document.getElementById("netAmountDue");
-                    netAmountDueInput.value = netAmountDue;
-                } else if (formula === 'NON-VAT') {
-                    var netAmountDueInput = document.getElementById("netAmountDue");
-                    netAmountDueInput.value = amount;
-                }
+            var date = td(2), refNum = td(3), partnerName = td(4), partnerTIN = td(5), serviceCharge = td(8),
+                fromDate = td(9), toDate = td(10), numTxn = td(12), amount = td(13), vatAmount = td(14),
+                netOfVAT = td(15), wtax = td(16), netAmtDue = td(17), addAmount = rowData.dataset.addAmount || '', formula = rowData.dataset.formula || '';
+
+            document.getElementById('fv-date').textContent = date;
+            document.getElementById('fv-reference').textContent = refNum;
+            document.getElementById('fv-partnerName').textContent = partnerName;
+            document.getElementById('fv-tin').textContent = partnerTIN;
+            document.getElementById('fv-serviceCharge').textContent = serviceCharge;
+            document.getElementById('fv-fromDate').textContent = fromDate;
+            document.getElementById('fv-toDate').textContent = toDate;
+            document.getElementById('fv-numTxn').textContent = numTxn;
+            document.getElementById('fv-amount').textContent = amount;
+            document.getElementById('fv-addAmountVal').textContent = addAmount;
+            document.getElementById('fv-vat').textContent = vatAmount;
+            document.getElementById('fv-netVat').textContent = netOfVAT;
+            document.getElementById('fv-wtax').textContent = wtax;
+            document.getElementById('fv-netAmtDue').textContent = (formula === 'NON-VAT') ? amount : netAmtDue;
+
+            document.getElementById('reference').value = refNum;
+            document.getElementById('addAmountInp').value = addAmount;
+            document.getElementById('amount-modal').value = amount;
+            document.getElementById('vatAmount').value = vatAmount;
+            document.getElementById('netOfVAT').value = netOfVAT;
+            document.getElementById('withholdingTax').value = wtax;
+            document.getElementById('netAmountDue').value = (formula === 'NON-VAT') ? amount : netAmtDue;
+
+            var showAdd = (partnerTIN === '005-519-158-000');
+            document.getElementById('addAmountDue-div').style.display = showAdd ? 'flex' : 'none';
+
+            openOverlay('confirmModal');
+        }
+
+        function closeApprovalModal() {
+            closeOverlay('confirmModal');
+        }
+
+        document.getElementById('confirmModal').addEventListener('click', function (e) {
+            if (e.target === this) closeApprovalModal();
+        });
+
+        document.getElementById('triggerApproveConfirm').addEventListener('click', function () {
+            closeOverlay('confirmModal');
+            openOverlay('approveConfirmModal');
+        });
+
+        document.getElementById('approveConfirmModal').addEventListener('click', function (e) {
+            if (e.target === this) closeConfirmModal('approveConfirmModal');
+        });
+
+        document.getElementById('confirmApproveYes').addEventListener('click', function () {
+            var refVal = document.getElementById('reference').value;
+            var hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'confirmBtn';
+            hiddenInput.value = refVal;
+            var form = document.querySelector('form');
+            form.appendChild(hiddenInput);
+            form.submit();
+        });
+
+        function closeConfirmModal(id) {
+            closeOverlay(id);
+            if (id === 'approveConfirmModal') openOverlay('confirmModal');
+        }
+
+        document.getElementById('cancelled-one').addEventListener('click', function () {
+            closeOverlay('confirmModal');
+            openOverlay('cancellationModal');
+        });
+
+        document.getElementById('cancellationModal').addEventListener('click', function (e) {
+            if (e.target === this) closeCancelModal('cancellationModal');
+        });
+
+        document.getElementById('forcancelled').addEventListener('click', function () {
+            var selected = document.querySelectorAll('.row-checkbox:checked');
+            if (selected.length === 0) {
+                openMsgModal('Please select at least one transaction to cancel.', true);
+                return;
             }
-
-
-            // Code to open the modal and perform necessary actions
-            var modal = document.getElementById("confirmModal");
-            modal.style.display = "block";
-        }
-
-        // Function to close the modal
-        function closeModal() {
-            var modal = document.getElementById("confirmModal");
-            modal.style.display = "none";
-        }
-
-        // Close modal when the close button is clicked
-        var closeButton = document.getElementsByClassName("closeBtn")[0];
-        closeButton.addEventListener("click", closeModal);
-
-        // Close modal when the user clicks outside the modal
-        window.addEventListener("click", function(event) {
-            var modal = document.getElementById("confirmModal");
-            if (event.target === modal) {
-                closeModal();
-            }
+            openOverlay('multipleCancellationModal');
         });
 
-        // Function to display a modal with a message and icon
-        function displayModal(message, iconClass) {
-            var modal = document.getElementById("messageModal");
-            var messageText = document.getElementById("modalMessage");
-            messageText.innerHTML = '<span class="' + iconClass + '"></span>' + message;
-            modal.style.display = "block";
-        }
-
-        // Function to close the modal
-        function closeModal() {
-            var modal = document.getElementById("messageModal");
-            modal.style.display = "none";
-        }
-
-        // Close the modal when the close button is clicked
-        var closeButton = document.querySelector(".close-button");
-        if (closeButton) {
-            closeButton.addEventListener("click", closeModal);
-        }
-
-        // Get references to the necessary elements
-        var cancellationModal = document.getElementById('cancellationModal');
-        var cancelButton = document.getElementById('cancelled-one');
-        var closeButton = document.querySelector('.cancel-close');
-        var confirmButton = document.getElementById('cancelConfirmBtn');
-        var cancellationReasonInput = document.getElementById('cancellationReason');
-
-        // Show the cancellation modal
-        function showCancellationModal() {
-            cancellationModal.style.display = 'block';
-        }
-
-        // Close the cancellation modal
-        function closeCancellationModal() {
-            cancellationModal.style.display = 'none';
-        }
-
-        // Event listener for the Cancel button
-        cancelButton.addEventListener('click', function() {
-            // Open the cancellation modal
-            showCancellationModal();
+        document.getElementById('multipleCancellationModal').addEventListener('click', function (e) {
+            if (e.target === this) closeCancelModal('multipleCancellationModal');
         });
 
-        // Event listener for the Close button in the modal
-        closeButton.addEventListener('click', function() {
-            // Close the cancellation modal
-            closeCancellationModal();
-        });
-
-        // Event listener for the Confirm button in the modal
-        confirmButton.addEventListener('click', function() {
-            // Get the cancellation reason from the textarea
-            var cancellationReason = cancellationReasonInput.value;
-
-            // Perform any necessary validation or processing with the cancellation reason here
-
-            // Close the cancellation modal
-            closeCancellationModal();
-        });
-
-
-
-        // Get references to the necessary elements
-        var cancellationModal = document.getElementById('multipleCancellationModal');
-        var cancelButton = document.getElementById('forcancelled');
-        var closeButton = document.querySelector('.multipleCancel-close');
-        var confirmButton = document.getElementById('multipleCancelConfirmBtn');
-        var cancellationReasonInput = document.getElementById('multipleCancellationReason');
-
-        // Show the cancellation modal
-        function showCancellationModal() {
-            cancellationModal.style.display = 'block';
+        function closeCancelModal(id) {
+            closeOverlay(id);
         }
 
-        // Close the cancellation modal
-        function closeCancellationModal() {
-            cancellationModal.style.display = 'none';
-        }
+        document.getElementById('cancellationReason').addEventListener('input', function () {
+            document.getElementById('charCount1').textContent = this.value.length;
+        });
+        document.getElementById('multipleCancellationReason').addEventListener('input', function () {
+            document.getElementById('charCount2').textContent = this.value.length;
+        });
 
-        // Event listener for the Cancel button
-        cancelButton.addEventListener('click', function() {
-            // Check if any table checkmarks are checked
-            var checkmarks = document.querySelectorAll('.selected-row');
-            if (checkmarks.length > 0) {
-                // Open the cancellation modal
-                showCancellationModal();
-            } else {
-                // Show an alert or perform any other action to indicate that no checkmarks are checked
-                alert('Please select at least one Transaction to cancel.');
+        document.getElementById('cancelConfirmBtn').addEventListener('click', function (e) {
+            var ta = document.getElementById('cancellationReason');
+            if (!ta.value.trim()) {
+                ta.classList.add('error');
+                ta.focus();
+                e.preventDefault();
             }
         });
 
-        // Event listener for the Close button in the modal
-        closeButton.addEventListener('click', function() {
-            // Close the cancellation modal
-            closeCancellationModal();
+        document.getElementById('multipleCancelConfirmBtn').addEventListener('click', function (e) {
+            var ta = document.getElementById('multipleCancellationReason');
+            if (!ta.value.trim()) {
+                ta.classList.add('error');
+                ta.focus();
+                e.preventDefault();
+            }
         });
 
-        // Event listener for the Confirm button in the modal
-        confirmButton.addEventListener('click', function() {
-            // Get the cancellation reason from the textarea
-            var cancellationReason = cancellationReasonInput.value;
+        function openMsgModal(msg, isErr) {
+            var modal = document.getElementById('messageModal');
+            var span = document.getElementById('modalMessage');
+            span.innerHTML = isErr
+                ? '<div class="icon-container"><div class="err-icon">&#10060;</div></div>' + msg
+                : '<div class="icon-container"><div class="icon">&#10003;</div></div>' + msg;
+            modal.classList.add('active');
+        }
 
-            // Perform any necessary validation or processing with the cancellation reason here
+        document.getElementById('msgCloseBtn').addEventListener('click', function () {
+            document.getElementById('messageModal').classList.remove('active');
+        });
 
-            // Close the cancellation modal
-            closeCancellationModal();
+        document.getElementById('messageModal').addEventListener('click', function (e) {
+            if (e.target === this) this.classList.remove('active');
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            renderPage(1);
+            updateBulkApprove();
         });
     </script>
 </body>

@@ -108,6 +108,30 @@ if (isset($_SESSION['user_type'])) {
             margin-bottom: 20px;
         }
 
+        /* Mode card selector */
+        .mode-cards { display:flex; gap:8px; }
+        .mode-card {
+            border: 1px solid #e9ecef;
+            padding: 8px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            min-width: 120px;
+            text-align: left;
+            background: #fff;
+            transition: all 120ms ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            display:flex;
+            flex-direction:row;
+            align-items:center;
+            gap:10px;
+        }
+        .mode-card .mode-icon { font-size:18px; color:#6c757d; width:28px; text-align:center; }
+        .mode-card .mode-text { display:flex; flex-direction:column; }
+        .mode-card .mode-label { font-weight:700; margin:0; font-size:13px; }
+        .mode-card small { color:#6c757d; display:block; font-size:11px; }
+        .mode-card.selected { border-color: #dc3545; box-shadow: 0 8px 24px rgba(220,53,69,0.06); }
+        .mode-card.selected .mode-icon { color:#dc3545; }
+
         .file-upload-area.drag-over {
             border-color: #dc3545;
             background-color: #ffe5e5;
@@ -127,7 +151,7 @@ if (isset($_SESSION['user_type'])) {
         /* File Cards Container */
         .files-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 15px;
             margin-top: 20px;
         }
@@ -135,66 +159,40 @@ if (isset($_SESSION['user_type'])) {
         /* Individual File Card */
         .file-card {
             border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 15px;
+            border-radius: 10px;
+            padding: 14px;
             background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            transition: all 0.3s ease;
-        }
-
-        .file-card:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        }
-
-        .file-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            border-bottom: 1px solid #dee2e6;
-            padding-bottom: 10px;
-        }
-
-        .file-card-info {
-            flex: 1;
-        }
-
-        .file-card-label {
-            font-size: 11px;
-            color: #6c757d;
-            text-transform: uppercase;
-            font-weight: 600;
-            margin-bottom: 3px;
-        }
-
-        .file-card-value {
-            font-size: 14px;
-            color: #212529;
-            font-weight: 500;
-            word-break: break-word;
-        }
-
-        .file-card-delete {
-            cursor: pointer;
-            color: #dc3545;
-            font-size: 20px;
+            gap: 8px;
             transition: all 0.2s ease;
+            min-height: 96px;
+            position: relative;
+            overflow: hidden;
         }
 
-        .file-card-delete:hover {
-            color: #bb2d3b;
-            transform: scale(1.1);
-        }
+        .file-card:hover { box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
 
-        .file-card-body {
+        .file-card-header { display:flex; gap:10px; align-items:flex-start; }
+
+        .file-card-info { flex: 1 1 auto; }
+
+        .file-card-label { font-size: 12px; color: #6c757d; font-weight:600; margin-bottom:4px; }
+        .file-card-value { font-size: 14px; color:#212529; font-weight:600; word-break: break-word; }
+
+        .file-card-delete { cursor:pointer; color:#6c757d; padding:6px; border-radius:6px; background: rgba(255,255,255,0.6); position:absolute; top:10px; right:10px; z-index:6; }
+        .file-card-delete:hover { background:#f8f9fa; color:#dc3545; transform: none; }
+
+        /* Footer container stays inside card flow and is pushed to bottom */
+        .file-card-footer {
+            margin-top: auto;
+            text-align: right;
             display: flex;
-            gap: 15px;
-        }
-
-        .file-card-detail {
-            flex: 1;
+            gap: 8px;
+            align-items: center;
+            justify-content: flex-end;
+            padding-top: 6px;
         }
 
         .badge-source {
@@ -309,69 +307,123 @@ if (isset($_SESSION['user_type'])) {
             margin-top: 3px;
         }
 
+        /* Duplicate check live list inside overlay (improved) */
+        .duplicate-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+        }
+
+        #duplicate-check-list {
+            width: 560px;
+            max-height: 420px;
+            overflow: auto;
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            text-align: left;
+        }
+
+        #duplicate-check-header {
+            font-weight: 700;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .check-item {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap: 12px;
+            padding:10px 8px;
+            border-bottom:1px solid #f1f1f1;
+            font-size:13px;
+        }
+
+        .check-item .name { flex:1; margin-right:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .check-item .status { width:40px; text-align:center; margin-left:8px; }
+
+        .fade-up {
+            animation: fadeUp 700ms forwards;
+        }
+
+        @keyframes fadeUp {
+            to { transform: translateY(-18px); opacity: 0; }
+        }
+
         .empty-state {
             text-align: center;
             padding: 20px;
             color: #6c757d;
         }
         
+        /* Branded section header and card */
+        .bp-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0 0 0;
+        }
+        .bp-section-title { display:flex; align-items:center; gap:12px; }
+        .bp-section-title i { font-size:32px; color: #dc3545; }
+        .bp-section-title h2 { margin:0; font-size:20px; color:#212529; font-weight:700; }
+        .bp-section-sub { margin:0; font-size:13px; color:#6c757d; }
+        .bp-card { background:#ffffff; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.04); border:1px solid #f1f1f1; }
+
     </style>
 </head>
 
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <i id="menu-btn" class="fa-solid fa-bars"></i>
-                <div class="usernav">
-                <h6><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo $_SESSION['admin_name'];
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo $_SESSION['user_name']; 
-                        }else{
-                            echo "GUEST";
-                        }
-                ?></h6>
-                <h6 style="margin-left:5px;"><?php 
-                    if($_SESSION['user_type'] === 'admin'){
-                        echo "(".$_SESSION['admin_email'].")";
-                    }elseif($_SESSION['user_type'] === 'user'){
-                        echo "(".$_SESSION['user_email'].")";
-                    }else{
-                        echo "GUEST";
-                    }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>Import Transaction</h3></center>
-        <div class="container-fluid border border-danger rounded mt-3 p-4">
-            <div class="container-fluid">
+        <div class="bp-section-header">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+                <div>
+                    <h2>Import Transaction</h2>
+                    <p class="bp-section-sub">Upload Excel files (.xls, .xlsx) for processing</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bp-card container-fluid mt-3 p-4">
+            <div class="bp-card-body">
                 <!-- Mode Toggle (Auto / Manual) + Proceed (moved to top-right) -->
                 <div class="mb-3 d-flex align-items-center justify-content-between" style="gap:12px;">
                     <div class="d-flex align-items-center" style="gap:12px;">
                         <label class="form-label me-2 mb-0">Import Mode:</label>
-                        <div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="importMode" id="modeAuto" value="auto" checked>
-                                <label class="form-check-label" for="modeAuto">Auto</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="importMode" id="modeManual" value="manual">
-                                <label class="form-check-label" for="modeManual">Manual</label>
-                            </div>
+                        <div class="mode-cards">
+                                <label class="mode-card selected" data-mode="auto">
+                                    <input type="radio" name="importMode" id="modeAuto" value="auto" checked style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Auto</div>
+                                        <small>Drag & Drop</small>
+                                    </div>
+                                </label>
+                                <label class="mode-card" data-mode="manual">
+                                    <input type="radio" name="importMode" id="modeManual" value="manual" style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-file-lines"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Manual</div>
+                                        <small>Form Upload</small>
+                                    </div>
+                                </label>
                         </div>
                     </div>
 
                     <div id="proceedContainer" class="proceed-container" style="display: none;">
                         <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
-                            Proceed <i class="fa-solid fa-arrow-right ms-2"></i>
+                            <i class="fa-solid fa-paper-plane me-2" aria-hidden="true"></i>Proceed
                         </button>
                     </div>
                 </div>
@@ -389,7 +441,7 @@ if (isset($_SESSION['user_type'])) {
 
                 <!-- Manual Import Area (hidden by default) -->
                 <div id="manualArea" style="display:none;">
-                    <form id="manualUploadForm" action="../../../models/saved/saved_billspayImportFile_NEW.php" method="post" enctype="multipart/form-data">
+                    <form id="manualUploadForm" action="../../../models/saved/saved_billspaymentImportFile.php" method="post" enctype="multipart/form-data">
                         <div class="row mt-3">
                             <div class="col-md-5 mb-3">
                                 <div class="d-flex align-items-center">
@@ -411,8 +463,8 @@ if (isset($_SESSION['user_type'])) {
                                 </div>
                             </div>
                             <div class="col-md-4 mb-3 d-flex">
-                                <input type="file" name="import_file" accept=".xls,.xlsx" class="form-control me-2" required />
-                                <input type="submit" class="btn btn-danger" id="manualProceed" value="Proceed">
+                                <input id="manualFileInput" type="file" name="import_file" accept=".xls,.xlsx" class="form-control me-2" />
+                                <input type="submit" class="btn btn-danger" id="manualProceed" value="Proceed" style="display:none;">
                             </div>
                         </div>
                     </form>
@@ -425,12 +477,356 @@ if (isset($_SESSION['user_type'])) {
             </div>
         </div>
     </div>
+    <style>
+        /* Page header, card and upload area - M Lhuillier theme */
+        .bp-section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            background: #ffffff; /* changed to white per request */
+            border-radius: 8px;
+            color: #212529;
+            margin: 18px 0 8px;
+            box-shadow: 0 6px 18px rgba(16,24,40,0.04);
+            border-left: 4px solid #dc3545; /* subtle brand accent */
+        }
+
+        .bp-section-title { display:flex; gap:12px; align-items:center; }
+        .bp-section-title i { font-size:28px; color:#dc3545; }
+        .bp-section-title h2 { margin:0; font-size:20px; font-weight:700; }
+        .bp-section-sub { margin:0; font-size:13px; opacity:0.95; }
+
+        .bp-card { background:#ffffff; border-radius:10px; box-shadow: 0 10px 24px rgba(16,24,40,0.06); color:#212529; }
+
+        /* File upload area */
+        .file-upload-area {
+            border: 2px dashed rgba(220,53,69,0.16);
+            border-radius: 10px;
+            padding: 34px 18px;
+            text-align: center;
+            background: #fff;
+            transition: all 180ms ease;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .file-upload-area.drag-over { background:#fff5f5; transform: translateY(-4px); box-shadow: 0 10px 20px rgba(220,53,69,0.06); border-color:#dc3545; }
+
+        .file-upload-icon i { font-size:36px; color:#dc3545; margin-bottom:8px; }
+        .file-upload-area h5 { margin:8px 0 4px; font-weight:700; }
+        .file-upload-area p { margin:0; color:#6c757d; }
+
+        /* small adjustments for alternate rules (kept for backward compatibility) */
+        .files-container { margin-top: 14px; }
+        .file-card { margin-bottom:10px; }
+        .file-card-header { display:flex; gap:12px; align-items:center; }
+        .file-card-info .file-card-label { font-size:12px; color:#6c757d; font-weight:600; }
+        .file-card-info .file-card-value { font-size:14px; color:#212529; font-weight:600; }
+        .file-card-delete { color:#6c757d; cursor:pointer; padding:6px; border-radius:6px; }
+        .file-card-delete:hover { background:#f8f9fa; color:#dc3545; }
+
+        .badge-source { padding:4px 8px; border-radius:6px; font-weight:700; font-size:12px; }
+        .badge-kpx { background:#e9f7ef; color:#1e7e34; }
+        .badge-kp7 { background:#eaf4ff; color:#1552c1; }
+
+        /* Proceed button */
+        .proceed-container { display:flex; align-items:center; gap:10px; }
+        .btn-proceed { background:#dc3545; border: none; color:#fff; padding:8px 14px; border-radius:8px; font-weight:700; }
+        .btn-proceed i { margin-right:8px; }
+
+        /* Tooltip partner name */
+        .partner-tooltip { position: relative; display:inline-block; }
+        .partner-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #212529; color: #fff; text-align: left; border-radius: 6px; padding: 8px; position: absolute; z-index: 99999; bottom: 125%; left: 0; opacity: 0; transition: opacity 0.2s; font-size:12px; }
+        .partner-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+        /* Professional Duplicate-Check Modal */
+        .duplicate-modal {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 19999;
+            pointer-events: none;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .duplicate-modal .duplicate-modal-content {
+            pointer-events: auto;
+            width: 580px;
+            max-width: 100%;
+            max-height: 85vh;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.2), 0 8px 16px rgba(0,0,0,0.1);
+            text-align: left;
+            box-sizing: border-box;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        @keyframes slideUp {
+            from { 
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        /* Header Section */
+        .duplicate-modal-header {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            padding: 20px 24px 18px;
+            color: #ffffff;
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .duplicate-modal-header-title {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .duplicate-modal-header-title i {
+            font-size: 24px;
+            margin-right: 12px;
+        }
+        
+        #duplicate-check-header {
+            font-weight: 600;
+            font-size: 18px;
+            color: #ffffff;
+            margin: 0;
+        }
+        
+        /* Progress Bar */
+        .duplicate-progress-bar-container {
+            background: rgba(255,255,255,0.25);
+            height: 6px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+        
+        .duplicate-progress-bar {
+            height: 100%;
+            background: #ffffff;
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        
+        /* List Container */
+        .duplicate-modal-body {
+            padding: 20px 24px;
+            flex: 1 1 auto;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #duplicate-check-list {
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 8px;
+            flex: 1 1 auto;
+        }
+        
+        /* Check Items */
+        .check-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            margin-bottom: 10px;
+            background: #ffffff;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        }
+        
+        .check-item:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            border-color: #dee2e6;
+        }
+        
+        .check-item .name {
+            flex: 1;
+            margin-right: 16px;
+            font-size: 13px;
+            color: #495057;
+            word-break: break-word;
+            line-height: 1.5;
+            font-weight: 500;
+        }
+        
+        .check-item .status {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        
+        .check-item.checking {
+            border-color: #007bff20;
+            background: linear-gradient(to right, #ffffff, #f8f9fa);
+        }
+        
+        .check-item.success {
+            border-color: #28a74520;
+            background: linear-gradient(to right, #d4edda, #ffffff);
+        }
+        
+        .check-item.warning {
+            border-color: #ffc10720;
+            background: linear-gradient(to right, #fff3cd, #ffffff);
+        }
+        
+        .check-item.fade-up {
+            transform: translateX(10px);
+            opacity: 0;
+            transition: all 0.4s ease;
+            max-height: 0;
+            padding: 0 16px;
+            margin-bottom: 0;
+            border-color: transparent;
+        }
+        
+        /* Footer Section */
+        .duplicate-modal-footer {
+            padding: 16px 24px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            border-radius: 0 0 12px 12px;
+        }
+        
+        #duplicate-check-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #6c757d;
+            margin: 0;
+        }
+        
+        .duplicate-footer-icon {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .duplicate-footer-icon i {
+            color: #dc3545;
+        }
+        
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.4);
+            z-index: 9998;
+            backdrop-filter: blur(2px);
+        }
+        
+        #loading-overlay .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+        }
+        
+        /* Custom Scrollbar */
+        #duplicate-check-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #duplicate-check-list::-webkit-scrollbar-track {
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        #duplicate-check-list::-webkit-scrollbar-thumb {
+            background: #dee2e6;
+            border-radius: 10px;
+            transition: background 0.3s;
+        }
+        
+        #duplicate-check-list::-webkit-scrollbar-thumb:hover {
+            background: #adb5bd;
+        }
+        
+        /* Status Icons */
+        .status-icon-checking {
+            color: #007bff;
+            animation: spin 1s linear infinite;
+        }
+        
+        .status-icon-success {
+            color: #28a745;
+        }
+        
+        .status-icon-warning {
+            color: #ffc107;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-        // Global variable to store file data
-        let uploadedFiles = [];
+        // Global variable to store file data (use var so it's available across script tags)
+        var uploadedFiles = window.uploadedFiles || [];
+
+        // Backwards-compatibility wrappers: expose global uploadFile/uploadFiles
+        // Define early so inline handlers can call them before DOM ready
+        window.uploadFile = function(f) {
+            try {
+                if (!f) return;
+                // if processFile is available, delegate; otherwise push into uploadedFiles
+                if (typeof processFile === 'function') return processFile(f);
+                // fallback: add file to uploadedFiles and attempt to render later
+                uploadedFiles.push(f);
+            } catch (e) {
+                console.error('uploadFile wrapper error:', e);
+            }
+        };
+
+        window.uploadFiles = function(files) {
+            try {
+                if (!files) return;
+                if (files instanceof FileList) files = Array.from(files);
+                if (!Array.isArray(files)) files = [files];
+                if (typeof handleFiles === 'function') return handleFiles(files);
+                files.forEach(function(f){ uploadedFiles.push(f); });
+            } catch (e) {
+                console.error('uploadFiles wrapper error:', e);
+            }
+        };
 
         $(document).ready(function() {
             const fileUploadArea = $('#fileUploadArea');
@@ -439,9 +835,18 @@ if (isset($_SESSION['user_type'])) {
             const proceedContainer = $('#proceedContainer');
             const proceedBtn = $('#proceedBtn');
 
-            // Click to open file dialog
+            // Click to open file dialog — use native DOM click for reliability
             fileUploadArea.on('click', function() {
-                fileInput.click();
+                if (fileInput.length && fileInput[0]) {
+                    try {
+                        fileInput[0].click();
+                    } catch (e) {
+                        // Fallback to jQuery trigger if DOM click fails
+                        fileInput.trigger('click');
+                    }
+                } else {
+                    fileInput.trigger('click');
+                }
             });
 
             // File input change event
@@ -493,12 +898,18 @@ if (isset($_SESSION['user_type'])) {
 
                 // Process each file
                 excelFiles.forEach(file => {
-                    processFile(file);
+                        processFile(file);
                 });
             }
 
             // Process individual file and auto-detect metadata
             function processFile(file) {
+                // Indicate files are being read so UI can block Proceed
+                window._filesBeingRead = window._filesBeingRead || 0;
+                window._filesBeingRead++;
+                $('#loading-overlay').css('display', 'flex');
+                proceedBtn.prop('disabled', true);
+
                 const reader = new FileReader();
                 
                 reader.onload = function(e) {
@@ -514,6 +925,36 @@ if (isset($_SESSION['user_type'])) {
                         // Auto-detect Source Type from Column H, Row 3 (H3)
                         const sourceTypeCell = firstSheet['H3'];
                         let sourceType = sourceTypeCell ? String(sourceTypeCell.v).trim().toUpperCase() : '';
+
+                        // Auto-detect Report Date from Column B, Row 3 (B3) - parse to YYYY-MM-DD when possible
+                        const reportDateCell = firstSheet['B3'];
+                        const reportDateRaw = reportDateCell ? String(reportDateCell.v).trim() : '';
+                        let reportDate = '';
+                        if (reportDateRaw) {
+                            // Try to extract patterns like "FEBRUARY 03 2026" or "January 5 2026"
+                            const m = reportDateRaw.match(/([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})/);
+                            if (m) {
+                                const monthName = m[1].toUpperCase();
+                                const day = parseInt(m[2], 10);
+                                const year = parseInt(m[3], 10);
+                                const months = {JAN:1,JANUARY:1,FEB:2,FEBRUARY:2,MAR:3,MARCH:3,APR:4,APRIL:4,MAY:5,JUN:6,JUNE:6,JUL:7,JULY:7,AUG:8,AUGUST:8,SEP:9,SEPTEMBER:9,OCT:10,OCTOBER:10,NOV:11,NOVEMBER:11,DEC:12,DECEMBER:12};
+                                const mm = months[monthName] || months[monthName.slice(0,3)];
+                                if (mm) {
+                                    const mmStr = String(mm).padStart(2, '0');
+                                    const ddStr = String(day).padStart(2, '0');
+                                    reportDate = `${year}-${mmStr}-${ddStr}`;
+                                }
+                            } else {
+                                // fallback: try Date parser
+                                const ds = new Date(reportDateRaw);
+                                if (!isNaN(ds.getTime())) {
+                                    const y = ds.getFullYear();
+                                    const m = String(ds.getMonth() + 1).padStart(2, '0');
+                                    const d = String(ds.getDate()).padStart(2, '0');
+                                    reportDate = `${y}-${m}-${d}`;
+                                }
+                            }
+                        }
                         
                         // Validate source type
                         if (sourceType !== 'KPX' && sourceType !== 'KP7') {
@@ -549,6 +990,7 @@ if (isset($_SESSION['user_type'])) {
                             return;
                         }
 
+
                         // Fetch partner name from database
                         $.ajax({
                             url: '../../../fetch/get_partner_name.php',
@@ -557,22 +999,28 @@ if (isset($_SESSION['user_type'])) {
                             dataType: 'json',
                             success: function(response) {
                                 const partnerName = response.success ? response.partner_name : 'Unknown Partner';
-                                
-                                // Add file to array
                                 const fileData = {
                                     file: file,
                                     name: file.name,
                                     partnerId: partnerId,
                                     partnerName: partnerName,
                                     sourceType: sourceType,
+                                    report_date_raw: reportDateRaw,
+                                    report_date: reportDate,
                                     id: Date.now() + Math.random()
                                 };
 
                                 uploadedFiles.push(fileData);
                                 renderFileCards();
+
+                                window._filesBeingRead--;
+                                if (window._filesBeingRead <= 0) {
+                                    window._filesBeingRead = 0;
+                                    $('#loading-overlay').hide();
+                                    proceedBtn.prop('disabled', false);
+                                }
                             },
                             error: function() {
-                                // If AJAX fails, still add the file but without partner name
                                 const fileData = {
                                     file: file,
                                     name: file.name,
@@ -584,6 +1032,13 @@ if (isset($_SESSION['user_type'])) {
 
                                 uploadedFiles.push(fileData);
                                 renderFileCards();
+
+                                window._filesBeingRead--;
+                                if (window._filesBeingRead <= 0) {
+                                    window._filesBeingRead = 0;
+                                    $('#loading-overlay').hide();
+                                    proceedBtn.prop('disabled', false);
+                                }
                             }
                         });
 
@@ -595,23 +1050,30 @@ if (isset($_SESSION['user_type'])) {
                             html: `Error reading file: <strong>${file.name}</strong><br>${error.message}`,
                             confirmButtonText: 'OK'
                         });
+                        window._filesBeingRead--;
+                        if (window._filesBeingRead <= 0) {
+                            window._filesBeingRead = 0;
+                            $('#loading-overlay').hide();
+                            proceedBtn.prop('disabled', false);
+                        }
                     }
                 };
 
                 reader.readAsArrayBuffer(file);
             }
 
-            // Render file cards
             function renderFileCards() {
                 filesContainer.empty();
 
                 if (uploadedFiles.length === 0) {
                     proceedContainer.hide();
+                    if (typeof window.updateManualProceedVisibility === 'function') {
+                        window.updateManualProceedVisibility();
+                    }
                     return;
                 }
 
                 uploadedFiles.forEach(fileData => {
-                    // Determine status icon based on file state
                     let statusIcon = '';
                     if (fileData.status === 'reading') {
                         statusIcon = '<i class="fa-solid fa-spinner fa-spin text-primary"></i>';
@@ -622,7 +1084,7 @@ if (isset($_SESSION['user_type'])) {
                     } else if (fileData.status === 'error') {
                         statusIcon = '<i class="fa-solid fa-circle-exclamation text-danger"></i>';
                     }
-                    
+
                     const card = $(`
                         <div class="file-card" data-id="${fileData.id}">
                             <div class="file-card-header">
@@ -634,7 +1096,8 @@ if (isset($_SESSION['user_type'])) {
                                     <i class="fa-solid fa-xmark"></i>
                                 </div>
                             </div>
-                            <div class="file-card-body">
+                            <div class="file-card-body"></div>
+                            <div class="file-card-footer">
                                 <div class="file-card-detail">
                                     <div class="file-card-label">Partner ID</div>
                                     <div class="file-card-value partner-tooltip">
@@ -654,7 +1117,6 @@ if (isset($_SESSION['user_type'])) {
                         </div>
                     `);
 
-                    // Delete file handler
                     card.find('.file-card-delete').on('click', function() {
                         removeFile(fileData.id);
                     });
@@ -663,7 +1125,60 @@ if (isset($_SESSION['user_type'])) {
                 });
 
                 proceedContainer.show();
+                if (typeof window.updateManualProceedVisibility === 'function') {
+                    window.updateManualProceedVisibility();
+                }
             }
+
+            // Manual proceed visibility and submit handling
+            (function() {
+                var $manualFileInput = $('#manualFileInput');
+                var $manualProceed = $('#manualProceed');
+
+                window.updateManualProceedVisibility = function() {
+                    if (!$manualProceed || $manualProceed.length === 0) return;
+                    var fi = $manualFileInput && $manualFileInput.length ? $manualFileInput[0] : null;
+                    var hasNativeFile = !!(fi && fi.files && fi.files.length > 0);
+                    var hasDroppedFiles = !!(window.uploadedFiles && window.uploadedFiles.length > 0);
+                    if (hasNativeFile || hasDroppedFiles) {
+                        $manualProceed.show();
+                    } else {
+                        $manualProceed.hide();
+                    }
+                };
+
+                window.updateManualProceedVisibility();
+                if ($manualFileInput && $manualFileInput.length) {
+                    $manualFileInput.on('change', window.updateManualProceedVisibility);
+                }
+
+                $('#manualUploadForm').off('submit.manual').on('submit.manual', function(e) {
+                    e.preventDefault();
+
+                    var selectedCompany = $('#manualCompanyInput').val();
+                    var fileType = $('#manualFileType').val();
+                    if (!fileType) {
+                        Swal.fire({ icon: 'warning', title: 'Missing File Type', text: 'Please select a source file type (KPX or KP7).', confirmButtonText: 'OK' });
+                        return false;
+                    }
+                    if (selectedCompany === 'All' && fileType === 'KPX') {
+                        Swal.fire({ icon: 'error', title: 'Invalid Combination', text: 'No All Partners Available for KPX. Please select a specific partner.', confirmButtonText: 'OK' });
+                        return false;
+                    }
+
+                    var fi = $('#manualFileInput')[0];
+                    var hasNativeFile = !!(fi && fi.files && fi.files.length > 0);
+                    var hasDroppedFiles = !!(window.uploadedFiles && window.uploadedFiles.length > 0);
+                    if (!hasNativeFile && !hasDroppedFiles) {
+                        $('#loading-overlay').hide();
+                        return false;
+                    }
+
+                    $('#loading-overlay').css('display', 'flex');
+                    checkManualDuplicates(this);
+                    return false;
+                });
+            })();
 
             // Remove file from array
             function removeFile(fileId) {
@@ -683,97 +1198,187 @@ if (isset($_SESSION['user_type'])) {
                     return;
                 }
 
-                // Show loading overlay
+                // Start duplicate check flow
                 $('#loading-overlay').css('display', 'flex');
-
-                // Step 1: Check for duplicates first
                 checkForDuplicates();
             });
 
-            // Function to check for duplicates
+            // Function to check for duplicates (batched to avoid PHP's max_file_uploads limit)
             function checkForDuplicates() {
                 // Set all files to "reading" status
-                uploadedFiles.forEach(file => {
-                    file.status = 'reading';
-                });
+                uploadedFiles.forEach(file => { file.status = 'reading'; });
                 renderFileCards();
-                
-                const formData = new FormData();
-                uploadedFiles.forEach((fileData, index) => {
-                    formData.append('files[]', fileData.file);
-                    formData.append('partner_ids[]', fileData.partnerId);
-                    formData.append('source_types[]', fileData.sourceType);
-                });
-                formData.append('check_duplicates', '1');
 
-                $.ajax({
-                    url: '../../../models/saved/saved_billspayImportFile_NEW.php',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    dataType: 'json',
-                    success: function(response) {
+                const BATCH_SIZE = 50; // adjust as needed (PHP default max_file_uploads is often 20)
+                let index = 0;
+                const aggregateResults = [];
+
+                // Build live-check modal UI (professional design)
+                $('#loading-overlay').css('display', 'flex');
+                // hide the small global spinner while the modal is visible
+                $('#loading-overlay .loading-spinner').hide();
+
+                var modalHtml = '<div class="duplicate-modal">'
+                    + '<div class="duplicate-modal-content">'
+                    + '<div class="duplicate-modal-header">'
+                    + '<div class="duplicate-modal-header-title">'
+                    + '<i class="fa-solid fa-shield-halved"></i>'
+                    + '<h4 id="duplicate-check-header">Checking files (0/' + uploadedFiles.length + ')</h4>'
+                    + '</div>'
+                    + '<div class="duplicate-progress-bar-container">'
+                    + '<div class="duplicate-progress-bar" id="duplicate-progress-bar"></div>'
+                    + '</div>'
+                    + '</div>'
+                    + '<div class="duplicate-modal-body">'
+                    + '<div id="duplicate-check-list"></div>'
+                    + '</div>'
+                    + '<div class="duplicate-modal-footer">'
+                    + '<div id="duplicate-check-footer">'
+                    + '<span class="duplicate-footer-icon"><i class="fa-solid fa-file-circle-check"></i> Validating files</span>'
+                    + '<span id="duplicate-progress-text"><strong>0</strong> / ' + uploadedFiles.length + '</span>'
+                    + '</div>'
+                    + '</div>'
+                    + '</div></div>';
+
+                // append modal to body to avoid clipping by overlay containers
+                $('body').append(modalHtml);
+                const $list = $('#duplicate-check-list');
+                $list.empty();
+                uploadedFiles.forEach((f, idx) => {
+                    const item = $(`<div class="check-item checking" data-idx="${idx}">
+                        <div class="name">${f.name}</div>
+                        <div class="status"><i class="fa-solid fa-spinner fa-spin status-icon-checking"></i></div>
+                    </div>`);
+                    $list.append(item);
+                });
+
+                let totalCount = uploadedFiles.length;
+                let processedCount = 0;
+                function updateHeader() {
+                    $('#duplicate-check-header').text('Checking files (' + processedCount + '/' + totalCount + ')');
+                    $('#duplicate-progress-text').html('<strong>' + processedCount + '</strong> / ' + totalCount);
+                    
+                    // Update progress bar
+                    const progressPercent = (processedCount / totalCount) * 100;
+                    $('#duplicate-progress-bar').css('width', progressPercent + '%');
+                }
+
+                function processBatch(start) {
+                    const formData = new FormData();
+                    const batchFiles = uploadedFiles.slice(start, start + BATCH_SIZE);
+                    batchFiles.forEach((fileData) => {
+                        formData.append('files[]', fileData.file);
+                        formData.append('partner_ids[]', fileData.partnerId);
+                        formData.append('source_types[]', fileData.sourceType);
+                        formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
+                    });
+                    formData.append('check_duplicates', '1');
+
+                    return $.ajax({
+                        url: '../../../models/saved/saved_billspayImportFile_NEW.php',
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        dataType: 'json'
+                    });
+                }
+
+                // Sequentially process batches to avoid overwhelming the server
+                function next() {
+                    if (index >= uploadedFiles.length) {
+                        // All batches done — aggregate and update UI
+                        // restore global spinner visibility then hide overlay
+                        $('#loading-overlay .loading-spinner').show();
+
+                        // Flatten aggregateResults into a single array of per-file results
+                        const flat = [].concat.apply([], aggregateResults);
+
+                        // Update uploadedFiles statuses from flat results
+                        flat.forEach((result, idx) => {
+                            if (uploadedFiles[idx]) {
+                                if (result.hasDuplicates) {
+                                    uploadedFiles[idx].status = 'duplicates';
+                                    uploadedFiles[idx].duplicateCount = result.duplicateRows;
+                                    uploadedFiles[idx].newCount = result.newRows;
+                                } else {
+                                    uploadedFiles[idx].status = 'valid';
+                                }
+                            }
+                        });
+
+                        renderFileCards();
+
+                        // remove live modal
+                        $('.duplicate-modal').remove();
                         $('#loading-overlay').hide();
-                        
-                        if (response.success) {
-                            // Update file statuses based on results
-                            response.files.forEach((result, index) => {
-                                if (uploadedFiles[index]) {
-                                    if (result.hasDuplicates) {
-                                        uploadedFiles[index].status = 'duplicates';
-                                        uploadedFiles[index].duplicateCount = result.duplicateRows;
-                                        uploadedFiles[index].newCount = result.newRows;
+
+                        // Check duplicates overal
+                        const filesWithDuplicates = flat.filter(f => f.hasDuplicates);
+                        if (filesWithDuplicates.length > 0) {
+                            showDuplicateModal(flat, filesWithDuplicates);
+                        } else {
+                            proceedWithUpload('skip');
+                        }
+
+                        return;
+                    }
+
+                    $('#loading-overlay').css('display', 'flex');
+
+                    processBatch(index).done(function(response) {
+                        if (response && response.success && Array.isArray(response.files)) {
+                            aggregateResults.push(response.files);
+
+                            // Update live UI for this batch
+                            response.files.forEach(function(res, j) {
+                                var globalIndex = index + j;
+                                var $item = $list.find('.check-item[data-idx="' + globalIndex + '"]');
+                                if ($item.length) {
+                                    if (res.hasDuplicates) {
+                                        $item.removeClass('checking').addClass('warning');
+                                        $item.find('.status').html('<i class="fa-solid fa-circle-exclamation status-icon-warning"></i>');
                                     } else {
-                                        uploadedFiles[index].status = 'valid';
+                                        $item.removeClass('checking').addClass('success');
+                                        $item.find('.status').html('<i class="fa-solid fa-circle-check status-icon-success"></i>');
                                     }
+                                    // animate fade-up then remove the item so new ones appear from bottom
+                                    setTimeout(function() { 
+                                        $item.addClass('fade-up'); 
+                                        setTimeout(function(){ 
+                                            $item.remove(); 
+                                            processedCount++; 
+                                            updateHeader(); 
+                                        }, 400); 
+                                    }, 300 + (j*60));
                                 }
                             });
-                            renderFileCards();
-                            
-                            // Check if any files have duplicates
-                            const filesWithDuplicates = response.files.filter(f => f.hasDuplicates);
-                            
-                            if (filesWithDuplicates.length > 0) {
-                                // Show duplicate warning modal with stats
-                                showDuplicateModal(response.files, filesWithDuplicates);
-                            } else {
-                                // No duplicates, proceed directly
-                                proceedWithUpload('skip');
-                            }
+
+                            index += BATCH_SIZE;
+                            // short delay to keep UI responsive for massive batches
+                            setTimeout(next, 50);
                         } else {
-                            // Set all files to error status
-                            uploadedFiles.forEach(file => {
-                                file.status = 'error';
-                            });
+                            // treat as error for this batch
+                            $('#loading-overlay').hide();
+                            uploadedFiles.forEach(file => { file.status = 'error'; });
                             renderFileCards();
-                            
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Validation Error',
-                                text: 'An error occurred while checking for duplicates.',
-                                confirmButtonText: 'OK'
-                            });
+                            Swal.fire({ icon: 'error', title: 'Validation Error', text: (response && response.error) ? response.error : 'An error occurred while checking for duplicates.', confirmButtonText: 'OK' });
                         }
-                    },
-                    error: function(xhr, status, error) {
+                    }).fail(function(xhr, status, error) {
+                        $('#loading-overlay .loading-spinner').show();
+                        $('.duplicate-modal').remove();
                         $('#loading-overlay').hide();
-                        
-                        // Set all files to error status
-                        uploadedFiles.forEach(file => {
-                            file.status = 'error';
-                        });
+                        uploadedFiles.forEach(file => { file.status = 'error'; });
                         renderFileCards();
-                        
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Validation Error',
-                            text: 'An error occurred while checking for duplicates. Please try again.',
-                            confirmButtonText: 'OK'
-                        });
-                        console.error('Duplicate check error:', error);
-                    }
-                });
+
+                        // Show generic error message for batch failure
+                        Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.', confirmButtonText: 'OK' });
+                        console.error('Duplicate check batch error:', error, xhr.responseText);
+                    });
+                }
+
+                // Start processing
+                next();
             }
 
             // Function to show duplicate modal
@@ -812,7 +1417,7 @@ if (isset($_SESSION['user_type'])) {
                     <div style="text-align: center;">
                         <div style="background-color: #fff8e1; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #ff9800;">
                             <p style="margin: 0; color: #666; font-size: 15px;">
-                                <strong style="color: #000;">${filesWithDuplicates.length}</strong> file(s) with Partner ID data already exists in the database
+                                <strong style="color: #000;">${filesWithDuplicates.length}</strong> file(s) with Partner ID data already exists
                             </p>
                         </div>
                         <div style="background-color: #f5f5f5; padding: 12px; border-radius: 5px; margin-bottom: 15px;">
@@ -969,6 +1574,7 @@ if (isset($_SESSION['user_type'])) {
                     formData.append('files[]', fileData.file);
                     formData.append('partner_ids[]', fileData.partnerId);
                     formData.append('source_types[]', fileData.sourceType);
+                    formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
                 });
                 formData.append('upload', '1');
                 formData.append('user_decision', userDecision); // Pass user decision
@@ -979,6 +1585,7 @@ if (isset($_SESSION['user_type'])) {
                     partnerId: f.partnerId,
                     partnerName: f.partnerName,
                     sourceType: f.sourceType
+                    , report_date: f.report_date || f.report_date_raw || ''
                 }))));
 
                 // Send to checker page
@@ -1010,6 +1617,10 @@ if (isset($_SESSION['user_type'])) {
         // Mode toggle: show/hide Auto (drag-drop) vs Manual form
         $(function() {
             function setMode(mode) {
+                // update selected card UI
+                $('.mode-card').removeClass('selected');
+                $('.mode-card[data-mode="' + mode + '"]').addClass('selected');
+
                 if (mode === 'manual') {
                     $('#fileUploadArea').hide();
                     $('#filesContainer').hide();
@@ -1018,6 +1629,9 @@ if (isset($_SESSION['user_type'])) {
                     // initialize manual partners dropdown
                     initManualSelect2();
                     loadManualPartners();
+                    if (typeof window.updateManualProceedVisibility === 'function') {
+                        window.updateManualProceedVisibility();
+                    }
                 } else {
                     $('#manualArea').hide();
                     $('#fileUploadArea').show();
@@ -1028,6 +1642,14 @@ if (isset($_SESSION['user_type'])) {
 
             $('input[name="importMode"]').on('change', function() {
                 setMode($(this).val());
+            });
+
+            // Clickable mode-card behavior: toggle radio and classes
+            $('.mode-card').on('click', function() {
+                var mode = $(this).data('mode');
+                $('input[name="importMode"][value="' + mode + '"]').prop('checked', true).trigger('change');
+                $('.mode-card').removeClass('selected');
+                $(this).addClass('selected');
             });
 
             function initManualSelect2() {
@@ -1081,53 +1703,10 @@ if (isset($_SESSION['user_type'])) {
             }
 
             // Manual form validation
-            $('#manualUploadForm').on('submit', function(e) {
-                e.preventDefault(); // Always prevent default to handle validation first
-                
-                var selectedCompany = $('#manualCompanyInput').val();
-                var fileType = $('#manualFileType').val();
-                
-                if (!fileType) {
-                    Swal.fire({ 
-                        icon: 'warning', 
-                        title: 'Missing File Type', 
-                        text: 'Please select a source file type (KPX or KP7).', 
-                        confirmButtonText: 'OK' 
-                    });
-                    return false;
-                }
-                
-                if (selectedCompany === 'All' && fileType === 'KPX') {
-                    Swal.fire({ 
-                        icon: 'error', 
-                        title: 'Invalid Combination', 
-                        text: 'No All Partners Available for KPX. Please select a specific partner.', 
-                        confirmButtonText: 'OK' 
-                    });
-                    return false;
-                }
-                
-                // Check if file is selected
-                var fileInput = $('input[name="import_file"]')[0];
-                if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-                    Swal.fire({ 
-                        icon: 'warning', 
-                        title: 'No File Selected', 
-                        text: 'Please select a file to upload.', 
-                        confirmButtonText: 'OK' 
-                    });
-                    return false;
-                }
-                
-                // Show loading overlay and check for duplicates
-                $('#loading-overlay').css('display', 'flex');
-                checkManualDuplicates(this);
-                
-                return false;
-            });
+            
 
-            // Function to check for duplicates in manual mode
-            function checkManualDuplicates(form) {
+            // Function to check for duplicates in manual mode (exposed globally)
+            window.checkManualDuplicates = function(form) {
                 // Async flow: resolve partner id (if specific), then POST to the same duplicate-check endpoint
                 $('#loading-overlay').css('display', 'flex');
 
@@ -1158,15 +1737,24 @@ if (isset($_SESSION['user_type'])) {
                     }
                     var formData = new FormData();
                     var fileInput = $(form).find('input[name="import_file"]')[0];
-                    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                    var selectedFile = null;
+
+                    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                        selectedFile = fileInput.files[0];
+                    } else if (window.uploadedFiles && window.uploadedFiles.length > 0) {
+                        var firstDropped = window.uploadedFiles[0];
+                        selectedFile = firstDropped && firstDropped.file ? firstDropped.file : firstDropped;
+                    }
+
+                    if (!selectedFile) {
                         $('#loading-overlay').hide();
-                        Swal.fire({ icon: 'warning', title: 'No File Selected', text: 'Please select a file to upload.', confirmButtonText: 'OK' });
+                        // No file selected for manual flow
                         return;
                     }
 
                     // Use the batch duplicate check endpoint (same as Auto) to ensure identical detection logic
                     var batchData = new FormData();
-                    batchData.append('files[]', fileInput.files[0]);
+                    batchData.append('files[]', selectedFile);
                     batchData.append('partner_ids[]', partnerId || '');
                     batchData.append('source_types[]', fileType || '');
                     batchData.append('check_duplicates', '1');
@@ -1346,36 +1934,147 @@ if (isset($_SESSION['user_type'])) {
                 });
             }
 
+            async function extractReportDateFromManualFile(file) {
+                if (!file) return '';
+                try {
+                    const buffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const reportDateCell = firstSheet['B3'];
+                    const raw = reportDateCell ? String(reportDateCell.v).trim() : '';
+                    if (!raw) return '';
+
+                    const m = raw.match(/([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})/);
+                    if (m) {
+                        const monthName = m[1].toUpperCase();
+                        const day = parseInt(m[2], 10);
+                        const year = parseInt(m[3], 10);
+                        const months = {JAN:1,JANUARY:1,FEB:2,FEBRUARY:2,MAR:3,MARCH:3,APR:4,APRIL:4,MAY:5,JUN:6,JUNE:6,JUL:7,JULY:7,AUG:8,AUGUST:8,SEP:9,SEPTEMBER:9,OCT:10,OCTOBER:10,NOV:11,NOVEMBER:11,DEC:12,DECEMBER:12};
+                        const mm = months[monthName] || months[monthName.slice(0,3)];
+                        if (mm) {
+                            return `${year}-${String(mm).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        }
+                    }
+
+                    const ds = new Date(raw);
+                    if (!isNaN(ds.getTime())) {
+                        return `${ds.getFullYear()}-${String(ds.getMonth() + 1).padStart(2, '0')}-${String(ds.getDate()).padStart(2, '0')}`;
+                    }
+                } catch (err) {
+                    console.warn('Manual report date extraction failed:', err);
+                }
+                return '';
+            }
+
             // Function to proceed with manual upload based on user decision
-            function proceedWithManualUpload(form, userDecision) {
+            async function proceedWithManualUpload(form, userDecision) {
                 $('#loading-overlay').css('display', 'flex');
 
-                var formData = new FormData(form);
-                formData.append('upload', '1');
-                formData.append('user_decision', userDecision || 'skip');
+                var fileInput = form.querySelector('input[name="import_file"]');
+                var selectedCompany = form.querySelector('input[name="company"]');
+                var fileTypeSelect = form.querySelector('select[name="fileType"]');
 
-                $.ajax({
-                    url: '../../../models/saved/saved_billspayImportFile_NEW.php',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        // Redirect to validation/checker page
-                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php';
-                    },
-                    error: function(xhr, status, error) {
-                        $('#loading-overlay').hide();
-                        Swal.fire({ icon: 'error', title: 'Upload Error', text: 'An error occurred while uploading files. Please try again.', confirmButtonText: 'OK' });
-                        console.error('Upload error:', error);
+                // Build a temporary form and do normal navigation submit to manual handler
+                var tempForm = document.createElement('form');
+                tempForm.method = 'POST';
+                tempForm.enctype = 'multipart/form-data';
+                tempForm.action = '../../../models/saved/saved_billspaymentImportFile.php';
+                tempForm.style.display = 'none';
+
+                var hasNativeFile = !!(fileInput && fileInput.files && fileInput.files.length > 0);
+                var appendedFile = false;
+                var submittedFile = null;
+
+                if (hasNativeFile) {
+                    submittedFile = fileInput.files[0] || null;
+                    var originalParent = fileInput.parentNode;
+                    var nextSibling = fileInput.nextSibling;
+                    tempForm.appendChild(fileInput);
+                    appendedFile = true;
+
+                    // If submit fails and page doesn't navigate, restore input
+                    setTimeout(function() {
+                        if (document.body.contains(tempForm)) {
+                            if (originalParent) {
+                                if (nextSibling) originalParent.insertBefore(fileInput, nextSibling);
+                                else originalParent.appendChild(fileInput);
+                            }
+                        }
+                    }, 2000);
+                } else if (window.uploadedFiles && window.uploadedFiles.length > 0) {
+                    try {
+                        var firstDropped = window.uploadedFiles[0];
+                        var droppedFile = firstDropped && firstDropped.file ? firstDropped.file : firstDropped;
+                        if (droppedFile) {
+                            submittedFile = droppedFile;
+                            var dt = new DataTransfer();
+                            dt.items.add(droppedFile);
+                            var syntheticInput = document.createElement('input');
+                            syntheticInput.type = 'file';
+                            syntheticInput.name = 'import_file';
+                            syntheticInput.files = dt.files;
+                            tempForm.appendChild(syntheticInput);
+                            appendedFile = true;
+                        }
+                    } catch (err) {
+                        console.warn('Failed to attach dropped file for manual submit:', err);
                     }
-                });
+                }
+
+                if (!appendedFile) {
+                    $('#loading-overlay').hide();
+                    return;
+                }
+
+                var hiddenUpload = document.createElement('input');
+                hiddenUpload.type = 'hidden';
+                hiddenUpload.name = 'upload';
+                hiddenUpload.value = '1';
+                tempForm.appendChild(hiddenUpload);
+
+                var hiddenDecision = document.createElement('input');
+                hiddenDecision.type = 'hidden';
+                hiddenDecision.name = 'user_decision';
+                hiddenDecision.value = userDecision || 'skip';
+                tempForm.appendChild(hiddenDecision);
+
+                var hiddenCompany = document.createElement('input');
+                hiddenCompany.type = 'hidden';
+                hiddenCompany.name = 'company';
+                hiddenCompany.value = selectedCompany ? selectedCompany.value : '';
+                tempForm.appendChild(hiddenCompany);
+
+                var hiddenFileType = document.createElement('input');
+                hiddenFileType.type = 'hidden';
+                hiddenFileType.name = 'fileType';
+                hiddenFileType.value = fileTypeSelect ? fileTypeSelect.value : '';
+                tempForm.appendChild(hiddenFileType);
+
+                // Extract Report Date from B3 and pass it to manual handler
+                var extractedReportDate = '';
+                if (submittedFile) {
+                    extractedReportDate = await extractReportDateFromManualFile(submittedFile);
+                }
+                if (!extractedReportDate && window.uploadedFiles && window.uploadedFiles.length > 0) {
+                    var firstMeta = window.uploadedFiles[0];
+                    extractedReportDate = (firstMeta && (firstMeta.report_date || firstMeta.report_date_raw)) ? (firstMeta.report_date || firstMeta.report_date_raw) : '';
+                }
+
+                var hiddenReportDate = document.createElement('input');
+                hiddenReportDate.type = 'hidden';
+                hiddenReportDate.name = 'report_date';
+                hiddenReportDate.value = extractedReportDate || '';
+                tempForm.appendChild(hiddenReportDate);
+
+                document.body.appendChild(tempForm);
+                tempForm.submit();
             }
 
             // Start in auto mode
             setMode('auto');
         });
     </script>
+    
 </body>
 <?php include '../../../templates/footer.php'; ?>
 

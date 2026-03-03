@@ -74,37 +74,25 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
     
     if(!empty($filterType)){
         if($filterType === 'daily'){
-            // For daily, use only startDate for both datetime and cancellation_date
-            // Each CTE needs the same parameters, so we need 4 total (2 for each CTE)
             $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ?)";
             $dateParams = [$startDate, $endDate, $startDate, $endDate]; // 4 params for 2 CTEs
             $dateTypes = 'ssss';
         }elseif($filterType === 'weekly'){
-            // For weekly, use BETWEEN for date range
-            // Each CTE needs 4 parameters, so we need 8 total
             $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-            // $dateParams = [$startDate, $endDate, $startDate, $endDate];
             $dateParams = [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate, $startDate, $endDate];
-            // $dateTypes = 'ssss';
             $dateTypes = 'ssssssss';
         }elseif($filterType === 'monthly'){
-            // For monthly, convert to first and last day of month
             $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
             $startMonth = $startDate . '-01';
-            $endMonth = date('Y-m-t', strtotime($endDate . '-01')); // Last day of month
-            // $dateParams = [$startMonth, $endMonth, $startMonth, $endMonth];
-            // $dateTypes = 'ssss';
+            $endMonth = date('Y-m-t', strtotime($endDate . '-01'));
             $dateParams = [$startMonth, $endMonth, $startMonth, $endMonth, $startMonth, $endMonth, $startMonth, $endMonth];
             $dateTypes = 'ssssssss';
         }elseif($filterType === 'yearly'){
-            // For yearly, convert to first and last day of year
             $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
             $startYear = $startDate . '-01-01';
             $endYear = $endDate . '-12-31';
             $dateParams = [$startYear, $endYear, $startYear, $endYear];
             $dateTypes = 'ssss';
-            // $dateParams = [$startYear, $endYear, $startYear, $endYear, $startYear, $endYear, $startYear, $endYear];
-            // $dateTypes = 'ssssssss';
         }
     }
     
@@ -127,70 +115,111 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
         $mainWhereClause = 'AND ' . implode(' AND ', $whereConditions);
     }
 
+    // Modified query to handle partners without partner_id/partner_id_kpx
     $DataQuery = "WITH summary_vol AS (
-                SELECT
-                    bt.partner_id,
-                    bt.partner_id_kpx,
-                    COUNT(*) AS vol1,
-                    sum(bt.amount_paid) AS principal1,
-                    sum(bt.charge_to_partner + charge_to_customer) AS charge1
-                FROM
-                    mldb.billspayment_transaction AS bt 
-                WHERE
-                    $dateCondition
-                    AND bt.status IS NULL 
-                GROUP BY
-                    bt.partner_id,
-                    bt.partner_id_kpx
-        ),
-        adjustment_vol AS (
-            SELECT
-                bt.partner_id,
-                bt.partner_id_kpx,
-                COUNT(*) AS vol2,
-                sum(bt.amount_paid) AS principal2,
-                sum(bt.charge_to_partner + charge_to_customer) AS charge2
-            FROM
-                mldb.billspayment_transaction AS bt 
-            WHERE
-                $dateCondition
-                AND bt.status = '*' 
-            GROUP BY
-                bt.partner_id,
-                bt.partner_id_kpx
-        )
+                        SELECT
+                            CASE 
+                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                                ELSE CONCAT('temp_', bt.partner_name)
+                            END COLLATE utf8mb4_general_ci AS partner_key,
+                            bt.partner_name,
+                            COUNT(*) AS vol1,
+                            SUM(bt.amount_paid) AS principal1,
+                            SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
+                        FROM
+                            mldb.billspayment_transaction AS bt 
+                        WHERE
+                            $dateCondition
+                            AND bt.status IS NULL 
+                            AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                        GROUP BY
+                            CASE 
+                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                                ELSE CONCAT('temp_', bt.partner_name)
+                            END COLLATE utf8mb4_general_ci,
+                            bt.partner_name
+                ),
+                adjustment_vol AS (
+                    SELECT
+                        CASE 
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', bt.partner_name)
+                        END COLLATE utf8mb4_general_ci AS partner_key,
+                        bt.partner_name,
+                        COUNT(*) AS vol2,
+                        SUM(bt.amount_paid) AS principal2,
+                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
+                    FROM
+                        mldb.billspayment_transaction AS bt 
+                    WHERE
+                        $dateCondition
+                        AND bt.status = '*' 
+                        AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                    GROUP BY
+                        CASE 
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', bt.partner_name)
+                        END COLLATE utf8mb4_general_ci,
+                        bt.partner_name
+                ),
+                all_partners AS (
+                    -- Partners from master file
+                    SELECT 
+                        COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
+                        mpm.partner_name
+                    FROM masterdata.partner_masterfile AS mpm
+                    WHERE mpm.status = 'ACTIVE'
+                    
+                    UNION
+                    
+                    -- Partners from summary transactions
+                    SELECT partner_key, partner_name FROM summary_vol
+                    
+                    UNION
+                    
+                    -- Partners from adjustment transactions
+                    SELECT partner_key, partner_name FROM adjustment_vol
+                )
 
-        SELECT
-            mpm.partner_name,
-            COALESCE(sv.vol1, 0) AS summary_vol,
-            COALESCE(sv.principal1, 0) AS summary_principal,
-            COALESCE(sv.charge1, 0) AS summary_charges,
-            
-            COALESCE(av.vol2, 0) AS adjustment_vol,
-            COALESCE(ABS(av.principal2), 0) AS adjustment_principal,
-            COALESCE(ABS(av.charge2), 0) AS adjustment_charges,
-            
-            (COALESCE(sv.vol1, 0) - COALESCE(av.vol2, 0)) AS net_vol,
-            (COALESCE(sv.principal1, 0) - COALESCE(ABS(av.principal2), 0)) AS net_principal,
-            (COALESCE(sv.charge1, 0) - COALESCE(ABS(av.charge2), 0)) AS net_charges
-        FROM
-            masterdata.partner_masterfile AS mpm
-        LEFT JOIN
-            summary_vol AS sv
-            ON (
-                mpm.partner_id = sv.partner_id
-                OR mpm.partner_id_kpx = sv.partner_id_kpx
-            )
-        LEFT JOIN
-            adjustment_vol AS av
-            ON (
-                mpm.partner_id = av.partner_id
-                OR mpm.partner_id_kpx = av.partner_id_kpx
-            )
-        WHERE
-            mpm.status = 'ACTIVE'
-            $mainWhereClause
-        ORDER BY mpm.partner_name";
+                SELECT
+                    ap.partner_name,
+                    SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
+                    SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
+                    SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
+
+                    SUM(COALESCE(av.vol2, 0)) AS adjustment_vol,
+                    SUM(COALESCE(ABS(av.principal2), 0)) AS adjustment_principal,
+                    SUM(COALESCE(ABS(av.charge2), 0)) AS adjustment_charges,
+
+                    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
+                    (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
+                    (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
+                FROM
+                    all_partners AS ap
+                LEFT JOIN
+                    summary_vol AS sv ON (
+                        ap.partner_key = sv.partner_key
+                        OR ap.partner_name = sv.partner_name
+                    )
+                LEFT JOIN
+                    adjustment_vol AS av ON (
+                        ap.partner_key = av.partner_key
+                        OR ap.partner_name = av.partner_name
+                    )
+                LEFT JOIN
+                    masterdata.partner_masterfile AS mpm ON (
+                        ap.partner_name = mpm.partner_name
+                    )
+                WHERE
+                    (mpm.status = 'ACTIVE' OR mpm.status IS NULL)
+                    $mainWhereClause
+                GROUP BY ap.partner_name
+                HAVING ap.partner_name IS NOT NULL
+                ORDER BY ap.partner_name";
 
     try {
         // Use prepared statement to execute the query
@@ -249,6 +278,123 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
             ]
         ]);
     }
+    exit();
+}
+
+// Debug partner details: return transaction rows and group breakdowns for a selected partner
+if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
+    $partner = $_POST['partner'] ?? '';
+    $filterType = $_POST['filterType'] ?? '';
+    $startDate = $_POST['startDate'] ?? '';
+    $endDate = $_POST['endDate'] ?? '';
+
+    if (empty($partner) || $partner === 'All') {
+        echo json_encode(['status' => 'error', 'message' => 'Please select a specific partner for debugging.']);
+        exit();
+    }
+
+    // Resolve partner masterfile row
+    $mpm = null;
+    $mpmStmt = $conn->prepare("SELECT * FROM masterdata.partner_masterfile WHERE partner_name = ? LIMIT 1");
+    if ($mpmStmt) {
+        $mpmStmt->bind_param('s', $partner);
+        $mpmStmt->execute();
+        $res = $mpmStmt->get_result();
+        if ($res && $row = $res->fetch_assoc()) {
+            $mpm = $row;
+        }
+        $mpmStmt->close();
+    }
+
+    // Build date condition same as report
+    $dateCondition = '(1=1)';
+    $dateParams = [];
+    if ($filterType === 'daily') {
+        $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ?)";
+        $dateParams = [$startDate, $startDate];
+    } elseif ($filterType === 'weekly' || $filterType === 'monthly' || $filterType === 'yearly') {
+        $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
+        $dateParams = [$startDate, $endDate, $startDate, $endDate];
+    }
+
+    // Modified to handle partners without IDs
+    $pid = $mpm['partner_id'] ?? '';
+    $pid_kpx = $mpm['partner_id_kpx'] ?? '';
+
+    // Fetch transaction rows that match either partner id OR partner name if no IDs
+    $txQuery = "SELECT bt.* FROM mldb.billspayment_transaction bt WHERE $dateCondition AND 
+                (bt.partner_id = ? OR bt.partner_id_kpx = ? OR 
+                 (bt.partner_name = ? AND (bt.partner_id IS NULL OR bt.partner_id_kpx IS NULL))) 
+                ORDER BY bt.datetime LIMIT 1000";
+    $txStmt = $conn->prepare($txQuery);
+    $txRows = [];
+    if ($txStmt) {
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) {
+            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
+        }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $bindValues[] = $partner; $bindTypes .= 's'; // Add partner name
+        $txStmt->bind_param($bindTypes, ...$bindValues);
+        $txStmt->execute();
+        $txRes = $txStmt->get_result();
+        if ($txRes) {
+            while ($r = $txRes->fetch_assoc()) $txRows[] = $r;
+        }
+        $txStmt->close();
+    }
+
+    // Fetch aggregated groups (by partner_id / partner_id_kpx) for selected partner ids
+    $groupQuery = "SELECT bt.partner_id, bt.partner_id_kpx, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY bt.partner_id, bt.partner_id_kpx";
+    $groupStmt = $conn->prepare($groupQuery);
+    $groups = [];
+    if ($groupStmt) {
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) {
+            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
+        }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $groupStmt->bind_param($bindTypes, ...$bindValues);
+        $groupStmt->execute();
+        $gRes = $groupStmt->get_result();
+        if ($gRes) {
+            while ($g = $gRes->fetch_assoc()) $groups[] = $g;
+        }
+        $groupStmt->close();
+    }
+
+    // Also show what normalized partner_key grouping would produce
+    $normQuery = "SELECT COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY COALESCE(bt.partner_id, bt.partner_id_kpx)";
+    $normStmt = $conn->prepare($normQuery);
+    $norm = [];
+    if ($normStmt) {
+        $bindTypes = '';
+        $bindValues = [];
+        if (!empty($dateParams)) {
+            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
+        }
+        $bindValues[] = $pid; $bindTypes .= 's';
+        $bindValues[] = $pid_kpx; $bindTypes .= 's';
+        $normStmt->bind_param($bindTypes, ...$bindValues);
+        $normStmt->execute();
+        $nRes = $normStmt->get_result();
+        if ($nRes) {
+            while ($n = $nRes->fetch_assoc()) $norm[] = $n;
+        }
+        $normStmt->close();
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'partner_master' => $mpm,
+        'transactions' => $txRows,
+        'groups' => $groups,
+        'normalized' => $norm
+    ]);
     exit();
 }
 
@@ -468,42 +614,63 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
             }
         }
     </style>
+    <style>
+        /* Loading overlay and spinner */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.45);
+            z-index: 99999;
+            backdrop-filter: blur(2px);
+        }
+
+       #loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #dc3545;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
     <div class="main-container">
-        <div class="top-content">
-            <div class="nav-container">
-                <div style="text-align: left;">
-                    <i id="menu-btn" class="fa-solid fa-bars"></i>Menu
-                </div>
-                <div class="usernav">
-                    <h6><?php 
-                            if($_SESSION['user_type'] === 'admin'){
-                                echo $_SESSION['admin_name'];
-                            }elseif($_SESSION['user_type'] === 'user'){
-                                echo $_SESSION['user_name']; 
-                            }else{
-                                echo "GUEST";
-                            }
-                    ?></h6>
-                    <h6 style="margin-left:5px;"><?php 
-                        if($_SESSION['user_type'] === 'admin'){
-                            echo "(".$_SESSION['admin_email'].")";
-                        }elseif($_SESSION['user_type'] === 'user'){
-                            echo "(".$_SESSION['user_email'].")";
-                        }else{
-                            echo "GUEST";
-                        }
-                    ?></h6>
-                </div>
-            </div>
-        </div>
+        <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
-        <center><h3>VOLUME REPORT</h3></center>
+        <div class="bp-section-header" role="region" aria-label="Page title">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                <div>
+                    <h2>Volume Report</h2>
+                    <p class="bp-section-sub">Summary of transaction volumes by partner and period</p>
+                </div>
+            </div>
+        </div>
         <div class="container-fluid">
             <div class="row">
                 <div class="col-md-18">
@@ -550,10 +717,11 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
                                     
                                 </div>
 
-                                <!-- Export Button -->
+                                <!-- Export + Debug Buttons (inline) -->
                                 <div class="col-md-1 col-sm-6">
-                                    <div class="align-items-end">
-                                        <button class="btn btn-danger" id="exportButton" type="button">Export to</button>
+                                    <div class="d-flex align-items-end" style="gap:8px; white-space:nowrap;">
+                                        <button class="btn btn-danger" id="exportButton" type="button" style="display:none;">Export to</button>
+                                        <button class="btn btn-warning" id="debugButton" type="button" style="display:none;">Debug Report</button>
                                     </div>
                                 </div>
                             </div>
@@ -654,8 +822,8 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
                     <label class="form-label">Partners Name:</label>
                     <select id="partnerlistDropdown" class="form-select select2" aria-label="Select Partner" name="partnerlist" data-placeholder="Search or select a Partner..." required>
                         <option value="">Select Partner</option>
-                        <option value="All">All</option> -->
-                        <!-- options will be populated by JS -->
+                        <option value="All">All</option>
+                        options will be populated by JS -->
                     <!-- </select>
                 </div>
                 <div class="col-md-2">
@@ -788,6 +956,8 @@ $(document).ready(function() {
     
     // Hide export button initially
     $('#exportButton').hide();
+    // Client-side cache for debug responses
+    var debugCache = {};
     
     // Handle date input changes
     $('input[name="startDate"], input[name="endDate"]').on('change', function() {
@@ -961,7 +1131,7 @@ $(document).ready(function() {
         showFilterContainersBasedOnDates(startDate, endDate);
         
         // Show loading
-        $('#loading-overlay').show();
+        $('#loading-overlay').css('display', 'flex');
         
         // Make AJAX request to generate report
         $.ajax({
@@ -976,6 +1146,8 @@ $(document).ready(function() {
             },
             success: function(response) {
                 console.log('Response received:', response);
+                        // Clear debug cache when a new report is generated
+                        debugCache = {};
                 try {
                     const result = JSON.parse(response);
                     
@@ -1356,15 +1528,14 @@ $(document).ready(function() {
             datesValid = startDate !== '' && endDate !== '';
         }
         
-        if (filterType && partner && datesValid) {
-            $('#generateReport').prop('disabled', false)
-            .removeClass('btn-secondary')
-            .addClass('btn-danger');
+        const enable = (filterType && partner && datesValid);
+        if (enable) {
+            $('#generateReport').prop('disabled', false).removeClass('btn-secondary').addClass('btn-danger');
         } else {
-            $('#generateReport').prop('disabled', true)
-            .removeClass('btn-danger')
-            .addClass('btn-secondary');
+            $('#generateReport').prop('disabled', true).removeClass('btn-danger').addClass('btn-secondary');
         }
+
+        // debug visibility handled after report generation
     }
     
     function updateDateInputsFromFilter(button) {
@@ -1481,6 +1652,15 @@ $(document).ready(function() {
         
         // Check if all totals are zero and toggle export button visibility
         toggleExportButton(totals);
+
+        // Show debug button only after a report is generated and when a specific partner + weekly (date range) is used
+        const selectedPartner = $('#partnerlistDropdown').val();
+        const selectedFilter = $('select[name="filterType"]').val();
+        if (selectedPartner && selectedPartner !== 'All' && selectedFilter === 'weekly' && Array.isArray(data) && data.length > 0) {
+            $('#debugButton').show();
+        } else {
+            $('#debugButton').hide();
+        }
     }
     
     function toggleExportButton(totals) {
@@ -1606,6 +1786,120 @@ $(document).ready(function() {
                     Swal.close();
                     exportToXLS();
                 });
+            }
+        });
+    });
+
+    // Build and render debug modal from response
+    function renderDebugModal(resp) {
+        if (!resp || resp.status === 'error') {
+            Swal.fire({ icon: 'error', title: 'Debug Error', text: resp ? (resp.message || 'Unknown error') : 'No debug data returned.' });
+            return;
+        }
+
+        let html = '<div style="text-align:left; max-height:60vh; overflow:auto; font-size:13px;">';
+        html += '<h4>Partner Masterfile</h4>';
+        html += '<table class="table table-sm table-bordered"><tbody>';
+        for (const k in resp.partner_master) {
+            html += `<tr><th style="width:30%">${k}</th><td>${resp.partner_master[k]}</td></tr>`;
+        }
+        html += '</tbody></table>';
+
+        html += '<h4>Aggregated groups (by partner_id / partner_id_kpx)</h4>';
+        if (Array.isArray(resp.groups) && resp.groups.length) {
+            html += '<table class="table table-sm table-bordered"><thead><tr><th>partner_id</th><th>partner_id_kpx</th><th>vol</th><th>principal</th><th>charge</th></tr></thead><tbody>';
+            resp.groups.forEach(g => {
+                html += `<tr><td>${g.partner_id}</td><td>${g.partner_id_kpx}</td><td>${g.vol}</td><td>${parseFloat(g.principal||0).toLocaleString()}</td><td>${parseFloat(g.charge||0).toLocaleString()}</td></tr>`;
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<p>No grouped matches found.</p>';
+        }
+
+        html += '<h4>Normalized grouping (COALESCE)</h4>';
+        if (Array.isArray(resp.normalized) && resp.normalized.length) {
+            html += '<table class="table table-sm table-bordered"><thead><tr><th>partner_key</th><th>vol</th><th>principal</th><th>charge</th></tr></thead><tbody>';
+            resp.normalized.forEach(n => {
+                html += `<tr><td>${n.partner_key}</td><td>${n.vol}</td><td>${parseFloat(n.principal||0).toLocaleString()}</td><td>${parseFloat(n.charge||0).toLocaleString()}</td></tr>`;
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<p>No normalized groups found.</p>';
+        }
+
+        html += '<h4>Sample Transactions (first 200)</h4>';
+        if (Array.isArray(resp.transactions) && resp.transactions.length) {
+            html += '<table class="table table-sm table-bordered"><thead><tr><th>id</th><th>datetime</th><th>partner_id</th><th>partner_id_kpx</th><th>amount_paid</th><th>charge_to_partner</th><th>charge_to_customer</th><th>status</th></tr></thead><tbody>';
+            resp.transactions.slice(0,200).forEach(t => {
+                html += `<tr><td>${t.id||''}</td><td>${t.datetime||''}</td><td>${t.partner_id||''}</td><td>${t.partner_id_kpx||''}</td><td>${parseFloat(t.amount_paid||0).toLocaleString()}</td><td>${parseFloat(t.charge_to_partner||0).toLocaleString()}</td><td>${parseFloat(t.charge_to_customer||0).toLocaleString()}</td><td>${t.status||''}</td></tr>`;
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<p>No transactions matched the selected partner and date range.</p>';
+        }
+
+        html += '</div>';
+
+        Swal.fire({ title: 'Debug Details', html: html, width: 900, customClass: { popup: 'swal2-overflow' }, confirmButtonText: 'Close' });
+    }
+
+    // Debug button click handler with client-side caching
+    $('#debugButton').on('click', function() {
+        const filterType = $('select[name="filterType"]').val();
+        const partner = $('#partnerlistDropdown').val();
+        const startDate = $('input[name="startDate"]').val();
+        const endDate = $('input[name="endDate"]').val();
+
+        if (!partner || partner === 'All') {
+            Swal.fire({ icon: 'warning', title: 'Select Partner', text: 'Please select a specific partner to debug.' });
+            return;
+        }
+        if (filterType !== 'weekly') {
+            Swal.fire({ icon: 'warning', title: 'Invalid Time Frame', text: 'Debug is available when Time Frame is Date Range.' });
+            return;
+        }
+
+        const cacheKey = [filterType, partner, startDate, endDate].join('|');
+
+        // Use cached response if available
+        if (debugCache[cacheKey]) {
+            renderDebugModal(debugCache[cacheKey]);
+            return;
+        }
+
+        // Not cached: fetch and cache
+        $('#loading-overlay').css('display', 'flex');
+
+        $.ajax({
+            url: '',
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'debug_partner',
+                partner: partner,
+                filterType: filterType,
+                startDate: startDate,
+                endDate: endDate
+            },
+            success: function(resp) {
+                $('#loading-overlay').hide();
+                if (!resp) {
+                    renderDebugModal(null);
+                    return;
+                }
+                if (resp.status !== 'success') {
+                    renderDebugModal(resp);
+                    return;
+                }
+
+                // Cache and render
+                debugCache[cacheKey] = resp;
+                renderDebugModal(resp);
+            },
+            error: function(xhr, status, err) {
+                $('#loading-overlay').hide();
+                console.error('Debug AJAX error', err, xhr.responseText);
+                Swal.fire({ icon: 'error', title: 'Debug Error', text: 'Failed to fetch debug data.' });
             }
         });
     });
