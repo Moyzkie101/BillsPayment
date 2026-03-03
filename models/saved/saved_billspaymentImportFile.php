@@ -2765,14 +2765,23 @@
         </script>
         <script>
             // script.js or within <script> tags in <head> or before </body>
-            document.getElementById('uploadForm').addEventListener('submit', function() {
-                // Show loading overlay when form is submitted
-                document.getElementById('loading-overlay').style.display = 'block';
-            });
-             // Loop through each element and set its display style to "block"
-            for (var i = 0; i < elements.length; i++) {
-                elements[i].style.display = "block";
-            }
+            (function(){
+                var _uploadForm = document.getElementById('uploadForm');
+                if (_uploadForm) {
+                    _uploadForm.addEventListener('submit', function() {
+                        // Show loading overlay when form is submitted
+                        var _loading = document.getElementById('loading-overlay');
+                        if (_loading) _loading.style.display = 'block';
+                    });
+                }
+
+                // Loop through each element and set its display style to "block" (guarded)
+                if (typeof elements !== 'undefined' && elements && elements.length) {
+                    for (var i = 0; i < elements.length; i++) {
+                        if (elements[i]) elements[i].style.display = "block";
+                    }
+                }
+            })();
 
             $(document).ready(function() {
                 $('#companyDropdown').select2({

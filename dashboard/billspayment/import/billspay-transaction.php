@@ -1670,8 +1670,8 @@ if (isset($_SESSION['user_type'])) {
             // Manual form validation
             
 
-            // Function to check for duplicates in manual mode
-            function checkManualDuplicates(form) {
+            // Function to check for duplicates in manual mode (exposed globally)
+            window.checkManualDuplicates = function(form) {
                 // Async flow: resolve partner id (if specific), then POST to the same duplicate-check endpoint
                 $('#loading-overlay').css('display', 'flex');
 
