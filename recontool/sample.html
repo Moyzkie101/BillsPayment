@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Excel Fetch Test</title>
+  <link rel="stylesheet" href="sample.css">
+</head>
+<body>
+  <h1>Excel Fetch Test</h1>
+
+  <div id="drop-area">
+    <p>Drag & drop an Excel file here, or <button id="choose-file">Choose file</button></p>
+    <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
+  </div>
+
+  <div style="margin-top:12px">
+    <label for="password-input">Password (if file is protected):</label>
+    <input id="password-input" type="password" placeholder="Enter password" style="margin-left:8px">
+    <button id="fetch">Fetch</button>
+  </div>
+
+  <div id="output"></div>
+
+  <div id="loading-overlay" class="hidden" role="status" aria-live="polite">
+    <div class="overlay-inner">
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="loading-text">Fetching data…</div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="sample.js"></script>
+</body>
+</html>

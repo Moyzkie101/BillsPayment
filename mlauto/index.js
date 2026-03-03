@@ -3903,6 +3903,7 @@ const elements = {
   fileList: document.getElementById("fileList"),
   fileCount: document.getElementById("fileCount"),
   sourceType: document.getElementById("sourceType"),
+  fileType: document.getElementById("fileType"),
   generateBtn: document.getElementById("generateBtn"),
   clearBtn: document.getElementById("clearBtn"),
   warningsBtn: document.getElementById("warningsBtn"),
@@ -4355,6 +4356,7 @@ const handleGenerate = async () => {
   }
 
   const sourceType = elements.sourceType.value;
+  const fileType = elements.fileType ? elements.fileType.value : 'transaction';
   const results = [];
   const warnings = [];
 
@@ -4375,9 +4377,25 @@ const handleGenerate = async () => {
 
       let partnerLookup = null;
       if (sheet) {
-        const cell = sheet["B4"] || sheet["b4"];
-        if (cell && (cell.v !== undefined)) {
-          partnerLookup = String(cell.v).trim();
+        if (fileType === 'cancellation') {
+          // Cancellation files place partner info in A2 like:
+          // PARTNER NAME :	 ASIALINK FINANCE CORPORATION
+          const rawCell = sheet['A2'] || sheet['a2'];
+          if (rawCell && rawCell.v !== undefined) {
+            let text = String(rawCell.v || '').trim();
+            // Extract after the first colon if present
+            if (text.indexOf(':') !== -1) {
+              text = text.split(':').slice(1).join(':');
+            }
+            // normalize whitespace and remove leading tabs
+            text = text.replace(/\t/g, ' ').replace(/\s+/g, ' ').trim();
+            if (text !== '') partnerLookup = text;
+          }
+        } else {
+          const cell = sheet["B4"] || sheet["b4"];
+          if (cell && (cell.v !== undefined)) {
+            partnerLookup = String(cell.v).trim();
+          }
         }
       }
 

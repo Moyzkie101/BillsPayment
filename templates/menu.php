@@ -177,8 +177,8 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="#" id="transaction-report-summary-link">Transaction Report (Summary)</a>
             </div> -->
             
-            <div class="sub">
-                <a href="#" id="cancellation-report-link"><i class="fa-solid fa-circle-xmark"></i> Cancellation Report</a>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/cancellation-report.php'">
+                <a href="<?php echo $base_url; ?>billspayment/report/cancellation-report.php" id="cancellation-report-link"><i class="fa-solid fa-circle-xmark"></i> Cancellation Report</a>
             </div>
             <?php if ($current_user_email === 'cill17098209' || $_SESSION['user_type'] === 'admin'):?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/balance-sheet-report.php'">
@@ -402,6 +402,26 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div>
         <?php endif; ?>
 
+        <!-- Tools Menu -->
+        <div class="onetab" id="tools-btn">
+            <h6><i class="fa-solid fa-tools"></i> Tools</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-tools" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-tools" style="display: none"></i>
+        </div>
+
+        <!-- Tools Submenu -->
+        <div class="onetab-sub" id="tools-nav" style="display: none;">
+                <div class="sub" onclick="window.open('<?php echo $auth_url; ?>mlauto/index.html', '_blank')">
+                    <a href="<?php echo $auth_url; ?>mlauto/index.html" target="_blank" rel="noopener noreferrer">KPX/KP7 Generator</a>
+            </div>
+                <div class="sub" onclick="window.open('<?php echo $auth_url; ?>mlbranchmaker/convert.html', '_blank')">
+                    <a href="<?php echo $auth_url; ?>mlbranchmaker/convert.html" target="_blank" rel="noopener noreferrer">Branch Maker</a>
+            </div>
+                <div class="sub" onclick="window.open('<?php echo $auth_url; ?>recontool/sample.html', '_blank')">
+                    <a href="<?php echo $auth_url; ?>recontool/sample.html" target="_blank" rel="noopener noreferrer">File Fetch</a>
+            </div>
+        </div>
+
         <!-- Logout Button -->
         <div class="onetab" onclick="parent.location='<?php echo $auth_url; ?>logout.php'">
         <a href="<?php echo $auth_url; ?>logout.php"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
@@ -430,7 +450,6 @@ const underConstructionIds = [
     'post-transaction-link',
     'settle-transaction-link',
     'transaction-report-summary-link',
-    'cancellation-report-link',
     'service-charge-automate-link'
 ];
 
@@ -596,5 +615,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }, 0);
+});
+</script>
+<script>
+// Tools menu toggle: simple show/hide for the Tools submenu
+document.addEventListener('DOMContentLoaded', function() {
+    var toolsBtn = document.getElementById('tools-btn');
+    var toolsNav = document.getElementById('tools-nav');
+    var closedTools = document.getElementById('closed-tools');
+    var openTools = document.getElementById('open-tools');
+    if (toolsBtn && toolsNav) {
+        toolsBtn.addEventListener('click', function() {
+            var isHidden = window.getComputedStyle(toolsNav).display === 'none';
+            if (isHidden) {
+                toolsNav.style.display = 'block';
+                if (closedTools && openTools) { closedTools.style.display = 'none'; openTools.style.display = 'block'; }
+            } else {
+                toolsNav.style.display = 'none';
+                if (closedTools && openTools) { closedTools.style.display = 'block'; openTools.style.display = 'none'; }
+            }
+        });
+    }
 });
 </script>
