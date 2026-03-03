@@ -225,27 +225,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         .container-fluid { padding: 12px; margin: 0; }
 
-        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(10,10,10,.5); backdrop-filter: blur(3px); z-index: 1050; align-items: center; justify-content: center; padding: 16px; }
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(10,10,10,.5);
+            backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+            z-index: 1050;
+            align-items: center; justify-content: center; padding: 16px;
+        }
         .modal-overlay.active { display: flex; }
-        .modal-card { background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); width: 100%; max-width: 520px; overflow: hidden; }
+
+        .modal-card {
+            background: #fff; border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xl);
+            width: 100%; max-width: 520px;
+            animation: mcSlide .2s var(--ease);
+            overflow: hidden;
+        }
         .modal-card-wide { max-width: 880px; }
-        .modal-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: var(--brand); color: #fff; }
-        .modal-card-header h3 { margin: 0; font-size: 15px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 8px; }
-        .modal-close-btn { background: none; border: none; cursor: pointer; color: rgba(255,255,255,.8); font-size: 22px; line-height: 1; padding: 2px 6px; border-radius: 4px; }
+        @keyframes mcSlide { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .modal-card-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 20px;
+            background: var(--brand);
+            color: #fff;
+        }
+        .modal-card-header h3 {
+            margin: 0; font-size: 15px; font-weight: 600;
+            color: #fff; display: flex; align-items: center; gap: 8px;
+        }
+        .modal-close-btn {
+            background: none; border: none; cursor: pointer;
+            color: rgba(255,255,255,.8); font-size: 22px; line-height: 1;
+            padding: 2px 6px; border-radius: 4px;
+            transition: color .12s, background .12s;
+        }
         .modal-close-btn:hover { color: #fff; background: rgba(255,255,255,.15); }
-        .modal-card-footer { padding: 12px 20px 16px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--n-200); }
+
+        .modal-card-body  { padding: 20px 22px; }
+        .modal-card-footer {
+            padding: 12px 20px 16px;
+            display: flex; align-items: center; justify-content: flex-end;
+            gap: 8px; flex-wrap: wrap;
+            border-top: 1px solid var(--n-200);
+        }
 
         .rv-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
         .rv-col { padding: 18px 22px; }
         .rv-col + .rv-col { border-left: 1px solid var(--n-200); background: var(--n-50); }
         .rv-section-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid var(--brand-light); }
         .rv-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; font-size: 13px; }
-        .rv-lbl { min-width: 110px; font-size: 11px; font-weight: 600; color: var(--n-600); text-transform: uppercase; letter-spacing: .03em; flex-shrink: 0; }
+        .rv-lbl { min-width: 110px; font-size: 11px; font-weight: 600; color: var(--n-600); text-transform: uppercase; letter-spacing: .03em; flex-shrink: 0; padding-top: 1px; }
         .rv-val { flex: 1; color: var(--n-900); font-weight: 500; word-break: break-word; }
         .rv-amt, .peso-inline { font-variant-numeric: tabular-nums; }
         .peso-inline { display: inline-flex; align-items: center; gap: 4px; }
 
-        .btn-modal { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border: none; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow-sm); }
+        .btn-modal {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 18px; border: none; border-radius: var(--radius-sm);
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: background .14s var(--ease), transform .1s, box-shadow .14s;
+            box-shadow: var(--shadow-sm);
+        }
+        .btn-modal:hover  { transform: translateY(-1px); box-shadow: var(--shadow); }
+        .btn-modal:active { transform: translateY(0); }
         .btn-green { background: var(--success); color: #fff; }
         .btn-green:hover { background: #1b5e20; }
         .btn-red { background: var(--brand); color: #fff; }
@@ -253,8 +296,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .btn-outline-red { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); }
         .btn-outline-red:hover { background: var(--brand-light); }
         .btn-ghost { background: var(--n-100); color: var(--n-800); border: 1px solid var(--n-300); }
+        .btn-ghost:hover { background: var(--n-200); }
 
-        .cancel-textarea { width: 100%; min-height: 100px; border: 1.5px solid var(--n-200); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13.5px; color: var(--n-900); resize: vertical; outline: none; font-family: inherit; line-height: 1.5; box-sizing: border-box; }
+        .cancel-textarea { width: 100%; min-height: 100px; border: 1.5px solid var(--n-200); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13.5px; color: var(--n-900); resize: vertical; outline: none; font-family: inherit; line-height: 1.5; transition: border-color .14s, box-shadow .14s; box-sizing: border-box; }
         .cancel-textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-light); }
         .cancel-textarea.error { border-color: var(--brand); }
         .char-count { font-size: 11px; color: var(--n-500); text-align: right; margin-top: 4px; }
@@ -430,40 +474,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
+            <!-- Single Cancellation Modal -->
             <div id="cancellationModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cancelTitle1">
                 <div class="modal-card">
                     <div class="modal-card-header">
-                        <h3 id="cancelTitle1"><span class="micon micon-hdr">cancel</span> Reason for Cancellation</h3>
+                        <h3 id="cancelTitle1">
+                            <span class="micon micon-hdr">cancel</span>
+                            Reason for Cancellation
+                        </h3>
                         <button type="button" class="modal-close-btn" onclick="closeCancelModal('cancellationModal')" aria-label="Close">&times;</button>
                     </div>
                     <div class="modal-card-body">
                         <input type="hidden" name="cancel_date" id="cancel_date" value="<?php echo date('Y-m-d'); ?>">
-                        <label style="display:block;font-size:13px;font-weight:600;color:var(--n-600);margin-bottom:8px;">Please describe the reason for cancellation <span style="color:var(--brand);">*</span></label>
-                        <textarea id="cancellationReason" name="cancellationReason" maxlength="500" class="cancel-textarea" placeholder="Enter your reason here..."></textarea>
+                        <label style="display:block;font-size:13px;font-weight:600;color:var(--n-600);margin-bottom:8px;">
+                            Please describe the reason for cancellation <span style="color:var(--brand);">*</span>
+                        </label>
+                        <textarea id="cancellationReason" name="cancellationReason" maxlength="500"
+                            class="cancel-textarea" placeholder="Enter your reason here..."></textarea>
                         <div class="char-count"><span id="charCount1">0</span> / 500</div>
                     </div>
                     <div class="modal-card-footer">
-                        <button type="submit" id="cancelConfirmBtn" name="cancelConfirmBtn" class="btn-modal btn-red"><span class="micon micon-sm">check_circle</span> Confirm Cancellation</button>
-                        <button type="button" class="btn-modal btn-ghost" onclick="closeCancelModal('cancellationModal')">Go Back</button>
+                        <button type="submit" id="cancelConfirmBtn" name="cancelConfirmBtn" class="btn-modal btn-red">
+                            <span class="micon micon-sm">check_circle</span> Confirm Cancellation
+                        </button>
+                        <button type="button" class="btn-modal btn-ghost" onclick="closeCancelModal('cancellationModal')">
+                            Go Back
+                        </button>
                     </div>
                 </div>
             </div>
 
+            <!-- Multiple Cancellation Modal -->
             <div id="multipleCancellationModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cancelTitle2">
                 <div class="modal-card">
                     <div class="modal-card-header">
-                        <h3 id="cancelTitle2"><span class="micon micon-hdr">cancel</span> Reason for Bulk Cancellation</h3>
+                        <h3 id="cancelTitle2">
+                            <span class="micon micon-hdr">cancel</span>
+                            Reason for Bulk Cancellation
+                        </h3>
                         <button type="button" class="modal-close-btn" onclick="closeCancelModal('multipleCancellationModal')" aria-label="Close">&times;</button>
                     </div>
                     <div class="modal-card-body">
                         <input type="hidden" name="cancel_date" id="cancel_date_multi" value="<?php echo date('Y-m-d'); ?>">
-                        <label style="display:block;font-size:13px;font-weight:600;color:var(--n-600);margin-bottom:8px;">Please describe the reason for cancellation <span style="color:var(--brand);">*</span></label>
-                        <textarea id="multipleCancellationReason" name="cancellationReason" maxlength="500" class="cancel-textarea" placeholder="Enter your reason here..."></textarea>
+                        <label style="display:block;font-size:13px;font-weight:600;color:var(--n-600);margin-bottom:8px;">
+                            Please describe the reason for cancellation <span style="color:var(--brand);">*</span>
+                        </label>
+                        <textarea id="multipleCancellationReason" name="cancellationReason" maxlength="500"
+                            class="cancel-textarea" placeholder="Enter your reason here..."></textarea>
                         <div class="char-count"><span id="charCount2">0</span> / 500</div>
                     </div>
                     <div class="modal-card-footer">
-                        <button type="submit" id="multipleCancelConfirmBtn" name="multipleCancelConfirmBtn" class="btn-modal btn-red"><span class="micon micon-sm">check_circle</span> Confirm Cancellation</button>
-                        <button type="button" class="btn-modal btn-ghost" onclick="closeCancelModal('multipleCancellationModal')">Go Back</button>
+                        <button type="submit" id="multipleCancelConfirmBtn" name="multipleCancelConfirmBtn" class="btn-modal btn-red">
+                            <span class="micon micon-sm">check_circle</span> Confirm Cancellation
+                        </button>
+                        <button type="button" class="btn-modal btn-ghost" onclick="closeCancelModal('multipleCancellationModal')">
+                            Go Back
+                        </button>
                     </div>
                 </div>
             </div>
