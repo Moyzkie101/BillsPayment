@@ -1,12 +1,40 @@
 (() => {
-  const dropArea = document.getElementById('drop-area');
-  const fileInput = document.getElementById('file-input');
+  const dropArea = document.getElementById('dropZone') || document.getElementById('drop-area');
+  const fileInput = document.getElementById('fileInput') || document.getElementById('file-input');
   const chooseBtn = document.getElementById('choose-file');
+  const clearBtn = document.getElementById('clear-btn');
   const fetchBtn = document.getElementById('fetch');
   const output = document.getElementById('output');
   let selectedFile = null;
 
-  chooseBtn.addEventListener('click', () => fileInput.click());
+  if (chooseBtn) chooseBtn.addEventListener('click', () => fileInput.click());
+  if (clearBtn) clearBtn.addEventListener('click', clearAll);
+
+  // allow clicking the whole drop area to open file picker
+  if (dropArea) {
+    dropArea.addEventListener('click', (e) => {
+      // ignore clicks that are on the input itself
+      if (e.target && e.target.tagName === 'INPUT') return;
+      if (fileInput) fileInput.click();
+    });
+  }
+
+  // hide result panel initially
+  const resultPanel = document.querySelector('.result-panel');
+  if (resultPanel) resultPanel.classList.add('hidden');
+
+  function clearAll(){
+    selectedFile = null;
+    if (fileInput) fileInput.value = '';
+    if (dropArea) {
+      // restore default text
+      const p = dropArea.querySelector('.drop-title') || dropArea.querySelector('p');
+      if (p) p.textContent = 'Drag & drop Excel files';
+      dropArea.classList.remove('dragover');
+    }
+    if (output) output.innerHTML = '';
+    if (resultPanel) resultPanel.classList.add('hidden');
+  }
 
   fileInput.addEventListener('change', (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -92,6 +120,8 @@
         if (pwd) opts.password = pwd;
         const workbook = XLSX.read(data, opts);
         renderWorkbook(workbook);
+        // show results panel when data is rendered
+        if (resultPanel) resultPanel.classList.remove('hidden');
       } catch (err) {
         console.error(err);
         const msg = String(err || '').toLowerCase();
@@ -210,7 +240,12 @@
       }
       output.appendChild(list);
     });
+    // ensure result area is allowed to expand (no inner cap)
+    const tableWrap = document.querySelector('.table-wrap') || document.getElementById('output');
+    if (tableWrap) { tableWrap.style.maxHeight = ''; tableWrap.style.overflow = 'visible'; }
   }
+
+  // removed height-capping behavior so the panel expands with content
 
   function showOutputError(msg) {
     output.innerHTML = '';
@@ -220,6 +255,8 @@
     errBox.style.whiteSpace = 'pre-wrap';
     errBox.textContent = msg;
     output.appendChild(errBox);
+    const tableWrap2 = document.querySelector('.table-wrap') || document.getElementById('output');
+    if (tableWrap2) { tableWrap2.style.maxHeight = ''; tableWrap2.style.overflow = 'visible'; }
   }
 
   const overlay = document.getElementById('loading-overlay');
