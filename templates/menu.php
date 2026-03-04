@@ -58,6 +58,37 @@ function getAuthPath() {
 $base_url = getBasePath();
 $auth_url = getAuthPath();
 
+// include permission middleware helpers
+include_once __DIR__ . '/middleware.php';
+
+// Temporary debug helper: show resolved access level and permissions when ?debug_access=1
+if (isset($_GET['debug_access']) && $_GET['debug_access']) {
+    $__dbg_level = intval(get_user_access_level());
+    $__dbg_perms = get_current_user_permissions();
+    // extra debug: inspect loaded map for this level
+    $__dbg_map = load_access_map();
+    if (function_exists('error_log')) {
+        error_log('[debug_access] menu: level=' . $__dbg_level . ' map_has_level=' . (isset($__dbg_map[$__dbg_level]) ? '1' : '0') . ' map_item=' . substr(var_export($__dbg_map[$__dbg_level] ?? null, true), 0, 300));
+    }
+    $__dbg_html = '<div style="position:fixed;right:12px;top:12px;background:#fff;border:1px solid #ccc;padding:8px;z-index:99999;font-size:12px;color:#111;max-width:320px;word-wrap:break-word;">'
+        . '<strong>Access Debug</strong><br>'
+        . 'Level: ' . $__dbg_level . '<br>'
+        . 'Permissions: ' . htmlspecialchars(json_encode($__dbg_perms, JSON_UNESCAPED_SLASHES));
+    if (function_exists('access_map_debug')) {
+        $__dbg_info = access_map_debug();
+        $__dbg_html .= '<br><hr style="border:none;border-top:1px solid #ddd;margin:6px 0;">';
+        $__dbg_html .= 'Map file exists: ' . ($__dbg_info['file_exists'] ? 'yes' : 'no') . '<br>';
+        $__dbg_html .= 'Raw length: ' . intval($__dbg_info['raw_len']) . '<br>';
+        $__dbg_html .= 'JSON error: ' . htmlspecialchars($__dbg_info['json_err']) . '<br>';
+        $__dbg_html .= 'Loaded keys: ' . htmlspecialchars(json_encode($__dbg_info['keys'], JSON_UNESCAPED_SLASHES)) . '<br>';
+    }
+    $__dbg_html .= '</div>';
+    
+    echo $__dbg_html;
+    if (function_exists('error_log')) {
+        error_log('[debug_access] level=' . $__dbg_level . ' perms=' . json_encode($__dbg_perms));
+    }
+}
 
 if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SESSION['user_type'] === 'user')): ?>
     <div id="sidemenu" class="sidemenu" style="display: none;">
@@ -66,6 +97,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <a href="<?php echo $base_url; ?>home.php"><i class="fa-solid fa-house"></i> Home</a>
         </div>
 
+        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Post Transaction','BP Settlement Adjustment Entry','BP Settlement Per Bank','BP Report Volume','BP Report EDI','BP Report Transaction Details','BP Report Transaction Summary','BP Report Cancellation','BP Report Balance Sheet'])): ?>
         <!-- Show/Hide Paramount -->
         <div class="onetab" id="para-btn">
             <h6><i class="fa-solid fa-money-bill-wave"></i> Bills Payment Transaction</h6>
@@ -73,11 +105,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <i class="fa-solid fa-chevron-down" id="open-para" style="display: none"></i>
         </div>
 
-        <?php if ($current_user_email === 'balb01013333' || $current_user_email === 'pera94005055' || $current_user_email === 'cill17098209'):
-        else:
-        ?>
-
-        <!-- Show/Hide Paramount Import -->
+        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation'])): ?>
         <div class="tabcat" id="para-import-btn" style="display: none;">
             <h6><i class="fa-solid fa-file-import"></i> Import</h6>
             <i class="fa-solid fa-chevron-right" id="closed-para-import" style="display: block"></i>
@@ -85,102 +113,97 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         </div>
         <?php endif; ?>
 
-            <!-- Paramount Import Buttons -->
-            <div class="onetab-sub" id="para-import-nav" style="display: none;">
-                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-transaction.php'">
-                    <a href="<?php echo $base_url; ?>billspayment/import/billspay-transaction.php"><i class="fa-solid fa-receipt"></i> Transaction</a>
-                </div>
-                <!-- <div class="sub">
-                    <a href="#" id="cancellation-link"><i class="fa-solid fa-ban"></i> Cancellation</a>
-                </div> -->
-
-                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php'">
-                    <a href="<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php">Cancellation</a>
-                </div>
-
-                <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billsFeedback.php'">
-                    <a href="<?php //echo $base_url; ?>billsFeedback.php">Feedback</a>
-                </div> -->
+        <!-- Paramount Import Buttons -->
+        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation'])): ?>
+        <div class="onetab-sub" id="para-import-nav" style="display: none;">
+            <?php if (has_permission('BP Import Transaction')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-transaction.php'">
+                <a href="<?php echo $base_url; ?>billspayment/import/billspay-transaction.php"><i class="fa-solid fa-receipt"></i> Transaction</a>
             </div>
-
-        <?php if ($_SESSION['user_type'] === 'admin'):?>
-            <!-- Show/Hide Paramount Post -->
-            <div class="tabcat" id="para-post-btn" style="display: none;">
-                <h6><i class="fa-solid fa-paper-plane"></i> Post</h6>
-                <i class="fa-solid fa-chevron-right" id="closed-para-post" style="display: block"></i>
-                <i class="fa-solid fa-chevron-down" id="open-para-post" style="display: none"></i>
+            <?php endif; ?>
+            <?php if (has_permission('BP Import Cancellation')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php'">
+                <a href="<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php">Cancellation</a>
             </div>
-    
-                <!-- Paramount Post Buttons -->
-                <div class="onetab-sub"  id="para-post-nav" style="display: none;">
-                    <!-- <div class="sub">
-                        <a href="#" id="post-transaction-link">Transaction</a>
-                    </div> -->
-
-                    <!-- recycle if needed -->
-                    <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/post/billspay-post-transaction.php'">
-                        <a href="<?php echo $base_url; ?>billspayment/post/billspay-post-transaction.php"><i class="fa-solid fa-check-to-slot"></i> Transaction</a>
-                    </div>
-
-                    <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billsFeedback.php'">
-                        <a href="<?php //echo $base_url; ?>billsFeedback.php">Feedback</a>
-                    </div> -->
-                </div>
+        </div>
         <?php endif; ?>
-        <?php //if( $_SESSION['user_type'] === 'admin' || $current_user_email === 'cill17098209'):?>
-            <!-- Show/Hide Paramount Settlement -->
+        <?php endif; ?>
+
+        <?php if (has_permission('BP Post Transaction')):?>
+        <!-- Show/Hide Paramount Post -->
+        <div class="tabcat" id="para-post-btn" style="display: none;">
+            <h6><i class="fa-solid fa-paper-plane"></i> Post</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-para-post" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-para-post" style="display: none"></i>
+        </div>
+        <div class="onetab-sub" id="para-post-nav" style="display: none;">
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/post/billspay-post-transaction.php'">
+                <a href="<?php echo $base_url; ?>billspayment/post/billspay-post-transaction.php"><i class="fa-solid fa-check-to-slot"></i> Transaction</a>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if (has_any_permission(['BP Settlement Adjustment Entry','BP Settlement Per Bank'])): ?>
         <div class="tabcat" id="para-settlement-btn" style="display: none;">
             <h6><i class="fa-solid fa-chart-line"></i> Settlement</h6>
             <i class="fa-solid fa-chevron-right" id="closed-para-settlement" style="display: block"></i>
             <i class="fa-solid fa-chevron-down" id="open-para-settlement" style="display: none"></i>
         </div>
 
-        <!-- Paramount Settlement Buttons -->
         <div class="onetab-sub" id="para-settlement-nav" style="display: none;">
+            <?php if (has_permission('BP Settlement Adjustment Entry')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/adjustment-entry-per-branch.php'">
                 <a href="<?php echo $base_url; ?>billspayment/settlement/adjustment-entry-per-branch.php"><i class="fa-solid fa-chart-column"></i> Adjustment Entry</a>
             </div>
+            <?php endif; ?>
+            <?php if (has_permission('BP Settlement Per Bank')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/settlement-per-bank.php'">
                 <a href="<?php echo $base_url; ?>billspayment/settlement/settlement-per-bank.php"><i class="fa-solid fa-chart-column"></i> Per Bank</a>
             </div>
-            <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/settlement/adjustment-transaction-per-partner.php'">
-                <a href="<?php //echo $base_url; ?>billspayment/settlement/adjustment-transaction-per-partner.php"><i class="fa-solid fa-chart-column"></i> Per Partner</a>
-            </div> -->
         </div>
-        <?php //endif; ?>
+            <?php endif; ?>
+        <?php endif; ?>
 
-        <!-- Show/Hide Paramount Report -->
+        <?php if (has_any_permission(['BP Report Volume','BP Report EDI','BP Report Transaction Details','BP Report Transaction Summary','BP Report Cancellation','BP Report Balance Sheet'])): ?>
         <div class="tabcat" id="para-report-btn" style="display: none;">
             <h6><i class="fa-solid fa-chart-line"></i> Report</h6>
             <i class="fa-solid fa-chevron-right" id="closed-para-report" style="display: block"></i>
             <i class="fa-solid fa-chevron-down" id="open-para-report" style="display: none"></i>
         </div>
-
-        <!-- Paramount Report Buttons -->
         <div class="onetab-sub" id="para-report-nav" style="display: none;">
             <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/report/daily-volume.php'">
                 <a href="<?php //echo $base_url; ?>billspayment/report/daily-volume.php">Volume Report</a>
             </div> -->
+            <?php if (has_permission('BP Report Volume')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/volume-report.php'">
                 <a href="<?php echo $base_url; ?>billspayment/report/volume-report.php"><i class="fa-solid fa-chart-column"></i> Volume Report</a>
             </div>
+            <?php endif; ?>
+            <?php if (has_permission('BP Report EDI')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/edi-report.php'">
                 <a href="<?php echo $base_url; ?>billspayment/report/edi-report.php"><i class="fa-solid fa-file-lines"></i> EDI Report</a>
             </div>
+            <?php endif; ?>
+            <?php if (has_permission('BP Report Transaction Details')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/transaction-report.php'">
                 <a href="<?php echo $base_url; ?>billspayment/report/transaction-report.php"><i class="fa-solid fa-list-check"></i> Transaction Report (Details)</a>
             </div>
+            <?php endif; ?>
+            <?php if (has_permission('BP Report Transaction Summary')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/transaction-summary.php'">
                 <a href="<?php echo $base_url; ?>billspayment/report/transaction-summary.php"><i class="fa-solid fa-table"></i> Transaction Report (Summary)</a>
             </div>
+            <?php endif; ?>
             <!-- <div class="sub">
                 <a href="#" id="transaction-report-summary-link">Transaction Report (Summary)</a>
             </div> -->
             
+            <?php if (has_permission('BP Report Cancellation')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/cancellation-report.php'">
                 <a href="<?php echo $base_url; ?>billspayment/report/cancellation-report.php" id="cancellation-report-link"><i class="fa-solid fa-circle-xmark"></i> Cancellation Report</a>
             </div>
-            <?php if ($current_user_email === 'cill17098209' || $_SESSION['user_type'] === 'admin'):?>
+            <?php endif; ?>
+            <?php if (has_permission('BP Report Balance Sheet')):?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/balance-sheet-report.php'">
                     <a href="<?php echo $base_url; ?>billspayment/report/balance-sheet-report.php" id="balance-sheet-report-link"><i class="fa-solid fa-chart-bar"></i> Balance Sheet Report</a>
                 </div>
@@ -201,6 +224,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="<?php //echo $base_url; ?>date/date-duplicate-report.php">BP Transaction (Duplicate/Split Transaction)</a>
             </div> -->
         </div>
+        <?php endif; ?>
 
         <!-- <div class="tabcat" id="action-report-btn" style="display: none;">
             <i class="fa-solid fa-chevron-right" id="closed-action-report" style="display: block"></i>
@@ -216,6 +240,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <a href="<?php echo $base_url; ?>actionLogReport.php">Action Log Reports</a>
         </div>
         </div>
+        <?php endif; ?>
 
         <!-- Show/Hide MAA -->
         <!-- <div class="onetab" id="maa-btn">
@@ -234,16 +259,16 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         </div> -->
 
         
-        <!-- Show/Hide Paramount -->
+        <!-- Show/Hide Billing Invoice (main) -->
+        <?php if (has_any_permission(['BI Create Manual', 'BI Create Automated', 'Invoice Review', 'Invoice Approval', 'BI Report Billing Invoice'])): ?>
         <div class="onetab" id="soa-btn">
             <h6><i class="fa-solid fa-file-invoice-dollar"></i> Billing Invoice</h6>
             <i class="fa-solid fa-chevron-right" id="closed-soa" style="display: block"></i>
             <i class="fa-solid fa-chevron-down" id="open-soa" style="display: none"></i>
         </div>
+        <?php endif; ?>
         <!-- Show/Hide soa create Sub-menu -->
-        <?php if ($current_user_email === 'balb01013333' || $current_user_email === 'pera94005055' || $current_user_email === 'cill17098209'):
-        else:
-        ?>
+        <?php if (has_any_permission(['BI Create Manual', 'BI Create Automated'])): ?>
             <div class="tabcat" id="soa-create-btn" style="display: none;">
                 <h6><i class="fa-solid fa-plus-circle"></i> Create</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-soa-create" style="display: block"></i>
@@ -252,59 +277,62 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <?php endif; ?>
 
         <!-- soa create Buttons -->
+        <?php if (has_any_permission(['BI Create Manual', 'BI Create Automated'])): ?>
         <div class="onetab-sub" id="soa-create-nav" style="display: none;">
+            <?php if (has_permission('BI Create Manual')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment-soa/create/billing-service-charge.php'">
                 <a href="<?php echo $base_url; ?>billspayment-soa/create/billing-service-charge.php"><i class="fa-solid fa-hand-holding-dollar"></i> Service Charge (MANUAL)</a>
             </div>
+            <?php endif; ?>
             <!-- recycle if needed -->
             <!-- <div class="sub">
                 <a href="#" id="service-charge-automate-link">Service Charge (AUTOMATED)</a>
             </div> -->
 			
+            <?php if (has_permission('BI Create Automated')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment-soa/create/billing-invoice-service-charge_automated.php'">
                 <a href="<?php echo $base_url; ?>billspayment-soa/create/billing-invoice-service-charge_automated.php"><i class="fa-solid fa-gears"></i> Service Charge (AUTOMATED)</a>
             </div>
+            <?php endif; ?>
 
         </div>
+        <?php endif; ?>
 
-        <?php if ($current_user_email === 'balb01013333' || $current_user_email === 'pera94005055'):
-        else:
-        ?>
-            <?php if ($current_user_email === 'cill17098209' || $_SESSION['user_type'] === 'admin'):?>
-                <!-- Show/Hide soa review Sub-menu -->
-                <div class="tabcat" id="soa-review-btn" style="display: none;">
-                    <h6><i class="fa-solid fa-clipboard-check"></i> Review</h6>
-                    <i class="fa-solid fa-chevron-right" id="closed-soa-review" style="display: block"></i>
-                    <i class="fa-solid fa-chevron-down" id="open-soa-review" style="display: none"></i>
-                </div>
-            <?php endif; ?>
+        <?php if (has_permission('Invoice Review')): ?>
+            <!-- Show/Hide soa review Sub-menu -->
+            <div class="tabcat" id="soa-review-btn" style="display: none;">
+                <h6><i class="fa-solid fa-clipboard-check"></i> Review</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-soa-review" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-soa-review" style="display: none"></i>
+            </div>
         <?php endif; ?>
 
         <!-- soa review Buttons -->
+        <?php if (has_permission('Invoice Review')): ?>
         <div class="onetab-sub" id="soa-review-nav" style="display: none;">
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment-soa/review/for-checking-review.php'">
                 <a href="<?php echo $base_url; ?>billspayment-soa/review/for-checking-review.php"><i class="fa-solid fa-magnifying-glass-chart"></i> For Checking / Review</a>
             </div>
         </div>
+        <?php endif; ?>
 
-        <?php if ($current_user_email === 'balb01013333' || $current_user_email === 'pera94005055' || $_SESSION['user_type'] === 'admin'):?>
-
+        <?php if (has_permission('Invoice Approval')): ?>
             <!-- Show/Hide soa approval Sub-menu -->
             <div class="tabcat" id="soa-approval-btn" style="display: none;">
                 <h6><i class="fa-solid fa-certificate"></i> Approval</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-soa-approval" style="display: block"></i>
                 <i class="fa-solid fa-chevron-down" id="open-soa-approval" style="display: none"></i>
             </div>
+
+            <!-- soa approval Buttons -->
+            <div class="onetab-sub" id="soa-approval-nav" style="display: none;">
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment-soa/approval/soa-approval.php'">
+                    <a href="<?php echo $base_url; ?>billspayment-soa/approval/soa-approval.php"><i class="fa-solid fa-check-double"></i> Billing Invoice Approval</a>
+                </div>
+            </div>
         <?php endif; ?>
 
-        <!-- soa approval Buttons -->
-        <div class="onetab-sub" id="soa-approval-nav" style="display: none;">
-            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment-soa/approval/soa-approval.php'">
-                <a href="<?php echo $base_url; ?>billspayment-soa/approval/soa-approval.php"><i class="fa-solid fa-check-double"></i> Billing Invoice Approval</a>
-            </div>
-        </div>
-
-        <!-- Show/Hide soa report Sub-menu -->
+        <?php if (has_permission('BI Report Billing Invoice')): ?>
         <div class="tabcat" id="soa-report-btn" style="display: none;">
             <h6><i class="fa-solid fa-chart-pie"></i> Report</h6>
             <i class="fa-solid fa-chevron-right" id="closed-soa-report" style="display: block"></i>
@@ -317,7 +345,9 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="<?php echo $base_url; ?>billspayment-soa/report/soa-report.php"><i class="fa-solid fa-file-contract"></i> Billing Invoice Report</a>
             </div>
         </div>
+        <?php endif; ?>
 
+        <?php if (has_permission('Masterfiles View Bank List')): ?>
         <!-- Show/Hide Set Masterfiles Main-menu -->
         <div class="onetab" id="masterfiles-btn">
             <h6><i class="fa-solid fa-layer-group"></i> Masterfiles</h6>
@@ -344,8 +374,9 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="<?php echo $base_url; ?>masterfiles/view/view-bank-list.php"><i class="fa-solid fa-receipt"></i> Bank List</a>
             </div>
         </div>
+        <?php endif; ?>
 
-        <?php if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin')): ?>
+        <?php if (has_any_permission(['Accounts','Maintenance Accounts User Management','Maintenance Accounts Access Levels','Maintenance Duplicate Transaction','Maintenance Masterfiles Partner List','Maintenance Masterfiles Bank List'])): ?>
             <!-- Show/Hide Set Maintenance Main-menu -->
             <div class="onetab" id="set-btn">
             <h6><i class="fa-solid fa-wrench"></i> Maintenance</h6>
@@ -354,19 +385,29 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div>
 
             <!-- Show/Hide Set maintenance Sub-menu -->
+            <?php if (has_any_permission(['Accounts','Maintenance Accounts User Management','Maintenance Accounts Access Levels'])): ?>
             <div class="tabcat" id="set-maintenance-btn" style="display: none;">
                 <h6><i class="fa-solid fa-users-gear"></i> Accounts</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-set-maintenance" style="display: block"></i>
                 <i class="fa-solid fa-chevron-down" id="open-set-maintenance" style="display: none"></i>
             </div>
+            <?php endif; ?>
 
             <!-- Set Maintenance Buttons -->
             <div class="onetab-sub" id="set-maintenance-nav" style="display: none;">
+                <?php if (has_permission('Maintenance Accounts User Management')): ?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/accounts/user-management.php'">
                     <a href="<?php echo $base_url; ?>maintenance/accounts/user-management.php"><i class="fa-solid fa-user-cog"></i> User Management</a>
                 </div>
+                <?php endif; ?>
+                <?php if (has_permission('Maintenance Accounts Access Levels')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/accounts/accesslevels.php'">
+                    <a href="<?php echo $base_url; ?>maintenance/accounts/accesslevels.php"><i class="fa-solid fa-key"></i> Access Levels</a>
+                </div>
+                <?php endif; ?>
             </div>
 
+            <?php if (has_permission('Maintenance Duplicate Transaction')): ?>
             <!-- Show/Hide Set duplicates Sub-menu -->
             <div class="tabcat" id="set-duplicate-btn" style="display: none;">
                 <h6><i class="fa-solid fa-code-compare"></i> Duplicate</h6>
@@ -380,7 +421,9 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     <a href="<?php echo $base_url; ?>billspayment/import/duplicate-transaction.php"><i class="fa-solid fa-receipt"></i> Transaction</a>
                 </div>
             </div>
+            <?php endif; ?>
 
+            <?php if (has_any_permission(['Maintenance Masterfiles Partner List','Maintenance Masterfiles Bank List'])): ?>
             <!-- Show/Hide Set masterfiles Sub-menu -->
             <div class="tabcat" id="set-masterfile-btn" style="display: none;">
                 <h6><i class="fa-solid fa-code-compare"></i> Masterfiles</h6>
@@ -389,20 +432,26 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div>
 
             <!-- Set Masterfiles Partner List Buttons -->
+            <?php if (has_permission('Maintenance Masterfiles Partner List')): ?>
             <div class="onetab-sub" id="set-masterfile-partner-nav" style="display: none;">
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/masterfiles/masterfile-partner-list.php'">
                     <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-partner-list.php"><i class="fa-solid fa-receipt"></i> Partner List</a>
                 </div>
             </div>
+            <?php endif; ?>
             <!-- Set Masterfiles Bank List Buttons -->
+            <?php if (has_permission('Maintenance Masterfiles Bank List')): ?>
             <div class="onetab-sub" id="set-masterfile-bank-nav" style="display: none;">
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php'">
                     <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php"><i class="fa-solid fa-receipt"></i> Bank List</a>
                 </div>
             </div>
+            <?php endif; ?>
+            <?php endif; ?>
         <?php endif; ?>
 
         <!-- Tools Menu -->
+        <?php if (has_any_permission(['Tools KPX Generator','Tools Branch Maker','Tools File Fetch'])): ?>
         <div class="onetab" id="tools-btn">
             <h6><i class="fa-solid fa-tools"></i> Tools</h6>
             <i class="fa-solid fa-chevron-right" id="closed-tools" style="display: block"></i>
@@ -411,16 +460,23 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
 
         <!-- Tools Submenu -->
         <div class="onetab-sub" id="tools-nav" style="display: none;">
+                <?php if (has_permission('Tools KPX Generator')): ?>
                 <div class="sub" onclick="window.open('<?php echo $auth_url; ?>mlauto/index.html', '_blank')">
                     <a href="<?php echo $auth_url; ?>mlauto/index.html" target="_blank" rel="noopener noreferrer">KPX/KP7 Generator</a>
             </div>
+                <?php endif; ?>
+                <?php if (has_permission('Tools Branch Maker')): ?>
                 <div class="sub" onclick="window.open('<?php echo $auth_url; ?>mlbranchmaker/convert.html', '_blank')">
                     <a href="<?php echo $auth_url; ?>mlbranchmaker/convert.html" target="_blank" rel="noopener noreferrer">Branch Maker</a>
             </div>
+                <?php endif; ?>
+                <?php if (has_permission('Tools File Fetch')): ?>
                 <div class="sub" onclick="window.open('<?php echo $auth_url; ?>recontool/sample.html', '_blank')">
                     <a href="<?php echo $auth_url; ?>recontool/sample.html" target="_blank" rel="noopener noreferrer">File Fetch</a>
             </div>
+                <?php endif; ?>
         </div>
+        <?php endif; ?>
 
         <!-- Logout Button -->
         <div class="onetab" onclick="parent.location='<?php echo $auth_url; ?>logout.php'">
