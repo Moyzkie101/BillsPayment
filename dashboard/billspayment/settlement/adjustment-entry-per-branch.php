@@ -444,6 +444,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         prev_outlet,
                                         prev_operator,
                                         partner_name, partner_id, partner_id_kpx,
+                        posting_date,
                                         reason_note, modified_by, modified_date
                                 )
                                 SELECT
@@ -460,6 +461,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         bt.outlet,
                                         bt.operator,
                                         bt.partner_name, bt.partner_id, bt.partner_id_kpx,
+                                        ?,
                                         ?, ?, NOW()
                                 FROM mldb.billspayment_transaction bt
                                 WHERE bt.reference_no = ?
@@ -488,6 +490,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
         $updateWrongAmountSql = "UPDATE mldb.billspayment_transaction
                                                                 SET settle_unsettle = 'settle',
+                                                                        settlement_date = ?,
                                                                         amount_paid = ?,
                                                                         charge_to_customer = ?,
                                                                         charge_to_partner = ?
@@ -635,11 +638,16 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             }
 
             if ($reasonNote === 'wrong-amount') {
+                if ($postingDate === '') {
+                    throw new Exception('Posting date is required for wrong-amount.');
+                }
+
                 $wrongAmountInsertStmt->bind_param(
-                    str_repeat('s', 7),
+                    str_repeat('s', 8),
                     $editedAmountPaid,
                     $editedChargeCustomer,
                     $editedChargePartner,
+                    $postingDate,
                     $reasonNote,
                     $modifiedBy,
                     $referenceNumber,
@@ -671,7 +679,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
                 if ($partnerId !== '' || $partnerIdKpx !== '') {
                     $wrongAmountUpdateStmt->bind_param(
-                        str_repeat('s', 7),
+                        str_repeat('s', 8),
+                        $postingDate,
                         $editedAmountPaid,
                         $editedChargeCustomer,
                         $editedChargePartner,
@@ -1970,11 +1979,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                             <div class="col-lg-6 settlement-edit-col">
                                 <div class="border rounded p-3 h-100 bg-white settlement-edit-field-panel">
                                     <h6 class="mb-3 text-center">Edit Field</h6>
-                                    <div class="mb-2 edit-field-row posting-date-row" data-field="posting_date"><label class="form-label mb-1">Posting Date</label><input type="date" class="form-control edit-posting-date" data-reference="${referenceKey}" value="${escapeModalValue(row.postingDate || '')}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="payor"><label class="form-label mb-1">Payor Name</label><input type="text" class="form-control edit-payor" data-reference="${referenceKey}" value="${escapeModalValue(row.payor)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="address"><label class="form-label mb-1">Payor Address</label><input type="text" class="form-control edit-address" data-reference="${referenceKey}" value="${escapeModalValue(row.address)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="account_no"><label class="form-label mb-1">Account Number</label><input type="text" class="form-control edit-account-no" data-reference="${referenceKey}" value="${escapeModalValue(row.accountNo)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="account_name"><label class="form-label mb-1">Account Name</label><input type="text" class="form-control edit-account-name" data-reference="${referenceKey}" value="${escapeModalValue(row.accountName)}" disabled></div>
+                                    <div class="mb-2 edit-field-row posting-date-row" data-field="posting_date"><label class="form-label mb-1">Settlement Date</label><input type="date" class="form-control edit-posting-date" data-reference="${referenceKey}" value="${escapeModalValue(row.postingDate || '')}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="principal"><label class="form-label mb-1">Principal</label><input type="text" class="form-control edit-amount-paid" data-reference="${referenceKey}" value="${escapeModalValue(row.amountPaid)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="charge_to_customer"><label class="form-label mb-1">Charge to Customer</label><input type="text" class="form-control edit-charge-customer" data-reference="${referenceKey}" value="${escapeModalValue(row.chargeToCustomer)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="charge_to_partner"><label class="form-label mb-1">Charge to Partner</label><input type="text" class="form-control edit-charge-partner" data-reference="${referenceKey}" value="${escapeModalValue(row.chargeToPartner)}" disabled></div>
@@ -2014,7 +2023,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             const reasonFieldMap = {
                 'wrong-biller': ['payor', 'address', 'other_details'],
                 'wrong-account': ['account_no', 'account_name'],
-                'wrong-amount': ['principal', 'charge_to_customer', 'charge_to_partner'],
+                'wrong-amount': ['posting_date', 'principal', 'charge_to_customer', 'charge_to_partner'],
                 'no-payment': ['principal', 'charge_to_customer', 'charge_to_partner']
             };
 
@@ -2308,14 +2317,18 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             }
 
             const missingPostingDate = changes.find(function (item) {
-                return item.reason_note === 'late-posting' && String(item.posting_date || '').trim() === '';
+                if (String(item.posting_date || '').trim() !== '') {
+                    return false;
+                }
+
+                return item.reason_note === 'late-posting' || item.reason_note === 'wrong-amount';
             });
 
             if (missingPostingDate) {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Posting Date Required',
-                    text: 'Please provide Posting Date for Late Posting reason.'
+                    text: 'Please provide Posting Date for Late Posting or Wrong Amount reason.'
                 });
                 return;
             }
