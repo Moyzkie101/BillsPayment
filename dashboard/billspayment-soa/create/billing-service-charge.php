@@ -9,6 +9,13 @@ session_start();
 @include '../../../fetch/fetch-partner-data.php';
 @include '../../../fetch/fetch-service-type.php';
 
+$options = (isset($options) && is_array($options)) ? $options : [];
+$withheld = $withheld ?? '';
+$partnerID = $partnerID ?? '';
+if (!isset($_SESSION['partnerName_soa'])) {
+    $_SESSION['partnerName_soa'] = '';
+}
+
 if (isset($_SESSION['user_type'])) {
     $current_user_email = '';
     if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {

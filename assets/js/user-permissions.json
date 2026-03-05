@@ -1,0 +1,39 @@
+{
+    "TEST123": [
+        "BP Import Transaction",
+        "BP Report EDI"
+    ],
+    "2020": [
+        "Masterfiles View Bank List",
+        "Tools Branch Maker",
+        "Tools File Fetch",
+        "Tools KPX Generator"
+    ],
+    "20235678": [
+        "BI Create Automated",
+        "BI Create Manual",
+        "BI Report Billing Invoice",
+        "BP Import Cancellation",
+        "BP Import Transaction",
+        "BP Post Transaction",
+        "BP Report Balance Sheet",
+        "BP Report Cancellation",
+        "BP Report EDI",
+        "BP Report Transaction Details",
+        "BP Report Transaction Summary",
+        "BP Report Volume",
+        "BP Settlement Adjustment Entry",
+        "BP Settlement Per Bank",
+        "Invoice Approval",
+        "Invoice Review",
+        "Maintenance Accounts Access Levels",
+        "Maintenance Accounts User Management",
+        "Maintenance Duplicate Transaction",
+        "Maintenance Masterfiles Bank List",
+        "Maintenance Masterfiles Partner List",
+        "Masterfiles View Bank List",
+        "Tools Branch Maker",
+        "Tools File Fetch",
+        "Tools KPX Generator"
+    ]
+}
