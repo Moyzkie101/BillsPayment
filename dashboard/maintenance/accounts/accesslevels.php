@@ -67,6 +67,7 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
     <script src="../../../assets/js/sweetalert2.all.min.js"></script>
     <link rel="icon" href="../../../images/MLW logo.png" type="image/png">
     <style>
+        :root { --brand: #C62828; }
         #searchInput:focus {
             border-color: #dc3545;
             box-shadow: 0 0 0 0.2rem rgba(220,53,69,0.15);
@@ -78,6 +79,8 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
             border-collapse: collapse;
             table-layout: fixed;
         }
+            .bp-section-title { display:flex; gap:12px; align-items:center; }
+            .bp-section-sub { font-size:13px; color:#6b7280; margin-top:4px; }
 
         #users-table thead th {
             background-color: #dc3545;
@@ -328,26 +331,40 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
         </div>
 
         <div class="bp-section-header" role="region" aria-label="Page title">
-            <h3 class="mb-0"><i class="fa-solid fa-key"></i> Access Levels</h3>
+            <div class="bp-section-title">
+                <i class="fa-solid fa-key micon-hdr" aria-hidden="true" style="color:var(--brand);"></i>
+                <div>
+                    <h3 class="mb-0">Access Levels</h3>
+                    <div class="bp-section-sub">Manage user access levels, saved per-user permissions, and role defaults</div>
+                </div>
+            </div>
         </div>
 
         <div class="bp-card container-fluid mt-3 p-4">
             <div class="row mb-3">
                 <div class="col-md-6 col-lg-4">
-                    <input
-                        type="search"
-                        id="searchInput"
-                        class="form-control"
-                        placeholder="Search by ID Number / First Name / Last Name / Email"
-                    >
-                </div>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white" id="searchIcon" style="border-right:0;">
+                                <i class="fa-solid fa-magnifying-glass" aria-hidden="true" style="color:#6b7280;"></i>
+                            </span>
+                            <input
+                                type="search"
+                                id="searchInput"
+                                class="form-control"
+                                placeholder="Search by ID Number / First Name / Last Name / Email"
+                                aria-describedby="searchIcon"
+                            />
+                            <button class="btn btn-outline-secondary" type="button" id="searchBtn" title="Search">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                            </button>
+                        </div>
+                    </div>
             </div>
 
             <div class="table-responsive">
                 <table class="table table-bordered table-hover align-middle" id="users-table">
                     <thead class="table-light">
                         <tr>
-                            <th>#</th>
                             <?php foreach ($columns as $column): ?>
                                 <?php if ($column === 'email'): ?>
                                     <th>Username</th>
@@ -364,7 +381,7 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                     <tbody>
                         <?php if (empty($users)): ?>
                             <tr>
-                                <td colspan="<?php echo count($columns) + 1; ?>" class="text-center text-muted">No users found.</td>
+                                <td colspan="<?php echo count($columns); ?>" class="text-center text-muted">No users found.</td>
                             </tr>
                         <?php else: ?>
                             <?php $index = 1; ?>
@@ -384,7 +401,7 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                                     data-last-name="<?php echo htmlspecialchars(strtolower($lastNameValue)); ?>"
                                     data-email="<?php echo htmlspecialchars(strtolower($emailValue)); ?>"
                                 >
-                                    <td><?php echo $index++; ?></td>
+                                    
                                     <?php foreach ($columns as $column): ?>
                                         <?php if ($column === 'access_level'): ?>
                                             <td class="access-level-cell"><?php echo htmlspecialchars((string)$accessLevelValue); ?></td>
@@ -515,6 +532,10 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
             function renderPermissionCards() {
                 const cardsContainer = $('#permissionCards');
                 const previewList = $('#permissionPreviewList');
+                // clear previous render to avoid duplicate nodes when modal reopened
+                cardsContainer.empty();
+                previewList.empty();
+
                 let contentHtml = '';
                 let previewHtml = '';
                 // Render groups (root catalog) with collapse toggles and color accents
@@ -705,23 +726,39 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 updatePreviewUI();
             }
 
-            $('#searchInput').on('input', function() {
-                const query = String($(this).val() || '').toLowerCase().trim();
-
+            function performSearch() {
+                const query = String($('#searchInput').val() || '').toLowerCase().trim();
                 $('#users-table tbody tr').each(function() {
-                    const idNumber = $(this).data('id-number') || '';
-                    const firstName = $(this).data('first-name') || '';
-                    const lastName = $(this).data('last-name') || '';
-                    const email = $(this).data('email') || '';
+                    const idNumber = String($(this).attr('data-id-number') || '').toLowerCase();
+                    const firstName = String($(this).attr('data-first-name') || '').toLowerCase();
+                    const lastName = String($(this).attr('data-last-name') || '').toLowerCase();
+                    const email = String($(this).attr('data-email') || '').toLowerCase();
 
-                    const isMatch =
+                    const isMatch = (
                         idNumber.indexOf(query) !== -1 ||
                         firstName.indexOf(query) !== -1 ||
                         lastName.indexOf(query) !== -1 ||
-                        email.indexOf(query) !== -1;
+                        email.indexOf(query) !== -1
+                    );
 
                     $(this).toggle(isMatch);
                 });
+            }
+
+            // live search as user types
+            $('#searchInput').on('input', performSearch);
+
+            // support clicking the search button and Enter key to run the same search
+            $('#searchBtn').on('click', function() {
+                performSearch();
+                $('#searchInput').focus();
+            });
+
+            $('#searchInput').on('keypress', function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    performSearch();
+                }
             });
 
             $('#users-table tbody').on('click', 'tr', function() {
