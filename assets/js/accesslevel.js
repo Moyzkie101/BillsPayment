@@ -114,7 +114,7 @@
 
     function initializeAccessLevelMap() {
         $.ajax({
-            url: '../../../assets/js/accesslevel-map.json',
+            url: '../../../assets/js/accesslevel-map.json?v=' + Date.now(),
             type: 'GET',
             dataType: 'json',
             cache: false,
@@ -165,11 +165,21 @@
                 const uniqueKeys = Array.from(new Set(flat)).sort();
 
                 // If levels provided are fewer than the number of single permissions,
-                // assume we need to seed a comprehensive mapping.
+                // generate additional combinations but DO NOT overwrite existing
+                // access level numbers. Append generated entries starting after
+                // the current maximum access_level so explicit mappings keep
+                // their intended values (e.g., powers-of-two roots).
                 if ((ACCESS_LEVELS_ARRAY || []).length < uniqueKeys.length) {
                     const generated = [];
                     const seen = new Set();
-                    let nextLevel = 1;
+
+                    var maxExisting = 0;
+                    (ACCESS_LEVELS_ARRAY || []).forEach(function (row) {
+                        maxExisting = Math.max(maxExisting, parseInt(row.access_level, 10) || 0);
+                        seen.add(createPermissionsKey(row.permissions || []));
+                    });
+
+                    let nextLevel = maxExisting + 1;
 
                     function pushPerms(perms) {
                         const key = createPermissionsKey(perms);
@@ -190,12 +200,8 @@
                         }
                     }
 
-                    // Merge any explicitly provided mappings (keep their permission sets too)
-                    (ACCESS_LEVELS_ARRAY || []).forEach(function (row) {
-                        pushPerms(row.permissions || []);
-                    });
-
-                    ACCESS_LEVELS_ARRAY = generated.slice();
+                    // Append generated entries to the existing mapping
+                    ACCESS_LEVELS_ARRAY = (ACCESS_LEVELS_ARRAY || []).concat(generated.slice());
                 }
             })();
 
@@ -339,10 +345,39 @@
 
     function getPermissionsByLevel(level) {
         const normalizedLevel = parseInt(level, 10);
-        if (!normalizedLevel || !ACCESS_LEVEL_MAP[normalizedLevel]) {
+        if (!normalizedLevel) return [];
+
+        // If there is an explicit mapping for this numeric level, use it.
+        if (ACCESS_LEVEL_MAP[normalizedLevel]) {
+            return expandLegacyAliases(ACCESS_LEVEL_MAP[normalizedLevel].permissions || []);
+        }
+
+        // Fallback: treat the numeric level as a bitmask of root menus.
+        // This implements the powers-of-two menu combination scheme where
+        // root 0 -> bit 1, root 1 -> bit 2, root 2 -> bit 4, etc.
+        try {
+            const out = [];
+            const roots = Array.isArray(PERMISSION_TREE) ? PERMISSION_TREE : [];
+            for (let i = 0; i < roots.length; i++) {
+                const bit = 1 << i; // 1,2,4,8,...
+                if ((normalizedLevel & bit) === bit) {
+                    // collect leaf keys under this root
+                    (function collectLeaf(nodes) {
+                        (nodes || []).forEach(function walk(n) {
+                            if (!n) return;
+                            if (!n.children || !n.children.length) {
+                                out.push(n.key);
+                                return;
+                            }
+                            (n.children || []).forEach(walk);
+                        });
+                    })(roots[i].children || []);
+                }
+            }
+            return expandLegacyAliases(Array.from(new Set(out)).sort());
+        } catch (e) {
             return [];
         }
-        return expandLegacyAliases(ACCESS_LEVEL_MAP[normalizedLevel].permissions || []);
     }
 
     function createPermissionsKey(permissions) {
@@ -369,7 +404,157 @@
                 return parseInt(row.access_level, 10) || 0;
             }
         }
-        return 0;
+        // No exact match found in explicit map. Compute a deterministic
+        // combination index based on root catalogs (singles 1..N, then
+        // pairs starting at N+1, then triples, etc.) so combinations
+        // like [root0] => 1, [root1] => 2, [root0,root1] => N+1, etc.
+        try {
+            const roots = Array.isArray(PERMISSION_TREE) ? PERMISSION_TREE : [];
+            const n = roots.length;
+            if (!n) return 0;
+
+            // Determine which roots are selected by checking if any leaf
+            // permission from that root appears in `permissions`.
+            const sel = [];
+            const permSet = new Set(normalizePermissions(permissions));
+            for (let i = 0; i < n; i++) {
+                const root = roots[i];
+                const leaves = [];
+                (function collect(node) {
+                    if (!node) return;
+                    if (!node.children || !node.children.length) {
+                        leaves.push(node.key);
+                        return;
+                    }
+                    leaves.push(node.key);
+                    (node.children || []).forEach(collect);
+                })(root);
+
+                const has = leaves.some(function (k) { return permSet.has(k); });
+                if (has) sel.push(i + 1); // 1-based indices
+            }
+
+            if (!sel.length) return 0;
+
+            // If only one root selected, return its 1-based index
+            if (sel.length === 1) return sel[0];
+
+            // Otherwise compute lexicographic rank among combinations of the same size
+            function combinations(n, k) {
+                const out = [];
+                const combo = [];
+                function back(start) {
+                    if (combo.length === k) {
+                        out.push(combo.slice());
+                        return;
+                    }
+                    for (let i = start; i <= n; i++) {
+                        combo.push(i);
+                        back(i + 1);
+                        combo.pop();
+                    }
+                }
+                back(1);
+                return out;
+            }
+
+            // compute offset: total subsets of sizes < sel.length among n
+            let offset = 0;
+            for (let s = 1; s < sel.length; s++) {
+                // compute C(n, s)
+                let c = 1;
+                for (let i = 0; i < s; i++) {
+                    c = c * (n - i) / (i + 1);
+                }
+                offset += c;
+            }
+
+            const combos = combinations(n, sel.length);
+            // find lex index
+            let lex = 0;
+            for (let i = 0; i < combos.length; i++) {
+                const a = combos[i];
+                let match = true;
+                for (let j = 0; j < a.length; j++) {
+                    if (a[j] !== sel[j]) { match = false; break; }
+                }
+                if (match) { lex = i; break; }
+            }
+
+            return offset + lex + 1;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    function computeCombinationIndex(permissions) {
+        // Returns the deterministic combination index as used for UI display
+        try {
+            const roots = Array.isArray(PERMISSION_TREE) ? PERMISSION_TREE : [];
+            const n = roots.length;
+            if (!n) return 0;
+
+            const permSet = new Set(normalizePermissions(permissions));
+            const sel = [];
+            for (let i = 0; i < n; i++) {
+                const root = roots[i];
+                const leaves = [];
+                (function collect(node) {
+                    if (!node) return;
+                    if (!node.children || !node.children.length) {
+                        leaves.push(node.key);
+                        return;
+                    }
+                    leaves.push(node.key);
+                    (node.children || []).forEach(collect);
+                })(root);
+                const has = leaves.some(function (k) { return permSet.has(k); });
+                if (has) sel.push(i + 1);
+            }
+            if (!sel.length) return 0;
+            if (sel.length === 1) return sel[0];
+
+            function combinations(n, k) {
+                const out = [];
+                const combo = [];
+                function back(start) {
+                    if (combo.length === k) {
+                        out.push(combo.slice());
+                        return;
+                    }
+                    for (let i = start; i <= n; i++) {
+                        combo.push(i);
+                        back(i + 1);
+                        combo.pop();
+                    }
+                }
+                back(1);
+                return out;
+            }
+
+            let offset = 0;
+            for (let s = 1; s < sel.length; s++) {
+                let c = 1;
+                for (let i = 0; i < s; i++) {
+                    c = c * (n - i) / (i + 1);
+                }
+                offset += c;
+            }
+
+            const combos = combinations(n, sel.length);
+            let lex = 0;
+            for (let i = 0; i < combos.length; i++) {
+                const a = combos[i];
+                let match = true;
+                for (let j = 0; j < a.length; j++) {
+                    if (a[j] !== sel[j]) { match = false; break; }
+                }
+                if (match) { lex = i; break; }
+            }
+            return offset + lex + 1;
+        } catch (e) {
+            return 0;
+        }
     }
 
     function updateUserAccessLevel(idNumber, newAccessLevel, permissions, onSuccess, onError) {
@@ -410,6 +595,7 @@
         getNextAccessLevel: getNextAccessLevel,
         createPermissionsKey: createPermissionsKey,
         findAccessLevelByPermissions: findAccessLevelByPermissions,
+        computeCombinationIndex: computeCombinationIndex,
         normalizePermissions: normalizePermissions,
         ancestorsOf: ancestorsOf,
         descendantsOf: descendantsOf,

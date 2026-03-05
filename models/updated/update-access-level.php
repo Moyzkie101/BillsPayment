@@ -251,6 +251,7 @@ try {
     $resolvedAccessLevel = $inputAccessLevel;
 
     if (!empty($inputPermissions)) {
+        // Resolve using explicit map combinations first (leaf-permissions based).
         $targetKey = permissions_key($inputPermissions);
         $existingLevel = 0;
 
@@ -261,28 +262,9 @@ try {
             }
         }
 
+        // If map has the combo, use it. Otherwise keep the computed value from UI.
         if ($existingLevel > 0) {
             $resolvedAccessLevel = $existingLevel;
-        } else {
-            $maxLevel = 0;
-            foreach ($accessMap['access_levels'] as $row) {
-                $maxLevel = max($maxLevel, (int)$row['access_level']);
-            }
-            $resolvedAccessLevel = $maxLevel + 1;
-
-            $accessMap['access_levels'][] = [
-                'access_level' => $resolvedAccessLevel,
-                'permissions' => $inputPermissions
-            ];
-
-            usort($accessMap['access_levels'], function ($a, $b) {
-                return $a['access_level'] <=> $b['access_level'];
-            });
-
-            if (!write_access_map_file($mapPath, $accessMap)) {
-                echo json_encode(['success' => false, 'message' => 'Failed to persist access map']);
-                exit;
-            }
         }
     }
 
@@ -334,18 +316,55 @@ try {
         exit;
     }
 
-    $currentSessionIdentity = '';
-    if (isset($_SESSION['admin_email'])) {
-        $currentSessionIdentity = (string)$_SESSION['admin_email'];
-    } elseif (isset($_SESSION['user_email'])) {
-        $currentSessionIdentity = (string)$_SESSION['user_email'];
+    // Normalize session identities and updated row values for robust comparison
+    $sessionEmails = [];
+    if (!empty($_SESSION['admin_email'])) $sessionEmails[] = trim(strtolower((string)$_SESSION['admin_email']));
+    if (!empty($_SESSION['user_email'])) $sessionEmails[] = trim(strtolower((string)$_SESSION['user_email']));
+    $sessionIds = [];
+    if (!empty($_SESSION['id_number'])) $sessionIds[] = trim((string)$_SESSION['id_number']);
+
+    $updatedEmail = isset($updatedRow['email']) ? trim(strtolower((string)$updatedRow['email'])) : '';
+    $updatedId = isset($updatedRow['id_number']) ? trim((string)$updatedRow['id_number']) : '';
+
+    $shouldUpdateSession = false;
+    if ($updatedEmail !== '' && in_array($updatedEmail, $sessionEmails, true)) {
+        $shouldUpdateSession = true;
+    }
+    if ($updatedId !== '' && in_array($updatedId, $sessionIds, true)) {
+        $shouldUpdateSession = true;
     }
 
-    if (
-        $currentSessionIdentity !== '' &&
-        ($currentSessionIdentity === (string)$updatedRow['email'] || $currentSessionIdentity === (string)$updatedRow['id_number'])
-    ) {
+    if ($shouldUpdateSession) {
         $_SESSION['user_access_level'] = (int)$updatedRow['access_level'];
+        $_SESSION['user_permissions'] = $inputPermissions;
+    }
+    // Persist explicit per-user permissions into DB column `permissions` (JSON),
+    // and keep the legacy file-backed storage for backward compatibility.
+    try {
+        $jsonPerms = json_encode($inputPermissions, JSON_UNESCAPED_SLASHES);
+        if ($jsonPerms === false) $jsonPerms = json_encode([]);
+
+        // update DB permissions column if present
+        $updPermQuery = "UPDATE mldb.user_form SET permissions = ? WHERE id_number = ?";
+        $updPermStmt = mysqli_prepare($conn, $updPermQuery);
+        if ($updPermStmt) {
+            mysqli_stmt_bind_param($updPermStmt, 'ss', $jsonPerms, $idNumber);
+            @mysqli_stmt_execute($updPermStmt);
+            @mysqli_stmt_close($updPermStmt);
+        }
+
+        // legacy file-backed store (non-fatal)
+        $userPermPath = __DIR__ . '/../../assets/js/user-permissions.json';
+        $userPermData = [];
+        if (file_exists($userPermPath)) {
+            $rawUp = @file_get_contents($userPermPath);
+            $decUp = json_decode($rawUp, true);
+            if (is_array($decUp)) $userPermData = $decUp;
+        }
+        $userPermData[$idNumber] = $inputPermissions;
+        @file_put_contents($userPermPath, json_encode($userPermData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
+    } catch (Exception $e) {
+        // non-fatal, continue
     }
 
     echo json_encode([

@@ -173,40 +173,558 @@
         {
             "access_level": 1,
             "permissions": [
-                "Tools",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet"
             ]
         },
         {
             "access_level": 2,
             "permissions": [
-                "BI Create Automated",
                 "BI Create Manual",
-                "BI Report Billing Invoice",
-                "BP Import Cancellation",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice"
+            ]
+        },
+        {
+            "access_level": 3,
+            "permissions": [
+                "Masterfiles View Bank List"
+            ]
+        },
+        {
+            "access_level": 4,
+            "permissions": [
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List"
+            ]
+        },
+        {
+            "access_level": 5,
+            "permissions": [
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+
+        {
+            "access_level": 6,
+            "permissions": [
                 "BP Import Transaction",
+                "BP Import Cancellation",
                 "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
                 "BP Report EDI",
                 "BP Report Transaction Details",
                 "BP Report Transaction Summary",
-                "BP Report Volume",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice"
+            ]
+        },
+        {
+            "access_level": 7,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
-                "Invoice Approval",
-                "Invoice Review",
-                "Maintenance Accounts Access Levels",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "Masterfiles View Bank List"
+            ]
+        },
+        {
+            "access_level": 8,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
                 "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
                 "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List",
+                "Maintenance Masterfiles Bank List"
+            ]
+        },
+        {
+            "access_level": 9,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "Tools KPX Generator",
                 "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 10,
+            "permissions": [
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Masterfiles View Bank List"
+            ]
+        },
+        {
+            "access_level": 11,
+            "permissions": [
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List"
+            ]
+        },
+        {
+            "access_level": 12,
+            "permissions": [
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 13,
+            "permissions": [
+                "Masterfiles View Bank List",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List"
+            ]
+        },
+        {
+            "access_level": 14,
+            "permissions": [
+                "Masterfiles View Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 15,
+            "permissions": [
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+
+        {
+            "access_level": 16,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Masterfiles View Bank List"
+            ]
+        },
+        {
+            "access_level": 17,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List"
+            ]
+        },
+        {
+            "access_level": 18,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 19,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "Masterfiles View Bank List",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List"
+            ]
+        },
+        {
+            "access_level": 20,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "Masterfiles View Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 21,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 22,
+            "permissions": [
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Masterfiles View Bank List",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List"
+            ]
+        },
+        {
+            "access_level": 23,
+            "permissions": [
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Masterfiles View Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 24,
+            "permissions": [
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 25,
+            "permissions": [
+                "Masterfiles View Bank List",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 26,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Masterfiles View Bank List",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List"
+            ]
+        },
+        {
+            "access_level": 27,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Masterfiles View Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 28,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 29,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "Masterfiles View Bank List",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 30,
+            "permissions": [
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Masterfiles View Bank List",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
+            ]
+        },
+        {
+            "access_level": 31,
+            "permissions": [
+                "BP Import Transaction",
+                "BP Import Cancellation",
+                "BP Post Transaction",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "BP Report Volume",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Cancellation",
+                "BP Report Balance Sheet",
+                "BI Create Manual",
+                "BI Create Automated",
+                "Invoice Review",
+                "Invoice Approval",
+                "BI Report Billing Invoice",
+                "Masterfiles View Bank List",
+                "Maintenance Accounts User Management",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Masterfiles Bank List",
+                "Tools KPX Generator",
+                "Tools Branch Maker",
+                "Tools File Fetch"
             ]
         }
     ],

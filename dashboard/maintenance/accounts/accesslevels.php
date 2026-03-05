@@ -683,10 +683,18 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 }).sort();
 
                 const matchedLevel = window.AccessLevelManager.findAccessLevelByPermissions(leafSelected);
+
+                // If no exact match found in the explicit map, compute a
+                // deterministic combination index based on root menus.
+                let computedCombo = 0;
+                if (!matchedLevel) {
+                    computedCombo = window.AccessLevelManager.computeCombinationIndex(leafSelected) || 0;
+                }
+
                 const nextLevel = window.AccessLevelManager.getNextAccessLevel();
 
-                // If no exact match found, fall back to the next available level.
-                computedLevelFromCards = matchedLevel || nextLevel;
+                // Priority: explicit match > computed combination index > next generated level
+                computedLevelFromCards = matchedLevel || computedCombo || nextLevel;
                 applyPermissionPreview();
                 $('#modalCurrentLevel').text(String(computedLevelFromCards));
                 renderSelectedCardsSummary();
@@ -738,18 +746,37 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 }
 
                 selectedRow = $(this);
+                selectedRow = $(this);
                 const currentLevel = parseInt(selectedUser.access_level, 10) || 0;
-                selectedPermissions = window.AccessLevelManager.getPermissionsByLevel(currentLevel);
                 computedLevelFromCards = currentLevel;
 
                 $('#modalUsername').text(selectedUser.email || '');
                 $('#modalCurrentLevel').text(currentLevel);
-                renderPermissionCards();
-                syncCardSelectionUI();
-                renderSelectedCardsSummary();
-                applyPermissionPreview();
 
-                accessLevelModal.show();
+                // Try to load explicit saved permissions for this user. If none
+                // found, fall back to mapping-based permissions by access level.
+                $.ajax({
+                    url: '../../../models/updated/get-user-permissions.php',
+                    method: 'GET',
+                    data: { id_number: selectedUser.id_number },
+                    dataType: 'json'
+                }).done(function(resp) {
+                    if (resp && resp.success && Array.isArray(resp.permissions) && resp.permissions.length) {
+                        // use saved (leaf) permissions
+                        selectedPermissions = resp.permissions.slice().sort();
+                    } else {
+                        // fallback to legacy mapping by numeric access level
+                        selectedPermissions = window.AccessLevelManager.getPermissionsByLevel(currentLevel);
+                    }
+                }).fail(function() {
+                    selectedPermissions = window.AccessLevelManager.getPermissionsByLevel(currentLevel);
+                }).always(function() {
+                    renderPermissionCards();
+                    syncCardSelectionUI();
+                    renderSelectedCardsSummary();
+                    applyPermissionPreview();
+                    accessLevelModal.show();
+                });
             });
 
             function togglePermissionFromCard(clickedPermission) {
@@ -879,8 +906,19 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                         selectedRow.attr('data-user', JSON.stringify(selectedUser));
                         selectedRow.find('.access-level-cell').text(String(updatedLevel));
 
+                        // If the saved user is the current logged-in user, reload
+                        // so server-rendered menus and session-derived permissions
+                        // are refreshed immediately without requiring logout.
+                        const currentSessionEmail = '<?php echo isset($current_user_email) ? addslashes($current_user_email) : ''; ?>'.toLowerCase();
+                        const updatedEmail = (response.updated.email || '').toLowerCase();
+
                         accessLevelModal.hide();
                         Swal.fire({ icon: 'success', title: 'Success', text: 'Access level updated successfully.' });
+
+                        if (currentSessionEmail && updatedEmail && currentSessionEmail === updatedEmail) {
+                            // force reload to pick up refreshed session/menu
+                            window.location.reload(true);
+                        }
                     },
                     function(xhr) {
                         let errorMessage = 'Server error while updating access level.';
