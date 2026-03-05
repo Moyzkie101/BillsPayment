@@ -101,7 +101,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                   FROM mldb.billspayment_transaction AS bt
                   WHERE (bt.status IS NULL OR bt.status <> '*')
                     AND (bt.post_transaction IS NULL OR bt.post_transaction <> 'posted')
-                    AND bt.settle_unsettle IS NULL
+                    AND (
+                        bt.settle_unsettle IS NULL
+                        OR TRIM(bt.settle_unsettle) = ''
+                        OR UPPER(TRIM(bt.settle_unsettle)) = 'UNSETTLE'
+                    )
                     AND bt.reference_no LIKE ?
                   ORDER BY bt.datetime ASC, bt.reference_no ASC";
 
@@ -210,7 +214,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
               WHERE $dateCondition
                                 AND (bt.status IS NULL OR bt.status <> '*')
                 AND (bt.post_transaction IS NULL OR bt.post_transaction <> 'posted')
-                AND bt.settle_unsettle IS NULL";
+                AND (
+                    bt.settle_unsettle IS NULL
+                    OR TRIM(bt.settle_unsettle) = ''
+                    OR UPPER(TRIM(bt.settle_unsettle)) = 'UNSETTLE'
+                )";
 
     if ($partner !== '' && $partner !== 'All') {
         if (!empty($partnerIds)) {
@@ -481,16 +489,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                                                         LIMIT 1";
 
         $updateLatePostingSql = "UPDATE mldb.billspayment_transaction
-                                                                SET settle_unsettle = 'settle',
-                                                                        settlement_date = ?
+                                                                SET settle_unsettle = 'Settle'
                                                             WHERE datetime = ?
                                                                 AND reference_no = ?
                                                                 AND (partner_id = ? OR partner_id_kpx = ?)
                                                             LIMIT 1";
 
         $updateWrongAmountSql = "UPDATE mldb.billspayment_transaction
-                                                                SET settle_unsettle = 'settle',
-                                                                        settlement_date = ?,
+                                                                SET settle_unsettle = 'Settle',
                                                                         amount_paid = ?,
                                                                         charge_to_customer = ?,
                                                                         charge_to_partner = ?
@@ -512,7 +518,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         other_details = ?,
                                         outlet = ?,
                                         operator = ?,
-                                        settle_unsettle = 'settle'
+                                        settle_unsettle = 'Settle'
                                     WHERE reference_no = ?
                                         AND datetime = ?
                                     LIMIT 1";
@@ -621,8 +627,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
                 if ($partnerId !== '' || $partnerIdKpx !== '') {
                     $lateUpdateStmt->bind_param(
-                        str_repeat('s', 5),
-                        $postingDate,
+                        str_repeat('s', 4),
                         $transactionDatetime,
                         $referenceNumber,
                         $partnerId,
@@ -679,8 +684,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
                 if ($partnerId !== '' || $partnerIdKpx !== '') {
                     $wrongAmountUpdateStmt->bind_param(
-                        str_repeat('s', 8),
-                        $postingDate,
+                        str_repeat('s', 7),
                         $editedAmountPaid,
                         $editedChargeCustomer,
                         $editedChargePartner,

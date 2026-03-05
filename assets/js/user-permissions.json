@@ -35,5 +35,65 @@
         "Tools Branch Maker",
         "Tools File Fetch",
         "Tools KPX Generator"
+    ],
+    "94005055": [
+        "BI Report Billing Invoice",
+        "BP Report EDI",
+        "BP Report Transaction Details",
+        "BP Report Transaction Summary",
+        "BP Report Volume",
+        "Invoice Approval",
+        "Masterfiles View Bank List"
+    ],
+    "1013333": [
+        "BI Report Billing Invoice",
+        "Invoice Approval"
+    ],
+    "17098209": [
+        "BI Report Billing Invoice",
+        "BP Report Balance Sheet",
+        "BP Report Cancellation",
+        "BP Report EDI",
+        "BP Report Transaction Details",
+        "BP Report Transaction Summary",
+        "BP Report Volume",
+        "BP Settlement Adjustment Entry",
+        "Invoice Review"
+    ],
+    "20217237": [
+        "BI Create Automated",
+        "BI Create Manual",
+        "BI Report Billing Invoice",
+        "BP Import Cancellation",
+        "BP Import Transaction",
+        "BP Report EDI",
+        "BP Report Volume",
+        "BP Settlement Per Bank",
+        "Masterfiles View Bank List",
+        "Tools Branch Maker",
+        "Tools File Fetch",
+        "Tools KPX Generator"
+    ],
+    "20236789": [
+        "BI Create Automated",
+        "BI Create Manual",
+        "BI Report Billing Invoice",
+        "BP Import Cancellation",
+        "BP Import Transaction",
+        "BP Post Transaction",
+        "BP Report Balance Sheet",
+        "BP Report Cancellation",
+        "BP Report EDI",
+        "BP Report Transaction Details",
+        "BP Report Transaction Summary",
+        "BP Report Volume",
+        "BP Settlement Adjustment Entry",
+        "BP Settlement Per Bank",
+        "Invoice Approval",
+        "Invoice Review",
+        "Masterfiles View Bank List",
+        "Tools Branch Maker",
+        "Tools File Fetch",
+        "Tools KPX Generator"
     ]
 }
