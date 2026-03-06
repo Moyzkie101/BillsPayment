@@ -1100,6 +1100,24 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.2);
         }
 
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.72);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading-overlay-content {
+            background: #ffffff;
+            border: 1px solid #f1f3f5;
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+        }
+
         @media (max-width: 991.98px) {
             .settle-filter-actions {
                 margin-top: 0;
@@ -1119,7 +1137,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
-            <div class="loading-spinner"></div>
+            <div class="loading-overlay-content d-flex align-items-center gap-2">
+                <div class="spinner-border text-danger" role="status" aria-hidden="true"></div>
+                <span class="small text-muted">Generating report...</span>
+            </div>
         </div>
         <div class="bp-section-header" role="region" aria-label="Page title">
             <div class="bp-section-title">
@@ -1153,13 +1174,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         <span class="settle-mode-main">Reference Number</span>
                                     </span>
                                 </label>
-                                <input type="radio" class="btn-check" name="settlement_view" id="settlement-unposting" value="unposting" autocomplete="off" <?php echo $settlement_view === 'unposting' ? 'checked' : ''; ?>>
-                                <label class="settle-mode-option" for="settlement-unposting">
+                                <!-- <input type="radio" class="btn-check" name="settlement_view" id="settlement-unposting" value="unposting" autocomplete="off" <?php echo $settlement_view === 'unposting' ? 'checked' : ''; ?>>
+                                <label class="settle-mode-option" for="settlement-unposting"> -->
                                     <!-- <span class="settle-mode-icon"><i class="fas fa-file-alt"></i></span> -->
-                                    <span class="settle-mode-text">
+                                    <!-- <span class="settle-mode-text">
                                         <span class="settle-mode-main">Unposting</span>
                                     </span>
-                                </label>
+                                </label> -->
                             </div>
                         </div>
                     </div>
@@ -1218,6 +1239,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 <div class="card-body settle-report-body">
                     <div class="d-flex justify-content-end align-items-center mb-2 gap-2">
                         <div class="d-flex gap-2">
+                            <button id="settle-logs" type="button" class="btn btn-secondary" disabled>Logs</button>
                             <button id="settle-edit" type="button" class="btn btn-secondary" disabled>Reason</button>
                             <button id="settle-save" type="button" class="btn btn-secondary" disabled>Save</button>
                         </div>
@@ -1325,10 +1347,19 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             const $filterTypeFieldWrap = $filterType.closest('.col-lg-3');
             const $referenceNumberWrap = $('#referenceNumberWrap');
             const $referenceNumberInput = $('#referenceNumberInput');
+            const $loadingOverlay = $('#loading-overlay');
             const settlementEditModalEl = document.getElementById('settlementEditModal');
             const settlementEditModal = settlementEditModalEl ? new bootstrap.Modal(settlementEditModalEl) : null;
             let currentRangeStart = '';
             let currentRangeEnd = '';
+
+            function showGenerateLoadingOverlay() {
+                $loadingOverlay.css('display', 'flex');
+            }
+
+            function hideGenerateLoadingOverlay() {
+                $loadingOverlay.hide();
+            }
 
             partnerDropdown.select2({
                 placeholder: partnerDropdown.data('placeholder') || 'Search or select a Partner...',
@@ -1502,6 +1533,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
             function requestReport(startDate, endDate) {
                 const selectedView = $('input[name="settlement_view"]:checked').val() || 'filter';
+                showGenerateLoadingOverlay();
                 $.ajax({
                     url: window.location.pathname,
                     type: 'POST',
@@ -1537,8 +1569,48 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                             title: 'Connection Error',
                             text: 'Failed to generate report. Please try again.'
                         });
+                    },
+                    complete: function() {
+                        hideGenerateLoadingOverlay();
                     }
                 });
+            }
+
+            function refreshCurrentReportAfterSave() {
+                const selectedView = $('input[name="settlement_view"]:checked').val() || 'filter';
+
+                if (selectedView === 'reference') {
+                    requestReport('', '');
+                    return;
+                }
+
+                const $activeDayButton = $dayButtonsWrapper.find('.day-button.day-button-active');
+                if ($activeDayButton.length && $activeDayButton.attr('id') !== 'allDaysButton') {
+                    const selectedDate = String($activeDayButton.data('date') || '').trim();
+                    if (selectedDate !== '') {
+                        requestReport(selectedDate, selectedDate);
+                        return;
+                    }
+                }
+
+                let startDate = String($startDate.val() || '').trim();
+                let endDate = String($endDate.val() || '').trim();
+                const filterType = String($filterType.val() || '').trim();
+
+                if (filterType === 'daily' || filterType === 'monthly' || filterType === 'yearly') {
+                    endDate = startDate;
+                } else if ((filterType === 'date-range' || filterType === 'monthly-range' || filterType === 'yearly-range') && !endDate) {
+                    endDate = startDate;
+                }
+
+                if (startDate !== '' && endDate !== '') {
+                    requestReport(startDate, endDate);
+                    return;
+                }
+
+                if (currentRangeStart !== '' && currentRangeEnd !== '') {
+                    requestReport(currentRangeStart, currentRangeEnd);
+                }
             }
 
             function formatAmount(value) {
@@ -1831,6 +1903,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     title: 'Confirm Save',
                     text: 'Do you want to save these submitted changes?',
                     showCancelButton: true,
+                    allowEnterKey: false,
+                    allowEscapeKey: false,
+                    allowOutsideClick: false,
                     confirmButtonText: 'Yes, Proceed',
                     cancelButtonText: 'Cancel'
                 }).then(function (confirmResult) {
@@ -1860,6 +1935,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                 icon: 'success',
                                 title: 'Inserted Successfully',
                                 text: `Saved ${result.insertedRows || 0} record(s).`
+                            }).then(function (successResult) {
+                                if (!successResult.isConfirmed) {
+                                    return;
+                                }
+
+                                window.settlementSubmittedChangesByKey = {};
+                                refreshCurrentReportAfterSave();
                             });
                         },
                         error: function () {
