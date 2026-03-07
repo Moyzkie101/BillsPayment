@@ -1239,7 +1239,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 <div class="card-body settle-report-body">
                     <div class="d-flex justify-content-end align-items-center mb-2 gap-2">
                         <div class="d-flex gap-2">
-                            <button id="settle-logs" type="button" class="btn btn-secondary" disabled>Logs</button>
+                            <button id="settle-logs" type="button" class="btn btn-secondary" style="display: none;" disabled>Logs</button>
                             <button id="settle-edit" type="button" class="btn btn-secondary" disabled>Reason</button>
                             <button id="settle-save" type="button" class="btn btn-secondary" disabled>Save</button>
                         </div>
@@ -1340,6 +1340,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             const $dayButtonsWrapper = $('#dayButtonsWrapper');
             const $reportStatus = $('#reportStatus');
             const $tableSearchInput = $('#tableSearchInput');
+            const $settleLogsBtn = $('#settle-logs');
             const $settleEditBtn = $('#settle-edit');
             const $settleSaveBtn = $('#settle-save');
             const $settlementViewRadios = $('input[name="settlement_view"]');
@@ -1359,6 +1360,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
             function hideGenerateLoadingOverlay() {
                 $loadingOverlay.hide();
+            }
+
+            function activateLogsButton() {
+                $settleLogsBtn
+                    .show()
+                    .prop('disabled', false)
+                    .removeClass('btn-secondary btn-danger btn-success')
+                    .addClass('btn-warning text-dark');
             }
 
             partnerDropdown.select2({
@@ -1777,6 +1786,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     $dayFilterContainer.hide();
                     $dayButtonsWrapper.find('.day-button').not('#allDaysButton').remove();
                     setDayActive($('#allDaysButton'));
+                    activateLogsButton();
                     requestReport('', '');
                     return;
                 }
@@ -1829,6 +1839,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     setDayActive($('#allDaysButton'));
                 }
 
+                activateLogsButton();
                 requestReport(startDate, endDate);
             });
 
