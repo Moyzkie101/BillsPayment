@@ -101,7 +101,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                   FROM mldb.billspayment_transaction AS bt
                   WHERE (bt.status IS NULL OR bt.status <> '*')
                     AND (bt.post_transaction IS NULL OR bt.post_transaction <> 'posted')
-                    AND bt.settle_unsettle IS NULL
+                    AND (
+                        bt.settle_unsettle IS NULL
+                        OR TRIM(bt.settle_unsettle) = ''
+                        OR UPPER(TRIM(bt.settle_unsettle)) = 'UNSETTLE'
+                    )
                     AND bt.reference_no LIKE ?
                   ORDER BY bt.datetime ASC, bt.reference_no ASC";
 
@@ -210,7 +214,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
               WHERE $dateCondition
                                 AND (bt.status IS NULL OR bt.status <> '*')
                 AND (bt.post_transaction IS NULL OR bt.post_transaction <> 'posted')
-                AND bt.settle_unsettle IS NULL";
+                AND (
+                    bt.settle_unsettle IS NULL
+                    OR TRIM(bt.settle_unsettle) = ''
+                    OR UPPER(TRIM(bt.settle_unsettle)) = 'UNSETTLE'
+                )";
 
     if ($partner !== '' && $partner !== 'All') {
         if (!empty($partnerIds)) {
@@ -296,6 +304,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'submit_changes') {
             'reference_number' => $referenceNumber,
             'transaction_datetime' => $transactionDatetime,
             'reason_note' => $reasonNote,
+            'posting_date' => isset($item['posting_date']) ? trim((string)$item['posting_date']) : '',
             'payor' => isset($item['payor']) ? trim((string)$item['payor']) : '',
             'address' => isset($item['address']) ? trim((string)$item['address']) : '',
             'account_no' => isset($item['account_no']) ? trim((string)$item['account_no']) : '',
@@ -385,6 +394,117 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                   )
                 LIMIT 1";
 
+        $insertLatePostingSql = "INSERT INTO mldb.settle_adjustment_branch_transaction (
+                                        datetime, reference_no,
+                                        prev_payor,
+                                        prev_address,
+                                        prev_account_no,
+                                        prev_account_name,
+                                        prev_amount_paid,
+                                        prev_charge_to_customer,
+                                        prev_charge_to_partner,
+                                        prev_contact_no,
+                                        prev_other_details,
+                                        prev_outlet,
+                                        prev_operator,
+                                        partner_name, partner_id, partner_id_kpx,
+                                        posting_date,
+                                        reason_note, modified_by, modified_date
+                                )
+                                SELECT
+                                        bt.datetime, bt.reference_no,
+                                        bt.payor,
+                                        bt.address,
+                                        bt.account_no,
+                                        bt.account_name,
+                                        bt.amount_paid,
+                                        bt.charge_to_customer,
+                                        bt.charge_to_partner,
+                                        bt.contact_no,
+                                        bt.other_details,
+                                        bt.outlet,
+                                        bt.operator,
+                                        bt.partner_name, bt.partner_id, bt.partner_id_kpx,
+                                        ?,
+                                        ?, ?, NOW()
+                                FROM mldb.billspayment_transaction bt
+                                WHERE bt.reference_no = ?
+                                    AND bt.datetime = ?
+                                    AND NOT EXISTS (
+                                        SELECT 1
+                                        FROM mldb.settle_adjustment_branch_transaction st
+                                        WHERE st.reference_no = bt.reference_no
+                                            AND st.datetime = bt.datetime
+                                    )
+                                LIMIT 1";
+
+        $insertWrongAmountSql = "INSERT INTO mldb.settle_adjustment_branch_transaction (
+                                        datetime, reference_no,
+                                        prev_payor,
+                                        prev_address,
+                                        prev_account_no,
+                                        prev_account_name,
+                                        prev_amount_paid, edited_amount_paid,
+                                        prev_charge_to_customer, edited_charge_to_customer,
+                                        prev_charge_to_partner, edited_charge_to_partner,
+                                        prev_contact_no,
+                                        prev_other_details,
+                                        prev_outlet,
+                                        prev_operator,
+                                        partner_name, partner_id, partner_id_kpx,
+                        posting_date,
+                                        reason_note, modified_by, modified_date
+                                )
+                                SELECT
+                                        bt.datetime, bt.reference_no,
+                                        bt.payor,
+                                        bt.address,
+                                        bt.account_no,
+                                        bt.account_name,
+                                        bt.amount_paid, ?,
+                                        bt.charge_to_customer, ?,
+                                        bt.charge_to_partner, ?,
+                                        bt.contact_no,
+                                        bt.other_details,
+                                        bt.outlet,
+                                        bt.operator,
+                                        bt.partner_name, bt.partner_id, bt.partner_id_kpx,
+                                        ?,
+                                        ?, ?, NOW()
+                                FROM mldb.billspayment_transaction bt
+                                WHERE bt.reference_no = ?
+                                    AND bt.datetime = ?
+                                    AND NOT EXISTS (
+                                        SELECT 1
+                                        FROM mldb.settle_adjustment_branch_transaction st
+                                        WHERE st.reference_no = bt.reference_no
+                                            AND st.datetime = bt.datetime
+                                    )
+                                LIMIT 1";
+
+        $latePostingPartnerLookupSql = "SELECT bt.partner_id, bt.partner_id_kpx
+                                                                        FROM mldb.billspayment_transaction bt
+                                                                        WHERE bt.reference_no = ?
+                                                                            AND bt.datetime = ?
+                                                                        LIMIT 1";
+
+        $updateLatePostingSql = "UPDATE mldb.billspayment_transaction
+                                                                SET settle_unsettle = 'Settle'
+                                                            WHERE datetime = ?
+                                                                AND reference_no = ?
+                                                                AND (partner_id = ? OR partner_id_kpx = ?)
+                                                            LIMIT 1";
+
+        $updateWrongAmountSql = "UPDATE mldb.billspayment_transaction
+                                                                SET settle_unsettle = 'Settle',
+                                                                        amount_paid = ?,
+                                                                        charge_to_customer = ?,
+                                                                        charge_to_partner = ?
+                                                            WHERE datetime = ?
+                                                                AND reference_no = ?
+                                                                AND (partner_id = ? OR partner_id_kpx = ?)
+                                                            LIMIT 1";
+
         $updateSql = "UPDATE mldb.billspayment_transaction
                                     SET
                                         payor = ?,
@@ -398,7 +518,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         other_details = ?,
                                         outlet = ?,
                                         operator = ?,
-                                        settle_unsettle = 'settle'
+                                        settle_unsettle = 'Settle'
                                     WHERE reference_no = ?
                                         AND datetime = ?
                                     LIMIT 1";
@@ -412,6 +532,31 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 $updateStmt = $conn->prepare($updateSql);
                 if (!$updateStmt) {
                         throw new Exception('Prepare failed (update): ' . $conn->error);
+                }
+
+                $lateInsertStmt = $conn->prepare($insertLatePostingSql);
+                if (!$lateInsertStmt) {
+                    throw new Exception('Prepare failed (late insert): ' . $conn->error);
+                }
+
+                $wrongAmountInsertStmt = $conn->prepare($insertWrongAmountSql);
+                if (!$wrongAmountInsertStmt) {
+                    throw new Exception('Prepare failed (wrong amount insert): ' . $conn->error);
+                }
+
+                $latePartnerLookupStmt = $conn->prepare($latePostingPartnerLookupSql);
+                if (!$latePartnerLookupStmt) {
+                    throw new Exception('Prepare failed (late partner lookup): ' . $conn->error);
+                }
+
+                $lateUpdateStmt = $conn->prepare($updateLatePostingSql);
+                if (!$lateUpdateStmt) {
+                    throw new Exception('Prepare failed (late update): ' . $conn->error);
+                }
+
+                $wrongAmountUpdateStmt = $conn->prepare($updateWrongAmountSql);
+                if (!$wrongAmountUpdateStmt) {
+                    throw new Exception('Prepare failed (wrong amount update): ' . $conn->error);
                 }
 
         $insertedRows = 0;
@@ -441,6 +586,121 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             $editedOutlet = trim((string)($item['outlet'] ?? ''));
             $editedOperator = trim((string)($item['operator'] ?? ''));
             $reasonNote = trim((string)($item['reason_note'] ?? ''));
+            $postingDate = trim((string)($item['posting_date'] ?? ''));
+
+            if ($reasonNote === 'late-posting') {
+                if ($postingDate === '') {
+                    throw new Exception('Posting date is required for late-posting.');
+                }
+
+                $lateInsertStmt->bind_param(
+                    str_repeat('s', 5),
+                    $postingDate,
+                    $reasonNote,
+                    $modifiedBy,
+                    $referenceNumber,
+                    $transactionDatetime
+                );
+
+                $lateInsertStmt->execute();
+                if ($lateInsertStmt->affected_rows > 0) {
+                    $insertedRows++;
+                } else {
+                    $skippedRows++;
+                }
+
+                $partnerId = '';
+                $partnerIdKpx = '';
+
+                $latePartnerLookupStmt->bind_param(
+                    str_repeat('s', 2),
+                    $referenceNumber,
+                    $transactionDatetime
+                );
+                $latePartnerLookupStmt->execute();
+                $latePartnerLookupResult = $latePartnerLookupStmt->get_result();
+                if ($latePartnerLookupResult && $latePartnerLookupResult->num_rows > 0) {
+                    $latePartnerRow = $latePartnerLookupResult->fetch_assoc();
+                    $partnerId = trim((string)($latePartnerRow['partner_id'] ?? ''));
+                    $partnerIdKpx = trim((string)($latePartnerRow['partner_id_kpx'] ?? ''));
+                }
+
+                if ($partnerId !== '' || $partnerIdKpx !== '') {
+                    $lateUpdateStmt->bind_param(
+                        str_repeat('s', 4),
+                        $transactionDatetime,
+                        $referenceNumber,
+                        $partnerId,
+                        $partnerIdKpx
+                    );
+                    $lateUpdateStmt->execute();
+                    if ($lateUpdateStmt->affected_rows > 0) {
+                        $updatedRows++;
+                    }
+                }
+
+                continue;
+            }
+
+            if ($reasonNote === 'wrong-amount') {
+                if ($postingDate === '') {
+                    throw new Exception('Posting date is required for wrong-amount.');
+                }
+
+                $wrongAmountInsertStmt->bind_param(
+                    str_repeat('s', 8),
+                    $editedAmountPaid,
+                    $editedChargeCustomer,
+                    $editedChargePartner,
+                    $postingDate,
+                    $reasonNote,
+                    $modifiedBy,
+                    $referenceNumber,
+                    $transactionDatetime
+                );
+
+                $wrongAmountInsertStmt->execute();
+                if ($wrongAmountInsertStmt->affected_rows > 0) {
+                    $insertedRows++;
+                } else {
+                    $skippedRows++;
+                }
+
+                $partnerId = '';
+                $partnerIdKpx = '';
+
+                $latePartnerLookupStmt->bind_param(
+                    str_repeat('s', 2),
+                    $referenceNumber,
+                    $transactionDatetime
+                );
+                $latePartnerLookupStmt->execute();
+                $latePartnerLookupResult = $latePartnerLookupStmt->get_result();
+                if ($latePartnerLookupResult && $latePartnerLookupResult->num_rows > 0) {
+                    $latePartnerRow = $latePartnerLookupResult->fetch_assoc();
+                    $partnerId = trim((string)($latePartnerRow['partner_id'] ?? ''));
+                    $partnerIdKpx = trim((string)($latePartnerRow['partner_id_kpx'] ?? ''));
+                }
+
+                if ($partnerId !== '' || $partnerIdKpx !== '') {
+                    $wrongAmountUpdateStmt->bind_param(
+                        str_repeat('s', 7),
+                        $editedAmountPaid,
+                        $editedChargeCustomer,
+                        $editedChargePartner,
+                        $transactionDatetime,
+                        $referenceNumber,
+                        $partnerId,
+                        $partnerIdKpx
+                    );
+                    $wrongAmountUpdateStmt->execute();
+                    if ($wrongAmountUpdateStmt->affected_rows > 0) {
+                        $updatedRows++;
+                    }
+                }
+
+                continue;
+            }
 
             $stmt->bind_param(
                 str_repeat('s', 15),
@@ -492,6 +752,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
         $stmt->close();
         $updateStmt->close();
+        $lateInsertStmt->close();
+        $wrongAmountInsertStmt->close();
+        $latePartnerLookupStmt->close();
+        $lateUpdateStmt->close();
+        $wrongAmountUpdateStmt->close();
 
         echo json_encode([
             'status' => 'success',
@@ -835,6 +1100,24 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.2);
         }
 
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.72);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading-overlay-content {
+            background: #ffffff;
+            border: 1px solid #f1f3f5;
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+        }
+
         @media (max-width: 991.98px) {
             .settle-filter-actions {
                 margin-top: 0;
@@ -854,7 +1137,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
-            <div class="loading-spinner"></div>
+            <div class="loading-overlay-content d-flex align-items-center gap-2">
+                <div class="spinner-border text-danger" role="status" aria-hidden="true"></div>
+                <span class="small text-muted">Generating report...</span>
+            </div>
         </div>
         <div class="bp-section-header" role="region" aria-label="Page title">
             <div class="bp-section-title">
@@ -888,6 +1174,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         <span class="settle-mode-main">Reference Number</span>
                                     </span>
                                 </label>
+                                <!-- <input type="radio" class="btn-check" name="settlement_view" id="settlement-unposting" value="unposting" autocomplete="off" <?php echo $settlement_view === 'unposting' ? 'checked' : ''; ?>>
+                                <label class="settle-mode-option" for="settlement-unposting"> -->
+                                    <!-- <span class="settle-mode-icon"><i class="fas fa-file-alt"></i></span> -->
+                                    <!-- <span class="settle-mode-text">
+                                        <span class="settle-mode-main">Unposting</span>
+                                    </span>
+                                </label> -->
                             </div>
                         </div>
                     </div>
@@ -931,7 +1224,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                         </div>
 
                         <div class="col-lg-2 col-md-12 col-sm-12 settle-filter-actions">
-                            <button id="generateReport" type="button" class="btn btn-secondary w-100 compact-apply-btn" disabled>Apply</button>
+                            <button id="generateReport" type="button" class="btn btn-secondary w-100 compact-apply-btn" disabled>Generate</button>
                         </div>
                     </div>
 
@@ -946,6 +1239,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 <div class="card-body settle-report-body">
                     <div class="d-flex justify-content-end align-items-center mb-2 gap-2">
                         <div class="d-flex gap-2">
+                            <button id="settle-logs" type="button" class="btn btn-secondary" disabled>Logs</button>
                             <button id="settle-edit" type="button" class="btn btn-secondary" disabled>Reason</button>
                             <button id="settle-save" type="button" class="btn btn-secondary" disabled>Save</button>
                         </div>
@@ -1053,10 +1347,19 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             const $filterTypeFieldWrap = $filterType.closest('.col-lg-3');
             const $referenceNumberWrap = $('#referenceNumberWrap');
             const $referenceNumberInput = $('#referenceNumberInput');
+            const $loadingOverlay = $('#loading-overlay');
             const settlementEditModalEl = document.getElementById('settlementEditModal');
             const settlementEditModal = settlementEditModalEl ? new bootstrap.Modal(settlementEditModalEl) : null;
             let currentRangeStart = '';
             let currentRangeEnd = '';
+
+            function showGenerateLoadingOverlay() {
+                $loadingOverlay.css('display', 'flex');
+            }
+
+            function hideGenerateLoadingOverlay() {
+                $loadingOverlay.hide();
+            }
 
             partnerDropdown.select2({
                 placeholder: partnerDropdown.data('placeholder') || 'Search or select a Partner...',
@@ -1230,6 +1533,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
             function requestReport(startDate, endDate) {
                 const selectedView = $('input[name="settlement_view"]:checked').val() || 'filter';
+                showGenerateLoadingOverlay();
                 $.ajax({
                     url: window.location.pathname,
                     type: 'POST',
@@ -1265,8 +1569,48 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                             title: 'Connection Error',
                             text: 'Failed to generate report. Please try again.'
                         });
+                    },
+                    complete: function() {
+                        hideGenerateLoadingOverlay();
                     }
                 });
+            }
+
+            function refreshCurrentReportAfterSave() {
+                const selectedView = $('input[name="settlement_view"]:checked').val() || 'filter';
+
+                if (selectedView === 'reference') {
+                    requestReport('', '');
+                    return;
+                }
+
+                const $activeDayButton = $dayButtonsWrapper.find('.day-button.day-button-active');
+                if ($activeDayButton.length && $activeDayButton.attr('id') !== 'allDaysButton') {
+                    const selectedDate = String($activeDayButton.data('date') || '').trim();
+                    if (selectedDate !== '') {
+                        requestReport(selectedDate, selectedDate);
+                        return;
+                    }
+                }
+
+                let startDate = String($startDate.val() || '').trim();
+                let endDate = String($endDate.val() || '').trim();
+                const filterType = String($filterType.val() || '').trim();
+
+                if (filterType === 'daily' || filterType === 'monthly' || filterType === 'yearly') {
+                    endDate = startDate;
+                } else if ((filterType === 'date-range' || filterType === 'monthly-range' || filterType === 'yearly-range') && !endDate) {
+                    endDate = startDate;
+                }
+
+                if (startDate !== '' && endDate !== '') {
+                    requestReport(startDate, endDate);
+                    return;
+                }
+
+                if (currentRangeStart !== '' && currentRangeEnd !== '') {
+                    requestReport(currentRangeStart, currentRangeEnd);
+                }
             }
 
             function formatAmount(value) {
@@ -1359,6 +1703,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             }
 
             window.updateSettlementSaveButtonState = updateSaveButtonState;
+            window.updateSettlementEditButtonState = updateEditButtonState;
 
             function getPendingSettlementChangesForSave() {
                 if (typeof window.getSettlementChangesForSave === 'function') {
@@ -1506,7 +1851,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
             $('#selectAllRows').on('change', function () {
                 const isChecked = $(this).is(':checked');
-                $('#transactionReportTable tbody .row-select').prop('checked', isChecked);
+                $('#transactionReportTable tbody .row-select:not(:disabled)').prop('checked', isChecked);
                 updateEditButtonState();
             });
 
@@ -1558,6 +1903,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     title: 'Confirm Save',
                     text: 'Do you want to save these submitted changes?',
                     showCancelButton: true,
+                    allowEnterKey: false,
+                    allowEscapeKey: false,
+                    allowOutsideClick: false,
                     confirmButtonText: 'Yes, Proceed',
                     cancelButtonText: 'Cancel'
                 }).then(function (confirmResult) {
@@ -1587,6 +1935,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                 icon: 'success',
                                 title: 'Inserted Successfully',
                                 text: `Saved ${result.insertedRows || 0} record(s).`
+                            }).then(function (successResult) {
+                                if (!successResult.isConfirmed) {
+                                    return;
+                                }
+
+                                window.settlementSubmittedChangesByKey = {};
+                                refreshCurrentReportAfterSave();
                             });
                         },
                         error: function () {
@@ -1680,6 +2035,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                 <label class="form-label mb-1">Reason Note</label>
                                 <select class="form-select edit-reason-note" data-reference="${referenceKey}">
                                     <option value="" ${reason === '' ? 'selected' : ''}>Select a Reason</option>
+                                    <option value="late-posting" ${reason === 'late-posting' ? 'selected' : ''}>Late Posting</option>
                                     <option value="wrong-biller" ${reason === 'wrong-biller' ? 'selected' : ''}>Wrong Biller</option>
                                     <option value="no-payment" ${reason === 'no-payment' ? 'selected' : ''}>No Payment</option>
                                     <option value="wrong-account" ${reason === 'wrong-account' ? 'selected' : ''}>Wrong Account</option>
@@ -1688,38 +2044,39 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                             </div>
                         </div>
 
-                        <div class="row g-3">
-                            <div class="col-lg-6">
-                                <div class="border rounded p-3 h-100 bg-white">
+                        <div class="row g-3 settlement-dual-cards-row">
+                            <div class="col-lg-12 settlement-prev-col">
+                                <div class="border rounded p-3 h-100 bg-white settlement-prev-field-panel">
                                     <h6 class="mb-3 text-center">Previous</h6>
-                                    <div class="mb-2"><label class="form-label mb-1">Payor Name</label><input type="text" class="form-control" value="${escapeModalValue(row.payor)}" readonly></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Payor Address</label><input type="text" class="form-control" value="${escapeModalValue(row.address)}" readonly></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Account Number</label><input type="text" class="form-control" value="${escapeModalValue(row.accountNo)}" readonly></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Account Name</label><input type="text" class="form-control" value="${escapeModalValue(row.accountName)}" readonly></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Principal</label><input type="text" class="form-control" value="${escapeModalValue(row.amountPaid)}" readonly></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Charge to Customer</label><input type="text" class="form-control" value="${escapeModalValue(row.chargeToCustomer)}" readonly></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Charge to Partner</label><input type="text" class="form-control" value="${escapeModalValue(row.chargeToPartner)}" readonly></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Contact Number</label><input type="text" class="form-control" value="${escapeModalValue(row.contactNo)}" readonly></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Other Details</label><input type="text" class="form-control" value="${escapeModalValue(row.otherDetails)}" readonly></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Branch Outlet</label><input type="text" class="form-control" value="${escapeModalValue(row.mlOutlet)}" readonly></div>
-                                    <div class="mb-0"><label class="form-label mb-1">Branch Operator</label><input type="text" class="form-control" value="${escapeModalValue(row.operator)}" readonly></div>
+                                    <div class="mb-2 prev-field-row" data-field="payor"><label class="form-label mb-1">Payor Name</label><input type="text" class="form-control" value="${escapeModalValue(row.payor)}" readonly></div>
+                                    <div class="mb-2 prev-field-row" data-field="address"><label class="form-label mb-1">Payor Address</label><input type="text" class="form-control" value="${escapeModalValue(row.address)}" readonly></div>
+                                    <div class="mb-2 prev-field-row" data-field="account_no"><label class="form-label mb-1">Account Number</label><input type="text" class="form-control" value="${escapeModalValue(row.accountNo)}" readonly></div>
+                                    <div class="mb-2 prev-field-row" data-field="account_name"><label class="form-label mb-1">Account Name</label><input type="text" class="form-control" value="${escapeModalValue(row.accountName)}" readonly></div>
+                                    <div class="mb-2 prev-field-row" data-field="principal"><label class="form-label mb-1">Principal</label><input type="text" class="form-control" value="${escapeModalValue(row.amountPaid)}" readonly></div>
+                                    <div class="mb-2 prev-field-row" data-field="charge_to_customer"><label class="form-label mb-1">Charge to Customer</label><input type="text" class="form-control" value="${escapeModalValue(row.chargeToCustomer)}" readonly></div>
+                                    <div class="mb-2 prev-field-row" data-field="charge_to_partner"><label class="form-label mb-1">Charge to Partner</label><input type="text" class="form-control" value="${escapeModalValue(row.chargeToPartner)}" readonly></div>
+                                    <div class="mb-2 prev-field-row" data-field="contact_no"><label class="form-label mb-1">Contact Number</label><input type="text" class="form-control" value="${escapeModalValue(row.contactNo)}" readonly></div>
+                                    <div class="mb-2 prev-field-row" data-field="other_details"><label class="form-label mb-1">Other Details</label><input type="text" class="form-control" value="${escapeModalValue(row.otherDetails)}" readonly></div>
+                                    <div class="mb-2 prev-field-row" data-field="outlet"><label class="form-label mb-1">Branch Outlet</label><input type="text" class="form-control" value="${escapeModalValue(row.mlOutlet)}" readonly></div>
+                                    <div class="mb-0 prev-field-row" data-field="operator"><label class="form-label mb-1">Branch Operator</label><input type="text" class="form-control" value="${escapeModalValue(row.operator)}" readonly></div>
                                 </div>
                             </div>
 
-                            <div class="col-lg-6">
-                                <div class="border rounded p-3 h-100 bg-white">
+                            <div class="col-lg-6 settlement-edit-col">
+                                <div class="border rounded p-3 h-100 bg-white settlement-edit-field-panel">
                                     <h6 class="mb-3 text-center">Edit Field</h6>
-                                    <div class="mb-2"><label class="form-label mb-1">Payor Name</label><input type="text" class="form-control edit-payor" data-reference="${referenceKey}" value="${escapeModalValue(row.payor)}" disabled></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Payor Address</label><input type="text" class="form-control edit-address" data-reference="${referenceKey}" value="${escapeModalValue(row.address)}" disabled></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Account Number</label><input type="text" class="form-control edit-account-no" data-reference="${referenceKey}" value="${escapeModalValue(row.accountNo)}" disabled></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Account Name</label><input type="text" class="form-control edit-account-name" data-reference="${referenceKey}" value="${escapeModalValue(row.accountName)}" disabled></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Principal</label><input type="text" class="form-control edit-amount-paid" data-reference="${referenceKey}" value="${escapeModalValue(row.amountPaid)}" disabled></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Charge to Customer</label><input type="text" class="form-control edit-charge-customer" data-reference="${referenceKey}" value="${escapeModalValue(row.chargeToCustomer)}" disabled></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Charge to Partner</label><input type="text" class="form-control edit-charge-partner" data-reference="${referenceKey}" value="${escapeModalValue(row.chargeToPartner)}" disabled></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Contact Number</label><input type="text" class="form-control edit-contact-no" data-reference="${referenceKey}" value="${escapeModalValue(row.contactNo)}" disabled></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Other Details</label><input type="text" class="form-control edit-other-details" data-reference="${referenceKey}" value="${escapeModalValue(row.otherDetails)}" disabled></div>
-                                    <div class="mb-2"><label class="form-label mb-1">Branch Outlet</label><input type="text" class="form-control edit-ml-outlet" data-reference="${referenceKey}" value="${escapeModalValue(row.mlOutlet)}" disabled></div>
-                                    <div class="mb-0"><label class="form-label mb-1">Branch Operator</label><input type="text" class="form-control edit-operator" data-reference="${referenceKey}" value="${escapeModalValue(row.operator)}" disabled></div>
+                                    <div class="mb-2 edit-field-row" data-field="payor"><label class="form-label mb-1">Payor Name</label><input type="text" class="form-control edit-payor" data-reference="${referenceKey}" value="${escapeModalValue(row.payor)}" disabled></div>
+                                    <div class="mb-2 edit-field-row" data-field="address"><label class="form-label mb-1">Payor Address</label><input type="text" class="form-control edit-address" data-reference="${referenceKey}" value="${escapeModalValue(row.address)}" disabled></div>
+                                    <div class="mb-2 edit-field-row" data-field="account_no"><label class="form-label mb-1">Account Number</label><input type="text" class="form-control edit-account-no" data-reference="${referenceKey}" value="${escapeModalValue(row.accountNo)}" disabled></div>
+                                    <div class="mb-2 edit-field-row" data-field="account_name"><label class="form-label mb-1">Account Name</label><input type="text" class="form-control edit-account-name" data-reference="${referenceKey}" value="${escapeModalValue(row.accountName)}" disabled></div>
+                                    <div class="mb-2 edit-field-row posting-date-row" data-field="posting_date"><label class="form-label mb-1">Settlement Date</label><input type="date" class="form-control edit-posting-date" data-reference="${referenceKey}" value="${escapeModalValue(row.postingDate || '')}" disabled></div>
+                                    <div class="mb-2 edit-field-row" data-field="principal"><label class="form-label mb-1">Principal</label><input type="text" class="form-control edit-amount-paid" data-reference="${referenceKey}" value="${escapeModalValue(row.amountPaid)}" disabled></div>
+                                    <div class="mb-2 edit-field-row" data-field="charge_to_customer"><label class="form-label mb-1">Charge to Customer</label><input type="text" class="form-control edit-charge-customer" data-reference="${referenceKey}" value="${escapeModalValue(row.chargeToCustomer)}" disabled></div>
+                                    <div class="mb-2 edit-field-row" data-field="charge_to_partner"><label class="form-label mb-1">Charge to Partner</label><input type="text" class="form-control edit-charge-partner" data-reference="${referenceKey}" value="${escapeModalValue(row.chargeToPartner)}" disabled></div>
+                                    <div class="mb-2 edit-field-row" data-field="contact_no"><label class="form-label mb-1">Contact Number</label><input type="text" class="form-control edit-contact-no" data-reference="${referenceKey}" value="${escapeModalValue(row.contactNo)}" disabled></div>
+                                    <div class="mb-2 edit-field-row" data-field="other_details"><label class="form-label mb-1">Other Details</label><input type="text" class="form-control edit-other-details" data-reference="${referenceKey}" value="${escapeModalValue(row.otherDetails)}" disabled></div>
+                                    <div class="mb-2 edit-field-row" data-field="outlet"><label class="form-label mb-1">Branch Outlet</label><input type="text" class="form-control edit-ml-outlet" data-reference="${referenceKey}" value="${escapeModalValue(row.mlOutlet)}" disabled></div>
+                                    <div class="mb-0 edit-field-row" data-field="operator"><label class="form-label mb-1">Branch Operator</label><input type="text" class="form-control edit-operator" data-reference="${referenceKey}" value="${escapeModalValue(row.operator)}" disabled></div>
                                 </div>
                             </div>
                         </div>
@@ -1745,10 +2102,85 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
         }
 
         function toggleWrongAmountFields($container, reasonValue) {
-            const canEditAmountFields = String(reasonValue || '').trim() === 'wrong-amount';
-            const amountSelectors = '.edit-amount-paid, .edit-charge-customer, .edit-charge-partner';
+            const reason = String(reasonValue || '').trim();
+            const hasReason = reason !== '';
+            const isLatePosting = reason === 'late-posting';
 
-            $container.find(amountSelectors).prop('disabled', !canEditAmountFields);
+            const reasonFieldMap = {
+                'wrong-biller': ['payor', 'address', 'other_details'],
+                'wrong-account': ['account_no', 'account_name'],
+                'wrong-amount': ['posting_date', 'principal', 'charge_to_customer', 'charge_to_partner'],
+                'no-payment': ['principal', 'charge_to_customer', 'charge_to_partner']
+            };
+
+            const visibleFields = reasonFieldMap[reason] || [];
+            const visibleSet = new Set(visibleFields);
+
+            const $prevCol = $container.find('.settlement-prev-col');
+            const $editCol = $container.find('.settlement-edit-col');
+            const $editPanel = $container.find('.settlement-edit-field-panel');
+            const $postingDateRow = $container.find('.posting-date-row');
+            const $postingDateInput = $postingDateRow.find('input');
+            const $prevRows = $container.find('.prev-field-row');
+            const $editRows = $container.find('.edit-field-row');
+            const $editInputs = $editRows.find('input');
+
+            $editInputs.prop('readonly', false).prop('disabled', true).removeClass('bg-light');
+
+            if (!hasReason) {
+                $prevCol.removeClass('col-lg-6').addClass('col-lg-12');
+                $editCol.hide();
+                $editPanel.hide();
+                $prevRows.show();
+                $editRows.show();
+                $postingDateRow.hide();
+                return;
+            }
+
+            if (isLatePosting) {
+                $prevCol.removeClass('col-lg-12').addClass('col-lg-6');
+                $editCol.show();
+                $editPanel.show();
+                $prevRows.show();
+                $editRows.hide();
+                $postingDateRow.show();
+                $postingDateInput.prop('disabled', false).prop('readonly', false).addClass('bg-light');
+                return;
+            }
+
+            $prevCol.removeClass('col-lg-12').addClass('col-lg-6');
+            $editCol.show();
+            $editPanel.show();
+
+            $prevRows.show();
+            $editRows.hide();
+            $postingDateRow.hide();
+
+            if (visibleSet.size > 0) {
+                $prevRows.filter(function () {
+                    const key = String($(this).data('field') || '');
+                    return visibleSet.has(key);
+                }).show();
+
+                $editRows.filter(function () {
+                    const key = String($(this).data('field') || '');
+                    return visibleSet.has(key);
+                }).show();
+            }
+
+            $editRows.each(function () {
+                const key = String($(this).data('field') || '');
+                const $input = $(this).find('input');
+                if (!visibleSet.has(key)) {
+                    return;
+                }
+
+                if (reason === 'wrong-amount') {
+                    $input.prop('disabled', false).prop('readonly', false).addClass('bg-light');
+                } else {
+                    $input.prop('disabled', false).prop('readonly', true).addClass('bg-light');
+                }
+            });
         }
 
         function splitSettlementRowKey(referenceKey) {
@@ -1782,6 +2214,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     reference_number: splitKey.referenceNumber,
                     transaction_datetime: splitKey.transactionDatetime,
                     reason_note: reasonNote,
+                    posting_date: String($container.find('.edit-posting-date').val() || '').trim(),
                     payor: String($container.find('.edit-payor').val() || '').trim(),
                     address: String($container.find('.edit-address').val() || '').trim(),
                     account_no: String($container.find('.edit-account-no').val() || '').trim(),
@@ -1885,11 +2318,22 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     $row.children('td').removeClass('bg-danger-subtle bs-danger-bg-subtle table-danger');
                     $row.addClass(highlightClass);
                     $row.children('td').addClass(highlightClass);
+
+                    const $checkbox = $row.find('.row-select');
+                    $checkbox.prop('checked', false).prop('disabled', false);
                 }
             });
 
+            const totalEnabled = $('#transactionReportTable tbody .row-select').length;
+            const checkedEnabled = $('#transactionReportTable tbody .row-select:checked').length;
+            $('#selectAllRows').prop('checked', totalEnabled > 0 && checkedEnabled === totalEnabled);
+
             if (typeof window.updateSettlementSaveButtonState === 'function') {
                 window.updateSettlementSaveButtonState();
+            }
+
+            if (typeof window.updateSettlementEditButtonState === 'function') {
+                window.updateSettlementEditButtonState();
             }
         }
 
@@ -1958,6 +2402,23 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 return;
             }
 
+            const missingPostingDate = changes.find(function (item) {
+                if (String(item.posting_date || '').trim() !== '') {
+                    return false;
+                }
+
+                return item.reason_note === 'late-posting' || item.reason_note === 'wrong-amount';
+            });
+
+            if (missingPostingDate) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Posting Date Required',
+                    text: 'Please provide Posting Date for Late Posting or Wrong Amount reason.'
+                });
+                return;
+            }
+
             $.ajax({
                 url: window.location.pathname,
                 type: 'POST',
@@ -1984,6 +2445,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     cacheSubmittedChanges(submitted);
                     applySubmittedDataToTable(submitted);
                     applySubmittedRowHighlight(submittedKeys, result.rowColorClass || 'bg-danger-subtle');
+
+                    $('#transactionReportTable tbody .row-select').prop('checked', false).prop('disabled', false);
+                    $('#selectAllRows').prop('checked', false);
+
+                    if (typeof window.updateSettlementEditButtonState === 'function') {
+                        window.updateSettlementEditButtonState();
+                    }
 
                     const modalEl = document.getElementById('settlementEditModal');
                     const modalInstance = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;

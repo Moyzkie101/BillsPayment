@@ -19,41 +19,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['check_duplicates_db']
     header('Content-Type: application/json');
     $mode = isset($_POST['mode']) ? trim($_POST['mode']) : 'normal';
 
-    // Normal mode: restore previous grouping (reference_no + DATE(datetime) + partner_id + amount_paid)
+    // Normal mode: sequential scan (read rows in deterministic order and compare adjacent rows)
     if ($mode === 'normal') {
         $results = [];
 
-        $groupSql = "SELECT reference_no, DATE(datetime) AS dt, partner_id, amount_paid, COUNT(*) AS cnt
-                     FROM billspayment_transaction
-                     GROUP BY reference_no, DATE(datetime), partner_id, amount_paid
-                     HAVING cnt > 1
-                     ORDER BY reference_no, dt";
+        $sql = "SELECT id, reference_no, datetime, partner_id, partner_name, partner_id_kpx, amount_paid, payor, branch_id, imported_by, imported_date, status
+                FROM billspayment_transaction
+                ORDER BY reference_no, partner_id, amount_paid, datetime, id";
 
-        $groups = $conn->query($groupSql);
-        if ($groups && $groups->num_rows > 0) {
-            while ($g = $groups->fetch_assoc()) {
-                // fetch all rows for this group
-                $ref = $conn->real_escape_string($g['reference_no']);
-                $dt = $g['dt'];
-                $partner = $conn->real_escape_string($g['partner_id']);
-                $amount = $g['amount_paid'];
+        $res = $conn->query($sql);
+        if ($res && $res->num_rows > 0) {
+            $currentGroup = [];
+            $prevKey = null;
 
-                $rowsSql = "SELECT id, reference_no, datetime, partner_id, partner_name, partner_id_kpx, amount_paid, payor, branch_id, imported_by, imported_date
-                            FROM billspayment_transaction
-                            WHERE reference_no = '" . $ref . "' AND DATE(datetime) = '" . $dt . "' AND partner_id = '" . $partner . "' AND amount_paid = '" . $amount . "'
-                            ORDER BY id ASC";
+            while ($row = $res->fetch_assoc()) {
+                $ref = isset($row['reference_no']) ? $row['reference_no'] : '';
+                // normalize date portion (YYYY-MM-DD) for comparison
+                $date = isset($row['datetime']) && $row['datetime'] !== null ? substr($row['datetime'], 0, 10) : '';
+                $partner = isset($row['partner_id']) ? $row['partner_id'] : '';
+                $amount = isset($row['amount_paid']) ? $row['amount_paid'] : '';
 
-                $rowsRes = $conn->query($rowsSql);
-                $rows = [];
-                if ($rowsRes && $rowsRes->num_rows > 0) {
-                    while ($r = $rowsRes->fetch_assoc()) {
-                        $rows[] = $r;
+                $key = $ref . '|' . $date . '|' . $partner . '|' . $amount;
+
+                if ($prevKey === null) {
+                    // first row
+                    $currentGroup = [$row];
+                    $prevKey = $key;
+                } elseif ($key === $prevKey) {
+                    // same group, append
+                    $currentGroup[] = $row;
+                } else {
+                    // boundary: flush if duplicate group (more than 1 row)
+                    if (count($currentGroup) > 1) {
+                        $grpRef = isset($currentGroup[0]['reference_no']) ? $currentGroup[0]['reference_no'] : '';
+                        $grpDate = isset($currentGroup[0]['datetime']) ? substr($currentGroup[0]['datetime'], 0, 10) : '';
+                        $grpPartner = isset($currentGroup[0]['partner_id']) ? $currentGroup[0]['partner_id'] : '';
+                        $results[] = ['group_key' => $grpRef . '|' . $grpDate . '|' . $grpPartner, 'rows' => $currentGroup];
                     }
+                    // start new group
+                    $currentGroup = [$row];
+                    $prevKey = $key;
                 }
+            }
 
-                if (!empty($rows)) {
-                    $results[] = ['group_key' => $g['reference_no'] . '|' . $g['dt'] . '|' . $g['partner_id'], 'rows' => $rows];
-                }
+            // flush last group
+            if (!empty($currentGroup) && count($currentGroup) > 1) {
+                $grpRef = isset($currentGroup[0]['reference_no']) ? $currentGroup[0]['reference_no'] : '';
+                $grpDate = isset($currentGroup[0]['datetime']) ? substr($currentGroup[0]['datetime'], 0, 10) : '';
+                $grpPartner = isset($currentGroup[0]['partner_id']) ? $currentGroup[0]['partner_id'] : '';
+                $results[] = ['group_key' => $grpRef . '|' . $grpDate . '|' . $grpPartner, 'rows' => $currentGroup];
             }
         }
 
@@ -567,6 +581,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 const target = (mode === 'dev') ? '#dev-card' : '#normal-card';
                 $(target).html('Checking duplicates...');
                 console.debug('[dup-check] initiating check, mode:', mode);
+                // measure latency
+                var _dup_start = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
                 $.post(window.location.href, { check_duplicates_db: 1, mode: mode }, function(resp){
                         console.debug('[dup-check] check_duplicates response', resp);
                         if(resp && resp.success){
@@ -586,7 +602,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                                     else renderNormal(resp.groups);
                         } else { $('#modal-card').html('<div style="padding:10px;color:#c00">Error occurred</div>'); }
                     hideOverlay();
-                }, 'json').fail(function(jqxhr, status, err){ console.debug('[dup-check] request failed', status, err); var t = ($('#mode-toggle .mode-btn.active').data('mode') === 'dev') ? '#dev-card' : '#normal-card'; $(t).html('<div style="padding:10px;color:#c00">Request failed</div>'); hideOverlay(); });
+                }, 'json')
+                .fail(function(jqxhr, status, err){
+                    console.debug('[dup-check] request failed', status, err);
+                    var t = ($('#mode-toggle .mode-btn.active').data('mode') === 'dev') ? '#dev-card' : '#normal-card';
+                    $(t).html('<div style="padding:10px;color:#c00">Request failed</div>');
+                    hideOverlay();
+                })
+                .always(function(){
+                    try{
+                        var _end = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                        var _lat = (_end - _dup_start);
+                        console.info('[dup-check] latency: ' + _lat.toFixed(2) + ' ms');
+                    }catch(e){ console.debug('[dup-check] latency calc error', e); }
+                });
             });
 
                 // request summary (global reference_no counts)

@@ -463,8 +463,8 @@ if (isset($_SESSION['user_type'])) {
                                 </div>
                             </div>
                             <div class="col-md-4 mb-3 d-flex">
-                                <input type="file" name="import_file" accept=".xls,.xlsx" class="form-control me-2" required />
-                                <input type="submit" class="btn btn-danger" id="manualProceed" value="Proceed">
+                                <input id="manualFileInput" type="file" name="import_file" accept=".xls,.xlsx" class="form-control me-2" />
+                                <input type="submit" class="btn btn-danger" id="manualProceed" value="Proceed" style="display:none;">
                             </div>
                         </div>
                     </form>
@@ -925,6 +925,36 @@ if (isset($_SESSION['user_type'])) {
                         // Auto-detect Source Type from Column H, Row 3 (H3)
                         const sourceTypeCell = firstSheet['H3'];
                         let sourceType = sourceTypeCell ? String(sourceTypeCell.v).trim().toUpperCase() : '';
+
+                        // Auto-detect Report Date from Column B, Row 3 (B3) - parse to YYYY-MM-DD when possible
+                        const reportDateCell = firstSheet['B3'];
+                        const reportDateRaw = reportDateCell ? String(reportDateCell.v).trim() : '';
+                        let reportDate = '';
+                        if (reportDateRaw) {
+                            // Try to extract patterns like "FEBRUARY 03 2026" or "January 5 2026"
+                            const m = reportDateRaw.match(/([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})/);
+                            if (m) {
+                                const monthName = m[1].toUpperCase();
+                                const day = parseInt(m[2], 10);
+                                const year = parseInt(m[3], 10);
+                                const months = {JAN:1,JANUARY:1,FEB:2,FEBRUARY:2,MAR:3,MARCH:3,APR:4,APRIL:4,MAY:5,JUN:6,JUNE:6,JUL:7,JULY:7,AUG:8,AUGUST:8,SEP:9,SEPTEMBER:9,OCT:10,OCTOBER:10,NOV:11,NOVEMBER:11,DEC:12,DECEMBER:12};
+                                const mm = months[monthName] || months[monthName.slice(0,3)];
+                                if (mm) {
+                                    const mmStr = String(mm).padStart(2, '0');
+                                    const ddStr = String(day).padStart(2, '0');
+                                    reportDate = `${year}-${mmStr}-${ddStr}`;
+                                }
+                            } else {
+                                // fallback: try Date parser
+                                const ds = new Date(reportDateRaw);
+                                if (!isNaN(ds.getTime())) {
+                                    const y = ds.getFullYear();
+                                    const m = String(ds.getMonth() + 1).padStart(2, '0');
+                                    const d = String(ds.getDate()).padStart(2, '0');
+                                    reportDate = `${y}-${m}-${d}`;
+                                }
+                            }
+                        }
                         
                         // Validate source type
                         if (sourceType !== 'KPX' && sourceType !== 'KP7') {
@@ -960,6 +990,7 @@ if (isset($_SESSION['user_type'])) {
                             return;
                         }
 
+
                         // Fetch partner name from database
                         $.ajax({
                             url: '../../../fetch/get_partner_name.php',
@@ -968,21 +999,20 @@ if (isset($_SESSION['user_type'])) {
                             dataType: 'json',
                             success: function(response) {
                                 const partnerName = response.success ? response.partner_name : 'Unknown Partner';
-                                
-                                // Add file to array
                                 const fileData = {
                                     file: file,
                                     name: file.name,
                                     partnerId: partnerId,
                                     partnerName: partnerName,
                                     sourceType: sourceType,
+                                    report_date_raw: reportDateRaw,
+                                    report_date: reportDate,
                                     id: Date.now() + Math.random()
                                 };
 
                                 uploadedFiles.push(fileData);
                                 renderFileCards();
 
-                                // file processed; decrement counter and hide overlay if done
                                 window._filesBeingRead--;
                                 if (window._filesBeingRead <= 0) {
                                     window._filesBeingRead = 0;
@@ -991,7 +1021,6 @@ if (isset($_SESSION['user_type'])) {
                                 }
                             },
                             error: function() {
-                                // If AJAX fails, still add the file but without partner name
                                 const fileData = {
                                     file: file,
                                     name: file.name,
@@ -1004,7 +1033,6 @@ if (isset($_SESSION['user_type'])) {
                                 uploadedFiles.push(fileData);
                                 renderFileCards();
 
-                                // file processed; decrement counter and hide overlay if done
                                 window._filesBeingRead--;
                                 if (window._filesBeingRead <= 0) {
                                     window._filesBeingRead = 0;
@@ -1022,7 +1050,6 @@ if (isset($_SESSION['user_type'])) {
                             html: `Error reading file: <strong>${file.name}</strong><br>${error.message}`,
                             confirmButtonText: 'OK'
                         });
-                        // ensure counter decremented on error
                         window._filesBeingRead--;
                         if (window._filesBeingRead <= 0) {
                             window._filesBeingRead = 0;
@@ -1034,17 +1061,19 @@ if (isset($_SESSION['user_type'])) {
 
                 reader.readAsArrayBuffer(file);
             }
-            // Render file cards
+
             function renderFileCards() {
                 filesContainer.empty();
 
                 if (uploadedFiles.length === 0) {
                     proceedContainer.hide();
+                    if (typeof window.updateManualProceedVisibility === 'function') {
+                        window.updateManualProceedVisibility();
+                    }
                     return;
                 }
 
                 uploadedFiles.forEach(fileData => {
-                    // Determine status icon based on file state
                     let statusIcon = '';
                     if (fileData.status === 'reading') {
                         statusIcon = '<i class="fa-solid fa-spinner fa-spin text-primary"></i>';
@@ -1055,7 +1084,7 @@ if (isset($_SESSION['user_type'])) {
                     } else if (fileData.status === 'error') {
                         statusIcon = '<i class="fa-solid fa-circle-exclamation text-danger"></i>';
                     }
-                    
+
                     const card = $(`
                         <div class="file-card" data-id="${fileData.id}">
                             <div class="file-card-header">
@@ -1067,10 +1096,7 @@ if (isset($_SESSION['user_type'])) {
                                     <i class="fa-solid fa-xmark"></i>
                                 </div>
                             </div>
-                            <div class="file-card-body">
-                                <!-- additional details can go here -->
-                            </div>
-
+                            <div class="file-card-body"></div>
                             <div class="file-card-footer">
                                 <div class="file-card-detail">
                                     <div class="file-card-label">Partner ID</div>
@@ -1091,7 +1117,6 @@ if (isset($_SESSION['user_type'])) {
                         </div>
                     `);
 
-                    // Delete file handler
                     card.find('.file-card-delete').on('click', function() {
                         removeFile(fileData.id);
                     });
@@ -1100,7 +1125,60 @@ if (isset($_SESSION['user_type'])) {
                 });
 
                 proceedContainer.show();
+                if (typeof window.updateManualProceedVisibility === 'function') {
+                    window.updateManualProceedVisibility();
+                }
             }
+
+            // Manual proceed visibility and submit handling
+            (function() {
+                var $manualFileInput = $('#manualFileInput');
+                var $manualProceed = $('#manualProceed');
+
+                window.updateManualProceedVisibility = function() {
+                    if (!$manualProceed || $manualProceed.length === 0) return;
+                    var fi = $manualFileInput && $manualFileInput.length ? $manualFileInput[0] : null;
+                    var hasNativeFile = !!(fi && fi.files && fi.files.length > 0);
+                    var hasDroppedFiles = !!(window.uploadedFiles && window.uploadedFiles.length > 0);
+                    if (hasNativeFile || hasDroppedFiles) {
+                        $manualProceed.show();
+                    } else {
+                        $manualProceed.hide();
+                    }
+                };
+
+                window.updateManualProceedVisibility();
+                if ($manualFileInput && $manualFileInput.length) {
+                    $manualFileInput.on('change', window.updateManualProceedVisibility);
+                }
+
+                $('#manualUploadForm').off('submit.manual').on('submit.manual', function(e) {
+                    e.preventDefault();
+
+                    var selectedCompany = $('#manualCompanyInput').val();
+                    var fileType = $('#manualFileType').val();
+                    if (!fileType) {
+                        Swal.fire({ icon: 'warning', title: 'Missing File Type', text: 'Please select a source file type (KPX or KP7).', confirmButtonText: 'OK' });
+                        return false;
+                    }
+                    if (selectedCompany === 'All' && fileType === 'KPX') {
+                        Swal.fire({ icon: 'error', title: 'Invalid Combination', text: 'No All Partners Available for KPX. Please select a specific partner.', confirmButtonText: 'OK' });
+                        return false;
+                    }
+
+                    var fi = $('#manualFileInput')[0];
+                    var hasNativeFile = !!(fi && fi.files && fi.files.length > 0);
+                    var hasDroppedFiles = !!(window.uploadedFiles && window.uploadedFiles.length > 0);
+                    if (!hasNativeFile && !hasDroppedFiles) {
+                        $('#loading-overlay').hide();
+                        return false;
+                    }
+
+                    $('#loading-overlay').css('display', 'flex');
+                    checkManualDuplicates(this);
+                    return false;
+                });
+            })();
 
             // Remove file from array
             function removeFile(fileId) {
@@ -1192,6 +1270,7 @@ if (isset($_SESSION['user_type'])) {
                         formData.append('files[]', fileData.file);
                         formData.append('partner_ids[]', fileData.partnerId);
                         formData.append('source_types[]', fileData.sourceType);
+                        formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
                     });
                     formData.append('check_duplicates', '1');
 
@@ -1495,6 +1574,7 @@ if (isset($_SESSION['user_type'])) {
                     formData.append('files[]', fileData.file);
                     formData.append('partner_ids[]', fileData.partnerId);
                     formData.append('source_types[]', fileData.sourceType);
+                    formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
                 });
                 formData.append('upload', '1');
                 formData.append('user_decision', userDecision); // Pass user decision
@@ -1505,6 +1585,7 @@ if (isset($_SESSION['user_type'])) {
                     partnerId: f.partnerId,
                     partnerName: f.partnerName,
                     sourceType: f.sourceType
+                    , report_date: f.report_date || f.report_date_raw || ''
                 }))));
 
                 // Send to checker page
@@ -1548,6 +1629,9 @@ if (isset($_SESSION['user_type'])) {
                     // initialize manual partners dropdown
                     initManualSelect2();
                     loadManualPartners();
+                    if (typeof window.updateManualProceedVisibility === 'function') {
+                        window.updateManualProceedVisibility();
+                    }
                 } else {
                     $('#manualArea').hide();
                     $('#fileUploadArea').show();
@@ -1619,53 +1703,10 @@ if (isset($_SESSION['user_type'])) {
             }
 
             // Manual form validation
-            $('#manualUploadForm').on('submit', function(e) {
-                e.preventDefault(); // Always prevent default to handle validation first
-                
-                var selectedCompany = $('#manualCompanyInput').val();
-                var fileType = $('#manualFileType').val();
-                
-                if (!fileType) {
-                    Swal.fire({ 
-                        icon: 'warning', 
-                        title: 'Missing File Type', 
-                        text: 'Please select a source file type (KPX or KP7).', 
-                        confirmButtonText: 'OK' 
-                    });
-                    return false;
-                }
-                
-                if (selectedCompany === 'All' && fileType === 'KPX') {
-                    Swal.fire({ 
-                        icon: 'error', 
-                        title: 'Invalid Combination', 
-                        text: 'No All Partners Available for KPX. Please select a specific partner.', 
-                        confirmButtonText: 'OK' 
-                    });
-                    return false;
-                }
-                
-                // Check if file is selected
-                var fileInput = $('input[name="import_file"]')[0];
-                if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-                    Swal.fire({ 
-                        icon: 'warning', 
-                        title: 'No File Selected', 
-                        text: 'Please select a file to upload.', 
-                        confirmButtonText: 'OK' 
-                    });
-                    return false;
-                }
-                
-                // Show loading overlay and check for duplicates
-                $('#loading-overlay').css('display', 'flex');
-                checkManualDuplicates(this);
-                
-                return false;
-            });
+            
 
-            // Function to check for duplicates in manual mode
-            function checkManualDuplicates(form) {
+            // Function to check for duplicates in manual mode (exposed globally)
+            window.checkManualDuplicates = function(form) {
                 // Async flow: resolve partner id (if specific), then POST to the same duplicate-check endpoint
                 $('#loading-overlay').css('display', 'flex');
 
@@ -1696,15 +1737,24 @@ if (isset($_SESSION['user_type'])) {
                     }
                     var formData = new FormData();
                     var fileInput = $(form).find('input[name="import_file"]')[0];
-                    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                    var selectedFile = null;
+
+                    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                        selectedFile = fileInput.files[0];
+                    } else if (window.uploadedFiles && window.uploadedFiles.length > 0) {
+                        var firstDropped = window.uploadedFiles[0];
+                        selectedFile = firstDropped && firstDropped.file ? firstDropped.file : firstDropped;
+                    }
+
+                    if (!selectedFile) {
                         $('#loading-overlay').hide();
-                        Swal.fire({ icon: 'warning', title: 'No File Selected', text: 'Please select a file to upload.', confirmButtonText: 'OK' });
+                        // No file selected for manual flow
                         return;
                     }
 
                     // Use the batch duplicate check endpoint (same as Auto) to ensure identical detection logic
                     var batchData = new FormData();
-                    batchData.append('files[]', fileInput.files[0]);
+                    batchData.append('files[]', selectedFile);
                     batchData.append('partner_ids[]', partnerId || '');
                     batchData.append('source_types[]', fileType || '');
                     batchData.append('check_duplicates', '1');
@@ -1884,129 +1934,147 @@ if (isset($_SESSION['user_type'])) {
                 });
             }
 
+            async function extractReportDateFromManualFile(file) {
+                if (!file) return '';
+                try {
+                    const buffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const reportDateCell = firstSheet['B3'];
+                    const raw = reportDateCell ? String(reportDateCell.v).trim() : '';
+                    if (!raw) return '';
+
+                    const m = raw.match(/([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})/);
+                    if (m) {
+                        const monthName = m[1].toUpperCase();
+                        const day = parseInt(m[2], 10);
+                        const year = parseInt(m[3], 10);
+                        const months = {JAN:1,JANUARY:1,FEB:2,FEBRUARY:2,MAR:3,MARCH:3,APR:4,APRIL:4,MAY:5,JUN:6,JUNE:6,JUL:7,JULY:7,AUG:8,AUGUST:8,SEP:9,SEPTEMBER:9,OCT:10,OCTOBER:10,NOV:11,NOVEMBER:11,DEC:12,DECEMBER:12};
+                        const mm = months[monthName] || months[monthName.slice(0,3)];
+                        if (mm) {
+                            return `${year}-${String(mm).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        }
+                    }
+
+                    const ds = new Date(raw);
+                    if (!isNaN(ds.getTime())) {
+                        return `${ds.getFullYear()}-${String(ds.getMonth() + 1).padStart(2, '0')}-${String(ds.getDate()).padStart(2, '0')}`;
+                    }
+                } catch (err) {
+                    console.warn('Manual report date extraction failed:', err);
+                }
+                return '';
+            }
+
             // Function to proceed with manual upload based on user decision
-            function proceedWithManualUpload(form, userDecision) {
+            async function proceedWithManualUpload(form, userDecision) {
                 $('#loading-overlay').css('display', 'flex');
 
-                var formData = new FormData(form);
-                formData.append('upload', '1');
-                formData.append('user_decision', userDecision || 'skip');
+                var fileInput = form.querySelector('input[name="import_file"]');
+                var selectedCompany = form.querySelector('input[name="company"]');
+                var fileTypeSelect = form.querySelector('select[name="fileType"]');
 
-                $.ajax({
-                    url: '../../../models/saved/saved_billspayImportFile_NEW.php',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        // Redirect to validation/checker page
-                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php';
-                    },
-                    error: function(xhr, status, error) {
-                        $('#loading-overlay').hide();
-                        Swal.fire({ icon: 'error', title: 'Upload Error', text: 'An error occurred while uploading files. Please try again.', confirmButtonText: 'OK' });
-                        console.error('Upload error:', error);
+                // Build a temporary form and do normal navigation submit to manual handler
+                var tempForm = document.createElement('form');
+                tempForm.method = 'POST';
+                tempForm.enctype = 'multipart/form-data';
+                tempForm.action = '../../../models/saved/saved_billspaymentImportFile.php';
+                tempForm.style.display = 'none';
+
+                var hasNativeFile = !!(fileInput && fileInput.files && fileInput.files.length > 0);
+                var appendedFile = false;
+                var submittedFile = null;
+
+                if (hasNativeFile) {
+                    submittedFile = fileInput.files[0] || null;
+                    var originalParent = fileInput.parentNode;
+                    var nextSibling = fileInput.nextSibling;
+                    tempForm.appendChild(fileInput);
+                    appendedFile = true;
+
+                    // If submit fails and page doesn't navigate, restore input
+                    setTimeout(function() {
+                        if (document.body.contains(tempForm)) {
+                            if (originalParent) {
+                                if (nextSibling) originalParent.insertBefore(fileInput, nextSibling);
+                                else originalParent.appendChild(fileInput);
+                            }
+                        }
+                    }, 2000);
+                } else if (window.uploadedFiles && window.uploadedFiles.length > 0) {
+                    try {
+                        var firstDropped = window.uploadedFiles[0];
+                        var droppedFile = firstDropped && firstDropped.file ? firstDropped.file : firstDropped;
+                        if (droppedFile) {
+                            submittedFile = droppedFile;
+                            var dt = new DataTransfer();
+                            dt.items.add(droppedFile);
+                            var syntheticInput = document.createElement('input');
+                            syntheticInput.type = 'file';
+                            syntheticInput.name = 'import_file';
+                            syntheticInput.files = dt.files;
+                            tempForm.appendChild(syntheticInput);
+                            appendedFile = true;
+                        }
+                    } catch (err) {
+                        console.warn('Failed to attach dropped file for manual submit:', err);
                     }
-                });
+                }
+
+                if (!appendedFile) {
+                    $('#loading-overlay').hide();
+                    return;
+                }
+
+                var hiddenUpload = document.createElement('input');
+                hiddenUpload.type = 'hidden';
+                hiddenUpload.name = 'upload';
+                hiddenUpload.value = '1';
+                tempForm.appendChild(hiddenUpload);
+
+                var hiddenDecision = document.createElement('input');
+                hiddenDecision.type = 'hidden';
+                hiddenDecision.name = 'user_decision';
+                hiddenDecision.value = userDecision || 'skip';
+                tempForm.appendChild(hiddenDecision);
+
+                var hiddenCompany = document.createElement('input');
+                hiddenCompany.type = 'hidden';
+                hiddenCompany.name = 'company';
+                hiddenCompany.value = selectedCompany ? selectedCompany.value : '';
+                tempForm.appendChild(hiddenCompany);
+
+                var hiddenFileType = document.createElement('input');
+                hiddenFileType.type = 'hidden';
+                hiddenFileType.name = 'fileType';
+                hiddenFileType.value = fileTypeSelect ? fileTypeSelect.value : '';
+                tempForm.appendChild(hiddenFileType);
+
+                // Extract Report Date from B3 and pass it to manual handler
+                var extractedReportDate = '';
+                if (submittedFile) {
+                    extractedReportDate = await extractReportDateFromManualFile(submittedFile);
+                }
+                if (!extractedReportDate && window.uploadedFiles && window.uploadedFiles.length > 0) {
+                    var firstMeta = window.uploadedFiles[0];
+                    extractedReportDate = (firstMeta && (firstMeta.report_date || firstMeta.report_date_raw)) ? (firstMeta.report_date || firstMeta.report_date_raw) : '';
+                }
+
+                var hiddenReportDate = document.createElement('input');
+                hiddenReportDate.type = 'hidden';
+                hiddenReportDate.name = 'report_date';
+                hiddenReportDate.value = extractedReportDate || '';
+                tempForm.appendChild(hiddenReportDate);
+
+                document.body.appendChild(tempForm);
+                tempForm.submit();
             }
 
             // Start in auto mode
             setMode('auto');
         });
     </script>
-    <script>
-        // Call this once on DOM ready to hook the manual form
-        function initManualImportRedirect() {
-            const form = document.getElementById('manualUploadForm');
-            if (!form) return;
-
-            form.addEventListener('submit', submitManualImportToSaved);
-        }
-
-        function submitManualImportToSaved(e) {
-            e.preventDefault();
-
-            const form = document.getElementById('manualUploadForm');
-            const fileInput = form.querySelector('input[type="file"][name="import_file"]');
-            const companyInput = form.querySelector('input[name="company"]');
-            const fileTypeSelect = form.querySelector('select[name="fileType"]');
-
-            // Basic validation
-            // if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-            // Swal.fire({ icon: 'warning', title: 'No file selected', text: 'Please choose an Excel file to upload.' });
-            // return;
-            // }
-            // if (!companyInput || !companyInput.value) {
-            // Swal.fire({ icon: 'warning', title: 'Partners Name required', text: 'Please select or type a partner name.' });
-            // return;
-            // }
-            // if (!fileTypeSelect || !fileTypeSelect.value) {
-            // Swal.fire({ icon: 'warning', title: 'Source File Type required', text: 'Please select KPX or KP7.' });
-            // return;
-            // }
-
-            // Show loading overlay (assumes #loading-overlay exists)
-            const overlay = document.getElementById('loading-overlay');
-            if (overlay) overlay.style.display = 'flex';
-
-            // Build temporary form that posts to the saved handler
-            const targetAction = '../../../models/saved/saved_billspaymentImportFile.php';
-            const tempForm = document.createElement('form');
-            tempForm.method = 'POST';
-            tempForm.enctype = 'multipart/form-data';
-            tempForm.action = targetAction;
-            tempForm.style.display = 'none';
-
-            // Move the actual file input into the temp form so the browser will include the file(s)
-            const originalParent = fileInput.parentNode;
-            const nextSibling = fileInput.nextSibling;
-            tempForm.appendChild(fileInput);
-
-            // Add hidden fields expected by the PHP handler
-            const hiddenUpload = document.createElement('input');
-            hiddenUpload.type = 'hidden';
-            hiddenUpload.name = 'upload';
-            hiddenUpload.value = '1';
-            tempForm.appendChild(hiddenUpload);
-
-            const hiddenCompany = document.createElement('input');
-            hiddenCompany.type = 'hidden';
-            hiddenCompany.name = 'company';
-            hiddenCompany.value = companyInput.value;
-            tempForm.appendChild(hiddenCompany);
-
-            const hiddenFileType = document.createElement('input');
-            hiddenFileType.type = 'hidden';
-            hiddenFileType.name = 'fileType';
-            hiddenFileType.value = fileTypeSelect.value;
-            tempForm.appendChild(hiddenFileType);
-
-            // Append form to body and submit (will cause navigation to the PHP handler)
-            document.body.appendChild(tempForm);
-            tempForm.submit();
-
-            // Note: page will unload on successful submit. If submission is prevented, restore file input.
-            setTimeout(() => {
-            if (document.body.contains(tempForm)) {
-                // restore file input to original place (if still on page)
-                if (originalParent) {
-                if (nextSibling) originalParent.insertBefore(fileInput, nextSibling);
-                else originalParent.appendChild(fileInput);
-                }
-                document.body.removeChild(tempForm);
-                if (overlay) overlay.style.display = 'none';
-            }
-            }, 2000);
-        }
-
-        // Initialize on DOM ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initManualImportRedirect);
-        } else {
-            initManualImportRedirect();
-        }
-        
-</script>
+    
 </body>
 <?php include '../../../templates/footer.php'; ?>
 

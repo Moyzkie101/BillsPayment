@@ -1,8 +1,12 @@
 <?php //if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SESSION['user_type'] === 'user')): ?>
+<?php
+include_once __DIR__ . '/../middleware.php';
+?>
 <?php if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin')): ?>
     <div class="btn-nav">
         <ul class="nav-list">
             <li><a href="admin_page.php">HOME</a></li>
+            <?php if (has_permission('Bills Payment')): ?>
             <li class="dropdown">
                 <button class="dropdown-btn">Import File</button>
                 <div class="dropdown-content">
@@ -11,6 +15,7 @@
                     <a id="user" href="import_billspaymentfeedback.php">BILLSPAYMENT FEEDBACK</a>
                 </div>
             </li>
+            <?php endif; ?>
             <!-- <li class="dropdown">
                 <button class="dropdown-btn">Transaction</button>
                 <div class="dropdown-content">
@@ -18,12 +23,15 @@
                 <a id="user" href="#">RECONCILIATION</a>
                 </div>
             </li> -->
+            <?php if (has_permission('Bills Payment')): ?>
             <li class="dropdown">
                 <button class="dropdown-btn">Post Transaction</button>
                 <div class="dropdown-content">
                 <a id="user" href="post_billspayment-transaction.php">BILLSPAYMENT TRANSACTION</a>
                 </div>
             </li>
+            <?php endif; ?>
+            <?php if (has_permission('Bills Payment')): ?>
             <li class="dropdown">
                 <button class="dropdown-btn">Reports</button>
                 <div class="dropdown-content">
@@ -35,6 +43,7 @@
                     <a id="user" href="billspay_cancellation.php">BILLSPAY CANCELLATION</a>
                 </div>
             </li>
+            <?php endif; ?>
             <!-- <li class="dropdown">
                 <button class="dropdown-btn">MAINTENANCE</button>
                 <div class="dropdown-content">

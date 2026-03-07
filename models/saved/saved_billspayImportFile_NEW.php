@@ -697,7 +697,14 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
             if (move_uploaded_file($tmpPath, $tempPath)) {
                 // Get partner name from database
                 $partnerName = getPartnerName($conn, $partnerId);
-                
+                // capture report date if client provided one
+                $reportDateRaw = $_POST['report_dates'][$i] ?? '';
+                $reportDate = null;
+                if (!empty($reportDateRaw)) {
+                    $ts = strtotime($reportDateRaw);
+                    if ($ts !== false) $reportDate = date('Y-m-d', $ts);
+                }
+
                 $uploadedFiles[] = [
                     'id' => $fileId,
                     'name' => $fileName,
@@ -705,6 +712,8 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
                     'partner_id' => $partnerId,
                     'partner_name' => $partnerName,
                     'source_type' => $sourceType,
+                    'report_date_raw' => $reportDateRaw,
+                    'report_date' => $reportDate,
                     'status' => 'pending',
                     'validation_result' => null,
                     'uploaded_by' => $current_user_email,
@@ -801,7 +810,7 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
                 $userDecision = $_SESSION['user_decision'] ?? 'skip';
 
                 // Import file with user decision
-                $result = importFileData($conn, $file['path'], $file['source_type'], $file['partner_id'], $current_user_email, null, null, $userDecision);
+                $result = importFileData($conn, $file['path'], $file['source_type'], $file['partner_id'], $current_user_email, null, null, $userDecision, $file);
 
                 if ($result['success']) {
                     $imported++;
@@ -1727,7 +1736,7 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     ];
 }
 
-function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserEmail, $progressToken = null, $cachedData = null, $userDecision = 'skip') {
+function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserEmail, $progressToken = null, $cachedData = null, $userDecision = 'skip', $fileMeta = null) {
     try {
         // Always parse Excel (simple and reliable like old code)
         $spreadsheet = loadSpreadsheet($filePath, true);
@@ -1768,11 +1777,32 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $getColumnLabels[] = trim(strval($cell->getValue()));
         }
 
-        // KP7 report date is stored in cell B3
-        $kp7ReportDate = null;
-        if ($sourceType === 'KP7') {
-            $kp7ReportDate = trim(strval($worksheet->getCell('B3')->getValue()));
+        // Extract header report date from cell B3 (commonly present for KP7/KPX)
+        $headerReportRaw = trim(strval($worksheet->getCell('B3')->getValue()));
+        $headerReport = null;
+        if ($headerReportRaw !== '') {
+            $ts = strtotime($headerReportRaw);
+            if ($ts !== false) $headerReport = date('Y-m-d', $ts);
         }
+
+        // Prefer file metadata report date (from upload client) if provided
+        $reportDateCandidate = null;
+        if (is_array($fileMeta)) {
+            if (!empty($fileMeta['report_date'])) {
+                $reportDateCandidate = $fileMeta['report_date'];
+            } elseif (!empty($fileMeta['report_date_raw'])) {
+                $tmp = trim($fileMeta['report_date_raw']);
+                $ts = strtotime($tmp);
+                $reportDateCandidate = ($ts !== false) ? date('Y-m-d', $ts) : $tmp;
+            }
+        }
+
+        // If still not set, use header report
+        if (empty($reportDateCandidate) && !empty($headerReport)) {
+            $reportDateCandidate = $headerReport;
+        }
+
+        // $reportDateCandidate may remain null; downstream logic will decide per-row fallback.
 
         // Helper functions (duplicate and override checks)
         $checkDuplicateData = function($referenceNumber, $datetime, $partnerIdParam = null) use ($conn) {
@@ -1879,7 +1909,8 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $person_operator = '';
             $remote_branch = null;
             $remote_operator = null;
-            $report_date = $sourceType === 'KP7' ? $kp7ReportDate : null;
+            // Use the best available report date for all rows: prefer file-level candidate, then header, then transaction date later
+            $report_date = $reportDateCandidate;
 
             if ($getColumnLabels[0] === 'STATUS' && (strtoupper($sourceType) === 'KP7')) {
                 $cellAValue = $worksheet->getCell('A' . $row)->getValue();
@@ -2221,6 +2252,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             status, 
             datetime, 
             cancellation_date, 
+            report_date,
             source_file, 
             control_no, 
             reference_no, 
@@ -2254,7 +2286,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             remote_branch, 
             remote_operator, 
             post_transaction
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         $insertStmt = $conn->prepare($insertSQL);
         
@@ -2464,6 +2496,27 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $b_status = $status;
             $b_datetime = $datetime_value;
             $b_cancellation_date = $cancellation_date;
+            // Determine report date to insert. Prefer row['report_date'] (user or KP7 header),
+            // but ensure it's not earlier than the transaction date portion of $b_datetime.
+            $b_report_date = null;
+            if (isset($row['report_date']) && $row['report_date'] !== '') {
+                $candidate = date('Y-m-d', strtotime($row['report_date']));
+                if (!empty($b_datetime)) {
+                    $txnDate = date('Y-m-d', strtotime($b_datetime));
+                    if (strtotime($candidate) < strtotime($txnDate)) {
+                        // Use transaction date when report_date is earlier than transaction
+                        $candidate = $txnDate;
+                    }
+                }
+                $b_report_date = $candidate;
+            } else {
+                // No provided report_date: fall back to transaction date if available
+                if (!empty($b_datetime)) {
+                    $b_report_date = date('Y-m-d', strtotime($b_datetime));
+                } else {
+                    $b_report_date = null;
+                }
+            }
             $b_sourceType = $sourceType;
             $b_control_number = $row['control_number'] ?? null;
             $b_reference_number = $row['reference_number'] ?? null;
@@ -2498,11 +2551,11 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $b_remote_operator = $row['remote_operator'] ?? null;
             $b_post_transaction = $row['post_transaction'] ?? null;
 
-            $insertStmt->bind_param(
-                "ssssssssssdddssissssssssssssssssssss",
+            $bindParams = [
                 $b_status,
                 $b_datetime,
                 $b_cancellation_date,
+                $b_report_date,
                 $b_sourceType,
                 $b_control_number,
                 $b_reference_number,
@@ -2536,7 +2589,17 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 $b_remote_branch,
                 $b_remote_operator,
                 $b_post_transaction
-            );
+            ];
+
+            // Build types string dynamically (all as strings for simplicity)
+            $types = str_repeat('s', count($bindParams));
+            // Prepare references for call_user_func_array
+            $refs = [];
+            foreach ($bindParams as $key => $value) {
+                $refs[$key] = &$bindParams[$key];
+            }
+            array_unshift($refs, $types);
+            call_user_func_array([$insertStmt, 'bind_param'], $refs);
 
             if (!$insertStmt->execute()) {
                 $insertFailures++;
@@ -2885,7 +2948,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <form method="post" id="performImportForm" style="display: inline; margin-right:8px;">
                                 <input type="hidden" name="progress_token" value="<?php echo htmlspecialchars($progressToken); ?>">
                                 <input type="hidden" name="perform_import" value="1">
-                                <button type="submit" name="perform_import" class="btn btn-success btn-sm">
+                                <button type="submit" name="perform_import" class="btn btn-success btn-sm" id="importBtn">
                                     <i class="fa-solid fa-file-import me-1"></i>
                                     <?php echo $validCount === 1 ? 'Import File' : 'Import All (' . $validCount . ')'; ?>
                                 </button>
@@ -2900,7 +2963,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             
             <?php if (!empty($renderFiles) && count($renderFiles) > 0): ?>
                 <div class="d-flex justify-content-end mb-2">
-                    <div style="min-width:220px; text-align:right;">
+                    <div style="min-width:420px; text-align:right;">
                         <label for="fileFilter" class="me-2" style="font-weight:600;">Show:</label>
                         <select id="fileFilter" class="form-select form-select-sm" style="display:inline-block; width:160px;">
                             <option value="all">All</option>
@@ -2908,6 +2971,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <option value="invalid">Invalid</option>
                             <option value="valid">Valid</option>
                         </select>
+                        <!-- Report Date will be extracted from uploaded files automatically (B3) -->
                     </div>
                 </div>
                 
@@ -3179,6 +3243,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <tr><th>KPX Partner ID:</th><td>${partnerData.partner_id_kpx || 'N/A'}</td></tr>
                             <tr><th>GL Code:</th><td>${partnerData.gl_code || 'N/A'}</td></tr>
                             <tr><th>Source Type:</th><td><span class="badge badge-${(sourceType || 'unknown').toLowerCase()}">${sourceType}</span></td></tr>
+                            <tr><th>Report Date:</th><td>${(validation && (validation.report_date || validation.report_date_raw)) ? (validation.report_date || validation.report_date_raw) : (fileData.report_date || fileData.report_date_raw || '')}</td></tr>
                             <tr><th>Transaction Date:</th><td>${validation.transaction_start_date ? ('Start Date: ' + validation.transaction_start_date + (validation.transaction_end_date ? ' - End Date: ' + validation.transaction_end_date : '')) : transactionDate}</td></tr>
                             <tr><th>Total Rows:</th><td>${validation.row_count || 0}</td></tr>
                             <tr><th>Status:</th><td><span class="badge badge-${fileData.status || 'pending'}">${formatStatusLabel(fileData.status || 'pending')}</span></td></tr>
@@ -3537,6 +3602,10 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                     <td><span class="badge badge-${sourceType.toLowerCase()}" style="font-size: 14px;">${sourceType} System</span></td>
                                 </tr>
                                 <tr>
+                                    <th style="background-color: #f8f9fa;"><i class="fa-solid fa-calendar-day" style="color: #6f42c1;"></i> Report Date</th>
+                                    <td><strong>${(validation && (validation.report_date || validation.report_date_raw)) ? (validation.report_date || validation.report_date_raw) : (fileData.report_date || fileData.report_date_raw || '')}</strong></td>
+                                </tr>
+                                <tr>
                                     <th style="background-color: #f8f9fa;"><i class="fa-solid fa-calendar-day" style="color: #0dcaf0;"></i> Start Date</th>
                                     <td><strong>${validation.transaction_start_date || 'N/A'}</strong></td>
                                 </tr>
@@ -3638,6 +3707,11 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         (function() {
             const form = document.getElementById('performImportForm');
             if (!form) return;
+
+            // Import button is always available when there are valid files; report date is
+            // extracted from each uploaded file (B3) and persisted per-file. No UI selector.
+            const importBtnEl = document.getElementById('importBtn');
+            try { if (importBtnEl) importBtnEl.style.display = ''; } catch(e){}
 
             const overlay = document.getElementById('importOverlay');
             const progressBar = document.getElementById('importProgressBar');

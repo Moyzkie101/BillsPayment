@@ -38,6 +38,24 @@
     function formatCurrency($amount) {
         return '₱ ' . number_format((float)$amount, 2);
     }
+
+    function normalizeReportDate($value) {
+        if (!isset($value)) {
+            return null;
+        }
+
+        $value = trim((string)$value);
+        if ($value === '') {
+            return null;
+        }
+
+        $timestamp = strtotime($value);
+        if ($timestamp === false) {
+            return null;
+        }
+
+        return date('Y-m-d', $timestamp);
+    }
     
     if (isset($_POST['upload'])){
         if(isset($_FILES['import_file']) && $_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
@@ -381,6 +399,7 @@
                     // $post_transaction = '';
 
                     //column headers
+                    $extracted_report_date = null;
                     foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
                         $getColumnLabels = [];
                         
@@ -395,9 +414,18 @@
                             }
                         }
 
-                        if($fileType === 'KP7'){
-                            $report_date = $conn->real_escape_string(strval($worksheet->getCell('B' . '3')->getValue()));
-
+                        if($fileType === 'KP7' || $fileType === 'KPX'){
+                            $report_date_raw = strval($worksheet->getCell('B' . '3')->getValue());
+                            $extracted_report_date = normalizeReportDate($report_date_raw);
+                            if (empty($extracted_report_date) && !empty($report_date_raw)) {
+                                $report_date_raw_trim = trim($report_date_raw);
+                                if (preg_match('/([A-Za-z]+\s+\d{1,2}\s+\d{4})/i', $report_date_raw_trim, $m)) {
+                                    $extracted_report_date = normalizeReportDate($m[1]);
+                                }
+                            }
+                            if (!empty($extracted_report_date)) {
+                                $_SESSION['extracted_report_date'] = $extracted_report_date;
+                            }
                         }
 
                         // Break after first worksheet since we only need headers once
@@ -565,8 +593,8 @@
                         elseif($getColumnLabels[0] === 'No'){
                             if($fileType === 'KPX'){
 
-                                // Initialize variables to prevent undefined variable warnings
-                                $report_date = null; // Add this line for KPX files (they don't have report_date)
+                                // Use extracted report date for KPX as well (cell B3)
+                                $report_date = $extracted_report_date;
                                 // Reset variables for each row
                                 $cancellStatus = '';
                                 $is_cancellation = strpos($worksheet->getCell('A' . $row)->getValue(), '*') !== false;
@@ -1126,6 +1154,18 @@
     if(isset($_POST['confirm_import'])) {
         $Matched_BranchID_data = $_SESSION['Matched_BranchID_data'] ?? [];
         $cancellation_BranchID_data = $_SESSION['cancellation_BranchID_data'] ?? [];
+        $selected_report_date = normalizeReportDate($_POST['report_date'] ?? ($_SESSION['manual_report_date'] ?? ($_SESSION['extracted_report_date'] ?? null)));
+
+        if (empty($selected_report_date)) {
+            $firstMatched = $Matched_BranchID_data[0]['report_date'] ?? null;
+            $firstCancelled = $cancellation_BranchID_data[0]['report_date'] ?? null;
+            $selected_report_date = normalizeReportDate($firstMatched ?? $firstCancelled);
+        }
+        if (empty($selected_report_date)) {
+            $selected_report_date = date('Y-m-d');
+        }
+
+        $_SESSION['manual_report_date'] = $selected_report_date;
 
         // Add this debug code INSIDE the confirm_import block
         error_log("Debug - Matched data count: " . count($Matched_BranchID_data));
@@ -1246,6 +1286,7 @@
                 $imported_date = $row['date_uploaded'];
                 $remote_branch = $row['remote_branch'];
                 $remote_operator = $row['remote_operator'];
+                $report_date = $conn->real_escape_string($selected_report_date);
                 
                 // NEW LOGIC: Handle datetime based on whether it's a matched cancellation
                 $datetime_value = null;
@@ -1282,6 +1323,7 @@
                     `status`, 
                     `datetime`, 
                     cancellation_date, 
+                    report_date,
                     source_file, 
                     control_no, 
                     reference_no, 
@@ -1319,6 +1361,7 @@
                     " . ($status ? "'$status'" : "NULL") . ",
                     " . ($datetime_value ? "'$datetime_value'" : "NULL") . ",
                     " . ($cancellation_date ? "'$cancellation_date'" : "NULL") . ",
+                    '$report_date',
                     '$source_file',
                     '$control_number',
                     '$reference_number',
@@ -1384,6 +1427,8 @@
                 unset($_SESSION['original_file_name']);
                 unset($_SESSION['source_file_type']);
                 unset($_SESSION['transactionDate']);
+                unset($_SESSION['manual_report_date']);
+                unset($_SESSION['extracted_report_date']);
                 
                 echo '<script>
                     document.addEventListener("DOMContentLoaded", function() {
@@ -1622,6 +1667,19 @@
         $processed_override_data = $_SESSION['processed_override_data'] ?? [];
         $matched_data = $_SESSION['Matched_BranchID_data'] ?? [];
         $cancellation_data = $_SESSION['cancellation_BranchID_data'] ?? [];
+        $selected_report_date = normalizeReportDate($_POST['report_date'] ?? ($_SESSION['manual_report_date'] ?? ($_SESSION['extracted_report_date'] ?? null)));
+
+        if (empty($selected_report_date)) {
+            $firstOverride = $processed_override_data[0]['report_date'] ?? null;
+            $firstMatched = $matched_data[0]['report_date'] ?? null;
+            $firstCancelled = $cancellation_data[0]['report_date'] ?? null;
+            $selected_report_date = normalizeReportDate($firstOverride ?? $firstMatched ?? $firstCancelled);
+        }
+        if (empty($selected_report_date)) {
+            $selected_report_date = date('Y-m-d');
+        }
+
+        $_SESSION['manual_report_date'] = $selected_report_date;
 
         // Increase memory limit and execution time for large files
         ini_set('memory_limit', '100000M');
@@ -1764,6 +1822,7 @@
                             status, 
                             datetime, 
                             cancellation_date, 
+                            report_date,
                             source_file, 
                             control_no, 
                             reference_no, 
@@ -1797,7 +1856,7 @@
                             remote_branch, 
                             remote_operator, 
                             post_transaction
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?)";
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?)";
 
                 $insertStmt = $conn->prepare($insertSQL);
                 if (!$insertStmt) {
@@ -1805,10 +1864,11 @@
                 }
 
                 // Bind params; nulls in $row will be sent as SQL NULL
-                $insertStmt->bind_param("ssssssssssdddssissssssssssssssssssss",
+                $insertStmt->bind_param("sssssssssssdddssissssssssssssssssssss",
                     $status,
                     $datetime_value,
                     $cancellation_date,
+                    $selected_report_date,
                     $source_file,
                     $row['control_number'],
                     $row['reference_number'],
@@ -1905,6 +1965,7 @@
                     status, 
                     datetime, 
                     cancellation_date, 
+                    report_date,
                     source_file, 
                     control_no, 
                     reference_no, 
@@ -1938,17 +1999,18 @@
                     remote_branch, 
                     remote_operator, 
                     post_transaction
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 $insertStmt = $conn->prepare($insertSQL);
                 
                 // Get source file from session or use default
                 $source_file = $_SESSION['source_file_type'] ?? 'Unknown';
 
-                $insertStmt->bind_param("ssssssssssdddssiisssssssssssssssssss", //36
+                $insertStmt->bind_param("sssssssssssdddssiisssssssssssssssssss", //37
                     $status,
                     $datetime_value,
                     $cancellation_date,
+                    $selected_report_date,
                     $source_file,
                     $row['control_number'],
                     $row['reference_number'],
@@ -2003,6 +2065,8 @@
             unset($_SESSION['original_file_name']);
             unset($_SESSION['source_file_type']);
             unset($_SESSION['transactionDate']);
+            unset($_SESSION['manual_report_date']);
+            unset($_SESSION['extracted_report_date']);
             
             $totalProcessed = $processedCount + $insertedCount;
             
@@ -2396,17 +2460,27 @@
                         // Calculate all summaries
                         $summaries = calculateTransactionSummary($matchedData, $cancellationData);
 
+                        // Resolve display report date (extracted from file/session)
+                        $displayReportDateRaw = normalizeReportDate($_SESSION['manual_report_date'] ?? ($_SESSION['extracted_report_date'] ?? null));
+                        if (empty($displayReportDateRaw)) {
+                            $firstMatched = $matchedData[0]['report_date'] ?? null;
+                            $firstCancelled = $cancellationData[0]['report_date'] ?? null;
+                            $displayReportDateRaw = normalizeReportDate($firstMatched ?? $firstCancelled);
+                        }
+
                         // Get display variables
                         $displayData = [
-                            'company' => htmlspecialchars($partnerSelection[0]['companys_name']),
+                            'company' => htmlspecialchars(strval($partnerSelection[0]['companys_name'] ?? '')),
                             // 'company' => htmlspecialchars($_POST['company'] ?? ''),
                             // 'partnerId' => htmlspecialchars($partners_id ?? ''),
-                            'partnerId' => htmlspecialchars($partnerSelection[0]['partners_id']),
-                            'partnerIdKPX' => htmlspecialchars($partnerSelection[0]['partners_id_kpx']),
-                            'GLCodes' => htmlspecialchars($partnerSelection[0]['gl_code']),
+                            'partnerId' => htmlspecialchars(strval($partnerSelection[0]['partners_id'] ?? '')),
+                            'partnerIdKPX' => htmlspecialchars(strval($partnerSelection[0]['partners_id_kpx'] ?? '')),
+                            'GLCodes' => htmlspecialchars(strval($partnerSelection[0]['gl_code'] ?? '')),
                             'rowCount' => number_format($summaries['summary']['count']),
-                            'sourceType' => htmlspecialchars(($_POST['fileType'] ?? '') . " System"),
-                            'transactionDate' => htmlspecialchars(date('F d, Y', strtotime($_POST['datePicker'] ?? date('Y-m-d'))))
+                            'sourceType' => htmlspecialchars(strval(($_POST['fileType'] ?? '') . " System")),
+                            'reportDateRaw' => htmlspecialchars(strval($displayReportDateRaw ?? '')),
+                            'reportDate' => htmlspecialchars(strval(!empty($displayReportDateRaw) ? date('F d, Y', strtotime($displayReportDateRaw)) : 'N/A')),
+                            'transactionDate' => htmlspecialchars(strval(date('F d, Y')))
                         ];
 
                         // Define table rows data
@@ -2426,7 +2500,8 @@
                                         <div class="card-body">
                                             <form method="post" id="confirmImportForm" class="d-inline">
                                                 <input type="hidden" name="confirm_import" value="1">
-                                                <button type="submit" class="btn btn-success btn-lg me-3 shadow-sm">
+                                                <input type="hidden" name="report_date" id="hiddenReportDate" value="' . $displayData['reportDateRaw'] . '">
+                                                <button type="submit" class="btn btn-success btn-lg me-3 shadow-sm" id="confirmImportButton">
                                                     <i class="fas fa-check-circle me-2"></i>Confirm Import
                                                 </button>
                                             </form>
@@ -2484,6 +2559,10 @@
                                                             <tr>
                                                                 <td><i class="fas fa-file-import text-primary me-2"></i>Source</td>
                                                                 <td class="fw-semibold">' . $displayData['sourceType'] . '</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td><i class="fas fa-calendar-day text-primary me-2"></i>Report Date</td>
+                                                                <td class="fw-semibold" id="reportDateText">' . $displayData['reportDate'] . '</td>
                                                             </tr>
                                                             <tr>
                                                                 <td><i class="fas fa-calendar-alt text-primary me-2"></i>Uploaded Date</td>
@@ -2571,7 +2650,6 @@
                             </div>
                         </div>
                         <script>
-                            // Hide the confirmation/summary section after clicking Confirm Import
                             document.addEventListener("DOMContentLoaded", function() {
                                 var confirmForm = document.getElementById("confirmImportForm");
                                 if (confirmForm) {
@@ -2669,14 +2747,23 @@
         </script>
         <script>
             // script.js or within <script> tags in <head> or before </body>
-            document.getElementById('uploadForm').addEventListener('submit', function() {
-                // Show loading overlay when form is submitted
-                document.getElementById('loading-overlay').style.display = 'block';
-            });
-             // Loop through each element and set its display style to "block"
-            for (var i = 0; i < elements.length; i++) {
-                elements[i].style.display = "block";
-            }
+            (function(){
+                var _uploadForm = document.getElementById('uploadForm');
+                if (_uploadForm) {
+                    _uploadForm.addEventListener('submit', function() {
+                        // Show loading overlay when form is submitted
+                        var _loading = document.getElementById('loading-overlay');
+                        if (_loading) _loading.style.display = 'block';
+                    });
+                }
+
+                // Loop through each element and set its display style to "block" (guarded)
+                if (typeof elements !== 'undefined' && elements && elements.length) {
+                    for (var i = 0; i < elements.length; i++) {
+                        if (elements[i]) elements[i].style.display = "block";
+                    }
+                }
+            })();
 
             $(document).ready(function() {
                 $('#companyDropdown').select2({
