@@ -310,10 +310,9 @@ $(function(){
                     try {
                         if (canvas && ctx && typeof resizeCanvasToDisplaySize === 'function') {
                             resizeCanvasToDisplaySize(canvas);
-                            // fill white background for immediate visibility
+                            // ensure canvas is cleared (transparent) for immediate visibility
                             var w = canvas.clientWidth, h = canvas.clientHeight;
-                            ctx.fillStyle = '#ffffff';
-                            ctx.fillRect(0,0,w,h);
+                            ctx.clearRect(0,0,w,h);
                         }
                     } catch(e){ console.error('sigCanvas: resize error', e); }
                 }, 50);
@@ -335,9 +334,6 @@ $(function(){
             }
             // Reset transform and scale once to map CSS pixels to backing store
             ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-            // Fill white background so strokes appear on white
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, w, h);
         }
 
         function startDraw(x,y){ drawing = true; lastX = x; lastY = y; }
@@ -378,24 +374,20 @@ $(function(){
 
         // clear button
         $('#clearCanvasBtn').off('click').on('click', function(){
-            // reset backing store and clear to white
+            // reset backing store and clear (transparent)
             resizeCanvasToDisplaySize(canvas);
             var w = canvas.clientWidth, h = canvas.clientHeight;
             ctx.clearRect(0,0,w,h);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0,0,w,h);
         });
 
         // save button -> convert to blob/file and upload
         $('#saveCanvasBtn').off('click').on('click', function(){
-            // ensure canvas is sized correctly
-            // draw white background to avoid transparency if needed
+            // ensure canvas is sized correctly and preserve transparency
             var tmpCanvas = document.createElement('canvas');
             tmpCanvas.width = canvas.width;
             tmpCanvas.height = canvas.height;
             var tctx = tmpCanvas.getContext('2d');
-            tctx.fillStyle = '#ffffff';
-            tctx.fillRect(0,0,tmpCanvas.width,tmpCanvas.height);
+            // draw the user's canvas onto the tmp canvas without adding a white background
             tctx.drawImage(canvas, 0, 0, tmpCanvas.width, tmpCanvas.height);
             tmpCanvas.toBlob(function(blob){
                 if (!blob) { Swal.fire('Error','Failed to create image','error'); return; }

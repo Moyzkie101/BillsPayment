@@ -22,6 +22,7 @@
         "Profile View"
     ],
     "20235678": [
+        "Accounts",
         "BI Create Automated",
         "BI Create Manual",
         "BI Report Billing Invoice",
@@ -36,6 +37,7 @@
         "BP Report Volume",
         "BP Settlement Adjustment Entry",
         "BP Settlement Per Bank",
+        "Bills Payment",
         "Invoice Approval",
         "Invoice Review",
         "Maintenance Accounts Access Levels",
@@ -44,6 +46,8 @@
         "Maintenance Masterfiles Bank List",
         "Maintenance Masterfiles Partner List",
         "Masterfiles View Bank List",
+        "Profile Signature",
+        "Profile View",
         "Tools Branch Maker",
         "Tools File Fetch",
         "Tools KPX Generator"

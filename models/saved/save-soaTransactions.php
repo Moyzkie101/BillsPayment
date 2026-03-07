@@ -7,6 +7,9 @@
 include '../../config/config.php';
 
 session_start();
+ 
+// Ensure we can resolve current user id
+include '../../templates/middleware.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirmBtn'])) {
     $partnerID = $_POST['partnerID'];
@@ -63,8 +66,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirmBtn'])) {
     $notedDate_signature = $_POST['notedDateSignature'];
     $status = 'Prepared';
 
-    // Generate prepared signature
-    $prepared_signature = 'electronically signed';
+    // Use the current user's id as a reference to their stored signature
+    $current_user_id = resolve_user_identifier();
+    // Store the id_number in prepared_signature so reports can resolve the actual signature image
+    $prepared_signature = $current_user_id ?: 'electronically signed';
     $reviewed_signature = '';
     $noted_signature = '';
     $reviewedFix_signature = '';
