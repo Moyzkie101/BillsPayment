@@ -97,6 +97,29 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <a href="<?php echo $base_url; ?>home.php"><i class="fa-solid fa-house"></i> Home</a>
         </div>
 
+        <!-- Profile Menu -->
+            <!-- Profile Menu (visibility controlled by permissions) -->
+            <?php if (has_any_permission(['Profile View','Profile Signature'])): ?>
+            <div class="onetab" id="profile-btn">
+                <h6><i class="fa-solid fa-user"></i> Profile</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-profile" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-profile" style="display: none"></i>
+            </div>
+            <div class="onetab-sub" id="profile-nav" style="display: none;">
+                <?php if (has_permission('Profile View')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/profile/profile.php'">
+                    <a href="<?php echo $auth_url; ?>dashboard/profile/profile.php">Profile</a>
+                </div>
+                <?php endif; ?>
+
+                <?php if (has_permission('Profile Signature')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/profile/profile-signature.php'">
+                    <a href="<?php echo $auth_url; ?>dashboard/profile/profile-signature.php">Signature</a>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+
         <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Post Transaction','BP Settlement Adjustment Entry','BP Settlement Per Bank','BP Report Volume','BP Report EDI','BP Report Transaction Details','BP Report Transaction Summary','BP Report Cancellation','BP Report Balance Sheet'])): ?>
         <!-- Show/Hide Paramount -->
         <div class="onetab" id="para-btn">
@@ -242,21 +265,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         </div>
         <?php endif; ?>
 
-        <!-- Show/Hide MAA -->
-        <!-- <div class="onetab" id="maa-btn">
-        <i class="fa-solid fa-caret-right" id="closed-maa" style="display: block"></i>
-        <i class="fa-solid fa-caret-down" id="open-maa" style="display: none"></i>
-        <h6>Bookkeeper</h6>
-        </div> -->
-
-        <!-- <div class="onetab-sub" id="maa-nav" style="display: none;">
-        <div class="sub" onclick="parent.location='#'">
-            <a href="#">Bookkeeper Import</a>
-        </div>
-        <div class="sub" onclick="parent.location='#'">
-            <a href="#">Book keeper Report</a>
-        </div>
-        </div> -->
+    
 
         
         <!-- Show/Hide Billing Invoice (main) -->
@@ -689,6 +698,26 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 toolsNav.style.display = 'none';
                 if (closedTools && openTools) { closedTools.style.display = 'block'; openTools.style.display = 'none'; }
+            }
+        });
+    }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var profileBtn = document.getElementById('profile-btn');
+    var profileNav = document.getElementById('profile-nav');
+    var closedProfile = document.getElementById('closed-profile');
+    var openProfile = document.getElementById('open-profile');
+    if (profileBtn && profileNav) {
+        profileBtn.addEventListener('click', function() {
+            var isHidden = window.getComputedStyle(profileNav).display === 'none';
+            if (isHidden) {
+                profileNav.style.display = 'block';
+                if (closedProfile && openProfile) { closedProfile.style.display = 'none'; openProfile.style.display = 'block'; }
+            } else {
+                profileNav.style.display = 'none';
+                if (closedProfile && openProfile) { closedProfile.style.display = 'block'; openProfile.style.display = 'none'; }
             }
         });
     }
