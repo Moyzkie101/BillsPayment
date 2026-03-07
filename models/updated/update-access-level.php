@@ -120,7 +120,7 @@ function read_access_map_file($path)
         $levels = [];
         foreach ($decoded as $item) {
             $level = isset($item['access_level']) ? (int)$item['access_level'] : 0;
-            if ($level <= 0) continue;
+            if ($level === 0) continue;
             $levels[] = [
                 'access_level' => $level,
                 'permissions' => normalize_permissions(isset($item['permissions']) ? $item['permissions'] : [])
@@ -152,7 +152,7 @@ function read_access_map_file($path)
     if (isset($decoded['access_levels']) && is_array($decoded['access_levels'])) {
         foreach ($decoded['access_levels'] as $item) {
             $level = isset($item['access_level']) ? (int)$item['access_level'] : 0;
-            if ($level <= 0) continue;
+            if ($level === 0) continue;
             $levels[] = [
                 'access_level' => $level,
                 'permissions' => normalize_permissions(isset($item['permissions']) ? $item['permissions'] : [])
@@ -268,7 +268,7 @@ try {
         }
     }
 
-    if ($resolvedAccessLevel <= 0) {
+    if ($resolvedAccessLevel === 0) {
         echo json_encode(['success' => false, 'message' => 'Unable to resolve access level from permissions']);
         exit;
     }
@@ -337,6 +337,10 @@ try {
     if ($shouldUpdateSession) {
         $_SESSION['user_access_level'] = (int)$updatedRow['access_level'];
         $_SESSION['user_permissions'] = $inputPermissions;
+        // Keep session in sync with current access map file mtime so middleware knows it's fresh
+        $mapMtime = 0;
+        if (file_exists($mapPath)) $mapMtime = @filemtime($mapPath);
+        $_SESSION['access_map_mtime'] = $mapMtime;
     }
     // Persist explicit per-user permissions into DB column `permissions` (JSON),
     // and keep the legacy file-backed storage for backward compatibility.

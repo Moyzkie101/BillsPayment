@@ -73,14 +73,14 @@ if (isset($_GET['debug_access']) && $_GET['debug_access']) {
     $__dbg_html = '<div style="position:fixed;right:12px;top:12px;background:#fff;border:1px solid #ccc;padding:8px;z-index:99999;font-size:12px;color:#111;max-width:320px;word-wrap:break-word;">'
         . '<strong>Access Debug</strong><br>'
         . 'Level: ' . $__dbg_level . '<br>'
-        . 'Permissions: ' . htmlspecialchars(json_encode($__dbg_perms, JSON_UNESCAPED_SLASHES));
+        . 'Permissions: ' . htmlspecialchars((string) json_encode($__dbg_perms, JSON_UNESCAPED_SLASHES));
     if (function_exists('access_map_debug')) {
         $__dbg_info = access_map_debug();
         $__dbg_html .= '<br><hr style="border:none;border-top:1px solid #ddd;margin:6px 0;">';
         $__dbg_html .= 'Map file exists: ' . ($__dbg_info['file_exists'] ? 'yes' : 'no') . '<br>';
         $__dbg_html .= 'Raw length: ' . intval($__dbg_info['raw_len']) . '<br>';
-        $__dbg_html .= 'JSON error: ' . htmlspecialchars($__dbg_info['json_err']) . '<br>';
-        $__dbg_html .= 'Loaded keys: ' . htmlspecialchars(json_encode($__dbg_info['keys'], JSON_UNESCAPED_SLASHES)) . '<br>';
+        $__dbg_html .= 'JSON error: ' . htmlspecialchars((string) ($__dbg_info['json_err'] ?? '')) . '<br>';
+        $__dbg_html .= 'Loaded keys: ' . htmlspecialchars((string) json_encode($__dbg_info['keys'], JSON_UNESCAPED_SLASHES)) . '<br>';
     }
     $__dbg_html .= '</div>';
     
