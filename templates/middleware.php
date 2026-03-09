@@ -57,7 +57,41 @@ function load_access_map()
 
     $map = $out;
     $GLOBALS['__access_map_last_debug'] = ['file_exists'=>file_exists($path),'raw_len'=>is_string($raw)?strlen($raw):0,'keys'=>array_values(array_keys($out))];
+    $GLOBALS['__access_map_file_mtime'] = file_exists($path) ? @filemtime($path) : 0;
     return $map;
+}
+}
+
+// Small compatibility helpers used by templates/menu.php debug block
+if (!function_exists('get_user_access_level')) {
+function get_user_access_level()
+{
+    if (isset($_SESSION['user_access_level'])) return $_SESSION['user_access_level'];
+    $id = resolve_user_identifier();
+    if (empty($id)) return null;
+    $row = get_user_row($id);
+    $access_col = resolve_access_level_column();
+    if ($row && isset($row[$access_col])) return intval($row[$access_col]);
+    return null;
+}
+}
+
+if (!function_exists('access_map_debug')) {
+function access_map_debug()
+{
+    $path = __DIR__ . '/../assets/js/accesslevel-map.json';
+    $raw = @file_get_contents($path);
+    $dec = @json_decode($raw, true);
+    $json_err = json_last_error() === JSON_ERROR_NONE ? null : json_last_error_msg();
+    $keys = array_keys(load_access_map());
+    $file_mtime = isset($GLOBALS['__access_map_file_mtime']) ? $GLOBALS['__access_map_file_mtime'] : (file_exists($path) ? @filemtime($path) : 0);
+    return [
+        'file_exists' => file_exists($path),
+        'raw_len' => is_string($raw) ? strlen($raw) : 0,
+        'file_mtime' => $file_mtime,
+        'json_err' => $json_err,
+        'keys' => $keys,
+    ];
 }
 }
 
@@ -145,6 +179,54 @@ if (!function_exists('get_current_user_permissions')) {
 function get_current_user_permissions()
 {
     global $conn;
+    // Invalidate cached session permissions if the access map file changed
+    $map = load_access_map();
+    $map_mtime = isset($GLOBALS['__access_map_file_mtime']) ? $GLOBALS['__access_map_file_mtime'] : 0;
+    if (!isset($_SESSION['access_map_mtime']) || $_SESSION['access_map_mtime'] !== $map_mtime) {
+        unset($_SESSION['user_permissions']);
+        unset($_SESSION['user_access_level']);
+        unset($_SESSION['user_permissions_raw']);
+    }
+
+    // If we have cached permissions, perform a lightweight DB check to ensure they are still current.
+    if (!empty($_SESSION['user_permissions']) && is_array($_SESSION['user_permissions'])) {
+        $perm_col = resolve_permissions_column();
+        $access_col = resolve_access_level_column();
+        $id = resolve_user_identifier();
+        if (!empty($id)) {
+            $row = get_user_row($id);
+            if ($row) {
+                $db_level = isset($row[$access_col]) ? intval($row[$access_col]) : null;
+                $db_raw_perms = isset($row[$perm_col]) ? $row[$perm_col] : null;
+                $session_level = isset($_SESSION['user_access_level']) ? intval($_SESSION['user_access_level']) : null;
+                // If access level changed, invalidate cache
+                if ($db_level !== null && $session_level !== null && $db_level !== $session_level) {
+                    unset($_SESSION['user_permissions']);
+                    unset($_SESSION['user_access_level']);
+                    unset($_SESSION['user_permissions_raw']);
+                } else {
+                    // Compare normalized permissions if DB has explicit perms
+                    if (!empty($db_raw_perms)) {
+                        $dec = @json_decode($db_raw_perms, true);
+                        $db_perms = is_array($dec) ? normalize_permission_list($dec) : [];
+                        $sess_perms = is_array($_SESSION['user_permissions']) ? normalize_permission_list($_SESSION['user_permissions']) : [];
+                        sort($db_perms, SORT_STRING);
+                        sort($sess_perms, SORT_STRING);
+                        if ($db_perms !== $sess_perms) {
+                            unset($_SESSION['user_permissions']);
+                            unset($_SESSION['user_access_level']);
+                            unset($_SESSION['user_permissions_raw']);
+                        }
+                    }
+                }
+            } else {
+                // user row missing -> clear session permissions
+                unset($_SESSION['user_permissions']);
+                unset($_SESSION['user_access_level']);
+                unset($_SESSION['user_permissions_raw']);
+            }
+        }
+    }
     if (!empty($_SESSION['user_permissions']) && is_array($_SESSION['user_permissions'])) return $_SESSION['user_permissions'];
 
     $id = resolve_user_identifier();
@@ -164,12 +246,13 @@ function get_current_user_permissions()
                 $perms = normalize_permission_list($dec);
                 $_SESSION['user_permissions'] = $perms;
                 if (!empty($level)) $_SESSION['user_access_level'] = $level;
+                $_SESSION['access_map_mtime'] = isset($GLOBALS['__access_map_file_mtime']) ? $GLOBALS['__access_map_file_mtime'] : 0;
                 return $perms;
             }
         }
 
-        // If permissions missing and user is admin (31), auto-populate full map
-        if (empty($raw) && intval($level) === 31) {
+        // If permissions missing and user is admin (-1), auto-populate full map
+        if (empty($raw) && intval($level) === -1) {
             $all = [];
             $map = load_access_map();
             foreach ($map as $lvlPerms) {
@@ -185,7 +268,8 @@ function get_current_user_permissions()
                 @$conn->query($sql);
             }
             $_SESSION['user_permissions'] = $perms;
-            $_SESSION['user_access_level'] = 31;
+            $_SESSION['user_access_level'] = intval($level);
+            $_SESSION['access_map_mtime'] = isset($GLOBALS['__access_map_file_mtime']) ? $GLOBALS['__access_map_file_mtime'] : 0;
             return $perms;
         }
 
@@ -194,6 +278,7 @@ function get_current_user_permissions()
             $perms = load_permissions_for_level(intval($level));
             $_SESSION['user_permissions'] = $perms;
             $_SESSION['user_access_level'] = intval($level);
+            $_SESSION['access_map_mtime'] = isset($GLOBALS['__access_map_file_mtime']) ? $GLOBALS['__access_map_file_mtime'] : 0;
             return $perms;
         }
     }

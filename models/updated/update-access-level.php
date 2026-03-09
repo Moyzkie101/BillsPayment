@@ -4,7 +4,22 @@ include '../../config/config.php';
 session_start();
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'admin') {
+// include permission helper so non-admin users with the sentinel (-1)
+// or explicit permission can also perform updates
+include_once __DIR__ . '/../../templates/middleware.php';
+
+$allowed = false;
+if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'admin') {
+    $allowed = true;
+}
+if (isset($_SESSION['access_level']) && intval($_SESSION['access_level']) === -1) {
+    $allowed = true;
+}
+if (function_exists('has_permission') && has_permission('Maintenance Accounts Access Levels')) {
+    $allowed = true;
+}
+
+if (!$allowed) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized access']);
     exit;
 }
@@ -120,7 +135,7 @@ function read_access_map_file($path)
         $levels = [];
         foreach ($decoded as $item) {
             $level = isset($item['access_level']) ? (int)$item['access_level'] : 0;
-            if ($level <= 0) continue;
+            if ($level === 0) continue;
             $levels[] = [
                 'access_level' => $level,
                 'permissions' => normalize_permissions(isset($item['permissions']) ? $item['permissions'] : [])
@@ -152,7 +167,7 @@ function read_access_map_file($path)
     if (isset($decoded['access_levels']) && is_array($decoded['access_levels'])) {
         foreach ($decoded['access_levels'] as $item) {
             $level = isset($item['access_level']) ? (int)$item['access_level'] : 0;
-            if ($level <= 0) continue;
+            if ($level === 0) continue;
             $levels[] = [
                 'access_level' => $level,
                 'permissions' => normalize_permissions(isset($item['permissions']) ? $item['permissions'] : [])
@@ -214,6 +229,34 @@ function flatten_catalog_keys($nodes)
     return $keys;
 }
 
+function flatten_catalog_leaf_keys($nodes)
+{
+    $keys = [];
+    if (!is_array($nodes)) {
+        return $keys;
+    }
+
+    foreach ($nodes as $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+
+        $children = isset($node['children']) && is_array($node['children']) ? $node['children'] : [];
+        if (empty($children)) {
+            if (isset($node['key']) && is_string($node['key']) && trim($node['key']) !== '') {
+                $keys[] = trim($node['key']);
+            }
+            continue;
+        }
+
+        $keys = array_merge($keys, flatten_catalog_leaf_keys($children));
+    }
+
+    $keys = array_values(array_unique($keys));
+    sort($keys, SORT_STRING);
+    return $keys;
+}
+
 try {
     $input = json_decode(file_get_contents('php://input'), true);
 
@@ -248,9 +291,18 @@ try {
         return in_array($permission, $allowedPermissions, true);
     }));
 
+    // Keep admin sentinel as-is when explicitly provided.
     $resolvedAccessLevel = $inputAccessLevel;
 
-    if (!empty($inputPermissions)) {
+    // Determine if all available leaf permissions are selected; this should map to sentinel -1.
+    $allowedLeafPermissions = flatten_catalog_leaf_keys(isset($accessMap['permission_catalog']) ? $accessMap['permission_catalog'] : []);
+    $allPermissionsSelected = !empty($allowedLeafPermissions)
+        && count($inputPermissions) === count($allowedLeafPermissions)
+        && count(array_diff($allowedLeafPermissions, $inputPermissions)) === 0;
+
+    if ($inputAccessLevel === -1 || $allPermissionsSelected) {
+        $resolvedAccessLevel = -1;
+    } elseif (!empty($inputPermissions)) {
         // Resolve using explicit map combinations first (leaf-permissions based).
         $targetKey = permissions_key($inputPermissions);
         $existingLevel = 0;
@@ -268,7 +320,7 @@ try {
         }
     }
 
-    if ($resolvedAccessLevel <= 0) {
+    if ($resolvedAccessLevel === 0) {
         echo json_encode(['success' => false, 'message' => 'Unable to resolve access level from permissions']);
         exit;
     }
@@ -337,6 +389,10 @@ try {
     if ($shouldUpdateSession) {
         $_SESSION['user_access_level'] = (int)$updatedRow['access_level'];
         $_SESSION['user_permissions'] = $inputPermissions;
+        // Keep session in sync with current access map file mtime so middleware knows it's fresh
+        $mapMtime = 0;
+        if (file_exists($mapPath)) $mapMtime = @filemtime($mapPath);
+        $_SESSION['access_map_mtime'] = $mapMtime;
     }
     // Persist explicit per-user permissions into DB column `permissions` (JSON),
     // and keep the legacy file-backed storage for backward compatibility.

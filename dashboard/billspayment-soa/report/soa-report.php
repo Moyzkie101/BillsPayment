@@ -351,6 +351,24 @@ if (isset($_SESSION['user_type'])) {
                                                             $status_class = 'badge bg-warning';
                                                     }
                                                     
+                                                    // Prepare prepared signature attribute: try to resolve stored id to actual signature image
+                                                    $prepared_sig_attr = '';
+                                                    if (!empty($row['prepared_signature'])) {
+                                                        // If the stored value appears to be an id_number, attempt to fetch blob
+                                                        $possible_id = $conn->real_escape_string($row['prepared_signature']);
+                                                        $sigRes = $conn->query("SELECT signature FROM mldb.user_sig WHERE id_number='" . $possible_id . "' LIMIT 1");
+                                                        if ($sigRes && $sigRes->num_rows) {
+                                                            $sigRow = $sigRes->fetch_assoc();
+                                                            if (!empty($sigRow['signature'])) {
+                                                                $prepared_sig_attr = 'data:image/png;base64,' . base64_encode($sigRow['signature']);
+                                                            }
+                                                        }
+                                                        if ($prepared_sig_attr === '') {
+                                                            // fallback to literal stored value
+                                                            $prepared_sig_attr = $row['prepared_signature'];
+                                                        }
+                                                    }
+
                                                     echo "<tr class='table-row-clickable' ondblclick='showSOADetails(this)' style='cursor: pointer;' 
                                                         data-status='" . htmlspecialchars($row['status']) . "'
                                                         data-date='{$formatted_date}'
@@ -375,7 +393,7 @@ if (isset($_SESSION['user_type'])) {
                                                         data-number-of-days='" . htmlspecialchars($row['numberOf_days'] ?? '0') . "'
                                                         data-add-amount='" . htmlspecialchars($row['add_amount'] ?? '0') . "'
 
-                                                        data-prepared-signature='" . htmlspecialchars($row['prepared_signature'] ?? '') . "'
+                                                        data-prepared-signature='" . htmlspecialchars($prepared_sig_attr ?? '') . "'
                                                         data-prepared-date-signature='" . htmlspecialchars($row['preparedDate_signature'] ?? '') . "'
                                                         data-created-by='" . htmlspecialchars($row['prepared_by'] ?? 'N/A') . "'
 
@@ -896,7 +914,13 @@ function showSOADetails(row) {
     const approvedElectronicDate = document.getElementById('modal-approved-electronic-date');
     const approvedForElement = document.getElementById('modal-approved-for');
     
-    if (preparedElectronicSig) preparedElectronicSig.textContent = preparedSignature || '';
+    if (preparedElectronicSig) {
+        if (preparedSignature && preparedSignature.indexOf('data:image/') === 0) {
+            preparedElectronicSig.innerHTML = '<img src="' + preparedSignature + '" alt="Prepared signature" style="max-height:72px;object-fit:contain;display:block;margin:0;" />';
+        } else {
+            preparedElectronicSig.textContent = preparedSignature || '';
+        }
+    }
     if (preparedElectronicDate) preparedElectronicDate.textContent = formatSignatureDate(preparedDateSignature);
     if (reviewedElectronicSig) reviewedElectronicSig.textContent = reviewedSignature || '';
     if (reviewedElectronicDate) reviewedElectronicDate.textContent = formatSignatureDate(reviewedDateSignature);

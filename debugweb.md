@@ -6,6 +6,8 @@ put: ?debug_access=1
 
 C:\xampp\php\php.exe tools\generate_access_map.php
 
+php tools/generate_access_map.php
+
 
 Singles + Pairs (default):
 C:\xampp\php\php.exe tools\generate_access_map.php

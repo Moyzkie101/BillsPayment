@@ -73,14 +73,14 @@ if (isset($_GET['debug_access']) && $_GET['debug_access']) {
     $__dbg_html = '<div style="position:fixed;right:12px;top:12px;background:#fff;border:1px solid #ccc;padding:8px;z-index:99999;font-size:12px;color:#111;max-width:320px;word-wrap:break-word;">'
         . '<strong>Access Debug</strong><br>'
         . 'Level: ' . $__dbg_level . '<br>'
-        . 'Permissions: ' . htmlspecialchars(json_encode($__dbg_perms, JSON_UNESCAPED_SLASHES));
+        . 'Permissions: ' . htmlspecialchars((string) json_encode($__dbg_perms, JSON_UNESCAPED_SLASHES));
     if (function_exists('access_map_debug')) {
         $__dbg_info = access_map_debug();
         $__dbg_html .= '<br><hr style="border:none;border-top:1px solid #ddd;margin:6px 0;">';
         $__dbg_html .= 'Map file exists: ' . ($__dbg_info['file_exists'] ? 'yes' : 'no') . '<br>';
         $__dbg_html .= 'Raw length: ' . intval($__dbg_info['raw_len']) . '<br>';
-        $__dbg_html .= 'JSON error: ' . htmlspecialchars($__dbg_info['json_err']) . '<br>';
-        $__dbg_html .= 'Loaded keys: ' . htmlspecialchars(json_encode($__dbg_info['keys'], JSON_UNESCAPED_SLASHES)) . '<br>';
+        $__dbg_html .= 'JSON error: ' . htmlspecialchars((string) ($__dbg_info['json_err'] ?? '')) . '<br>';
+        $__dbg_html .= 'Loaded keys: ' . htmlspecialchars((string) json_encode($__dbg_info['keys'], JSON_UNESCAPED_SLASHES)) . '<br>';
     }
     $__dbg_html .= '</div>';
     
@@ -96,6 +96,29 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <div class="onetab" onclick="parent.location='<?php echo $base_url; ?>home.php'">
         <a href="<?php echo $base_url; ?>home.php"><i class="fa-solid fa-house"></i> Home</a>
         </div>
+
+        <!-- Profile Menu -->
+            <!-- Profile Menu (visibility controlled by permissions) -->
+            <?php if (has_any_permission(['Profile View','Profile Signature'])): ?>
+            <div class="onetab" id="profile-btn">
+                <h6><i class="fa-solid fa-user"></i> Profile</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-profile" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-profile" style="display: none"></i>
+            </div>
+            <div class="onetab-sub" id="profile-nav" style="display: none;">
+                <?php if (has_permission('Profile View')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/profile/profile.php'">
+                    <a href="<?php echo $auth_url; ?>dashboard/profile/profile.php">Profile</a>
+                </div>
+                <?php endif; ?>
+
+                <?php if (has_permission('Profile Signature')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/profile/profile-signature.php'">
+                    <a href="<?php echo $auth_url; ?>dashboard/profile/profile-signature.php">Signature</a>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
 
         <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Post Transaction','BP Settlement Adjustment Entry','BP Settlement Per Bank','BP Report Volume','BP Report EDI','BP Report Transaction Details','BP Report Transaction Summary','BP Report Cancellation','BP Report Balance Sheet'])): ?>
         <!-- Show/Hide Paramount -->
@@ -242,21 +265,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         </div>
         <?php endif; ?>
 
-        <!-- Show/Hide MAA -->
-        <!-- <div class="onetab" id="maa-btn">
-        <i class="fa-solid fa-caret-right" id="closed-maa" style="display: block"></i>
-        <i class="fa-solid fa-caret-down" id="open-maa" style="display: none"></i>
-        <h6>Bookkeeper</h6>
-        </div> -->
-
-        <!-- <div class="onetab-sub" id="maa-nav" style="display: none;">
-        <div class="sub" onclick="parent.location='#'">
-            <a href="#">Bookkeeper Import</a>
-        </div>
-        <div class="sub" onclick="parent.location='#'">
-            <a href="#">Book keeper Report</a>
-        </div>
-        </div> -->
+    
 
         
         <!-- Show/Hide Billing Invoice (main) -->
@@ -510,7 +519,13 @@ const underConstructionIds = [
 ];
 
 // Add event listeners to all under construction features
-document.addEventListener('DOMContentLoaded', function() {
+(function onReady(handler){
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', handler);
+    } else {
+        handler();
+    }
+})(function() {
     underConstructionIds.forEach(function(id) {
         const element = document.getElementById(id);
         if (element) {
@@ -675,7 +690,13 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
 // Tools menu toggle: simple show/hide for the Tools submenu
-document.addEventListener('DOMContentLoaded', function() {
+(function onReady(handler){
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', handler);
+    } else {
+        handler();
+    }
+})(function() {
     var toolsBtn = document.getElementById('tools-btn');
     var toolsNav = document.getElementById('tools-nav');
     var closedTools = document.getElementById('closed-tools');
@@ -689,6 +710,33 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 toolsNav.style.display = 'none';
                 if (closedTools && openTools) { closedTools.style.display = 'block'; openTools.style.display = 'none'; }
+            }
+        });
+    }
+});
+</script>
+<script>
+// Profile menu toggle
+(function onReady(handler){
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', handler);
+    } else {
+        handler();
+    }
+})(function() {
+    var profileBtn = document.getElementById('profile-btn');
+    var profileNav = document.getElementById('profile-nav');
+    var closedProfile = document.getElementById('closed-profile');
+    var openProfile = document.getElementById('open-profile');
+    if (profileBtn && profileNav) {
+        profileBtn.addEventListener('click', function() {
+            var isHidden = window.getComputedStyle(profileNav).display === 'none';
+            if (isHidden) {
+                profileNav.style.display = 'block';
+                if (closedProfile && openProfile) { closedProfile.style.display = 'none'; openProfile.style.display = 'block'; }
+            } else {
+                profileNav.style.display = 'none';
+                if (closedProfile && openProfile) { closedProfile.style.display = 'block'; openProfile.style.display = 'none'; }
             }
         });
     }
