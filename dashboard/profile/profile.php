@@ -20,9 +20,11 @@ $level = get_user_access_level();
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>My Profile</title>
+        <link rel="icon" href="../../images/MLW%20logo.png" type="image/png">
     <link rel="stylesheet" href="../../assets/css/templates/style.css?v=<?php echo time(); ?>">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
     <style>
         /* Profile revamp styles */
         .profile-row { display:flex; gap:16px; align-items:flex-start; }

@@ -24,9 +24,12 @@ if ($stmt) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Signature</title>
+        <link rel="icon" href="../../images/MLW%20logo.png" type="image/png">
+
     <link rel="stylesheet" href="../../assets/css/templates/style.css?v=<?php echo time(); ?>">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+     
     <style>
         .file-upload-area {
             border: 3px dashed #dee2e6;
