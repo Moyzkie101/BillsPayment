@@ -126,6 +126,11 @@
                     "key": "Masterfiles View Bank List",
                     "label": "Masterfiles View Bank List",
                     "icon": "check_circle"
+                },
+                {
+                    "key": "Masterfiles View Partner List",
+                    "label": "Masterfiles View Partner List",
+                    "icon": "check_circle"
                 }
             ]
         },
@@ -304,13 +309,15 @@
         {
             "access_level": 8,
             "permissions": [
-                "Masterfiles View Bank List"
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List"
             ]
         },
         {
             "access_level": 9,
             "permissions": [
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -330,7 +337,8 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Masterfiles View Bank List"
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List"
             ]
         },
         {
@@ -349,6 +357,7 @@
                 "BP Settlement Per Bank",
                 "Bills Payment",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -361,7 +370,8 @@
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Masterfiles View Bank List"
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List"
             ]
         },
         {
@@ -373,6 +383,7 @@
                 "Invoice Approval",
                 "Invoice Review",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -397,7 +408,8 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Masterfiles View Bank List"
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List"
             ]
         },
         {
@@ -421,6 +433,7 @@
                 "Invoice Approval",
                 "Invoice Review",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -598,7 +611,8 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List"
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List"
             ]
         },
         {
@@ -611,6 +625,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -636,7 +651,8 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List"
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List"
             ]
         },
         {
@@ -661,6 +677,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -679,7 +696,8 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List"
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List"
             ]
         },
         {
@@ -697,6 +715,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -727,7 +746,8 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List"
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List"
             ]
         },
         {
@@ -757,6 +777,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -905,6 +926,7 @@
             "access_level": 40,
             "permissions": [
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -914,6 +936,7 @@
             "access_level": 41,
             "permissions": [
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -937,6 +960,7 @@
                 "BP Settlement Per Bank",
                 "Bills Payment",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -958,6 +982,7 @@
                 "BP Settlement Per Bank",
                 "Bills Payment",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -974,6 +999,7 @@
                 "Invoice Approval",
                 "Invoice Review",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -988,6 +1014,7 @@
                 "Invoice Approval",
                 "Invoice Review",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -1016,6 +1043,7 @@
                 "Invoice Approval",
                 "Invoice Review",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -1042,6 +1070,7 @@
                 "Invoice Approval",
                 "Invoice Review",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -1247,6 +1276,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -1262,6 +1292,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -1291,6 +1322,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -1318,6 +1350,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -1340,6 +1373,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -1360,6 +1394,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -1394,6 +1429,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -1426,6 +1462,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -1460,6 +1497,7 @@
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
