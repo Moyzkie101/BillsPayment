@@ -1045,6 +1045,11 @@ const partnerMaster = [
     partner_name: "GREEN VALLEY COLLEGE FOUNDATION INC."
   },
   {
+    partner_id: NaN,
+    partner_id_kpx: "2898",
+    partner_name: "GSIS"
+  },
+  {
     partner_id: "MLBPP190509",
     partner_id_kpx: "307",
     partner_name: "GUIMARAS ELECTRIC COOPERATIVE"
@@ -1655,6 +1660,11 @@ const partnerMaster = [
     partner_name: "LCG MARKETING-CAGAYAN 51"
   },
   {
+    partner_id: "MLBPP200731",
+    partner_id_kpx: null,
+    partner_name: "LCG MARKETING PHILIPPINE CORPORATION"
+  },
+  {
     partner_id: "MLBPP210819",
     partner_id_kpx: "457",
     partner_name: "LDS - SAR (SPECIAL ACCOUNT RECEIVABLE)"
@@ -1753,6 +1763,11 @@ const partnerMaster = [
     partner_id: "MLBPP150119",
     partner_id_kpx: null,
     partner_name: "MA. CORAZON JULIE'S BAKESHOP"
+  },
+  {
+    partner_id: "MLBPP150119",
+    partner_id_kpx: null,
+    partner_name: "MA. CORAZON JULIES BAKESHOP"
   },
   {
     partner_id: "MLBPP180500",
@@ -2111,7 +2126,7 @@ const partnerMaster = [
   },
   {
     partner_id: null,
-    partner_id_kpx: 1074,
+    partner_id_kpx: "1074",
     partner_name: "MYLORA CORPORATION"
   },
   {
