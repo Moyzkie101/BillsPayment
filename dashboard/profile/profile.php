@@ -142,35 +142,6 @@ $(function(){
 });
 </script>
 
+<?php include '../../templates/footer.php'; ?>
 </body>
 </html>
-
-<script>
-// Localized sidebar toggle for this page only
-document.addEventListener('DOMContentLoaded', function() {
-    var menubtn = document.getElementById('menu-btn');
-    var sidemenu = document.getElementById('sidemenu');
-    if (!menubtn || !sidemenu) return;
-
-    menubtn.addEventListener('click', function(e){
-        e.stopPropagation();
-        var isHidden = window.getComputedStyle(sidemenu).display === 'none' || sidemenu.style.display === 'none';
-        if (isHidden) {
-            sidemenu.style.animation = 'slide-in-from-left 0.5s ease';
-            sidemenu.style.display = 'block';
-        } else {
-            sidemenu.style.animation = 'slide-out-to-left 0.5s ease';
-            setTimeout(function(){ sidemenu.style.display = 'none'; }, 450);
-        }
-    });
-
-    document.addEventListener('click', function(ev){
-        try {
-            if (!sidemenu.contains(ev.target) && !menubtn.contains(ev.target) && sidemenu.style.display === 'block') {
-                sidemenu.style.animation = 'slide-out-to-left 0.5s ease';
-                setTimeout(function(){ sidemenu.style.display = 'none'; }, 450);
-            }
-        } catch(e){}
-    });
-});
-</script>

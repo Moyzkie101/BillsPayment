@@ -519,7 +519,13 @@ const underConstructionIds = [
 ];
 
 // Add event listeners to all under construction features
-document.addEventListener('DOMContentLoaded', function() {
+(function onReady(handler){
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', handler);
+    } else {
+        handler();
+    }
+})(function() {
     underConstructionIds.forEach(function(id) {
         const element = document.getElementById(id);
         if (element) {
@@ -684,7 +690,13 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
 // Tools menu toggle: simple show/hide for the Tools submenu
-document.addEventListener('DOMContentLoaded', function() {
+(function onReady(handler){
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', handler);
+    } else {
+        handler();
+    }
+})(function() {
     var toolsBtn = document.getElementById('tools-btn');
     var toolsNav = document.getElementById('tools-nav');
     var closedTools = document.getElementById('closed-tools');
@@ -704,7 +716,14 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+// Profile menu toggle
+(function onReady(handler){
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', handler);
+    } else {
+        handler();
+    }
+})(function() {
     var profileBtn = document.getElementById('profile-btn');
     var profileNav = document.getElementById('profile-nav');
     var closedProfile = document.getElementById('closed-profile');
