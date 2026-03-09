@@ -356,7 +356,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         </div>
         <?php endif; ?>
 
-        <?php if (has_permission('Masterfiles View Bank List')): ?>
+        <?php if (has_any_permission(['Masterfiles View Partner List','Masterfiles View Bank List'])): ?>
         <!-- Show/Hide Set Masterfiles Main-menu -->
         <div class="onetab" id="masterfiles-btn">
             <h6><i class="fa-solid fa-layer-group"></i> Masterfiles</h6>
@@ -379,9 +379,16 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         </div> -->
         <!-- Set Masterfiles Bank List Buttons -->
         <div class="onetab-sub" id="set-masterfile-bank-nav" style="display: none;">
+            <?php if (has_permission('Masterfiles View Partner List')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>masterfiles/view/view-partner-list.php'">
+                <a href="<?php echo $base_url; ?>masterfiles/view/view-partner-list.php" id="partner-list-link"><i class="fa-solid fa-receipt"></i> Partner List</a>
+            </div>
+            <?php endif; ?>
+            <?php if (has_permission('Masterfiles View Bank List')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>masterfiles/view/view-bank-list.php'">
                 <a href="<?php echo $base_url; ?>masterfiles/view/view-bank-list.php"><i class="fa-solid fa-receipt"></i> Bank List</a>
             </div>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
 
