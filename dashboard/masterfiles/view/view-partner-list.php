@@ -52,80 +52,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_partner_list') {
     }
 }
 
-// update partner handler (AJAX)
-if (isset($_POST['action']) && $_POST['action'] === 'update_partner') {
-    header('Content-Type: application/json');
-    try {
-        $partnerId = isset($_POST['partner_id']) ? $_POST['partner_id'] : null;
-        $updatesJson = isset($_POST['updates']) ? $_POST['updates'] : null;
-        if (!$partnerId || !$updatesJson) {
-            throw new Exception('Missing parameters');
-        }
-
-        $updates = json_decode($updatesJson, true);
-        if (!is_array($updates) || empty($updates)) {
-            throw new Exception('No updates provided');
-        }
-
-        // allowlist fields to update
-        $allowed = [
-            'partner_id_kpx','partner_type','gl_code','partner_name','inc_exc','withheld','partnerTin',
-            'address','businessStyle','abbreviation','series_number','partner_accName','bank_accNumber',
-            'bank','settled_online_check','settled_sched','charge_to','charge_sched','serviceCharge',
-            'payment_option','transaction_range','transaction_path','status'
-        ];
-
-        $setParts = [];
-        $params = [];
-        $types = '';
-        foreach ($updates as $k => $v) {
-            if (in_array($k, $allowed, true)) {
-                $setParts[] = "`$k` = ?";
-                $params[] = $v;
-                $types .= 's';
-            }
-        }
-
-        if (empty($setParts)) {
-            throw new Exception('No valid fields to update');
-        }
-
-        $params[] = $partnerId;
-        $types .= 's';
-
-        $sql = "UPDATE masterdata.partner_masterfile SET " . implode(', ', $setParts) . " WHERE partner_id = ?";
-        $stmt = $conn->prepare($sql);
-        if (!$stmt) throw new Exception('Prepare failed: ' . $conn->error);
-
-        // bind params dynamically
-        $bindNames = [];
-        $bindNames[] = & $types;
-        for ($i = 0; $i < count($params); $i++) {
-            $bindNames[] = & $params[$i];
-        }
-        call_user_func_array([$stmt, 'bind_param'], $bindNames);
-
-        if (!$stmt->execute()) {
-            throw new Exception('Execute failed: ' . $stmt->error);
-        }
-
-        // fetch updated row
-        $sel = $conn->prepare('SELECT * FROM masterdata.partner_masterfile WHERE partner_id = ? LIMIT 1');
-        $sel->bind_param('s', $partnerId);
-        $sel->execute();
-        $res = $sel->get_result();
-        $updated = $res->fetch_assoc();
-        $sel->close();
-        $stmt->close();
-
-        echo json_encode(['status' => 'success', 'data' => $updated]);
-        exit();
-    } catch (Exception $e) {
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
-        exit();
-    }
-}
-
 ?>
 
 <!DOCTYPE html>
@@ -182,13 +108,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_partner') {
         .partner-detail-val { color:#0f172a; font-size:14px; word-break:break-word; }
         @media (max-width:700px) { .partner-details-grid { grid-template-columns: 1fr; } #partnerModal { width:96%; } }
         #partnerModal .modal-footer { padding:12px 20px; border-top:1px solid #f1f5f9; display:flex; justify-content:flex-end; gap:8px; background:#fff; }
-        .btn-ghost { background:transparent; border:1px solid #e2e8f0; color:#0f172a; padding:8px 12px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition: all 160ms ease; }
-        .btn-ghost .btn-label { font-weight:600; font-size:13px; }
-        .btn-ghost:hover { background:#f8fafc; transform:translateY(-2px); box-shadow:0 6px 18px rgba(2,6,23,0.06); }
-        .btn-primary { background:#0ea5a4; border:0; color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition: all 160ms ease; }
-        .btn-primary:hover { filter:brightness(0.95); transform:translateY(-1px); }
-        .modal-close { transition: all 140ms ease; }
-        .modal-close:hover { transform:translateY(-1px); color:#0b1220; }
+        .btn-ghost { background:transparent; border:1px solid #e2e8f0; color:#0f172a; padding:8px 12px; border-radius:8px; cursor:pointer; }
+        .btn-primary { background:#0ea5a4; border:0; color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; }
     </style>
 </head>
 <body>
@@ -261,7 +182,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_partner') {
                                             </div>
                                             <div class="modal-actions">
                                                 <span id="partnerStatusBadge" class="partner-status-badge badge-other">&nbsp;</span>
-                                                <button type="button" class="btn-ghost" id="partnerModalEditBtn" title="Edit"><i class="fa fa-pen"></i><span class="btn-label"> Edit</span></button>
                                                 <button type="button" class="modal-close" id="partnerModalClose" aria-label="Close">×</button>
                                             </div>
                                         </div>
@@ -535,7 +455,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_partner') {
                 html += `
                     <div class="partner-detail">
                         <div class="partner-detail-key">${escapeHtml(label)}</div>
-                        <div class="partner-detail-val" data-key="${escapeHtml(key)}">${escapeHtml(val)}</div>
+                        <div class="partner-detail-val">${escapeHtml(val)}</div>
                     </div>
                 `;
             });
@@ -549,79 +469,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_partner') {
 
             // Wire copy button
             $('#partnerModalCopyBtn').off('click').on('click', function () { copyPartnerDetails(partner); });
-
-        // edit / save button toggles based on whether inputs are present
-            $('#partnerModalEditBtn').off('click').on('click', function () {
-            if ($('#partnerModalBody').find('.modal-edit-input').length) {
-                savePartnerEdits(partner);
-            } else {
-                enterEditMode(partner);
-            }
-        });
-
-        function enterEditMode(partner) {
-            $('#partnerModalEditBtn').html('<i class="fa fa-check"></i><span class="btn-label"> Save</span>').attr('title', 'Save').attr('data-editing','1');
-            // turn values into inputs
-            $('#partnerModalBody').find('.partner-detail-val').each(function () {
-                const $val = $(this);
-                const key = $val.data('key');
-                const text = $val.text();
-                if (key === 'address') {
-                    $val.html(`<textarea class="modal-edit-input" data-key="${escapeHtml(key)}" style="width:100%;min-height:64px">${escapeHtml(text)}</textarea>`);
-                } else {
-                    $val.html(`<input class="modal-edit-input" data-key="${escapeHtml(key)}" type="text" value="${escapeHtml(text)}" style="width:100%">`);
-                }
-            });
-        }
-
-        function savePartnerEdits(partner) {
-                const updates = {};
-                $('#partnerModalBody').find('.modal-edit-input').each(function() {
-                    const $i = $(this);
-                    const k = $i.data('key');
-                    const v = $i.val();
-                    updates[k] = v;
-                });
-                // disable button
-                $('#partnerModalEditBtn').prop('disabled', true).addClass('disabled');
-                $.ajax({
-                    url: 'masterfile-partner-list.php',
-                    method: 'POST',
-                    dataType: 'json',
-                    data: {
-                        action: 'update_partner',
-                        partner_id: partner.partner_id || partner.id,
-                        updates: JSON.stringify(updates)
-                    },
-                    success: function(resp) {
-                        if (resp && resp.status === 'success' && resp.data) {
-                            // update local copy
-                            const updated = resp.data;
-                            // replace in allPartners
-                            for (let i=0;i<allPartners.length;i++) {
-                                if (String(allPartners[i].partner_id) === String(updated.partner_id) || String(allPartners[i].id) === String(updated.id)) {
-                                    allPartners[i] = updated;
-                                    break;
-                                }
-                            }
-                            filteredPartners = allPartners.slice();
-                            renderTableRowsPaged();
-                            // reset edit button UI then refresh modal content
-                            $('#partnerModalEditBtn').html('<i class="fa fa-pen"></i><span class="btn-label"> Edit</span>').attr('title','Edit').removeAttr('data-editing');
-                            showPartnerModal(updated);
-                            Swal.fire({ toast:true, position:'top-end', timer:1200, showConfirmButton:false, icon:'success', title:'Saved' });
-                        } else {
-                            Swal.fire({ icon:'error', title:'Save Failed', text: (resp && resp.message) ? resp.message : 'Unable to save changes.' });
-                        }
-                    },
-                    error: function() {
-                        Swal.fire({ icon:'error', title:'Save Failed', text: 'Unable to save changes.' });
-                    },
-                    complete: function() {
-                        $('#partnerModalEditBtn').prop('disabled', false).removeClass('disabled');
-                    }
-                });
-            }
         }
 
         function copyPartnerDetails(partner) {
@@ -667,7 +514,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_partner') {
 
         function loadPartnerTableData() {
             $.ajax({
-                url: 'masterfile-partner-list.php',
+                url: 'view-partner-list.php',
                 method: 'POST',
                 dataType: 'json',
                 data: {

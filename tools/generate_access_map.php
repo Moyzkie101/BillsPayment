@@ -562,6 +562,41 @@ if (!@rename($tmpPath, $mapPath)) {
 }
 
 $finalSize = @filesize($mapPath);
+// Print generated summary and a hierarchical listing of the permission catalog
 echo "Generated new menu-based access level map with " . count($accessLevels) . " entries.\n";
 echo "Wrote to: $mapPath (bytes: " . ($finalSize === false ? 'unknown' : $finalSize) . ")\n";
+
+// Helper to print the catalog in a Menu >> Submenu >>> Child style
+function print_catalog_hierarchy($catalog)
+{
+    if (!is_array($catalog) || empty($catalog)) {
+        echo "(permission catalog is empty)\n";
+        return;
+    }
+
+    foreach ($catalog as $root) {
+        if (!is_array($root)) continue;
+        $rootLabel = isset($root['label']) && trim($root['label']) !== '' ? $root['label'] : (isset($root['key']) ? $root['key'] : '(unnamed)');
+        echo $rootLabel . "\n";
+
+        if (isset($root['children']) && is_array($root['children']) && !empty($root['children'])) {
+            foreach ($root['children'] as $child) {
+                $childLabel = isset($child['label']) && trim($child['label']) !== '' ? $child['label'] : (isset($child['key']) ? $child['key'] : '(unnamed)');
+                echo ">> " . $childLabel . "\n";
+
+                // deeper level if present
+                if (isset($child['children']) && is_array($child['children']) && !empty($child['children'])) {
+                    foreach ($child['children'] as $sub) {
+                        $subLabel = isset($sub['label']) && trim($sub['label']) !== '' ? $sub['label'] : (isset($sub['key']) ? $sub['key'] : '(unnamed)');
+                        echo ">>> " . $subLabel . "\n";
+                    }
+                }
+            }
+        }
+    }
+}
+
+echo "\nPermission catalog (Menu >> Submenu >>> Child):\n";
+print_catalog_hierarchy($permissionCatalog);
+
 exit(0);
