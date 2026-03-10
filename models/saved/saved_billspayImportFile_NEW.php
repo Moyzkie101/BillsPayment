@@ -687,6 +687,7 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
             $fileName = $_FILES['files']['name'][$i];
             $partnerId = $_POST['partner_ids'][$i] ?? '';
             $sourceType = $_POST['source_types'][$i] ?? '';
+            $billersName = $_POST['billers_names'][$i] ?? '';
             
             // Generate unique ID for temp storage
             $fileId = uniqid('file_', true);
@@ -696,7 +697,7 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
             // Move uploaded file to temp directory
             if (move_uploaded_file($tmpPath, $tempPath)) {
                 // Get partner name from database
-                $partnerName = getPartnerName($conn, $partnerId);
+                $partnerName = getPartnerName($conn, $partnerId, $sourceType);
                 // capture report date if client provided one
                 $reportDateRaw = $_POST['report_dates'][$i] ?? '';
                 $reportDate = null;
@@ -711,6 +712,7 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
                     'path' => $tempPath,
                     'partner_id' => $partnerId,
                     'partner_name' => $partnerName,
+                    'billers_name' => $billersName,
                     'source_type' => $sourceType,
                     'report_date_raw' => $reportDateRaw,
                     'report_date' => $reportDate,
@@ -1000,7 +1002,12 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
 // Helper Functions
 // ============================================================================
 
-function getPartnerName($conn, $partnerId) {
+function getPartnerName($conn, $partnerId, $sourceType = '') {
+    $isKpx1074 = (strtoupper((string)$sourceType) === 'KPX' && trim((string)$partnerId) === '1074');
+    if ($isKpx1074) {
+        return 'SECURITY BANK';
+    }
+
     $query = "SELECT partner_name FROM masterdata.partner_masterfile 
               WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1";
     $stmt = $conn->prepare($query);
@@ -1143,11 +1150,20 @@ function validateFileFast($conn, $filePath, $sourceType, $partnerId) {
         // Quick partner check
         $partnerData = null;
         if ($partnerId !== 'All') {
-            $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name 
-                           FROM masterdata.partner_masterfile 
-                           WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1";
-            $stmt = $conn->prepare($partnerQuery);
-            $stmt->bind_param("ss", $partnerId, $partnerId);
+            $isKpx1074 = (strtoupper((string)$sourceType) === 'KPX' && trim((string)$partnerId) === '1074');
+            if ($isKpx1074) {
+                $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name 
+                               FROM masterdata.partner_masterfile 
+                               WHERE partner_id_kpx = ? AND partner_name = 'SECURITY BANK' LIMIT 1";
+                $stmt = $conn->prepare($partnerQuery);
+                $stmt->bind_param("s", $partnerId);
+            } else {
+                $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name 
+                               FROM masterdata.partner_masterfile 
+                               WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1";
+                $stmt = $conn->prepare($partnerQuery);
+                $stmt->bind_param("ss", $partnerId, $partnerId);
+            }
             $stmt->execute();
             $result = $stmt->get_result();
             
@@ -1372,11 +1388,20 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
         // Validate partner exists and get partner data
         $partnerData = null;
         if ($partnerId !== 'All') {
-            $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name 
-                           FROM masterdata.partner_masterfile 
-                           WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1";
-            $stmt = $conn->prepare($partnerQuery);
-            $stmt->bind_param("ss", $partnerId, $partnerId);
+            $isKpx1074 = (strtoupper((string)$sourceType) === 'KPX' && trim((string)$partnerId) === '1074');
+            if ($isKpx1074) {
+                $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name 
+                               FROM masterdata.partner_masterfile 
+                               WHERE partner_id_kpx = ? AND partner_name = 'SECURITY BANK' LIMIT 1";
+                $stmt = $conn->prepare($partnerQuery);
+                $stmt->bind_param("s", $partnerId);
+            } else {
+                $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name 
+                               FROM masterdata.partner_masterfile 
+                               WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1";
+                $stmt = $conn->prepare($partnerQuery);
+                $stmt->bind_param("ss", $partnerId, $partnerId);
+            }
             $stmt->execute();
             $result = $stmt->get_result();
             
@@ -1748,11 +1773,20 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         $errors = [];
 
         // Get partner data
-        $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name 
-                        FROM masterdata.partner_masterfile 
-                        WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1";
-        $stmt = $conn->prepare($partnerQuery);
-        $stmt->bind_param("ss", $partnerId, $partnerId);
+        $isKpx1074 = (strtoupper((string)$sourceType) === 'KPX' && trim((string)$partnerId) === '1074');
+        if ($isKpx1074) {
+            $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name 
+                            FROM masterdata.partner_masterfile 
+                            WHERE partner_id_kpx = ? AND partner_name = 'SECURITY BANK' LIMIT 1";
+            $stmt = $conn->prepare($partnerQuery);
+            $stmt->bind_param("s", $partnerId);
+        } else {
+            $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name 
+                            FROM masterdata.partner_masterfile 
+                            WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1";
+            $stmt = $conn->prepare($partnerQuery);
+            $stmt->bind_param("ss", $partnerId, $partnerId);
+        }
         $stmt->execute();
         $partnerResult = $stmt->get_result();
         $partnerData = $partnerResult->fetch_assoc();
@@ -1768,7 +1802,11 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         $PartnerID = $partnerData['partner_id'];
         $PartnerID_KPX = $partnerData['partner_id_kpx'];
         $GLCode = $partnerData['gl_code'];
-        $PartnerName = $partnerData['partner_name'];
+        $PartnerName = $isKpx1074 ? 'SECURITY BANK' : $partnerData['partner_name'];
+        $BillersName = '';
+        if ($isKpx1074 && is_array($fileMeta) && !empty($fileMeta['billers_name'])) {
+            $BillersName = trim((string)$fileMeta['billers_name']);
+        }
 
         // Read row 9 column headers
         $getColumnLabels = [];
@@ -2170,6 +2208,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 'region_description' => $region_description,
                 'person_operator' => $person_operator,
                 'partner_name' => $PartnerName,
+                'billers_name' => $BillersName,
                 'partner_id' => $PartnerID,
                 'PartnerID_KPX' => $PartnerID_KPX,
                 'GLCode' => $GLCode,
@@ -2273,6 +2312,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             region, 
             operator, 
             partner_name, 
+            billers_name,
             partner_id, 
             partner_id_kpx,
             mpm_gl_code,
@@ -2286,7 +2326,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             remote_branch, 
             remote_operator, 
             post_transaction
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         $insertStmt = $conn->prepare($insertSQL);
         
@@ -2537,6 +2577,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $b_region_description = $row['region_description'] ?? null;
             $b_person_operator = $row['person_operator'] ?? null;
             $b_partner_name = $row['partner_name'] ?? null;
+            $b_billers_name = $row['billers_name'] ?? null;
             $b_partner_id = $row['partner_id'] ?? null;
             $b_partner_id_kpx = $row['PartnerID_KPX'] ?? null;
             $b_gl_code = $row['GLCode'] ?? null;
@@ -2576,6 +2617,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 $b_region_description,
                 $b_person_operator,
                 $b_partner_name,
+                $b_billers_name,
                 $b_partner_id,
                 $b_partner_id_kpx,
                 $b_gl_code,
@@ -3243,6 +3285,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <tr><th>KPX Partner ID:</th><td>${partnerData.partner_id_kpx || 'N/A'}</td></tr>
                             <tr><th>GL Code:</th><td>${partnerData.gl_code || 'N/A'}</td></tr>
                             <tr><th>Source Type:</th><td><span class="badge badge-${(sourceType || 'unknown').toLowerCase()}">${sourceType}</span></td></tr>
+                            ${((sourceType || '').toUpperCase() === 'KPX' && String(partnerData.partner_id_kpx || fileData.partner_id || '') === '1074' && (fileData.billers_name || '').trim() !== '') ? `<tr><th>Billers Name:</th><td>${fileData.billers_name}</td></tr>` : ''}
                             <tr><th>Report Date:</th><td>${(validation && (validation.report_date || validation.report_date_raw)) ? (validation.report_date || validation.report_date_raw) : (fileData.report_date || fileData.report_date_raw || '')}</td></tr>
                             <tr><th>Transaction Date:</th><td>${validation.transaction_start_date ? ('Start Date: ' + validation.transaction_start_date + (validation.transaction_end_date ? ' - End Date: ' + validation.transaction_end_date : '')) : transactionDate}</td></tr>
                             <tr><th>Total Rows:</th><td>${validation.row_count || 0}</td></tr>
@@ -3593,6 +3636,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                     <th style="background-color: #f8f9fa;"><i class="fa-solid fa-building" style="color: #d63384;"></i> Partner Name</th>
                                     <td><strong>${partnerData.partner_name || fileData.partner_name || 'N/A'}</strong></td>
                                 </tr>
+                                ${((sourceType || '').toUpperCase() === 'KPX' && String(partnerData.partner_id_kpx || fileData.partner_id || '') === '1074' && (fileData.billers_name || '').trim() !== '') ? `<tr><th style="background-color: #f8f9fa;"><i class="fa-solid fa-file-signature" style="color: #198754;"></i> Billers Name</th><td><strong>${fileData.billers_name}</strong></td></tr>` : ''}
                                 <tr>
                                     <th style="background-color: #f8f9fa;"><i class="fa-solid fa-list" style="color: #fd7e14;"></i> No. of Data Rows Uploaded</th>
                                     <td><strong>${totalRowsUploaded}</strong></td>
