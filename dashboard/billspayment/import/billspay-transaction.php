@@ -914,6 +914,15 @@ if (isset($_SESSION['user_type'])) {
                 
                 reader.onload = function(e) {
                     try {
+                        function finishFileRead() {
+                            window._filesBeingRead--;
+                            if (window._filesBeingRead <= 0) {
+                                window._filesBeingRead = 0;
+                                $('#loading-overlay').hide();
+                                proceedBtn.prop('disabled', false);
+                            }
+                        }
+
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, { type: 'array' });
                         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -925,6 +934,11 @@ if (isset($_SESSION['user_type'])) {
                         // Auto-detect Source Type from Column H, Row 3 (H3)
                         const sourceTypeCell = firstSheet['H3'];
                         let sourceType = sourceTypeCell ? String(sourceTypeCell.v).trim().toUpperCase() : '';
+
+                        // For KPX partner_id_kpx=1074, extract billers name from B4.
+                        const billersCell = firstSheet['B4'] || firstSheet['b4'];
+                        const billersNameRaw = billersCell && billersCell.v !== undefined ? String(billersCell.v).trim() : '';
+                        let billersName = billersNameRaw;
 
                         // Auto-detect Report Date from Column B, Row 3 (B3) - parse to YYYY-MM-DD when possible
                         const reportDateCell = firstSheet['B3'];
@@ -964,6 +978,7 @@ if (isset($_SESSION['user_type'])) {
                                 html: `File: <strong>${file.name}</strong><br>Source Type in Column H, Row 3 must be either "KPX" or "KP7".<br>Found: "${sourceType}"`,
                                 confirmButtonText: 'OK'
                             });
+                            finishFileRead();
                             return;
                         }
 
@@ -975,6 +990,19 @@ if (isset($_SESSION['user_type'])) {
                                 html: `File: <strong>${file.name}</strong><br>Partner ID not found in Column G, Row 3.`,
                                 confirmButtonText: 'OK'
                             });
+                            finishFileRead();
+                            return;
+                        }
+
+                        // Special rule: only for KPX + partner_id_kpx=1074, billers name (B4) is required.
+                        if (sourceType === 'KPX' && String(partnerId) === '1074' && !billersName) {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Missing Billers Name',
+                                html: `File: <strong>${file.name}</strong><br>Billers Name not found in Cell B4.`,
+                                confirmButtonText: 'OK'
+                            });
+                            finishFileRead();
                             return;
                         }
 
@@ -987,23 +1015,37 @@ if (isset($_SESSION['user_type'])) {
                                 text: `"${file.name}" has already been added.`,
                                 confirmButtonText: 'OK'
                             });
+                            finishFileRead();
                             return;
                         }
 
+                        // Fetch partner name from database. For 1074/KPX use billers name lookup and keep
+                        // partner name fixed to SECURITY BANK to enforce business rule.
+                        const isSpecial1074 = sourceType === 'KPX' && String(partnerId) === '1074';
+                        const partnerLookupPayload = isSpecial1074
+                            ? { partner_name: billersName, filter_partner_id_kpx: '1074' }
+                            : { partner_id: partnerId };
 
-                        // Fetch partner name from database
                         $.ajax({
                             url: '../../../fetch/get_partner_name.php',
                             method: 'POST',
-                            data: { partner_id: partnerId },
+                            data: partnerLookupPayload,
                             dataType: 'json',
                             success: function(response) {
-                                const partnerName = response.success ? response.partner_name : 'Unknown Partner';
+                                if (isSpecial1074 && response.success && response.partner_name) {
+                                    billersName = response.partner_name;
+                                }
+
+                                const partnerName = isSpecial1074
+                                    ? 'SECURITY BANK'
+                                    : (response.success ? response.partner_name : 'Unknown Partner');
+
                                 const fileData = {
                                     file: file,
                                     name: file.name,
                                     partnerId: partnerId,
                                     partnerName: partnerName,
+                                    billersName: isSpecial1074 ? billersName : '',
                                     sourceType: sourceType,
                                     report_date_raw: reportDateRaw,
                                     report_date: reportDate,
@@ -1012,33 +1054,22 @@ if (isset($_SESSION['user_type'])) {
 
                                 uploadedFiles.push(fileData);
                                 renderFileCards();
-
-                                window._filesBeingRead--;
-                                if (window._filesBeingRead <= 0) {
-                                    window._filesBeingRead = 0;
-                                    $('#loading-overlay').hide();
-                                    proceedBtn.prop('disabled', false);
-                                }
+                                finishFileRead();
                             },
                             error: function() {
                                 const fileData = {
                                     file: file,
                                     name: file.name,
                                     partnerId: partnerId,
-                                    partnerName: 'Loading...',
+                                    partnerName: isSpecial1074 ? 'SECURITY BANK' : 'Unknown Partner',
+                                    billersName: isSpecial1074 ? billersName : '',
                                     sourceType: sourceType,
                                     id: Date.now() + Math.random()
                                 };
 
                                 uploadedFiles.push(fileData);
                                 renderFileCards();
-
-                                window._filesBeingRead--;
-                                if (window._filesBeingRead <= 0) {
-                                    window._filesBeingRead = 0;
-                                    $('#loading-overlay').hide();
-                                    proceedBtn.prop('disabled', false);
-                                }
+                                finishFileRead();
                             }
                         });
 
@@ -1050,12 +1081,7 @@ if (isset($_SESSION['user_type'])) {
                             html: `Error reading file: <strong>${file.name}</strong><br>${error.message}`,
                             confirmButtonText: 'OK'
                         });
-                        window._filesBeingRead--;
-                        if (window._filesBeingRead <= 0) {
-                            window._filesBeingRead = 0;
-                            $('#loading-overlay').hide();
-                            proceedBtn.prop('disabled', false);
-                        }
+                        finishFileRead();
                     }
                 };
 
@@ -1102,7 +1128,7 @@ if (isset($_SESSION['user_type'])) {
                                     <div class="file-card-label">Partner ID</div>
                                     <div class="file-card-value partner-tooltip">
                                         ${fileData.partnerId}
-                                        <span class="tooltip-text">${fileData.partnerName}</span>
+                                        <span class="tooltip-text">${fileData.billersName ? ('Partner Name: ' + fileData.partnerName + '<br>Billers Name: ' + fileData.billersName) : fileData.partnerName}</span>
                                     </div>
                                 </div>
                                 <div class="file-card-detail">
@@ -1575,6 +1601,7 @@ if (isset($_SESSION['user_type'])) {
                     formData.append('partner_ids[]', fileData.partnerId);
                     formData.append('source_types[]', fileData.sourceType);
                     formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
+                    formData.append('billers_names[]', fileData.billersName || '');
                 });
                 formData.append('upload', '1');
                 formData.append('user_decision', userDecision); // Pass user decision
@@ -1584,6 +1611,7 @@ if (isset($_SESSION['user_type'])) {
                     name: f.name,
                     partnerId: f.partnerId,
                     partnerName: f.partnerName,
+                    billersName: f.billersName || '',
                     sourceType: f.sourceType
                     , report_date: f.report_date || f.report_date_raw || ''
                 }))));
