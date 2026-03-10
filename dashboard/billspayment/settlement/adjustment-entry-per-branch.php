@@ -101,7 +101,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                   FROM mldb.billspayment_transaction AS bt
                   WHERE (bt.status IS NULL OR bt.status <> '*')
                     AND (bt.post_transaction IS NULL OR bt.post_transaction <> 'posted')
-                    AND bt.settle_unsettle IS NULL
+                    AND (
+                        bt.settle_unsettle IS NULL
+                        OR TRIM(bt.settle_unsettle) = ''
+                        OR UPPER(TRIM(bt.settle_unsettle)) = 'UNSETTLE'
+                    )
                     AND bt.reference_no LIKE ?
                   ORDER BY bt.datetime ASC, bt.reference_no ASC";
 
@@ -210,7 +214,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
               WHERE $dateCondition
                                 AND (bt.status IS NULL OR bt.status <> '*')
                 AND (bt.post_transaction IS NULL OR bt.post_transaction <> 'posted')
-                AND bt.settle_unsettle IS NULL";
+                AND (
+                    bt.settle_unsettle IS NULL
+                    OR TRIM(bt.settle_unsettle) = ''
+                    OR UPPER(TRIM(bt.settle_unsettle)) = 'UNSETTLE'
+                )";
 
     if ($partner !== '' && $partner !== 'All') {
         if (!empty($partnerIds)) {
@@ -296,6 +304,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'submit_changes') {
             'reference_number' => $referenceNumber,
             'transaction_datetime' => $transactionDatetime,
             'reason_note' => $reasonNote,
+            'posting_date' => isset($item['posting_date']) ? trim((string)$item['posting_date']) : '',
             'payor' => isset($item['payor']) ? trim((string)$item['payor']) : '',
             'address' => isset($item['address']) ? trim((string)$item['address']) : '',
             'account_no' => isset($item['account_no']) ? trim((string)$item['account_no']) : '',
@@ -399,6 +408,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         prev_outlet,
                                         prev_operator,
                                         partner_name, partner_id, partner_id_kpx,
+                                        posting_date,
                                         reason_note, modified_by, modified_date
                                 )
                                 SELECT
@@ -415,6 +425,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         bt.outlet,
                                         bt.operator,
                                         bt.partner_name, bt.partner_id, bt.partner_id_kpx,
+                                        ?,
                                         ?, ?, NOW()
                                 FROM mldb.billspayment_transaction bt
                                 WHERE bt.reference_no = ?
@@ -441,6 +452,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         prev_outlet,
                                         prev_operator,
                                         partner_name, partner_id, partner_id_kpx,
+                        posting_date,
                                         reason_note, modified_by, modified_date
                                 )
                                 SELECT
@@ -457,6 +469,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         bt.outlet,
                                         bt.operator,
                                         bt.partner_name, bt.partner_id, bt.partner_id_kpx,
+                                        ?,
                                         ?, ?, NOW()
                                 FROM mldb.billspayment_transaction bt
                                 WHERE bt.reference_no = ?
@@ -476,20 +489,18 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                                                         LIMIT 1";
 
         $updateLatePostingSql = "UPDATE mldb.billspayment_transaction
-                                                                SET settle_unsettle = 'settle'
-                                                            WHERE post_transaction = 'unposted'
-                                                                AND datetime = ?
+                                                                SET settle_unsettle = 'Settle'
+                                                            WHERE datetime = ?
                                                                 AND reference_no = ?
                                                                 AND (partner_id = ? OR partner_id_kpx = ?)
                                                             LIMIT 1";
 
         $updateWrongAmountSql = "UPDATE mldb.billspayment_transaction
-                                                                SET settle_unsettle = 'settle',
+                                                                SET settle_unsettle = 'Settle',
                                                                         amount_paid = ?,
                                                                         charge_to_customer = ?,
                                                                         charge_to_partner = ?
-                                                            WHERE post_transaction = 'unposted'
-                                                                AND datetime = ?
+                                                            WHERE datetime = ?
                                                                 AND reference_no = ?
                                                                 AND (partner_id = ? OR partner_id_kpx = ?)
                                                             LIMIT 1";
@@ -507,7 +518,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         other_details = ?,
                                         outlet = ?,
                                         operator = ?,
-                                        settle_unsettle = 'settle'
+                                        settle_unsettle = 'Settle'
                                     WHERE reference_no = ?
                                         AND datetime = ?
                                     LIMIT 1";
@@ -575,10 +586,16 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             $editedOutlet = trim((string)($item['outlet'] ?? ''));
             $editedOperator = trim((string)($item['operator'] ?? ''));
             $reasonNote = trim((string)($item['reason_note'] ?? ''));
+            $postingDate = trim((string)($item['posting_date'] ?? ''));
 
             if ($reasonNote === 'late-posting') {
+                if ($postingDate === '') {
+                    throw new Exception('Posting date is required for late-posting.');
+                }
+
                 $lateInsertStmt->bind_param(
-                    str_repeat('s', 4),
+                    str_repeat('s', 5),
+                    $postingDate,
                     $reasonNote,
                     $modifiedBy,
                     $referenceNumber,
@@ -626,11 +643,16 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             }
 
             if ($reasonNote === 'wrong-amount') {
+                if ($postingDate === '') {
+                    throw new Exception('Posting date is required for wrong-amount.');
+                }
+
                 $wrongAmountInsertStmt->bind_param(
-                    str_repeat('s', 7),
+                    str_repeat('s', 8),
                     $editedAmountPaid,
                     $editedChargeCustomer,
                     $editedChargePartner,
+                    $postingDate,
                     $reasonNote,
                     $modifiedBy,
                     $referenceNumber,
@@ -1078,6 +1100,24 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.2);
         }
 
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.72);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading-overlay-content {
+            background: #ffffff;
+            border: 1px solid #f1f3f5;
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+        }
+
         @media (max-width: 991.98px) {
             .settle-filter-actions {
                 margin-top: 0;
@@ -1097,7 +1137,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
-            <div class="loading-spinner"></div>
+            <div class="loading-overlay-content d-flex align-items-center gap-2">
+                <div class="spinner-border text-danger" role="status" aria-hidden="true"></div>
+                <span class="small text-muted">Generating report...</span>
+            </div>
         </div>
         <div class="bp-section-header" role="region" aria-label="Page title">
             <div class="bp-section-title">
@@ -1131,13 +1174,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         <span class="settle-mode-main">Reference Number</span>
                                     </span>
                                 </label>
-                                <input type="radio" class="btn-check" name="settlement_view" id="settlement-unposting" value="unposting" autocomplete="off" <?php echo $settlement_view === 'unposting' ? 'checked' : ''; ?>>
-                                <label class="settle-mode-option" for="settlement-unposting">
+                                <!-- <input type="radio" class="btn-check" name="settlement_view" id="settlement-unposting" value="unposting" autocomplete="off" <?php echo $settlement_view === 'unposting' ? 'checked' : ''; ?>>
+                                <label class="settle-mode-option" for="settlement-unposting"> -->
                                     <!-- <span class="settle-mode-icon"><i class="fas fa-file-alt"></i></span> -->
-                                    <span class="settle-mode-text">
+                                    <!-- <span class="settle-mode-text">
                                         <span class="settle-mode-main">Unposting</span>
                                     </span>
-                                </label>
+                                </label> -->
                             </div>
                         </div>
                     </div>
@@ -1196,6 +1239,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 <div class="card-body settle-report-body">
                     <div class="d-flex justify-content-end align-items-center mb-2 gap-2">
                         <div class="d-flex gap-2">
+                            <button id="settle-logs" type="button" class="btn btn-secondary" disabled>Logs</button>
                             <button id="settle-edit" type="button" class="btn btn-secondary" disabled>Reason</button>
                             <button id="settle-save" type="button" class="btn btn-secondary" disabled>Save</button>
                         </div>
@@ -1303,10 +1347,19 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             const $filterTypeFieldWrap = $filterType.closest('.col-lg-3');
             const $referenceNumberWrap = $('#referenceNumberWrap');
             const $referenceNumberInput = $('#referenceNumberInput');
+            const $loadingOverlay = $('#loading-overlay');
             const settlementEditModalEl = document.getElementById('settlementEditModal');
             const settlementEditModal = settlementEditModalEl ? new bootstrap.Modal(settlementEditModalEl) : null;
             let currentRangeStart = '';
             let currentRangeEnd = '';
+
+            function showGenerateLoadingOverlay() {
+                $loadingOverlay.css('display', 'flex');
+            }
+
+            function hideGenerateLoadingOverlay() {
+                $loadingOverlay.hide();
+            }
 
             partnerDropdown.select2({
                 placeholder: partnerDropdown.data('placeholder') || 'Search or select a Partner...',
@@ -1480,6 +1533,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
             function requestReport(startDate, endDate) {
                 const selectedView = $('input[name="settlement_view"]:checked').val() || 'filter';
+                showGenerateLoadingOverlay();
                 $.ajax({
                     url: window.location.pathname,
                     type: 'POST',
@@ -1515,8 +1569,48 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                             title: 'Connection Error',
                             text: 'Failed to generate report. Please try again.'
                         });
+                    },
+                    complete: function() {
+                        hideGenerateLoadingOverlay();
                     }
                 });
+            }
+
+            function refreshCurrentReportAfterSave() {
+                const selectedView = $('input[name="settlement_view"]:checked').val() || 'filter';
+
+                if (selectedView === 'reference') {
+                    requestReport('', '');
+                    return;
+                }
+
+                const $activeDayButton = $dayButtonsWrapper.find('.day-button.day-button-active');
+                if ($activeDayButton.length && $activeDayButton.attr('id') !== 'allDaysButton') {
+                    const selectedDate = String($activeDayButton.data('date') || '').trim();
+                    if (selectedDate !== '') {
+                        requestReport(selectedDate, selectedDate);
+                        return;
+                    }
+                }
+
+                let startDate = String($startDate.val() || '').trim();
+                let endDate = String($endDate.val() || '').trim();
+                const filterType = String($filterType.val() || '').trim();
+
+                if (filterType === 'daily' || filterType === 'monthly' || filterType === 'yearly') {
+                    endDate = startDate;
+                } else if ((filterType === 'date-range' || filterType === 'monthly-range' || filterType === 'yearly-range') && !endDate) {
+                    endDate = startDate;
+                }
+
+                if (startDate !== '' && endDate !== '') {
+                    requestReport(startDate, endDate);
+                    return;
+                }
+
+                if (currentRangeStart !== '' && currentRangeEnd !== '') {
+                    requestReport(currentRangeStart, currentRangeEnd);
+                }
             }
 
             function formatAmount(value) {
@@ -1809,6 +1903,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     title: 'Confirm Save',
                     text: 'Do you want to save these submitted changes?',
                     showCancelButton: true,
+                    allowEnterKey: false,
+                    allowEscapeKey: false,
+                    allowOutsideClick: false,
                     confirmButtonText: 'Yes, Proceed',
                     cancelButtonText: 'Cancel'
                 }).then(function (confirmResult) {
@@ -1838,6 +1935,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                 icon: 'success',
                                 title: 'Inserted Successfully',
                                 text: `Saved ${result.insertedRows || 0} record(s).`
+                            }).then(function (successResult) {
+                                if (!successResult.isConfirmed) {
+                                    return;
+                                }
+
+                                window.settlementSubmittedChangesByKey = {};
+                                refreshCurrentReportAfterSave();
                             });
                         },
                         error: function () {
@@ -1965,6 +2069,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                     <div class="mb-2 edit-field-row" data-field="address"><label class="form-label mb-1">Payor Address</label><input type="text" class="form-control edit-address" data-reference="${referenceKey}" value="${escapeModalValue(row.address)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="account_no"><label class="form-label mb-1">Account Number</label><input type="text" class="form-control edit-account-no" data-reference="${referenceKey}" value="${escapeModalValue(row.accountNo)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="account_name"><label class="form-label mb-1">Account Name</label><input type="text" class="form-control edit-account-name" data-reference="${referenceKey}" value="${escapeModalValue(row.accountName)}" disabled></div>
+                                    <div class="mb-2 edit-field-row posting-date-row" data-field="posting_date"><label class="form-label mb-1">Settlement Date</label><input type="date" class="form-control edit-posting-date" data-reference="${referenceKey}" value="${escapeModalValue(row.postingDate || '')}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="principal"><label class="form-label mb-1">Principal</label><input type="text" class="form-control edit-amount-paid" data-reference="${referenceKey}" value="${escapeModalValue(row.amountPaid)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="charge_to_customer"><label class="form-label mb-1">Charge to Customer</label><input type="text" class="form-control edit-charge-customer" data-reference="${referenceKey}" value="${escapeModalValue(row.chargeToCustomer)}" disabled></div>
                                     <div class="mb-2 edit-field-row" data-field="charge_to_partner"><label class="form-label mb-1">Charge to Partner</label><input type="text" class="form-control edit-charge-partner" data-reference="${referenceKey}" value="${escapeModalValue(row.chargeToPartner)}" disabled></div>
@@ -2004,7 +2109,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             const reasonFieldMap = {
                 'wrong-biller': ['payor', 'address', 'other_details'],
                 'wrong-account': ['account_no', 'account_name'],
-                'wrong-amount': ['principal', 'charge_to_customer', 'charge_to_partner'],
+                'wrong-amount': ['posting_date', 'principal', 'charge_to_customer', 'charge_to_partner'],
                 'no-payment': ['principal', 'charge_to_customer', 'charge_to_partner']
             };
 
@@ -2014,18 +2119,32 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             const $prevCol = $container.find('.settlement-prev-col');
             const $editCol = $container.find('.settlement-edit-col');
             const $editPanel = $container.find('.settlement-edit-field-panel');
+            const $postingDateRow = $container.find('.posting-date-row');
+            const $postingDateInput = $postingDateRow.find('input');
             const $prevRows = $container.find('.prev-field-row');
             const $editRows = $container.find('.edit-field-row');
             const $editInputs = $editRows.find('input');
 
             $editInputs.prop('readonly', false).prop('disabled', true).removeClass('bg-light');
 
-            if (!hasReason || isLatePosting) {
+            if (!hasReason) {
                 $prevCol.removeClass('col-lg-6').addClass('col-lg-12');
                 $editCol.hide();
                 $editPanel.hide();
                 $prevRows.show();
                 $editRows.show();
+                $postingDateRow.hide();
+                return;
+            }
+
+            if (isLatePosting) {
+                $prevCol.removeClass('col-lg-12').addClass('col-lg-6');
+                $editCol.show();
+                $editPanel.show();
+                $prevRows.show();
+                $editRows.hide();
+                $postingDateRow.show();
+                $postingDateInput.prop('disabled', false).prop('readonly', false).addClass('bg-light');
                 return;
             }
 
@@ -2035,6 +2154,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
             $prevRows.show();
             $editRows.hide();
+            $postingDateRow.hide();
 
             if (visibleSet.size > 0) {
                 $prevRows.filter(function () {
@@ -2094,6 +2214,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     reference_number: splitKey.referenceNumber,
                     transaction_datetime: splitKey.transactionDatetime,
                     reason_note: reasonNote,
+                    posting_date: String($container.find('.edit-posting-date').val() || '').trim(),
                     payor: String($container.find('.edit-payor').val() || '').trim(),
                     address: String($container.find('.edit-address').val() || '').trim(),
                     account_no: String($container.find('.edit-account-no').val() || '').trim(),
@@ -2277,6 +2398,23 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     icon: 'warning',
                     title: 'No Changes Found',
                     text: 'Please select transaction rows and edit details first.'
+                });
+                return;
+            }
+
+            const missingPostingDate = changes.find(function (item) {
+                if (String(item.posting_date || '').trim() !== '') {
+                    return false;
+                }
+
+                return item.reason_note === 'late-posting' || item.reason_note === 'wrong-amount';
+            });
+
+            if (missingPostingDate) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Posting Date Required',
+                    text: 'Please provide Posting Date for Late Posting or Wrong Amount reason.'
                 });
                 return;
             }

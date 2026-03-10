@@ -6,8 +6,30 @@ require '../../../vendor/autoload.php';
 // Start the session
 session_start();
 
+// Resolve current user id and fetch signature blob (if any)
+include '../../../templates/middleware.php';
+$current_user_id = resolve_user_identifier();
+$prepared_sig_blob = null;
+if (!empty($current_user_id)) {
+    $stmtSig = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");
+    if ($stmtSig) {
+        $stmtSig->bind_param('s', $current_user_id);
+        $stmtSig->execute();
+        $stmtSig->bind_result($sig_blob);
+        if ($stmtSig->fetch()) $prepared_sig_blob = $sig_blob;
+        $stmtSig->close();
+    }
+}
+
 @include '../../../fetch/fetch-partner-data.php';
 @include '../../../fetch/fetch-service-type.php';
+
+$options = (isset($options) && is_array($options)) ? $options : [];
+$withheld = $withheld ?? '';
+$partnerID = $partnerID ?? '';
+if (!isset($_SESSION['partnerName_soa'])) {
+    $_SESSION['partnerName_soa'] = '';
+}
 
 if (isset($_SESSION['user_type'])) {
     $current_user_email = '';
@@ -344,7 +366,15 @@ if (isset($_SESSION['user_type'])) {
                                         <input type="text" id="preparedFix_signature" class="preparedFix_signature" name="preparedFix_signature" value="" readonly>
                                     </div>
                                     <div class="prepared-inp">
+                                        <?php if (!empty($prepared_sig_blob)): ?>
+                                            <div style="text-align:center;margin-bottom:6px;">
+                                                <img id="prepared-signature-preview" src="data:image/png;base64,<?php echo base64_encode($prepared_sig_blob); ?>" alt="Signature" style="max-height:56px;display:block;margin:0 auto;object-fit:contain;" />
+                                            </div>
+                                        <?php else: ?>
+                                            <div style="text-align:center;margin-bottom:6px;color:#6c757d;font-size:12px;">No signature</div>
+                                        <?php endif; ?>
                                         <input type="text" id="preparedInput" class="preparedInput" name="preparedInput" value="" readonly>
+                                        <input type="hidden" id="prepared_signature_ref" name="prepared_signature" value="<?php echo htmlspecialchars($current_user_id ?? ''); ?>">
                                     </div>
                                     <div class="position-lbl">
                                         <label for="">Accounting Staff</label>

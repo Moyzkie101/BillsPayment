@@ -116,7 +116,11 @@ elseif(isset($_POST['submit'])){
             $loginresult = mysqli_query($conn, $loginquery);
             $_SESSION['admin_name'] =  $row['first_name'].' '.$row['middle_name'].' '.$row['last_name'];
             $_SESSION['admin_email'] = $row['email'];
+            $_SESSION['id_number'] = $row['id_number'] ?? '';
             $_SESSION['user_type'] = $row['user_type'];
+            $_SESSION['user_access_level'] = isset($row['access_level'])
+               ? (int)$row['access_level']
+               : (isset($row['acess_level']) ? (int)$row['acess_level'] : 0);
             // $_SESSION['user_roles'] = $row['roles'];
             echo "<script>
                   window.onload = function() {
@@ -166,7 +170,11 @@ elseif(isset($_POST['submit'])){
             $loginresult = mysqli_query($conn, $loginquery);
             $_SESSION['user_name'] =  $row['first_name'].' '.$row['middle_name'].' '.$row['last_name'];
             $_SESSION['user_email'] = $row['email'];
+            $_SESSION['id_number'] = $row['id_number'] ?? '';
             $_SESSION['user_type'] = $row['user_type'];
+            $_SESSION['user_access_level'] = isset($row['access_level'])
+               ? (int)$row['access_level']
+               : (isset($row['acess_level']) ? (int)$row['acess_level'] : 0);
             // Check if the password is "Password1"
             if($pass == md5("Mlinc1234")){
                // Show a modal to prompt the user to create another password

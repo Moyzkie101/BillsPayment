@@ -5,27 +5,26 @@ require '../../../vendor/autoload.php';
 
 // Start the session
 session_start();
+// include shared permission helpers and resolve current user
+@include_once __DIR__ . '/../../../templates/middleware.php';
 
+if (!isset($_SESSION['user_type']) || !in_array($_SESSION['user_type'], ['admin', 'user'], true)) {
+    header("Location:../../../index.php");
+    session_destroy();
+    exit();
+}
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
+// ensure a user display name exists
+if ($_SESSION['user_type'] === 'admin' && !empty($_SESSION['admin_name'])) {
+    $_SESSION['user_name'] = $_SESSION['admin_name'];
+} elseif (empty($_SESSION['user_name'])) {
+    $_SESSION['user_name'] = $_SESSION['user_email'] ?? $_SESSION['admin_email'] ?? '';
+}
 
-        $_SESSION['user_name'] = $_SESSION['admin_name'];
-        
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-        if ($_SESSION['user_email'] !== 'balb01013333' && $_SESSION['user_email'] !== 'pera94005055') {
-            header("Location:../../../index.php");
-            session_destroy();
-            exit();
-        }
-    }else{
-        header("Location:../../../index.php");
-        session_destroy();
-        exit();
-    }
+// require the Invoice Approval permission
+if (!function_exists('has_permission') || !has_permission('Invoice Approval')) {
+    header('Location:../../home.php');
+    exit();
 }
 
 

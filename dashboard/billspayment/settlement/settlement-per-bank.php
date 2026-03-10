@@ -98,30 +98,29 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_settlement_type_list') 
             exit();
         }
 
-        $settlementTypeQuery = 'SELECT
-                                    settled_online_check
+        // Populate settlement types from mldb.bank_table
+        $settlementTypeQuery = "SELECT DISTINCT
+                                    bt.settled_online_check
                                 FROM
-                                    mldb.bank_table
+                                    mldb.bank_table bt
                                 WHERE
-                                    used_unused = ?';
+                                    bt.used_unused = 'used'
+                                    AND bt.settled_online_check IS NOT NULL
+                                    AND TRIM(bt.settled_online_check) <> ''";
 
         if ($bankName !== 'ALL') {
-            $settlementTypeQuery .= ' AND bank_name = ?';
+            $settlementTypeQuery .= " AND UPPER(TRIM(bt.bank_name)) = UPPER(TRIM(?))";
         }
 
-        $settlementTypeQuery .= ' GROUP BY settled_online_check ORDER BY settled_online_check';
+        $settlementTypeQuery .= ' ORDER BY bt.settled_online_check';
         $stmt = $conn->prepare($settlementTypeQuery);
 
         if (!$stmt) {
             throw new Exception('Prepare failed: ' . $conn->error);
         }
 
-        $usedStatus = 'used';
-
         if ($bankName !== 'ALL') {
-            $stmt->bind_param('ss', $usedStatus, $bankName);
-        } else {
-            $stmt->bind_param('s', $usedStatus);
+            $stmt->bind_param('s', $bankName);
         }
 
         $stmt->execute();
@@ -151,6 +150,175 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_settlement_type_list') 
 
 }
 
+// get next CAD number based on bank abbreviation + selected date (YYYY-MM)
+if (isset($_POST['action']) && $_POST['action'] === 'get_next_cad_no') {
+    try {
+        $bankName = trim($_POST['bank_name'] ?? '');
+        $transactionDateRaw = trim($_POST['transaction_date'] ?? '');
+
+        if ($bankName === '' || $transactionDateRaw === '') {
+            echo json_encode(['status' => 'error', 'message' => 'Missing bank or transaction date']);
+            exit();
+        }
+
+        $abbrQuery = "SELECT bank_abbreviation FROM mldb.bank_table WHERE UPPER(TRIM(bank_name)) = UPPER(TRIM(?)) LIMIT 1";
+        $abbrStmt = $conn->prepare($abbrQuery);
+        if (!$abbrStmt) {
+            throw new Exception('Prepare failed: ' . $conn->error);
+        }
+        $abbrStmt->bind_param('s', $bankName);
+        $abbrStmt->execute();
+        $abbrResult = $abbrStmt->get_result();
+        $abbrRow = $abbrResult ? $abbrResult->fetch_assoc() : null;
+        $abbrStmt->close();
+
+        $abbr = trim($abbrRow['bank_abbreviation'] ?? '');
+        if ($abbr === '') {
+            throw new Exception('Bank abbreviation not found for selected bank');
+        }
+
+        $ts = strtotime($transactionDateRaw);
+        if ($ts === false && preg_match('/^\d{4}-\d{2}$/', $transactionDateRaw)) {
+            $ts = strtotime($transactionDateRaw . '-01');
+        }
+        if ($ts === false) {
+            throw new Exception('Invalid transaction date');
+        }
+
+        $yearMonth = date('Y-m', $ts);
+        $dayPart = date('d', $ts);
+        $cadNo = $abbr . '-' . $yearMonth . '-000' . $dayPart;
+
+        echo json_encode([
+            'status' => 'success',
+            'cad_no' => $cadNo,
+            'year_month' => $yearMonth,
+            'day' => $dayPart
+        ]);
+        exit();
+    } catch (Exception $e) {
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        exit();
+    }
+}
+
+// update settlement/unsettlement details for selected partner transactions (context menu)
+if (isset($_POST['action']) && $_POST['action'] === 'update_settle_status') {
+    try {
+        $statusRaw = $_POST['status'] ?? '';
+        $status = strtoupper(trim($statusRaw));
+
+        $partnerId = $_POST['partner_id'] ?? '';
+        $partnerIdKpx = $_POST['partner_id_kpx'] ?? '';
+        $partnerIds = $_POST['partner_ids'] ?? ($_POST['partner_ids[]'] ?? []);
+        $partnerIdKpxs = $_POST['partner_id_kpxs'] ?? ($_POST['partner_id_kpxs[]'] ?? []);
+        $startDate = $_POST['startDate'] ?? '';
+        $endDate = $_POST['endDate'] ?? '';
+
+        $settlementDate = $_POST['settlement_date'] ?? '';
+        $cadNo = trim($_POST['cad_no'] ?? '');
+        $rfpNo = trim($_POST['rfp_no'] ?? '');
+
+        $hasSingle = ($partnerId !== '' || $partnerIdKpx !== '');
+        $hasArray = (!empty($partnerIds) || !empty($partnerIdKpxs));
+        if (($status !== 'SETTLE' && $status !== 'UNSETTLE') || (!$hasSingle && !$hasArray)) {
+            echo json_encode(['status' => 'error', 'message' => 'Missing parameters']);
+            exit();
+        }
+
+        if ($status === 'SETTLE') {
+            if ($settlementDate === '' || $cadNo === '' || $rfpNo === '') {
+                echo json_encode(['status' => 'error', 'message' => 'Settlement Date, CAD No, and RFP No are required']);
+                exit();
+            }
+        }
+
+        $clauses = [];
+        $whereTypes = '';
+        $whereParams = [];
+
+        if (!empty($partnerIds) && is_array($partnerIds)) {
+            $clean = array_values(array_filter($partnerIds, function ($v) { return trim((string)$v) !== ''; }));
+            if (!empty($clean)) {
+                $placeholders = implode(',', array_fill(0, count($clean), '?'));
+                $clauses[] = "NULLIF(TRIM(partner_id),'') IN ($placeholders)";
+                $whereTypes .= str_repeat('s', count($clean));
+                foreach ($clean as $value) {
+                    $whereParams[] = $value;
+                }
+            }
+        }
+
+        if (!empty($partnerIdKpxs) && is_array($partnerIdKpxs)) {
+            $clean = array_values(array_filter($partnerIdKpxs, function ($v) { return trim((string)$v) !== ''; }));
+            if (!empty($clean)) {
+                $placeholders = implode(',', array_fill(0, count($clean), '?'));
+                $clauses[] = "NULLIF(TRIM(partner_id_kpx),'') IN ($placeholders)";
+                $whereTypes .= str_repeat('s', count($clean));
+                foreach ($clean as $value) {
+                    $whereParams[] = $value;
+                }
+            }
+        }
+
+        if (empty($clauses) && ($partnerId !== '' || $partnerIdKpx !== '')) {
+            $clauses[] = "NULLIF(TRIM(partner_id),'') = ?";
+            $whereTypes .= 's';
+            $whereParams[] = $partnerId;
+
+            $clauses[] = "NULLIF(TRIM(partner_id_kpx),'') = ?";
+            $whereTypes .= 's';
+            $whereParams[] = $partnerIdKpx;
+        }
+
+        if (empty($clauses)) {
+            throw new Exception('No partner identifiers provided');
+        }
+
+        if ($status === 'SETTLE') {
+            $sql = "UPDATE mldb.billspayment_transaction
+                    SET settlement_date = ?, cad_no = ?, rfp_no = ?, settle_unsettle = 'Settle'
+                    WHERE (" . implode(' OR ', $clauses) . ")";
+            $types = 'sss' . $whereTypes;
+            $params = [$settlementDate, $cadNo, $rfpNo];
+        } else {
+            $sql = "UPDATE mldb.billspayment_transaction
+                    SET settlement_date = NULL, cad_no = NULL, rfp_no = NULL, settle_unsettle = 'Unsettle'
+                    WHERE (" . implode(' OR ', $clauses) . ")";
+            $types = $whereTypes;
+            $params = [];
+        }
+
+        $params = array_merge($params, $whereParams);
+
+        if ($startDate !== '' && $endDate !== '') {
+            $sql .= " AND DATE(datetime) BETWEEN ? AND ?";
+            $types .= 'ss';
+            $params[] = $startDate;
+            $params[] = $endDate;
+        }
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception('Prepare failed: ' . $conn->error);
+        }
+
+        if ($types !== '') {
+            $stmt->bind_param($types, ...$params);
+        }
+
+        $stmt->execute();
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+
+        echo json_encode(['status' => 'success', 'updated' => $affected]);
+        exit();
+    } catch (Exception $e) {
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        exit();
+    }
+}
+
 // get data table results based on filter dropdown selection
 if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
     $partner = $_POST['partner'] ?? '';
@@ -169,25 +337,29 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         exit();
     }
 
-    $dateCondition = '';
+    $transactionDateCondition = '';
+    $settlementDateCondition = '';
     $dateTypesPerCte = '';
     $dateParamsPerCte = [];
 
     if ($filterType === 'daily') {
-        $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ?)";
-        $dateTypesPerCte = 'ss';
-        $dateParamsPerCte = [$startDate, $startDate];
+        $transactionDateCondition = 'DATE(mbt.datetime) = ?';
+        $settlementDateCondition = 'DATE(msabt.posting_date) = ?';
+        $dateTypesPerCte = 's';
+        $dateParamsPerCte = [$startDate];
     } elseif ($filterType === 'date-range') {
         $rangeEnd = $endDate !== '' ? $endDate : $startDate;
-        $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-        $dateTypesPerCte = 'ssss';
-        $dateParamsPerCte = [$startDate, $rangeEnd, $startDate, $rangeEnd];
+        $transactionDateCondition = 'DATE(mbt.datetime) BETWEEN ? AND ?';
+        $settlementDateCondition = 'DATE(msabt.posting_date) BETWEEN ? AND ?';
+        $dateTypesPerCte = 'ss';
+        $dateParamsPerCte = [$startDate, $rangeEnd];
     } elseif ($filterType === 'monthly') {
         $startMonth = $startDate . '-01';
         $endMonth = date('Y-m-t', strtotime($startDate . '-01'));
-        $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-        $dateTypesPerCte = 'ssss';
-        $dateParamsPerCte = [$startMonth, $endMonth, $startMonth, $endMonth];
+        $transactionDateCondition = 'DATE(mbt.datetime) BETWEEN ? AND ?';
+        $settlementDateCondition = 'DATE(msabt.posting_date) BETWEEN ? AND ?';
+        $dateTypesPerCte = 'ss';
+        $dateParamsPerCte = [$startMonth, $endMonth];
     } else {
         echo json_encode([
             'status' => 'error',
@@ -197,304 +369,182 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         exit();
     }
 
-    $cteFilterConditions = [];
-    $cteFilterTypes = '';
-    $cteFilterParams = [];
+    $partnerListConditions = [];
+    $partnerListTypes = '';
+    $partnerListParams = [];
+    $partnerBankJoin = '';
 
+    // If a specific settlement type selected, filter by it.
+    // If 'ALL' (or empty), derive the active settlement types from mldb.bank_table where used_unused = 'used'
     if (!empty($settlementType) && strtoupper($settlementType) !== 'ALL') {
-        $cteFilterConditions[] = "EXISTS (
-            SELECT 1
-                        FROM masterdata.partner_masterfile pm
-                        WHERE (
-                                (NULLIF(TRIM(pm.partner_id), '') IS NOT NULL AND NULLIF(TRIM(pm.partner_id), '') = NULLIF(TRIM(bt.partner_id), ''))
-                                OR (NULLIF(TRIM(pm.partner_id_kpx), '') IS NOT NULL AND NULLIF(TRIM(pm.partner_id_kpx), '') = NULLIF(TRIM(bt.partner_id_kpx), ''))
-                                OR (UPPER(TRIM(pm.partner_name)) = UPPER(TRIM(bt.partner_name)))
-                        )
-              AND pm.settled_online_check = ?
-        )";
-        $cteFilterTypes .= 's';
-        $cteFilterParams[] = $settlementType;
+        $partnerListConditions[] = 'mpm.settled_online_check = ?';
+        $partnerListTypes .= 's';
+        $partnerListParams[] = $settlementType;
+    } else {
+        // fetch available settlement types marked as 'used' in bank_table
+        try {
+            $typesQuery = "SELECT DISTINCT settled_online_check FROM mldb.bank_table WHERE used_unused = 'used' AND settled_online_check IS NOT NULL AND TRIM(settled_online_check) <> ''";
+            $typesStmt = null;
+            if (!empty($bankName) && strtoupper($bankName) !== 'ALL') {
+                $typesQuery .= " AND UPPER(TRIM(bank_name)) = UPPER(TRIM(?))";
+                $typesStmt = $conn->prepare($typesQuery);
+                if ($typesStmt) {
+                    $typesStmt->bind_param('s', $bankName);
+                }
+            } else {
+                $typesStmt = $conn->prepare($typesQuery);
+            }
+
+            $availableTypes = [];
+            if ($typesStmt) {
+                $typesStmt->execute();
+                $typesResult = $typesStmt->get_result();
+                if ($typesResult && $typesResult->num_rows > 0) {
+                    while ($r = $typesResult->fetch_assoc()) {
+                        $availableTypes[] = $r['settled_online_check'];
+                    }
+                }
+                $typesStmt->close();
+            }
+
+            if (!empty($availableTypes)) {
+                // add IN clause for the available settlement types
+                $placeholders = implode(',', array_fill(0, count($availableTypes), '?'));
+                $partnerListConditions[] = 'mpm.settled_online_check IN (' . $placeholders . ')';
+                $partnerListTypes .= str_repeat('s', count($availableTypes));
+                foreach ($availableTypes as $t) {
+                    $partnerListParams[] = $t;
+                }
+            }
+        } catch (Exception $e) {
+            // if something goes wrong, fall back to no settlement-type filter
+        }
     }
 
     if (!empty($bankName) && strtoupper($bankName) !== 'ALL') {
-        $cteFilterConditions[] = "EXISTS (
-            SELECT 1
-                        FROM masterdata.partner_masterfile pm
-                        WHERE (
-                                (NULLIF(TRIM(pm.partner_id), '') IS NOT NULL AND NULLIF(TRIM(pm.partner_id), '') = NULLIF(TRIM(bt.partner_id), ''))
-                                OR (NULLIF(TRIM(pm.partner_id_kpx), '') IS NOT NULL AND NULLIF(TRIM(pm.partner_id_kpx), '') = NULLIF(TRIM(bt.partner_id_kpx), ''))
-                                OR (UPPER(TRIM(pm.partner_name)) = UPPER(TRIM(bt.partner_name)))
-                        )
-                            AND (
-                                UPPER(TRIM(pm.bank)) = UPPER(TRIM(?))
-                                OR EXISTS (
-                                        SELECT 1
-                                        FROM mldb.partner_bank pb
-                                        WHERE pb.partner_id = pm.partner_id
-                                            AND UPPER(TRIM(pb.bank)) = UPPER(TRIM(?))
-                                )
-                            )
-        )";
-                $cteFilterTypes .= 'ss';
-                $cteFilterParams[] = $bankName;
-        $cteFilterParams[] = $bankName;
-    }
-
-    $allPartnersFilterConditions = [];
-    $allPartnersFilterTypes = '';
-    $allPartnersFilterParams = [];
-
-    if (!empty($settlementType) && strtoupper($settlementType) !== 'ALL') {
-        $allPartnersFilterConditions[] = "mpm.settled_online_check = ?";
-        $allPartnersFilterTypes .= 's';
-        $allPartnersFilterParams[] = $settlementType;
-    }
-
-    if (!empty($bankName) && strtoupper($bankName) !== 'ALL') {
-        $allPartnersFilterConditions[] = "(
+        // join partner_bank and match directly to ensure partner_name_list only contains affiliated partners
+        $partnerBankJoin = " LEFT JOIN mldb.partner_bank pb ON pb.partner_id = mpm.partner_id ";
+        $partnerListConditions[] = '(
             UPPER(TRIM(mpm.bank)) = UPPER(TRIM(?))
-            OR EXISTS (
-                SELECT 1
-                FROM mldb.partner_bank pb
-                WHERE pb.partner_id = mpm.partner_id
-                  AND UPPER(TRIM(pb.bank)) = UPPER(TRIM(?))
-            )
-        )";
-        $allPartnersFilterTypes .= 'ss';
-        $allPartnersFilterParams[] = $bankName;
-        $allPartnersFilterParams[] = $bankName;
+            OR UPPER(TRIM(pb.bank)) = UPPER(TRIM(?))
+        )';
+        $partnerListTypes .= 'ss';
+        $partnerListParams[] = $bankName;
+        $partnerListParams[] = $bankName;
     }
 
-    $cteFilterClause = '';
-    if (!empty($cteFilterConditions)) {
-        $cteFilterClause = ' AND ' . implode(' AND ', $cteFilterConditions);
-    }
-
-    $perCteTypes = $dateTypesPerCte . $cteFilterTypes;
-    $perCteParams = array_merge($dateParamsPerCte, $cteFilterParams);
-
-    $allPartnersWhereClause = '';
-    if (!empty($allPartnersFilterConditions)) {
-        $allPartnersWhereClause = ' AND ' . implode(' AND ', $allPartnersFilterConditions);
-    }
-
-    $types = $perCteTypes . $perCteTypes . $allPartnersFilterTypes;
-    $params = array_merge($perCteParams, $perCteParams, $allPartnersFilterParams);
-
-    $mainWhereClause = '';
     if (!empty($partner) && strtoupper($partner) !== 'ALL') {
-        $mainWhereClause = ' AND ap.partner_name = ?';
-        $types .= 's';
-        $params[] = $partner;
+        $partnerListConditions[] = 'UPPER(TRIM(mpm.partner_name)) = UPPER(TRIM(?))';
+        $partnerListTypes .= 's';
+        $partnerListParams[] = $partner;
     }
 
-    $dataQuery = "WITH partner_lookup_by_id AS (
+    $partnerListWhereClause = '';
+    if (!empty($partnerListConditions)) {
+        $partnerListWhereClause = ' AND ' . implode(' AND ', $partnerListConditions);
+    }
+
+    $types = $partnerListTypes . $dateTypesPerCte . $dateTypesPerCte;
+    $params = array_merge($partnerListParams, $dateParamsPerCte, $dateParamsPerCte);
+
+    $dataQuery = "WITH partner_name_list AS (
                     SELECT
-                        NULLIF(TRIM(mpm.partner_id), '') AS partner_id,
-                        MAX(mpm.partner_name) AS canonical_partner_name
-                    FROM masterdata.partner_masterfile AS mpm
-                    WHERE mpm.status = 'ACTIVE'
-                      AND mpm.partner_id IS NOT NULL
-                      AND TRIM(mpm.partner_id) <> ''
-                    GROUP BY NULLIF(TRIM(mpm.partner_id), '')
-                ),
-                partner_lookup_by_kpx AS (
-                    SELECT
-                        NULLIF(TRIM(mpm.partner_id_kpx), '') AS partner_id_kpx,
-                        MAX(mpm.partner_name) AS canonical_partner_name
-                    FROM masterdata.partner_masterfile AS mpm
-                    WHERE mpm.status = 'ACTIVE'
-                      AND mpm.partner_id_kpx IS NOT NULL
-                      AND TRIM(mpm.partner_id_kpx) <> ''
-                    GROUP BY NULLIF(TRIM(mpm.partner_id_kpx), '')
-                ),
-                partner_lookup_by_name AS (
-                    SELECT
-                        UPPER(TRIM(mpm.partner_name)) COLLATE utf8mb4_general_ci AS partner_name_norm,
-                        MAX(mpm.partner_name) AS canonical_partner_name
-                    FROM masterdata.partner_masterfile AS mpm
-                    WHERE mpm.status = 'ACTIVE'
-                      AND mpm.partner_name IS NOT NULL
-                      AND TRIM(mpm.partner_name) <> ''
-                    GROUP BY UPPER(TRIM(mpm.partner_name)) COLLATE utf8mb4_general_ci
-                ),
-                summary_vol AS (
-                    SELECT
-                        COALESCE(
-                            pid.canonical_partner_name,
-                            pkpx.canonical_partner_name,
-                            pname.canonical_partner_name,
-                            NULLIF(TRIM(bt.partner_name), ''),
-                            CONCAT(
-                                'UNMAPPED-',
-                                COALESCE(
-                                    NULLIF(TRIM(bt.partner_id), ''),
-                                    NULLIF(TRIM(bt.partner_id_kpx), ''),
-                                    'UNKNOWN'
-                                )
-                            )
-                        ) AS partner_name,
-                        MAX(NULLIF(TRIM(bt.partner_id), '')) AS partner_id,
-                        MAX(NULLIF(TRIM(bt.partner_id_kpx), '')) AS partner_id_kpx,
-                        COUNT(*) AS vol1,
-                        SUM(bt.amount_paid) AS principal1,
-                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
-                    FROM mldb.billspayment_transaction AS bt
-                    LEFT JOIN partner_lookup_by_id AS pid ON NULLIF(TRIM(bt.partner_id), '') = pid.partner_id
-                    LEFT JOIN partner_lookup_by_kpx AS pkpx ON NULLIF(TRIM(bt.partner_id_kpx), '') = pkpx.partner_id_kpx
-                    LEFT JOIN partner_lookup_by_name AS pname ON UPPER(TRIM(bt.partner_name)) COLLATE utf8mb4_general_ci = pname.partner_name_norm
-                    WHERE $dateCondition
-                        AND bt.status IS NULL
-                        AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                        $cteFilterClause
-                    GROUP BY COALESCE(
-                        pid.canonical_partner_name,
-                        pkpx.canonical_partner_name,
-                        pname.canonical_partner_name,
-                        NULLIF(TRIM(bt.partner_name), ''),
-                        CONCAT(
-                            'UNMAPPED-',
-                            COALESCE(
-                                NULLIF(TRIM(bt.partner_id), ''),
-                                NULLIF(TRIM(bt.partner_id_kpx), ''),
-                                'UNKNOWN'
-                            )
-                        )
-                    )
-                ),
-                summary_by_partner AS (
-                    SELECT
-                        partner_name,
-                        MAX(partner_id) AS partner_id,
-                        MAX(partner_id_kpx) AS partner_id_kpx,
-                        SUM(vol1) AS vol1,
-                        SUM(principal1) AS principal1,
-                        SUM(charge1) AS charge1
-                    FROM summary_vol
-                    GROUP BY partner_name
-                ),
-                adjustment_vol AS (
-                    SELECT
-                        COALESCE(
-                            pid.canonical_partner_name,
-                            pkpx.canonical_partner_name,
-                            pname.canonical_partner_name,
-                            NULLIF(TRIM(bt.partner_name), ''),
-                            CONCAT(
-                                'UNMAPPED-',
-                                COALESCE(
-                                    NULLIF(TRIM(bt.partner_id), ''),
-                                    NULLIF(TRIM(bt.partner_id_kpx), ''),
-                                    'UNKNOWN'
-                                )
-                            )
-                        ) AS partner_name,
-                        MAX(NULLIF(TRIM(bt.partner_id), '')) AS partner_id,
-                        MAX(NULLIF(TRIM(bt.partner_id_kpx), '')) AS partner_id_kpx,
-                        COUNT(*) AS vol2,
-                        SUM(bt.amount_paid) AS principal2,
-                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
-                    FROM mldb.billspayment_transaction AS bt
-                    LEFT JOIN partner_lookup_by_id AS pid ON NULLIF(TRIM(bt.partner_id), '') = pid.partner_id
-                    LEFT JOIN partner_lookup_by_kpx AS pkpx ON NULLIF(TRIM(bt.partner_id_kpx), '') = pkpx.partner_id_kpx
-                    LEFT JOIN partner_lookup_by_name AS pname ON UPPER(TRIM(bt.partner_name)) COLLATE utf8mb4_general_ci = pname.partner_name_norm
-                    WHERE $dateCondition
-                        AND bt.status = '*'
-                        AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                        $cteFilterClause
-                    GROUP BY COALESCE(
-                        pid.canonical_partner_name,
-                        pkpx.canonical_partner_name,
-                        pname.canonical_partner_name,
-                        NULLIF(TRIM(bt.partner_name), ''),
-                        CONCAT(
-                            'UNMAPPED-',
-                            COALESCE(
-                                NULLIF(TRIM(bt.partner_id), ''),
-                                NULLIF(TRIM(bt.partner_id_kpx), ''),
-                                'UNKNOWN'
-                            )
-                        )
-                    )
-                ),
-                adjustment_by_partner AS (
-                    SELECT
-                        partner_name,
-                        MAX(partner_id) AS partner_id,
-                        MAX(partner_id_kpx) AS partner_id_kpx,
-                        SUM(vol2) AS vol2,
-                        SUM(principal2) AS principal2,
-                        SUM(charge2) AS charge2
-                    FROM adjustment_vol
-                    GROUP BY partner_name
-                ),
-                partner_master_dedup AS (
-                    SELECT
+                        mpm.partner_id,
+                        mpm.partner_id_kpx,
                         mpm.partner_name,
-                        MAX(NULLIF(TRIM(mpm.partner_id), '')) AS partner_id,
-                        MAX(NULLIF(TRIM(mpm.partner_id_kpx), '')) AS partner_id_kpx,
-                        MAX(mpm.partner_accName) AS partner_accName,
-                        MAX(mpm.bank_accNumber) AS bank_accNumber,
-                        MAX(mpm.bank) AS bank,
-                        MAX(mpm.settled_online_check) AS settled_online_check,
-                        MAX(mpm.charge_to) AS charge_to,
-                        MAX(mpm.charge_sched) AS charge_sched
-                    FROM masterdata.partner_masterfile AS mpm
+                        mpm.partner_accName,
+                        mpm.bank_accNumber,
+                        mpm.bank AS bank_name,
+                        mpm.settled_online_check,
+                        mpm.charge_to,
+                        mpm.charge_sched
+                    FROM masterdata.partner_masterfile mpm
+                    $partnerBankJoin
                     WHERE mpm.status = 'ACTIVE'
-                    $allPartnersWhereClause
-                    GROUP BY mpm.partner_name
+                    $partnerListWhereClause
                 ),
-                all_partners_union AS (
+                transaction_data AS (
                     SELECT
-                        CONVERT(partner_name USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_name,
-                        CONVERT(partner_id USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id,
-                        CONVERT(partner_id_kpx USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id_kpx
-                    FROM partner_master_dedup
-
-                    UNION ALL
-
-                    SELECT
-                        CONVERT(partner_name USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_name,
-                        CONVERT(partner_id USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id,
-                        CONVERT(partner_id_kpx USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id_kpx
-                    FROM summary_by_partner
-
-                    UNION ALL
-
-                    SELECT
-                        CONVERT(partner_name USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_name,
-                        CONVERT(partner_id USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id,
-                        CONVERT(partner_id_kpx USING utf8mb4) COLLATE utf8mb4_general_ci AS partner_id_kpx
-                    FROM adjustment_by_partner
+                        mbt.partner_id,
+                            mbt.partner_id_kpx,
+                            SUM(CASE WHEN mbt.settle_unsettle IS NULL OR TRIM(mbt.settle_unsettle) = '' OR UPPER(TRIM(mbt.settle_unsettle)) = 'UNSETTLE' THEN 1 ELSE 0 END) AS unsettled_count,
+                            COUNT(*) AS volume_count,
+                        SUM(mbt.amount_paid) AS principal_amount_paid,
+                        SUM(mbt.charge_to_customer + mbt.charge_to_partner) AS charges
+                    FROM mldb.billspayment_transaction mbt
+                    LEFT JOIN mldb.settle_adjustment_branch_transaction msabt
+                        ON (
+                            NULLIF(TRIM(mbt.partner_id), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(msabt.partner_id), '') COLLATE utf8mb4_0900_ai_ci
+                            OR
+                            NULLIF(TRIM(mbt.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(msabt.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci
+                        )
+                        AND DATE(mbt.settlement_date) = DATE(msabt.posting_date)
+                        AND NULLIF(TRIM(mbt.reference_no), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(msabt.reference_no), '') COLLATE utf8mb4_0900_ai_ci
+                    WHERE mbt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+                        AND msabt.reason_note IS NULL
+                        AND $transactionDateCondition 
+                    GROUP BY mbt.partner_id, mbt.partner_id_kpx
                 ),
-                all_partners AS (
+                principal_adjustment_data AS (
                     SELECT
-                        partner_name,
-                        MAX(partner_id) AS partner_id,
-                        MAX(partner_id_kpx) AS partner_id_kpx
-                    FROM all_partners_union
-                    GROUP BY partner_name
+                        msabt.partner_id,
+                        msabt.partner_id_kpx,
+                        SUM(
+                            CASE
+                                WHEN LOWER(TRIM(msabt.reason_note)) = 'late-posting'
+                                    THEN COALESCE(msabt.prev_amount_paid, 0)
+                                WHEN LOWER(TRIM(msabt.reason_note)) = 'wrong-amount'
+                                    THEN COALESCE(msabt.edited_amount_paid, 0)
+                                ELSE 0
+                            END
+                        ) AS principal_adjustment,
+                        SUM(
+                            CASE
+                                WHEN LOWER(TRIM(msabt.reason_note)) = 'late-posting'
+                                    THEN COALESCE(msabt.prev_charge_to_customer, 0) + COALESCE(msabt.prev_charge_to_partner, 0)
+                                WHEN LOWER(TRIM(msabt.reason_note)) = 'wrong-amount'
+                                    THEN COALESCE(msabt.edited_charge_to_customer, 0) + COALESCE(msabt.edited_charge_to_partner, 0)
+                                ELSE 0
+                            END
+                        ) AS charges
+                    FROM mldb.settle_adjustment_branch_transaction msabt
+                    WHERE $settlementDateCondition
+                    GROUP BY msabt.partner_id, msabt.partner_id_kpx
                 )
                 SELECT
-                    ap.partner_name,
-                    COALESCE(ap.partner_id, pmd.partner_id) AS partner_id,
-                    COALESCE(ap.partner_id_kpx, pmd.partner_id_kpx) AS partner_id_kpx,
-                    pmd.partner_accName,
-                    pmd.bank_accNumber,
-                    pmd.bank,
-                    pmd.settled_online_check,
-                    pmd.charge_to,
-                    pmd.charge_sched,
-                    (COALESCE(sv.vol1, 0) - COALESCE(av.vol2, 0)) AS net_vol,
-                    (COALESCE(sv.principal1, 0) - COALESCE(ABS(av.principal2), 0)) AS net_principal,
-                    (COALESCE(sv.charge1, 0) - COALESCE(ABS(av.charge2), 0)) AS net_charges
-                FROM all_partners AS ap
-                LEFT JOIN summary_by_partner AS sv ON ap.partner_name = sv.partner_name
-                LEFT JOIN adjustment_by_partner AS av ON ap.partner_name = av.partner_name
-                LEFT JOIN partner_master_dedup AS pmd ON ap.partner_name = pmd.partner_name
-                WHERE ap.partner_name IS NOT NULL
-                $mainWhereClause
-                ORDER BY ap.partner_name";
+                    pml.partner_id,
+                    pml.partner_id_kpx,
+                    pml.partner_name,
+                    pml.partner_accName,
+                    pml.bank_accNumber,
+                    pml.bank_name,
+                    pml.settled_online_check,
+                    pml.charge_to,
+                    pml.charge_sched,
+                    COALESCE(td.unsettled_count, 0) AS has_unsettled,
+                    COALESCE(td.volume_count, 0) AS volume_count,
+                    COALESCE(td.principal_amount_paid, 0) AS principal_amount_paid,
+                    COALESCE(td.charges, 0) AS charges,
+                    COALESCE(pad.principal_adjustment - pad.charges, 0) AS principal_adjustment,
+                    CASE
+                        WHEN COALESCE(pad.principal_adjustment - pad.charges, 0) = 0
+                            THEN COALESCE(td.principal_amount_paid, 0)
+                        ELSE COALESCE((COALESCE(td.principal_amount_paid, 0) - COALESCE(td.charges, 0)) + (COALESCE(pad.principal_adjustment, 0) - COALESCE(pad.charges, 0)), 0)
+                    END AS amount_for_settlement
+                FROM partner_name_list pml
+                LEFT JOIN transaction_data td
+                    ON (
+                        NULLIF(TRIM(td.partner_id), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id), '') COLLATE utf8mb4_0900_ai_ci
+                        OR
+                        NULLIF(TRIM(td.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci
+                    )
+                LEFT JOIN principal_adjustment_data pad
+                    ON (
+                        NULLIF(TRIM(pad.partner_id), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id), '') COLLATE utf8mb4_0900_ai_ci
+                        OR
+                        NULLIF(TRIM(pad.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci
+                    )
+                ORDER BY pml.partner_name";
 
     try {
         $stmt = $conn->prepare($dataQuery);
@@ -682,6 +732,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                 <div class="col-md-1 col-sm-6">
                                     <div class="col-md-3 d-flex align-items-end">
                                         <button type="button" class="btn btn-danger" id="generateReport">Generate</button>
+                                        <button type="button" class="btn btn-secondary ms-2" id="bulkActionBtn" style="display:none;">Bulk Action</button>
                                     </div>
                                     
                                 </div>
@@ -721,6 +772,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                 <table id="transactionReportTable" class="table table-bordered table-hover table-striped">
                                     <thead class="table-light sticky-top">
                                         <tr>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'><input id="selectAllRows" type="checkbox" aria-label="Select all" /></th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>No.</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Partner Name</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Account Name</th>
@@ -728,6 +780,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                             <th colspan="3" class='text-truncate text-center align-middle'>Net Total Transaction</th>
                                             <th class='text-truncate text-center align-middle'>Principal Adjustment</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Amount for Settlement</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>Status</th>
                                         </tr>
                                         <tr>
                                             <!-- Column header for Net -->
@@ -740,25 +793,28 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                     <tbody>
                                         <!-- Data will be populated via JavaScript -->
                                         <tr>
-                                            <td></td>
-                                            <td></td>
-                                            <td></td>
-                                            <td></td>
-                                            <td></td>
-                                            <td></td>
-                                            <td></td>
-                                            <td></td>
-                                            <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
                                         </tr>
                                     </tbody>
                                     <tfoot class="sticky-bottom table-dark">
                                         <tr>
-                                            <th colspan="4" class="text-end">Total : </th>
+                                            <th colspan="5" class="text-end">Total : </th>
                                             <th class="text-center" id="totalnetvolume">0</th>
                                             <th class="text-end" id="totalnetprincipal">0.00</th>
                                             <th class="text-end" id="totalnetcharge">0.00</th>
-                                            <th class="text-end">0.00</th>
-                                            <th class="text-end">0.00</th>
+                                            <th class="text-end" id="totalprincipaladjustment">0.00</th>
+                                            <th class="text-end" id="totalamountforsettlement">0.00</th>
+                                            <th class="text-center"></th>
                                             <!-- <th class="text-end">0.00</th>
                                             <th class="text-end">0.00</th>
                                             <th class="text-end">0.00</th>
@@ -883,6 +939,620 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         });
     });
 
+</script>
+
+<!-- CONTEXT MENU FOR TRANSACTION ROWS -->
+<style>
+    .bp-context-menu {
+        position: absolute;
+        z-index: 3000;
+        background: #fff;
+        border: 1px solid rgba(0,0,0,0.15);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        min-width: 180px;
+        padding: 6px 0;
+        display: none;
+    }
+    .bp-context-menu .item {
+        padding: 8px 12px;
+        cursor: pointer;
+    }
+    .bp-context-menu .item.disabled {
+        color: #6c757d;
+        cursor: default;
+    }
+    .bp-context-menu .item:hover:not(.disabled) {
+        background: #f8f9fa;
+    }
+    /* show pointer when hovering over selectable data rows */
+    #transactionReportTable tbody tr[data-partner-id],
+    #transactionReportTable tbody tr[data-partner-id-kpx] {
+        cursor: pointer;
+    }
+    .row-disabled {
+        opacity: 0.6;
+    }
+    .row-disabled .row-select {
+        cursor: not-allowed;
+    }
+</style>
+
+<div id="bpContextMenu" class="bp-context-menu"></div>
+
+<script>
+    (function() {
+        const $menu = $('#bpContextMenu');
+
+        function hideMenu() {
+            $menu.hide().empty();
+        }
+
+        function getTargetRows($row) {
+            const $selectedRows = $('#transactionReportTable tbody .row-select:checked').closest('tr');
+            if ($selectedRows.length > 0) {
+                return $selectedRows;
+            }
+            return $row;
+        }
+
+        function collectIdentifiers($rows) {
+            const partnerIds = [];
+            const partnerIdKpxs = [];
+            $rows.each(function() {
+                const $r = $(this);
+                const pid = String($r.data('partner-id') || '').trim();
+                const pkpx = String($r.data('partner-id-kpx') || '').trim();
+                if (pid !== '' && !partnerIds.includes(pid)) {
+                    partnerIds.push(pid);
+                }
+                if (pkpx !== '' && !partnerIdKpxs.includes(pkpx)) {
+                    partnerIdKpxs.push(pkpx);
+                }
+            });
+            return { partnerIds, partnerIdKpxs };
+        }
+
+        // selection mode: null | 'settle' | 'unsettle'
+        let selectionMode = null;
+
+        function getRowMode($row) {
+            return (Number($row.data('has-unsettled') || 0) > 0) ? 'unsettle' : 'settle';
+        }
+
+        function setSelectionMode(mode) {
+            selectionMode = mode;
+            updateSelectableRows();
+        }
+
+        function updateSelectableRows() {
+            $('#transactionReportTable tbody tr').each(function() {
+                const $tr = $(this);
+                // only affect data rows
+                if (!$tr.data('partner-id') && !$tr.data('partner-id-kpx')) return;
+                const rowMode = getRowMode($tr);
+                const $chk = $tr.find('.row-select');
+                if (!selectionMode) {
+                    $tr.removeClass('row-disabled');
+                    $chk.prop('disabled', false);
+                } else if (rowMode !== selectionMode) {
+                    $tr.addClass('row-disabled');
+                    $chk.prop('disabled', true).prop('checked', false);
+                } else {
+                    $tr.removeClass('row-disabled');
+                    $chk.prop('disabled', false);
+                }
+            });
+            // after updating rows, recalc bulk button
+            updateBulkActionButton();
+        }
+
+        function updateSelectionModeFromSelected() {
+            const $selected = $('#transactionReportTable tbody .row-select:checked').closest('tr');
+            if ($selected.length === 0) {
+                selectionMode = null;
+                updateSelectableRows();
+                return;
+            }
+            const mode = getRowMode($selected.first());
+            selectionMode = mode;
+            updateSelectableRows();
+        }
+
+        function getBankNameForRows($rows) {
+            const fromFilter = $('select[name="bankName"]').val() || '';
+            if (fromFilter) {
+                return fromFilter;
+            }
+
+            const uniqueBanks = [];
+            $rows.each(function() {
+                const bank = String($(this).data('bank-name') || '').trim();
+                if (bank && !uniqueBanks.includes(bank)) {
+                    uniqueBanks.push(bank);
+                }
+            });
+
+            if (uniqueBanks.length === 1) {
+                return uniqueBanks[0];
+            }
+
+            return uniqueBanks.length > 1 ? 'Multiple Banks' : '';
+        }
+
+        function formatRfpPrefixFromDate(dateValue) {
+            if (!dateValue) {
+                return '';
+            }
+            const date = new Date(dateValue);
+            if (Number.isNaN(date.getTime())) {
+                return '';
+            }
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            return `${date.getFullYear()}-${month}-`;
+        }
+
+        function loadCadNo(bankName, transactionDate) {
+            return $.ajax({
+                url: '',
+                type: 'POST',
+                data: {
+                    action: 'get_next_cad_no',
+                    bank_name: bankName,
+                    transaction_date: transactionDate
+                }
+            });
+        }
+
+        async function openSettleModal($rows) {
+            const multiple = $rows.length > 1;
+            const partnerName = String($rows.first().data('partner-name') || '');
+            const bankName = getBankNameForRows($rows);
+
+            if (!bankName || bankName === 'Multiple Banks') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Bank Name Required',
+                    text: 'Please filter or select rows under a single bank before settling.'
+                });
+                return;
+            }
+
+            const partnerHtml = multiple ? '' : `
+                <div class="text-start mb-2">
+                    <label class="form-label mb-1"><b>Partner Name</b></label>
+                    <div class="form-control">${partnerName || ''}</div>
+                </div>`;
+
+            await Swal.fire({
+                title: 'Settle Transactions',
+                width: 650,
+                html: `
+                    ${partnerHtml}
+                    <div class="text-start mb-2">
+                        <label class="form-label mb-1"><b>Bank Name</b></label>
+                        <div class="form-control" id="settleBankName">${bankName}</div>
+                    </div>
+                    <div class="text-start mb-2">
+                        <label class="form-label mb-1"><b>Settlement Date</b></label>
+                        <input type="date" id="settleDate" class="form-control" />
+                    </div>
+                    <div class="text-start mb-2">
+                        <label class="form-label mb-1"><b>CAD No</b></label>
+                        <input type="text" id="cadNo" class="form-control" readonly />
+                    </div>
+                    <div class="text-start mb-0">
+                        <label class="form-label mb-1"><b>RFP No</b></label>
+                        <div class="input-group">
+                            <span class="input-group-text" id="rfpPrefix">YYYY-MM-</span>
+                            <input type="text" id="rfpSuffix" class="form-control" placeholder="Manual suffix" />
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Settle',
+                didOpen: () => {
+                    const confirmBtn = Swal.getConfirmButton();
+                    const dateInput = document.getElementById('settleDate');
+                    const cadInput = document.getElementById('cadNo');
+                    const prefixEl = document.getElementById('rfpPrefix');
+                    const suffixInput = document.getElementById('rfpSuffix');
+                    const filterType = $('select[name="filterType"]').val() || '';
+                    const startDateValue = $('input[name="startDate"]').val() || '';
+                    const endDateValue = $('input[name="endDate"]').val() || '';
+                    const transactionDate = (filterType === 'date-range' && endDateValue)
+                        ? endDateValue
+                        : (startDateValue || endDateValue);
+
+                    const toggleConfirm = () => {
+                        const prefix = prefixEl.textContent || '';
+                        const canSubmit = !!(dateInput.value && cadInput.value && prefix !== 'YYYY-MM-' && suffixInput.value.trim() !== '');
+                        confirmBtn.disabled = !canSubmit;
+                    };
+
+                    confirmBtn.disabled = true;
+
+                    dateInput.addEventListener('change', async function() {
+                        const prefix = formatRfpPrefixFromDate(dateInput.value);
+                        prefixEl.textContent = prefix || 'YYYY-MM-';
+                        toggleConfirm();
+                    });
+
+                    suffixInput.addEventListener('input', toggleConfirm);
+
+                    // CAD No is based on selected Transaction Date filter, not Settlement Date.
+                    (async function initializeCadNo() {
+                        if (!transactionDate) {
+                            cadInput.value = '';
+                            Swal.showValidationMessage('Transaction Date filter is required before settling.');
+                            return;
+                        }
+                        try {
+                            const response = await loadCadNo(bankName, transactionDate);
+                            const result = typeof response === 'object' ? response : JSON.parse(response);
+                            if (result.status === 'success') {
+                                cadInput.value = result.cad_no || '';
+                            } else {
+                                cadInput.value = '';
+                                Swal.showValidationMessage(result.message || 'Failed to generate CAD No');
+                            }
+                        } catch (err) {
+                            cadInput.value = '';
+                            Swal.showValidationMessage('Failed to generate CAD No');
+                        }
+                        toggleConfirm();
+                    })();
+                },
+                preConfirm: () => {
+                    const settlementDate = document.getElementById('settleDate').value;
+                    const cadNo = document.getElementById('cadNo').value;
+                    const rfpPrefix = document.getElementById('rfpPrefix').textContent || '';
+                    const rfpSuffix = document.getElementById('rfpSuffix').value.trim();
+
+                    if (!settlementDate || !cadNo || rfpPrefix === 'YYYY-MM-' || !rfpSuffix) {
+                        Swal.showValidationMessage('Settlement Date, CAD No, and RFP No are required');
+                        return false;
+                    }
+
+                    return {
+                        settlementDate,
+                        cadNo,
+                        rfpNo: `${rfpPrefix}${rfpSuffix}`
+                    };
+                }
+            }).then((result) => {
+                if (!result.isConfirmed || !result.value) {
+                    return;
+                }
+                const ids = collectIdentifiers($rows);
+                performSettleAction(ids.partnerIds, ids.partnerIdKpxs, 'Settle', $rows, {
+                    settlementDate: result.value.settlementDate,
+                    cadNo: result.value.cadNo,
+                    rfpNo: result.value.rfpNo
+                });
+            });
+        }
+
+        function showMenuForRow($row, event) {
+            hideMenu();
+            const $targetRows = getTargetRows($row);
+            const multiple = $targetRows.length > 1;
+            const partnerName = String($row.data('partner-name') || '');
+            const unsettledCount = $targetRows.filter(function() {
+                return Number($(this).data('has-unsettled') || 0) > 0;
+            }).length;
+
+            // For multi-select, require same status so only one toggle action appears.
+            if (multiple && unsettledCount > 0 && unsettledCount < $targetRows.length) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Mixed Status Selection',
+                    text: 'Please select rows with the same status before using context menu.'
+                });
+                return;
+            }
+
+            const toggleAction = unsettledCount > 0 ? 'Settle' : 'Unsettle';
+
+            const items = [];
+            if (!multiple) {
+                items.push({ label: partnerName || 'Partner', cls: 'disabled' });
+            }
+            items.push({ label: toggleAction, cls: '', action: toggleAction });
+
+            items.forEach((it) => {
+                const $it = $('<div class="item"></div>').text(it.label).addClass(it.cls);
+                if (!it.cls) {
+                    $it.on('click', function() {
+                        hideMenu();
+
+                        if (it.action === 'Settle') {
+                            openSettleModal($targetRows);
+                            return;
+                        }
+
+                        const confirmText = multiple
+                            ? `Are you sure you want to mark ${$targetRows.length} partners as Unsettle?`
+                            : `Are you sure you want to mark ${partnerName} as Unsettle?`;
+
+                        Swal.fire({
+                            title: 'Unsettle',
+                            text: confirmText,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes'
+                        }).then((res) => {
+                            if (!res.isConfirmed) {
+                                return;
+                            }
+
+                            const ids = collectIdentifiers($targetRows);
+                            performSettleAction(ids.partnerIds, ids.partnerIdKpxs, 'Unsettle', $targetRows);
+                        });
+                    });
+                }
+                $menu.append($it);
+            });
+
+            $menu.css({ left: event.pageX + 'px', top: event.pageY + 'px' }).show();
+        }
+
+        function performSettleAction(partnerIds, partnerIdKpxs, action, $rowOrRows, settlePayload = null) {
+            const startDate = $('input[name="startDate"]').val() || '';
+            const endDate = $('input[name="endDate"]').val() || '';
+            const data = {
+                action: 'update_settle_status',
+                status: action,
+                startDate: startDate,
+                endDate: endDate
+            };
+
+            if (action === 'Settle' && settlePayload) {
+                data.settlement_date = settlePayload.settlementDate;
+                data.cad_no = settlePayload.cadNo;
+                data.rfp_no = settlePayload.rfpNo;
+            }
+
+            // attach arrays
+            for (let i = 0; i < partnerIds.length; i++) {
+                data['partner_ids[]'] = data['partner_ids[]'] || [];
+                data['partner_ids[]'].push(partnerIds[i]);
+            }
+            for (let i = 0; i < partnerIdKpxs.length; i++) {
+                data['partner_id_kpxs[]'] = data['partner_id_kpxs[]'] || [];
+                data['partner_id_kpxs[]'].push(partnerIdKpxs[i]);
+            }
+
+            const showOverlay = (action === 'Settle' || action === 'Unsettle');
+
+            $.ajax({
+                url: '',
+                type: 'POST',
+                data: data,
+                beforeSend: function() {
+                    if (showOverlay) {
+                        $('#loading-overlay').css('display', 'flex');
+                    }
+                },
+                complete: function() {
+                    if (showOverlay) {
+                        $('#loading-overlay').hide();
+                    }
+                },
+                success: function(response) {
+                    try {
+                        const result = typeof response === 'object' ? response : JSON.parse(response);
+                        if (result.status === 'success') {
+                            // toggle classes on affected rows
+                            if ($rowOrRows && $rowOrRows.length) {
+                                const statusIconForSettle = '<i class="fa-solid fa-check text-success" title="Settled"></i>';
+                                const statusIconForUnsettle = '<i class="fa-solid fa-xmark text-danger" title="Unsettled"></i>';
+                                const newIcon = (action === 'Settle') ? statusIconForSettle : statusIconForUnsettle;
+
+                                $rowOrRows.each(function() {
+                                    const $r = $(this);
+                                    if (action === 'Settle') {
+                                        $r.removeClass('table-danger').addClass('table-success');
+                                        $r.data('has-unsettled', 0);
+                                        $r.attr('data-has-unsettled', 0);
+                                    } else {
+                                        $r.removeClass('table-success').addClass('table-danger');
+                                        $r.data('has-unsettled', 1);
+                                        $r.attr('data-has-unsettled', 1);
+                                    }
+
+                                    // update status icon cell (last td)
+                                    $r.find('td').last().html(newIcon);
+
+                                    // uncheck rows after action
+                                    $r.find('.row-select').prop('checked', false).trigger('change');
+                                });
+                                $('#selectAllRows').prop('checked', false).trigger('change');
+                                // refresh bulk button state
+                                updateBulkActionButton();
+                            }
+                            Swal.fire({ icon: 'success', title: 'Updated', text: `${result.updated || 0} rows updated.` });
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error', text: result.message || 'Failed to update transactions.' });
+                        }
+                    } catch (e) {
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Invalid server response.' });
+                    }
+                },
+                error: function() {
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Request failed.' });
+                }
+            });
+        }
+
+        // attach contextmenu listener to table rows via delegation
+        $(document).on('contextmenu', '#transactionReportTable tbody tr', function(e) {
+            const $tr = $(this);
+            // ignore header/footer rows without data (they may be section rows)
+            if (!$tr.data('partner-id') && !$tr.data('partner-id-kpx')) {
+                return;
+            }
+            e.preventDefault();
+            showMenuForRow($tr, e);
+        });
+
+        // select-all checkbox handler (enforces selectionMode)
+        $(document).on('change', '#selectAllRows', function() {
+            const isChecked = $(this).is(':checked');
+            const $allCheckboxes = $('#transactionReportTable tbody .row-select');
+            if (!isChecked) {
+                // uncheck all and reset mode
+                $allCheckboxes.prop('checked', false).trigger('change');
+                selectionMode = null;
+                updateSelectableRows();
+                return;
+            }
+
+            // if selectionMode not set, ask user which type to select
+            if (!selectionMode) {
+                Swal.fire({
+                    title: 'Select rows to target',
+                    text: 'Choose which status to select for bulk operation:',
+                    showDenyButton: true,
+                    showCancelButton: true,
+                    confirmButtonText: 'Select All Settled',
+                    denyButtonText: 'Select All Unsettled'
+                }).then((res) => {
+                    if (res.isConfirmed) {
+                        setSelectionMode('settle');
+                        $allCheckboxes.filter(function() { return Number($(this).closest('tr').data('has-unsettled') || 0) === 0; }).prop('checked', true).trigger('change');
+                    } else if (res.isDenied) {
+                        setSelectionMode('unsettle');
+                        $allCheckboxes.filter(function() { return Number($(this).closest('tr').data('has-unsettled') || 0) > 0; }).prop('checked', true).trigger('change');
+                    } else {
+                        // cancelled
+                        $('#selectAllRows').prop('checked', false);
+                    }
+                });
+                return;
+            }
+
+            // if selectionMode already set, only toggle matching rows
+            if (selectionMode === 'settle') {
+                $allCheckboxes.filter(function() { return Number($(this).closest('tr').data('has-unsettled') || 0) === 0; }).prop('checked', true).trigger('change');
+            } else if (selectionMode === 'unsettle') {
+                $allCheckboxes.filter(function() { return Number($(this).closest('tr').data('has-unsettled') || 0) > 0; }).prop('checked', true).trigger('change');
+            }
+        });
+
+        // row checkbox toggles header
+        $(document).on('change', '#transactionReportTable tbody', function(e) {
+            const total = $('#transactionReportTable tbody .row-select').length;
+            const checked = $('#transactionReportTable tbody .row-select:checked').length;
+            $('#selectAllRows').prop('checked', total > 0 && total === checked);
+        });
+
+        // enforce selectionMode when individual row checkbox changes
+        $(document).on('change', '#transactionReportTable tbody .row-select', function(e) {
+            const $chk = $(this);
+            const $tr = $chk.closest('tr');
+            const rowMode = getRowMode($tr);
+
+            if ($chk.is(':checked')) {
+                // trying to select
+                if (!selectionMode) {
+                    setSelectionMode(rowMode);
+                } else if (selectionMode !== rowMode) {
+                    // prevent selecting mixed status
+                    $chk.prop('checked', false);
+                    Swal.fire({ icon: 'warning', title: 'Mixed Status Selection', text: 'You cannot select rows of different statuses.' , timer:1500, showConfirmButton:false});
+                    return;
+                }
+            } else {
+                // unchecked: if no selected remain, reset mode
+                const anyChecked = $('#transactionReportTable tbody .row-select:checked').length > 0;
+                if (!anyChecked) {
+                    selectionMode = null;
+                    updateSelectableRows();
+                }
+            }
+
+            // ensure UI updated
+            updateBulkActionButton();
+        });
+
+        // clicking a row toggles its selection (except when clicking inputs, links, buttons or right-clicking)
+        $(document).on('click', '#transactionReportTable tbody tr', function(e) {
+            if (e.which === 3) return; // ignore right-click
+            // ignore clicks that originated from interactive elements
+            if ($(e.target).closest('input, a, button, label, .item, #bpContextMenu, .row-select').length) return;
+            const $chk = $(this).find('.row-select');
+            if ($chk.length && !$chk.is(':disabled')) {
+                $chk.prop('checked', !$chk.prop('checked')).trigger('change');
+            }
+        });
+
+        // bulk action button manager
+        function updateBulkActionButton() {
+            const $btn = $('#bulkActionBtn');
+            const $selectedRows = $('#transactionReportTable tbody .row-select:checked').closest('tr');
+            if ($selectedRows.length === 0) {
+                $btn.hide();
+                return;
+            }
+
+            const unsettledCount = $selectedRows.filter(function() {
+                return Number($(this).data('has-unsettled') || 0) > 0;
+            }).length;
+
+            if (unsettledCount > 0 && unsettledCount < $selectedRows.length) {
+                $btn.show().prop('disabled', true).removeClass('btn-success btn-danger').addClass('btn-secondary').text('Mixed Selection');
+                return;
+            }
+
+            if (unsettledCount > 0) {
+                $btn.show().prop('disabled', false).removeClass('btn-danger btn-secondary').addClass('btn-success').text('Settle');
+                return;
+            }
+
+            $btn.show().prop('disabled', false).removeClass('btn-success btn-secondary').addClass('btn-danger').text('Unsettle');
+        }
+
+        // when a row checkbox changes or select-all toggles, update the bulk button
+        $(document).on('change', '#transactionReportTable tbody .row-select', updateBulkActionButton);
+        $(document).on('change', '#selectAllRows', updateBulkActionButton);
+
+        // bulk button click behavior; mirrors context menu actions
+        $(document).on('click', '#bulkActionBtn', function() {
+            const $btn = $(this);
+            if ($btn.is(':disabled')) {
+                Swal.fire({ icon: 'warning', title: 'Invalid Selection', text: 'Please select rows with the same status.' });
+                return;
+            }
+
+            const action = $btn.text().trim();
+            const $rows = $('#transactionReportTable tbody .row-select:checked').closest('tr');
+            if ($rows.length === 0) {
+                Swal.fire({ icon: 'warning', title: 'No Rows Selected', text: 'Please select at least one row.' });
+                return;
+            }
+
+            if (action === 'Settle') {
+                openSettleModal($rows);
+                return;
+            }
+
+            if (action === 'Unsettle') {
+                const confirmText = $rows.length > 1 ? `Are you sure you want to mark ${$rows.length} partners as Unsettle?` : `Are you sure you want to mark this partner as Unsettle?`;
+                Swal.fire({ title: 'Unsettle', text: confirmText, icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes' }).then((res) => {
+                    if (!res.isConfirmed) return;
+                    const ids = collectIdentifiers($rows);
+                    performSettleAction(ids.partnerIds, ids.partnerIdKpxs, 'Unsettle', $rows);
+                });
+                return;
+            }
+        });
+
+        // hide menu on click elsewhere or escape
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('#bpContextMenu').length) hideMenu();
+        });
+        $(document).on('keydown', function(e) { if (e.key === 'Escape') hideMenu(); });
+    })();
 </script>
 
 <!-- BANK NAME DROPDOWN SELECTION HANDLER -->
@@ -1158,11 +1828,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         clearReportTable: function() {
             const tbody = $('#transactionReportTable tbody');
             tbody.empty();
-            tbody.append('<tr><td colspan="9" class="text-center"><b>CHARGE BY CUSTOMER</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER DAILY</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER WEEKLY</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr><tr><td colspan="9" class="text-center"><b>CHARGE BY PARTNER MONTHLY</b></td></tr><tr><td colspan="9" class="text-center text-muted">No data yet</td></tr>');
+            tbody.append('<tr><td colspan="11" class="text-start"><b>CHARGE BY CUSTOMER</b></td></tr><tr><td colspan="11" class="text-center text-muted">No data yet</td></tr><tr><td colspan="11" class="text-start"><b>CHARGE BY PARTNER DAILY</b></td></tr><tr><td colspan="11" class="text-center text-muted">No data yet</td></tr><tr><td colspan="11" class="text-start"><b>CHARGE BY PARTNER WEEKLY</b></td></tr><tr><td colspan="11" class="text-center text-muted">No data yet</td></tr><tr><td colspan="11" class="text-start"><b>CHARGE BY PARTNER MONTHLY</b></td></tr><tr><td colspan="11" class="text-center text-muted">No data yet</td></tr>');
 
             $('#totalnetvolume').text('0');
             $('#totalnetprincipal').text('0.00');
             $('#totalnetcharge').text('0.00');
+            $('#totalprincipaladjustment').text('0.00');
+            $('#totalamountforsettlement').text('0.00');
         },
 
         populateReportTable: function(data, refs) {
@@ -1172,6 +1844,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             let totalNetVolume = 0;
             let totalNetPrincipal = 0;
             let totalNetCharge = 0;
+            let totalPrincipalAdjustment = 0;
+            let totalAmountForSettlement = 0;
             let runningIndex = 0;
 
             const rows = Array.isArray(data) ? data : [];
@@ -1185,99 +1859,44 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 return Math.abs(value) < 0.0000001;
             };
 
-            const normalizePartnerName = function(value) {
+            const normalizeValue = function(value) {
                 return String(value || '').trim().toUpperCase();
-            };
-
-            const normalizePartnerRef = function(value) {
-                return String(value || '').trim().toUpperCase();
-            };
-
-            const getPartnerReferences = function(row) {
-                const refs = [];
-                const partnerIdRef = normalizePartnerRef(row.partner_id);
-                const partnerIdKpxRef = normalizePartnerRef(row.partner_id_kpx);
-                const partnerNameRef = normalizePartnerName(row.partner_name);
-
-                if (partnerIdRef) {
-                    refs.push(`PID:${partnerIdRef}`);
-                }
-
-                if (partnerIdKpxRef) {
-                    refs.push(`KPX:${partnerIdKpxRef}`);
-                }
-
-                if (partnerNameRef) {
-                    refs.push(`PNAME:${partnerNameRef}`);
-                }
-
-                return refs;
             };
 
             const applyRowIntoTarget = function(target, source) {
-                target.net_vol = toNumber(target.net_vol) + toNumber(source.net_vol);
-                target.net_principal = toNumber(target.net_principal) + toNumber(source.net_principal);
-                target.net_charges = toNumber(target.net_charges) + toNumber(source.net_charges);
+                target.volume_count = toNumber(target.volume_count) + toNumber(source.volume_count);
+                target.principal_amount_paid = toNumber(target.principal_amount_paid) + toNumber(source.principal_amount_paid);
+                target.charges = toNumber(target.charges) + toNumber(source.charges);
+                target.principal_adjustment = toNumber(target.principal_adjustment) + toNumber(source.principal_adjustment);
+                target.amount_for_settlement = toNumber(target.amount_for_settlement) + toNumber(source.amount_for_settlement);
                 target.partner_name = target.partner_name || source.partner_name || '';
                 target.partner_id = target.partner_id || source.partner_id || '';
                 target.partner_id_kpx = target.partner_id_kpx || source.partner_id_kpx || '';
                 target.partner_accName = target.partner_accName || source.partner_accName || '';
                 target.bank_accNumber = target.bank_accNumber || source.bank_accNumber || '';
-                target.bank = target.bank || source.bank || '';
+                target.bank_name = target.bank_name || source.bank_name || source.bank || '';
                 target.settled_online_check = target.settled_online_check || source.settled_online_check || '';
                 target.charge_to = target.charge_to || source.charge_to || '';
                 target.charge_sched = target.charge_sched || source.charge_sched || '';
             };
 
-            const referenceToKeyMap = new Map();
             const mergedRowsMap = new Map();
             rows.forEach(function(row) {
-                const rowRefs = getPartnerReferences(row);
-                if (rowRefs.length === 0) {
-                    return;
-                }
-
-                const matchedKeys = Array.from(new Set(
-                    rowRefs
-                        .map(function(ref) { return referenceToKeyMap.get(ref); })
-                        .filter(Boolean)
-                ));
-
-                let partnerKey = matchedKeys.length > 0 ? matchedKeys[0] : rowRefs[0];
-
-                if (matchedKeys.length > 1) {
-                    const primaryRow = mergedRowsMap.get(partnerKey);
-                    for (let index = 1; index < matchedKeys.length; index += 1) {
-                        const secondaryKey = matchedKeys[index];
-                        if (secondaryKey === partnerKey) {
-                            continue;
-                        }
-
-                        const secondaryRow = mergedRowsMap.get(secondaryKey);
-                        if (secondaryRow && primaryRow) {
-                            applyRowIntoTarget(primaryRow, secondaryRow);
-                        }
-
-                        mergedRowsMap.delete(secondaryKey);
-
-                        referenceToKeyMap.forEach(function(mappedKey, ref) {
-                            if (mappedKey === secondaryKey) {
-                                referenceToKeyMap.set(ref, partnerKey);
-                            }
-                        });
-                    }
-                }
-
-                rowRefs.forEach(function(ref) {
-                    referenceToKeyMap.set(ref, partnerKey);
-                });
+                const partnerKey = [
+                    normalizeValue(row.partner_name),
+                    normalizeValue(row.partner_id),
+                    normalizeValue(row.partner_id_kpx)
+                ].join('|');
 
                 if (!mergedRowsMap.has(partnerKey)) {
                     mergedRowsMap.set(partnerKey, {
                         ...row,
-                        net_vol: toNumber(row.net_vol),
-                        net_principal: toNumber(row.net_principal),
-                        net_charges: toNumber(row.net_charges)
+                        volume_count: toNumber(row.volume_count),
+                        principal_amount_paid: toNumber(row.principal_amount_paid),
+                        charges: toNumber(row.charges),
+                        principal_adjustment: toNumber(row.principal_adjustment),
+                        amount_for_settlement: toNumber(row.amount_for_settlement),
+                        bank_name: row.bank_name || row.bank || ''
                     });
                     return;
                 }
@@ -1289,16 +1908,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             const mergedRows = Array.from(mergedRowsMap.values());
 
             const visibleRows = mergedRows.filter(function(row) {
-                const netVol = toNumber(row.net_vol);
-                const netPrincipal = toNumber(row.net_principal);
-                const netCharge = toNumber(row.net_charges);
+                const volumeCount = toNumber(row.volume_count);
+                const principalAmountPaid = toNumber(row.principal_amount_paid);
+                const charges = toNumber(row.charges);
 
-                return !(isEffectivelyZero(netVol) && isEffectivelyZero(netPrincipal) && isEffectivelyZero(netCharge));
+                return !(isEffectivelyZero(volumeCount) && isEffectivelyZero(principalAmountPaid) && isEffectivelyZero(charges));
             });
-
-            const normalizeValue = function(value) {
-                return String(value || '').trim().toUpperCase();
-            };
 
             const getEffectiveChargeTo = function(row) {
                 const chargeTo = normalizeValue(row.charge_to);
@@ -1346,37 +1961,39 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
             const appendDataRows = function(sectionRows) {
                 sectionRows.forEach((row) => {
-                    const netVol = toNumber(row.net_vol);
-                    const netPrincipal = toNumber(row.net_principal);
-                    const netCharge = toNumber(row.net_charges);
+                    const volumeCount = toNumber(row.volume_count);
+                    const principalAmountPaid = toNumber(row.principal_amount_paid);
+                    const charges = toNumber(row.charges);
+                    const principalAdjustment = toNumber(row.principal_adjustment);
+                    const amountForSettlement = toNumber(row.amount_for_settlement);
 
                     displayedRows.add(row);
 
-                    totalNetVolume += netVol;
-                    totalNetPrincipal += netPrincipal;
-                    totalNetCharge += netCharge;
+                    totalNetVolume += volumeCount;
+                    totalNetPrincipal += principalAmountPaid;
+                    totalNetCharge += charges;
+                    totalPrincipalAdjustment += principalAdjustment;
+                    totalAmountForSettlement += amountForSettlement;
                     runningIndex += 1;
 
-                    const partnerMeta = [
-                        row.bank ? `Bank: ${row.bank}` : '',
-                        row.settled_online_check ? `Settlement: ${row.settled_online_check}` : '',
-                        row.charge_to ? `Charge To: ${row.charge_to}` : '',
-                        row.charge_sched ? `Charge Sched: ${row.charge_sched}` : ''
-                    ].filter(Boolean).join(' | ');
-
+                    const isUnsettled = toNumber(row.has_unsettled) > 0;
+                    const trClass = isUnsettled ? 'table-danger' : 'table-success';
+                    const statusIcon = isUnsettled ? '<i class="fa-solid fa-xmark text-danger" title="Unsettled"></i>' : '<i class="fa-solid fa-check text-success" title="Settled"></i>';
                     const tr = `
-                        <tr>
+                        <tr class="${trClass}" data-partner-id="${row.partner_id || ''}" data-partner-id-kpx="${row.partner_id_kpx || ''}" data-partner-name="${(row.partner_name||'').replace(/"/g,'&quot;')}" data-bank-name="${(row.bank_name||'').replace(/"/g,'&quot;')}" data-has-unsettled="${row.has_unsettled || 0}">
+                            <td class="text-center"><input class="form-check-input row-select" type="checkbox" aria-label="Select row"></td>
                             <td class="text-center">${runningIndex}</td>
                             <td>
                                 ${row.partner_name || ''}
                             </td>
                             <td>${row.partner_accName || ''}</td>
                             <td class="text-truncate">${row.bank_accNumber || ''}</td>
-                            <td class="text-end">${netVol.toLocaleString()}</td>
-                            <td class="text-end">${netPrincipal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                            <td class="text-end">${netCharge.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                            <td class="text-end">0.00</td>
-                            <td class="text-end">0.00</td>
+                            <td class="text-end">${volumeCount.toLocaleString()}</td>
+                            <td class="text-end">${principalAmountPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td class="text-end">${charges.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td class="text-end">${principalAdjustment.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td class="text-end">${amountForSettlement.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td class="text-center">${statusIcon}</td>
                         </tr>
                     `;
                     tbody.append(tr);
@@ -1384,15 +2001,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             };
 
             if (visibleRows.length === 0) {
-                tbody.append('<tr><td colspan="9" class="text-center">No data found for the selected criteria</td></tr>');
+                tbody.append('<tr><td colspan="11" class="text-center">No data found for the selected criteria</td></tr>');
             } else {
                 sections.forEach(section => {
                     const sectionRows = visibleRows.filter(section.matcher);
 
-                    tbody.append(`<tr><td colspan="9" class="text-center"><b>${section.title}</b></td></tr>`);
+                    tbody.append(`<tr><td colspan="11" class="text-start"><b>${section.title}</b></td></tr>`);
 
-                    if (sectionRows.length === 0) {
-                        tbody.append('<tr><td colspan="9" class="text-center text-muted">No data found under this section</td></tr>');
+                        if (sectionRows.length === 0) {
+                        tbody.append('<tr><td colspan="11" class="text-center text-muted">No data found under this section</td></tr>');
                         return;
                     }
 
@@ -1404,7 +2021,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 });
 
                 if (uncategorizedRows.length > 0) {
-                    tbody.append('<tr><td colspan="9" class="text-center"><b>UNMAPPED CHARGE CATEGORY</b></td></tr>');
+                    tbody.append('<tr><td colspan="11" class="text-start"><b>UNMAPPED CHARGE CATEGORY</b></td></tr>');
                     appendDataRows(uncategorizedRows);
                 }
             }
@@ -1412,6 +2029,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             $('#totalnetvolume').text(totalNetVolume.toLocaleString());
             $('#totalnetprincipal').text(totalNetPrincipal.toLocaleString('en-US', { minimumFractionDigits: 2 }));
             $('#totalnetcharge').text(totalNetCharge.toLocaleString('en-US', { minimumFractionDigits: 2 }));
+            $('#totalprincipaladjustment').text(totalPrincipalAdjustment.toLocaleString('en-US', { minimumFractionDigits: 2 }));
+            $('#totalamountforsettlement').text(totalAmountForSettlement.toLocaleString('en-US', { minimumFractionDigits: 2 }));
         },
 
         getEffectiveDates: function(refs) {
