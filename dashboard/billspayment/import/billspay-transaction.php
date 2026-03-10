@@ -1527,12 +1527,15 @@ if (isset($_SESSION['user_type'])) {
                 }
 
                 // Otherwise show the standard duplicate modal with Override/Skip/Remove
+                // If ALL uploaded files have duplicates, hide the Skip (deny) option
+                const allFilesAreDuplicate = (filesWithDuplicates.length === uploadedFiles.length);
+
                 Swal.fire({
                     title: '<i class="fa-solid fa-triangle-exclamation" style="color: #ff9800;"></i> Duplicate Records Detected',
                     html: summaryHTML + fileListHTML,
                     icon: 'warning',
                     showCancelButton: true,
-                    showDenyButton: true,
+                    showDenyButton: !allFilesAreDuplicate,
                     confirmButtonText: '<i class="fa-solid fa-rotate"></i> Override',
                     denyButtonText: '<i class="fa-solid fa-forward"></i> Skip',
                     cancelButtonText: '<i class="fa-solid fa-trash"></i> Remove',
@@ -1567,8 +1570,21 @@ if (isset($_SESSION['user_type'])) {
                         // User chose Override
                         proceedWithUpload('override');
                     } else if (result.isDenied) {
-                        // User chose Skip
-                        proceedWithUpload('skip');
+                        // User chose Skip — exclude entire files that have any duplicates
+                        filesWithDuplicates.forEach(f => {
+                            uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId)));
+                        });
+                        renderFileCards();
+                        if (uploadedFiles.length === 0) {
+                            Swal.fire({
+                                icon: 'info',
+                                title: 'All Files Skipped',
+                                text: 'No files left to import after skipping duplicates.',
+                                confirmButtonText: 'OK'
+                            });
+                        } else {
+                            proceedWithUpload('skip');
+                        }
                     } else {
                         // User chose Remove: delete the files that had duplicates and continue
                         filesWithDuplicates.forEach(f => {
