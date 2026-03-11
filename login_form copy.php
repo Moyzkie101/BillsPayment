@@ -5,10 +5,33 @@ use FontLib\Table\Type\head;
 
 include 'config/config.php';
 
-session_start();
+// Start session only when safe to send headers (avoid warnings when embedded)
+if (session_status() === PHP_SESSION_NONE) {
+   if (!headers_sent()) {
+      session_start();
+   } else {
+      // Headers already sent (embedded include). Try to start quietly to avoid warnings.
+      @session_start();
+   }
+}
+
+$isEmbeddedLogin = isset($EMBED_LOGIN_FORM) && $EMBED_LOGIN_FORM === true;
+
+// Build stable app-relative URLs so redirects work in standalone and embedded modes.
+$appBasePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+if ($appBasePath === '.' || $appBasePath === '/') {
+   $appBasePath = '';
+}
+$loginUrl = $appBasePath . '/login_form.php';
+$logoutUrl = $appBasePath . '/logout.php';
+$dashboardUrl = $appBasePath . '/dashboard/';
+$soaApprovalUrl = $appBasePath . '/dashboard/billspayment-soa/approval/soa-approval.php';
+$soaReviewUrl = $appBasePath . '/dashboard/billspayment-soa/review/for-checking-review.php';
 
 // Include shared header (scripts/styles used across the app)
-@include_once __DIR__ . '/templates/header.php';
+if (!$isEmbeddedLogin) {
+   @include_once __DIR__ . '/templates/header.php';
+}
 
 // Handle password change success/error messages FIRST before redirect check
 if(isset($_SESSION['success_message']) || isset($_SESSION['error_message'])){
@@ -17,14 +40,16 @@ if(isset($_SESSION['success_message']) || isset($_SESSION['error_message'])){
 } else {
    // Only check for redirect if there are no messages to show
    if(isset($_SESSION['user_type'])){
-      header('location: dashboard/');
+      header('location: ' . $dashboardUrl);
       exit();
    }
 }
 
-echo '<script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>';
-echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>';
-echo '<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>';
+if (!$isEmbeddedLogin) {
+   echo '<script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>';
+   echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>';
+   echo '<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>';
+}
 
 // Handle password change success/error messages FIRST before login processing
 if(isset($_SESSION['success_message'])){
@@ -41,10 +66,10 @@ if(isset($_SESSION['success_message'])){
                }).then((result) => {
                   if (result.isConfirmed) {
                      // Clear session and redirect to login page
-                     fetch('logout.php', {
+                     fetch('".$logoutUrl."', {
                         method: 'POST'
                      }).then(() => {
-                        window.location.href = 'login_form.php';
+                        window.top.location.href = '".$loginUrl."';
                      });
                   }
                });
@@ -72,10 +97,10 @@ elseif(isset($_SESSION['error_message'])){
                }).then((result) => {
                   if (result.isConfirmed) {
                      // Clear session and redirect to login page
-                     fetch('logout.php', {
+                     fetch('".$logoutUrl."', {
                         method: 'POST'
                      }).then(() => {
-                        window.location.href = 'login_form.php';
+                        window.top.location.href = '".$loginUrl."';
                      });
                   }
                });
@@ -148,7 +173,7 @@ elseif(isset($_POST['submit'])){
                         title: 'Signed in successfully'
                       }).then(() => {
                         // Redirect to the generate_payment.php page.
-                        window.location.href = 'dashboard/';
+                                    window.top.location.href = '".$dashboardUrl."';
                     });
                   }
                </script>";
@@ -199,10 +224,10 @@ elseif(isset($_POST['submit'])){
                         } 
                         else {
                            // Send AJAX request to destroy session and redirect
-                           fetch("logout.php", {
+                           fetch("'.$logoutUrl.'", {
                               method: "POST"
                            }).then(() => {
-                              window.location.href = "login_form.php";
+                              window.top.location.href = "'.$loginUrl.'";
                            });
                         }  
                      });
@@ -233,7 +258,7 @@ elseif(isset($_POST['submit'])){
                            icon: "success",
                            title: "Signed in successfully",
                            }).then(() => {
-                           window.location.href = "dashboard/billspayment-soa/approval/soa-approval.php";
+                           window.top.location.href = "'.$soaApprovalUrl.'";
                         });
                      }
                   </script>';
@@ -261,7 +286,7 @@ elseif(isset($_POST['submit'])){
                            icon: "success",
                            title: "Signed in successfully",
                            }).then(() => {
-                           window.location.href = "dashboard/billspayment-soa/review/for-checking-review.php";
+                           window.top.location.href = "'.$soaReviewUrl.'";
                         });
                      }
                   </script>';
@@ -288,7 +313,7 @@ elseif(isset($_POST['submit'])){
                            icon: "success",
                            title: "Signed in successfully",
                            }).then(() => {
-                           window.location.href = "dashboard/";
+                           window.top.location.href = "'.$dashboardUrl.'";
                         });
                      }
                   </script>';
@@ -354,6 +379,7 @@ if(isset($_SESSION['error_message'])){
 }
 
 ?>
+<?php if (!$isEmbeddedLogin): ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -365,11 +391,51 @@ if(isset($_SESSION['error_message'])){
    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap">
    <link rel="stylesheet" href="./assets/css/style.css?v=<?php echo time(); ?>">
    <link rel="stylesheet" href="./assets/css/login.css?v=<?php echo time(); ?>">
-   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.1.4/dist/sweetalert2.min.css">
-   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.1.4/dist/sweetalert2.all.min.js"></script>
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
    <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
 </head>
 <body>
+<?php else: ?>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap">
+<link rel="stylesheet" href="./assets/css/login.css?v=<?php echo time(); ?>">
+<!-- Embedded-mode tweaks: transparent background and close button inside card -->
+<style>
+   /* Embedded fragment should size to the card only (no full-page 100vh wrapper). */
+   .login-page {
+      background: transparent !important;
+      min-height: auto !important;
+      height: auto !important;
+      width: auto !important;
+      display: block !important;
+   }
+   /* center the login card without creating extra scrollable area */
+   .login-panel {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 0 !important;
+      background: transparent !important;
+      min-height: auto !important;
+   }
+   /* close X that appears on the card when embedded */
+   .login-card .embedded-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 40;
+      background: rgba(0,0,0,0.35);
+      border: 0;
+      color: #fff;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+   }
+</style>
+<?php endif; ?>
 
 <!-- Change Password Modal -->
 <div id="changePasswordModal" class="change-password-modal" aria-hidden="true">
@@ -410,11 +476,14 @@ if(isset($_SESSION['error_message'])){
 
    <!-- Right: Form Panel (single-column layout) -->
    <div class="login-panel">
-      <div class="login-card">
-         <button type="button" class="card-close" id="cardClose" aria-label="Close login">&times;</button>
+      <div class="login-card" role="dialog" aria-modal="true">
+         <?php if ($isEmbeddedLogin): ?>
+            <button type="button" class="embedded-close" data-bs-dismiss="modal" aria-label="Close">&times;</button>
+         <?php endif; ?>
          <div class="login-panel-brand">
             <img src="./images/MLW Logo.png" alt="ML Logo" class="brand-logo">
-           
+            
+         </div>
          <p class="card-title">Welcome Back</p>
          <p class="card-sub">Sign in to your account to continue</p>
          <div class="accent-bar"></div>
@@ -423,7 +492,7 @@ if(isset($_SESSION['error_message'])){
 
             <!-- Username -->
             <div class="field-group">
-               <label for="email">Username</label>
+               <label for="email"><i class="fa-solid fa-user" style="margin-right:6px;color:#d70c0c;"></i>Username</label>
                <div class="field-input">
                   <i class="fa-solid fa-user fi-icon"></i>
                   <input
@@ -441,7 +510,7 @@ if(isset($_SESSION['error_message'])){
 
             <!-- Password -->
             <div class="field-group">
-               <label for="password">Password</label>
+               <label for="password"><i class="fa-solid fa-lock" style="margin-right:6px;color:#d70c0c;"></i>Password</label>
                <div class="field-input">
                   <i class="fa-solid fa-lock fi-icon"></i>
                   <input
@@ -451,7 +520,6 @@ if(isset($_SESSION['error_message'])){
                      required
                      placeholder="Enter your password"
                      autocomplete="off"
-                     value="<?php echo isset($_COOKIE['saved_password']) ? htmlspecialchars($_COOKIE['saved_password']) : ''; ?>"
                   >
                   <button type="button" class="eye-btn" id="togglePassword" aria-label="Toggle password visibility">
                      <i class="fa-solid fa-eye"></i>
@@ -461,8 +529,8 @@ if(isset($_SESSION['error_message'])){
 
             <!-- Remember username -->
             <div class="save-row">
-               <input type="checkbox" id="save_as" name="save_as" <?php echo (isset($_COOKIE['saved_username']) || isset($_COOKIE['saved_password'])) ? 'checked' : ''; ?>>
-               <label for="save_as">Remember me</label>
+               <input type="checkbox" id="save_as" name="save_as" <?php echo isset($_COOKIE['saved_username']) ? 'checked' : ''; ?>>
+               <label for="save_as">Remember my username</label>
             </div>
 
             <!-- Submit -->
@@ -470,7 +538,9 @@ if(isset($_SESSION['error_message'])){
                <i class="fa-solid fa-right-to-bracket" style="margin-right:8px;"></i>LOGIN
             </button>
 
-            <!-- Back link removed per UI update -->
+            <div class="login-back">
+               <a href="index.php"><i class="fa-solid fa-arrow-left" style="margin-right:4px;"></i>Back to home</a>
+            </div>
 
          </form>
       </div>
@@ -494,79 +564,31 @@ document.addEventListener('DOMContentLoaded', function () {
       });
    }
 
-   // Load remembered username/password from localStorage
+   // Load remembered username from localStorage
    var emailInput   = document.getElementById('email');
    var saveCheckbox = document.getElementById('save_as');
    try {
-      var savedU = localStorage.getItem('bp_saved_username');
-      var savedP = localStorage.getItem('bp_saved_password');
-      if (savedU && emailInput && !emailInput.value) {
-         emailInput.value = savedU;
-      }
-      if (savedP && pwd && !pwd.value) {
-         pwd.value = savedP;
+      var saved = localStorage.getItem('bp_saved_username');
+      if (saved && emailInput && !emailInput.value) {
+         emailInput.value = saved;
       }
    } catch (e) {}
 
-      // Update left icon color when inputs are populated
-      function updateFilledState(input) {
-         if (!input) return;
-         var wrapper = input.closest('.field-input');
-         if (!wrapper) return;
-         if (input.value && input.value.trim() !== '') {
-            wrapper.classList.add('input-filled');
-         } else {
-            wrapper.classList.remove('input-filled');
-         }
-      }
-
-      // Initialize filled state (covers pre-filled cookies/localStorage)
-      updateFilledState(emailInput);
-      updateFilledState(pwd);
-
-         // Also initialize and bind for change-password modal inputs
-         var newPwdInput = document.getElementById('new_password');
-         var confirmPwdInput = document.getElementById('confirm_password');
-         updateFilledState(newPwdInput);
-         updateFilledState(confirmPwdInput);
-         if (newPwdInput) newPwdInput.addEventListener('input', function () { updateFilledState(newPwdInput); });
-         if (confirmPwdInput) confirmPwdInput.addEventListener('input', function () { updateFilledState(confirmPwdInput); });
-
-      // Update on user input
-      if (emailInput) {
-         emailInput.addEventListener('input', function () { updateFilledState(emailInput); });
-      }
-      if (pwd) {
-         pwd.addEventListener('input', function () { updateFilledState(pwd); });
-      }
-
-   // Save / clear on submit (remember username + password when checked)
+   // Save / clear on submit
    var form = document.getElementById('loginForm');
    if (form) {
       form.addEventListener('submit', function () {
          try {
-            if (saveCheckbox && saveCheckbox.checked && emailInput && emailInput.value && pwd && pwd.value) {
+            if (saveCheckbox && saveCheckbox.checked && emailInput && emailInput.value) {
                localStorage.setItem('bp_saved_username', emailInput.value);
-               localStorage.setItem('bp_saved_password', pwd.value);
                document.cookie = 'saved_username=' + encodeURIComponent(emailInput.value) + '; path=/; max-age=' + (60 * 60 * 24 * 30);
-               document.cookie = 'saved_password=' + encodeURIComponent(pwd.value) + '; path=/; max-age=' + (60 * 60 * 24 * 30);
             } else {
                localStorage.removeItem('bp_saved_username');
-               localStorage.removeItem('bp_saved_password');
                document.cookie = 'saved_username=; path=/; max-age=0';
-               document.cookie = 'saved_password=; path=/; max-age=0';
             }
          } catch (e) {}
       });
    }
-
-      // Close button redirects back to index.php
-      var cardClose = document.getElementById('cardClose');
-      if (cardClose) {
-         cardClose.addEventListener('click', function () {
-            window.location.href = 'index.php';
-         });
-      }
 
    // ESC closes change-password modal
    var modal = document.getElementById('changePasswordModal');
@@ -603,6 +625,8 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-<?php @include_once __DIR__ . '/templates/footer.php'; ?>
+<?php if (!$isEmbeddedLogin) { @include_once __DIR__ . '/templates/footer.php'; } ?>
+<?php if (!$isEmbeddedLogin): ?>
 </body>
 </html>
+<?php endif; ?>
