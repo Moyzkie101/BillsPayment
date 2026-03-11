@@ -101,6 +101,9 @@
         "Invoice Approval",
         "Invoice Review",
         "Masterfiles View Bank List",
+        "Masterfiles View Partner List",
+        "Profile Signature",
+        "Profile View",
         "Tools Branch Maker",
         "Tools File Fetch",
         "Tools KPX Generator"
