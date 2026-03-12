@@ -289,6 +289,17 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
             border-color: #dbe3ee;
         }
 
+        /* Swap Reset All button default and hover styles: filled by default, outline on hover */
+        #resetAllBtn {
+            transition: all .12s ease;
+        }
+        #resetAllBtn:hover {
+            background: #ffffff !important;
+            color: #dc3545 !important;
+            border: 1px solid #dc3545 !important;
+            box-shadow: none !important;
+        }
+
         #permissionPreview .preview-item .label {
             display: inline-block;
             width: calc(100% - 24px);
@@ -363,24 +374,29 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
         </div>
 
         <div class="bp-card container-fluid mt-3 p-4">
-            <div class="row mb-3">
-                <div class="col-md-6 col-lg-4">
-                        <div class="input-group">
-                            <span class="input-group-text bg-white" id="searchIcon" style="border-right:0;">
-                                <i class="fa-solid fa-magnifying-glass" aria-hidden="true" style="color:#6b7280;"></i>
-                            </span>
-                            <input
-                                type="search"
-                                id="searchInput"
-                                class="form-control"
-                                placeholder="Search by ID Number / First Name / Last Name / Email"
-                                aria-describedby="searchIcon"
-                            />
-                            <button class="btn btn-outline-secondary" type="button" id="searchBtn" title="Search">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-                            </button>
-                        </div>
+            <div class="row mb-3 align-items-center">
+                <div class="col-md-8 col-lg-6">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white" id="searchIcon" style="border-right:0;">
+                            <i class="fa-solid fa-magnifying-glass" aria-hidden="true" style="color:#6b7280;"></i>
+                        </span>
+                        <input
+                            type="search"
+                            id="searchInput"
+                            class="form-control"
+                            placeholder="Search by ID Number / First Name / Last Name / Email"
+                            aria-describedby="searchIcon"
+                        />
+                        <button class="btn btn-outline-secondary" type="button" id="searchBtn" title="Search">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </button>
                     </div>
+                </div>
+                <div class="col-md-4 col-lg-6 text-end">
+                    <button class="btn btn-danger" type="button" id="resetAllBtn" title="Reset All">
+                        Reset All
+                    </button>
+                </div>
             </div>
 
             <div class="table-responsive">
@@ -828,6 +844,61 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                     e.preventDefault();
                     performSearch();
                 }
+            });
+
+            // Reset All button: set all non-sentinel users to level 1; re-apply -1 users
+            $('#resetAllBtn').on('click', function() {
+                Swal.fire({
+                    title: 'Reset all users Default Access Level and Re apply Admin Access Level',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, reset all',
+                    cancelButtonText: 'Cancel'
+                }).then(function(result) {
+                    if (!result || !result.isConfirmed) return;
+
+                    $.ajax({
+                        url: '../../../models/updated/reset-all-access-levels.php',
+                        method: 'POST',
+                        dataType: 'json'
+                    }).done(function(resp) {
+                        if (!resp || !resp.success) {
+                            Swal.fire({ icon: 'error', title: 'Failed', text: resp && resp.message ? resp.message : 'Reset failed.' });
+                            return;
+                        }
+
+                        // Update table rows if details returned, otherwise reload
+                        if (Array.isArray(resp.updated) && resp.updated.length) {
+                            resp.updated.forEach(function(u) {
+                                var idn = (u.id_number || '').toString().toLowerCase();
+                                var row = $('#users-table tbody tr').filter(function() {
+                                    return String($(this).attr('data-id-number') || '').toLowerCase() === idn;
+                                }).first();
+
+                                if (!row || !row.length) return;
+
+                                try {
+                                    var du = row.attr('data-user');
+                                    var obj = du ? JSON.parse(du) : {};
+                                    obj.access_level = parseInt(u.access_level, 10) || 0;
+                                    row.attr('data-user', JSON.stringify(obj));
+                                    row.find('.access-level-cell').text(String(obj.access_level));
+                                } catch (e) {
+                                    // ignore
+                                }
+                            });
+                        }
+
+                        Swal.fire({ icon: 'success', title: 'Reset complete', text: resp.message || 'All users updated.' });
+
+                        // If current session was affected, force reload to refresh menus
+                        if (resp.current_user_changed) {
+                            window.location.reload(true);
+                        }
+                    }).fail(function() {
+                        Swal.fire({ icon: 'error', title: 'Server error', text: 'Failed to perform reset.' });
+                    });
+                });
             });
 
             $('#users-table tbody').on('click', 'tr', function() {
