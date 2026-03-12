@@ -174,29 +174,16 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         $types .= 'ss';
     }
 
-    $partnerIds = [];
+    // Partner owner filter based on sub_billers_name rules
+    $partnerOwnerCondition = '';
     if ($partner !== '' && $partner !== 'All') {
-        $partnerConvertSQL = "SELECT DISTINCT partner_id, partner_id_kpx FROM masterdata.partner_masterfile WHERE partner_name = ? AND status = 'ACTIVE'";
-        $partnerStmt = $conn->prepare($partnerConvertSQL);
-
-        if ($partnerStmt) {
-            $partnerStmt->bind_param('s', $partner);
-            $partnerStmt->execute();
-            $partnerResult = $partnerStmt->get_result();
-
-            while ($row = $partnerResult->fetch_assoc()) {
-                if (!empty($row['partner_id'])) {
-                    $partnerIds[] = trim((string)$row['partner_id']);
-                }
-                if (!empty($row['partner_id_kpx'])) {
-                    $partnerIds[] = trim((string)$row['partner_id_kpx']);
-                }
-            }
-
-            $partnerStmt->close();
+        if ($partner === 'SECURITY BANK') {
+            $partnerOwnerCondition = ' AND bt.partner_name = ? AND (bt.sub_billers_name IS NULL OR TRIM(bt.sub_billers_name) = \'\')';
+        } elseif ($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING') {
+            $partnerOwnerCondition = ' AND bt.sub_billers_name = ?';
+        } else {
+            $partnerOwnerCondition = ' AND bt.partner_name = ?';
         }
-
-        $partnerIds = array_values(array_unique(array_filter($partnerIds)));
     }
 
         $query = "SELECT
@@ -224,19 +211,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 )
                 AND bt.rfp_no IS NULL
                 AND bt.cad_no IS NULL
-                AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')";
+                AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+                $partnerOwnerCondition";
 
     if ($partner !== '' && $partner !== 'All') {
-        if (!empty($partnerIds)) {
-            $partnerIdPlaceholders = implode(',', array_fill(0, count($partnerIds), '?'));
-            $query .= " AND (bt.partner_id IN ($partnerIdPlaceholders) OR bt.partner_id_kpx IN ($partnerIdPlaceholders))";
-            $params = array_merge($params, $partnerIds, $partnerIds);
-            $types .= str_repeat('s', count($partnerIds) * 2);
-        } else {
-            $query .= " AND bt.partner_name = ?";
-            $params[] = $partner;
-            $types .= 's';
-        }
+        $params[] = $partner;
+        $types .= 's';
     }
 
     $query .= ' ORDER BY bt.datetime ASC, bt.reference_no ASC';
@@ -316,29 +296,16 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_logs_list') {
         }
     }
 
-    $partnerIds = [];
+    // Partner owner filter based on sub_billers_name rules
+    $partnerOwnerConditionLogs = '';
     if ($partner !== '' && $partner !== 'All') {
-        $partnerConvertSQL = "SELECT DISTINCT partner_id, partner_id_kpx FROM masterdata.partner_masterfile WHERE partner_name = ? AND status = 'ACTIVE'";
-        $partnerStmt = $conn->prepare($partnerConvertSQL);
-
-        if ($partnerStmt) {
-            $partnerStmt->bind_param('s', $partner);
-            $partnerStmt->execute();
-            $partnerResult = $partnerStmt->get_result();
-
-            while ($row = $partnerResult->fetch_assoc()) {
-                if (!empty($row['partner_id'])) {
-                    $partnerIds[] = trim((string)$row['partner_id']);
-                }
-                if (!empty($row['partner_id_kpx'])) {
-                    $partnerIds[] = trim((string)$row['partner_id_kpx']);
-                }
-            }
-
-            $partnerStmt->close();
+        if ($partner === 'SECURITY BANK') {
+            $partnerOwnerConditionLogs = ' AND mbt.partner_name = ? AND (mbt.sub_billers_name IS NULL OR TRIM(mbt.sub_billers_name) = \'\')';
+        } elseif ($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING') {
+            $partnerOwnerConditionLogs = ' AND mbt.sub_billers_name = ?';
+        } else {
+            $partnerOwnerConditionLogs = ' AND mbt.partner_name = ?';
         }
-
-        $partnerIds = array_values(array_unique(array_filter($partnerIds)));
     }
 
     $query = "SELECT
@@ -416,7 +383,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_logs_list') {
             WHERE (mbt.status IS NULL OR mbt.status <> '*')
                 AND mbt.rfp_no IS NULL
                 AND mbt.cad_no IS NULL
-              AND mbt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')";
+                            AND mbt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')";
 
     if ($settlementView === 'reference') {
         $query .= ' AND msabt.reference_no LIKE ?';
@@ -436,16 +403,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_logs_list') {
     }
 
     if ($partner !== '' && $partner !== 'All') {
-        if (!empty($partnerIds)) {
-            $partnerPlaceholders = implode(',', array_fill(0, count($partnerIds), '?'));
-            $query .= " AND (mbt.partner_id IN ($partnerPlaceholders) OR mbt.partner_id_kpx IN ($partnerPlaceholders))";
-            $params = array_merge($params, $partnerIds, $partnerIds);
-            $types .= str_repeat('s', count($partnerIds) * 2);
-        } else {
-            $query .= ' AND mbt.partner_name = ?';
-            $params[] = $partner;
-            $types .= 's';
-        }
+        $query .= $partnerOwnerConditionLogs;
+        $params[] = $partner;
+        $types .= 's';
     }
 
     $query .= ' ORDER BY mbt.datetime ASC, msabt.reference_no ASC';
