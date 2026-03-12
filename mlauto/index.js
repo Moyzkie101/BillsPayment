@@ -175,6 +175,11 @@ const partnerMaster = [
     partner_name: "BAYAN TELECOMMUNICATIONS INC"
   },
   {
+    partner_id: null,
+    partner_id_kpx: "1144",
+    partner_name: "BAYBAY CITY WATER DISTRICT"
+  },
+  {
     partner_id: "MLBPP200681",
     partner_id_kpx: "50",
     partner_name: "BBBROTHERS DV GEN. MDSE INC"
@@ -985,11 +990,6 @@ const partnerMaster = [
     partner_name: "GENTRADE INTERNATIONAL PHILS. INC."
   },
   {
-    partner_id: "MLBPP180456",
-    partner_id_kpx: "293",
-    partner_name: "GI PHILIPPINES CORP."
-  },
-  {
     partner_id: "MLBPP130022",
     partner_id_kpx: "294",
     partner_name: "GLOBAL DOMINION FINANCING"
@@ -1053,6 +1053,11 @@ const partnerMaster = [
     partner_id: "MLBPP190509",
     partner_id_kpx: "307",
     partner_name: "GUIMARAS ELECTRIC COOPERATIVE"
+  },
+  {
+    partner_id: null,
+    partner_id_kpx: "1158",
+    partner_name: "GUIUAN WATER DISTRICT"
   },
   {
     partner_id: "MLBPP200656",
@@ -1363,6 +1368,11 @@ const partnerMaster = [
     partner_id: "MLBPP180421",
     partner_id_kpx: "385",
     partner_name: "ISPD - BIYAHE TICKET PRINCIPAL"
+  },
+  {
+    partner_id: "MLBPP180456",
+    partner_id_kpx: null,
+    partner_name: "BIYAHEKO.COM CORPORATION"
   },
   {
     partner_id: "MLBPP200585",
@@ -2028,6 +2038,11 @@ const partnerMaster = [
     partner_id: NaN,
     partner_id_kpx: "1133",
     partner_name: "ML JEWELLERS LIVE SELLING USA"
+  },
+  {
+    partner_id: NaN,
+    partner_id_kpx: "1043",
+    partner_name: "ML LOANS RAFFLE"
   },
   {
     partner_id: NaN,
@@ -3000,6 +3015,11 @@ const partnerMaster = [
     partner_name: "RIVERSIDE COLLEGE INC."
   },
   {
+    partner_id: null,
+    partner_id_kpx: "1159",
+    partner_name: "RIZAL MEMORIAL COLLEGES INC. - DAVAO"
+  },
+  {
     partner_id: "MLBPP150116",
     partner_id_kpx: "773",
     partner_name: "RMG MANAGEMENT CORPORATION"
@@ -3513,6 +3533,11 @@ const partnerMaster = [
     partner_id: "MLBPP170399",
     partner_id_kpx: "886",
     partner_name: "SURIGAO ELECTRIC COOPERATIVE (SURSECO 1)"
+  },
+  {
+    partner_id: null,
+    partner_id_kpx: "1045",
+    partner_name: "SURALLAH WATER DISTRICT"
   },
   {
     partner_id: "MLBPP200628",

@@ -2312,7 +2312,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             region, 
             operator, 
             partner_name, 
-            billers_name,
+            sub_billers_name,
             partner_id, 
             partner_id_kpx,
             mpm_gl_code,
