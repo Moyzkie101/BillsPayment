@@ -1572,5 +1572,6 @@ if (isset($_POST['EditConfirmBtn'])) {
     </script>
 </body>
 <?php include '../../../templates/footer.php'; ?>
+<?php include '../no-signature-modal.php'; ?>
 
 </html>

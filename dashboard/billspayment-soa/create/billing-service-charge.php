@@ -942,5 +942,6 @@ if (isset($_SESSION['user_type'])) {
         </script>
     
     <?php include '../../../templates/footer.php'; ?>
+    <?php include '../no-signature-modal.php'; ?>
 </body>
 </html>
