@@ -46,39 +46,56 @@
         "Maintenance Masterfiles Bank List",
         "Maintenance Masterfiles Partner List",
         "Masterfiles View Bank List",
-        "Masterfiles View Partner List",
-        "Profile Signature",
-        "Profile View",
         "Tools Branch Maker",
         "Tools File Fetch",
         "Tools KPX Generator"
     ],
     "94005055": [
         "BI Report Billing Invoice",
+        "Invoice Approval",
+        "Masterfiles View Bank List",
+        "Masterfiles View Partner List",
+        "Profile Signature",
+        "Profile View"
+    ],
+    "1013333": [
+        "BI Report Billing Invoice",
+        "Invoice Approval",
+        "Profile Signature",
+        "Profile View"
+    ],
+    "17098209": [
+        "BI Report Billing Invoice",
+        "BP Report Balance Sheet",
+        "BP Report Cancellation",
         "BP Report EDI",
         "BP Report Transaction Details",
         "BP Report Transaction Summary",
         "BP Report Volume",
-        "Invoice Approval",
-        "Masterfiles View Bank List"
-    ],
-    "1013333": [
-        "BI Report Billing Invoice",
-        "Invoice Approval"
-    ],
-    "17098209": [
-        "Invoice Review"
+        "BP Settlement Adjustment Entry",
+        "BP Settlement Per Bank",
+        "Invoice Review",
+        "Maintenance Masterfiles Bank List",
+        "Maintenance Masterfiles Partner List",
+        "Masterfiles View Bank List",
+        "Masterfiles View Partner List",
+        "Profile Signature",
+        "Profile View"
     ],
     "20217237": [
-        "BI Create Automated",
-        "BI Create Manual",
-        "BI Report Billing Invoice",
         "BP Import Cancellation",
         "BP Import Transaction",
+        "BP Report Cancellation",
         "BP Report EDI",
+        "BP Report Transaction Details",
+        "BP Report Transaction Summary",
         "BP Report Volume",
+        "BP Settlement Adjustment Entry",
         "BP Settlement Per Bank",
         "Masterfiles View Bank List",
+        "Masterfiles View Partner List",
+        "Profile Signature",
+        "Profile View",
         "Tools Branch Maker",
         "Tools File Fetch",
         "Tools KPX Generator"
@@ -98,8 +115,8 @@
         "BP Report Volume",
         "BP Settlement Adjustment Entry",
         "BP Settlement Per Bank",
-        "Invoice Approval",
-        "Invoice Review",
+        "Maintenance Masterfiles Bank List",
+        "Maintenance Masterfiles Partner List",
         "Masterfiles View Bank List",
         "Masterfiles View Partner List",
         "Profile Signature",
