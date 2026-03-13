@@ -45,14 +45,24 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
         $page = isset($_POST['page']) ? (int)$_POST['page'] : 1;
         $rows_per_page = isset($_POST['rows_per_page']) ? (int)$_POST['rows_per_page'] : 10;
         
-        // Initialize arrays and variables
-        $whereConditions = [];
-        $params = [];
-        
-        // Partner filter
+        // Build transaction-level partner owner filter using sub_billers_name rules
+        $ownerFilterCondition = '';
         if (!empty($partner) && $partner !== 'All') {
-            $whereConditions[] = "mpm.partner_name = ?";
-            $params[] = $partner;
+            $partnerEsc = mysqli_real_escape_string($conn, $partner);
+            if ($partner === 'SECURITY BANK') {
+                $ownerFilterCondition = " AND bt.partner_name = '{$partnerEsc}' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '')";
+            } elseif ($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING') {
+                $ownerFilterCondition = " AND bt.sub_billers_name = '{$partnerEsc}'";
+            } else {
+                $ownerFilterCondition = " AND bt.partner_name = '{$partnerEsc}'";
+            }
+        }
+
+        // Apply final owner filter so specific partner selection returns only that owner row
+        $selectedOwnerCondition = '';
+        if (!empty($partner) && $partner !== 'All') {
+            $selectedOwnerEsc = mysqli_real_escape_string($conn, $partner);
+            $selectedOwnerCondition = " AND ao.owner_name = '{$selectedOwnerEsc}'";
         }
 
         // Date condition - fix the logic
@@ -77,12 +87,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
             $sourceFileCondition = "AND bt.source_file IN ('KP7', 'KPX')";
         }
 
-        // Build WHERE clause for main query
-        $mainWhereClause = '';
-        if (!empty($whereConditions)) {
-            $mainWhereClause = 'AND ' . implode(' AND ', $whereConditions);
-        }
-        
         // Check database connection
         if (!$conn) {
             echo json_encode(['success' => false, 'error' => 'Database connection failed']);
@@ -93,7 +97,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
         $query = "
             WITH summary_vol AS (
                 SELECT
-                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
+                    CASE
+                        WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                        WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                        ELSE bt.partner_name
+                    END AS owner_name,
+                    MAX(bt.sub_billers_name) AS sub_billers_name,
                     COUNT(*) AS vol1,
                     sum(bt.amount_paid) AS principal1,
                     sum(bt.charge_to_partner) AS charge_partner1,
@@ -102,14 +111,25 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     mldb.billspayment_transaction AS bt
                 WHERE
                     $dateCondition
-                    AND bt.status IS NULL
+                    AND bt.status IS NULL 
+                    AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944') 
                     $sourceFileCondition
+                    $ownerFilterCondition
                 GROUP BY
-                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
+                    CASE
+                        WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                        WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                        ELSE bt.partner_name
+                    END
             ),
             adjustment_vol AS (
                 SELECT
-                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci AS partner_key,
+                    CASE
+                        WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                        WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                        ELSE bt.partner_name
+                    END AS owner_name,
+                    MAX(bt.sub_billers_name) AS sub_billers_name,
                     COUNT(*) AS vol2,
                     sum(bt.amount_paid) AS principal2,
                     sum(bt.charge_to_partner) AS charge_partner2,
@@ -118,16 +138,40 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                     mldb.billspayment_transaction AS bt
                 WHERE
                     $dateCondition
-                    AND bt.status = '*'
+                    AND bt.status = '*' 
+                    AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944') 
                     $sourceFileCondition
+                    $ownerFilterCondition
                 GROUP BY
-                    COALESCE(bt.partner_id, bt.partner_id_kpx) COLLATE utf8mb4_general_ci
+                    CASE
+                        WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                        WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                        ELSE bt.partner_name
+                    END
+            ),
+            mpm_details AS (
+                SELECT
+                    partner_name,
+                    MAX(partner_id) AS partner_id,
+                    MAX(partner_id_kpx) AS partner_id_kpx,
+                    MAX(gl_code) AS gl_code
+                FROM masterdata.partner_masterfile
+                WHERE status = 'ACTIVE'
+                GROUP BY partner_name
+            ),
+            all_owners AS (
+                SELECT partner_name AS owner_name FROM mpm_details
+                UNION
+                SELECT owner_name FROM summary_vol
+                UNION
+                SELECT owner_name FROM adjustment_vol
             )
             SELECT 
-                mpm.partner_name,
+                ao.owner_name AS partner_name,
                 mpm.partner_id,
                 mpm.partner_id_kpx,
                 mpm.gl_code,
+                COALESCE(sv.sub_billers_name, av.sub_billers_name) AS sub_billers_name,
                 
                 COALESCE(sv.vol1, 0) AS summary_vol,
                 COALESCE(sv.principal1, 0) AS summary_principal,
@@ -147,38 +191,25 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
                 (COALESCE(sv.charge_customer1, 0) - COALESCE(ABS(av.charge_customer2), 0)) AS net_charges_customer,
                 ((COALESCE(sv.charge_partner1, 0) - COALESCE(ABS(av.charge_partner2), 0)) + (COALESCE(sv.charge_customer1, 0) - COALESCE(ABS(av.charge_customer2), 0))) AS net_total_charge
             FROM 
-                masterdata.partner_masterfile AS mpm
+                all_owners AS ao
             LEFT JOIN
                 summary_vol AS sv
-                ON (
-                    COALESCE(mpm.partner_id, mpm.partner_id_kpx) COLLATE utf8mb4_general_ci = sv.partner_key
-                )
+                ON ao.owner_name = sv.owner_name
             LEFT JOIN
                 adjustment_vol AS av
-                ON (
-                    COALESCE(mpm.partner_id, mpm.partner_id_kpx) COLLATE utf8mb4_general_ci = av.partner_key
-                )
+                ON ao.owner_name = av.owner_name
+            LEFT JOIN
+                mpm_details AS mpm
+                ON ao.owner_name = mpm.partner_name
             WHERE
-                mpm.status = 'ACTIVE'
-                $mainWhereClause
+                ao.owner_name IS NOT NULL
+                $selectedOwnerCondition
             ORDER BY
-                mpm.partner_name
+                ao.owner_name
         ";
-        
+
         // Execute the query
-        if (!empty($params)) {
-            $stmt = $conn->prepare($query);
-            if ($stmt) {
-                $types = str_repeat('s', count($params));
-                $stmt->bind_param($types, ...$params);
-                $stmt->execute();
-                $result = $stmt->get_result();
-            } else {
-                throw new Exception('Failed to prepare statement');
-            }
-        } else {
-            $result = $conn->query($query);
-        }
+        $result = $conn->query($query);
         
         if (!$result) {
             throw new Exception('Query failed: ' . $conn->error);
@@ -306,7 +337,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
     $pid_kpx = $mpm['partner_id_kpx'] ?? '';
 
     // Fetch transaction rows that match either partner id
-    $txQuery = "SELECT bt.* FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) ORDER BY bt.datetime LIMIT 1000";
+    $txQuery = "SELECT bt.* FROM mldb.billspayment_transaction bt WHERE $dateCondition AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944') AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) ORDER BY bt.datetime LIMIT 1000";
     $txStmt = $conn->prepare($txQuery);
     $txRows = [];
     if ($txStmt) {
@@ -328,7 +359,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
     }
 
     // Fetch aggregated groups (by partner_id / partner_id_kpx) for selected partner ids
-    $groupQuery = "SELECT bt.partner_id, bt.partner_id_kpx, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY bt.partner_id, bt.partner_id_kpx";
+    $groupQuery = "SELECT bt.partner_id, bt.partner_id_kpx, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944') AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY bt.partner_id, bt.partner_id_kpx";
     $groupStmt = $conn->prepare($groupQuery);
     $groups = [];
     if ($groupStmt) {
@@ -345,7 +376,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
     }
 
     // Also show normalized grouping
-    $normQuery = "SELECT COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY COALESCE(bt.partner_id, bt.partner_id_kpx)";
+    $normQuery = "SELECT COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944') AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY COALESCE(bt.partner_id, bt.partner_id_kpx)";
     $normStmt = $conn->prepare($normQuery);
     $norm = [];
     if ($normStmt) {
@@ -762,9 +793,19 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
         // Build table rows
         let tableRows = '';
         data.forEach(function(row, index) {
+            const subBillersName = (row.sub_billers_name || '').toString().trim();
+            const partnerName = (row.partner_name || '').toString().trim();
+            let partner_name_raw = partnerName;
+
+            if (subBillersName === 'MYLORA CORPORATION' || subBillersName === 'JUNANS MARKETING') {
+                partner_name_raw = subBillersName;
+            } else if (subBillersName === '' && partnerName === 'SECURITY BANK') {
+                partner_name_raw = partnerName;
+            }
+
             tableRows += `
                 <tr class="transaction-row" data-row-index="${index}">
-                    <td class='text-truncate'>${escapeHtml(row.partner_name || '')}</td>
+                    <td class='text-truncate'>${escapeHtml(partner_name_raw)}</td>
                     <td class="text-center">${escapeHtml(row.partner_id || '')}</td>
                     <td class="text-center">${escapeHtml(row.partner_id_kpx || '')}</td>
                     <td class="text-center">${escapeHtml(row.gl_code || '')}</td>

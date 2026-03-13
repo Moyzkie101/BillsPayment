@@ -465,10 +465,16 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 ),
                 transaction_data AS (
                     SELECT
-                        mbt.partner_id,
-                            mbt.partner_id_kpx,
-                            SUM(CASE WHEN mbt.settle_unsettle IS NULL OR TRIM(mbt.settle_unsettle) = '' OR UPPER(TRIM(mbt.settle_unsettle)) = 'UNSETTLE' THEN 1 ELSE 0 END) AS unsettled_count,
-                            COUNT(*) AS volume_count,
+                        CASE
+                            WHEN UPPER(TRIM(COALESCE(mbt.sub_billers_name, ''))) IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                                THEN mbt.sub_billers_name
+                            WHEN UPPER(TRIM(COALESCE(mbt.partner_name, ''))) = 'SECURITY BANK'
+                                AND (mbt.sub_billers_name IS NULL OR TRIM(mbt.sub_billers_name) = '')
+                                THEN mbt.partner_name
+                            ELSE mbt.partner_name
+                        END AS owner_name,
+                        SUM(CASE WHEN mbt.settle_unsettle IS NULL OR TRIM(mbt.settle_unsettle) = '' OR UPPER(TRIM(mbt.settle_unsettle)) = 'UNSETTLE' THEN 1 ELSE 0 END) AS unsettled_count,
+                        COUNT(*) AS volume_count,
                         SUM(mbt.amount_paid) AS principal_amount_paid,
                         SUM(mbt.charge_to_customer + mbt.charge_to_partner) AS charges
                     FROM mldb.billspayment_transaction mbt
@@ -483,12 +489,18 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     WHERE mbt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
                         AND msabt.reason_note IS NULL
                         AND $transactionDateCondition 
-                    GROUP BY mbt.partner_id, mbt.partner_id_kpx
+                    GROUP BY owner_name
                 ),
                 principal_adjustment_data AS (
                     SELECT
-                        msabt.partner_id,
-                        msabt.partner_id_kpx,
+                        CASE
+                            WHEN UPPER(TRIM(COALESCE(msabt.sub_billers_name, ''))) IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                                THEN msabt.sub_billers_name
+                            WHEN UPPER(TRIM(COALESCE(msabt.partner_name, ''))) = 'SECURITY BANK'
+                                AND (msabt.sub_billers_name IS NULL OR TRIM(msabt.sub_billers_name) = '')
+                                THEN msabt.partner_name
+                            ELSE msabt.partner_name
+                        END AS owner_name,
                         SUM(
                             CASE
                                 WHEN LOWER(TRIM(msabt.reason_note)) = 'late-posting'
@@ -509,12 +521,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         ) AS charges
                     FROM mldb.settle_adjustment_branch_transaction msabt
                     WHERE $settlementDateCondition
-                    GROUP BY msabt.partner_id, msabt.partner_id_kpx
+                    GROUP BY owner_name
                 )
                 SELECT
                     pml.partner_id,
                     pml.partner_id_kpx,
                     pml.partner_name,
+                    COALESCE(NULLIF(TRIM(td.owner_name), ''), pml.partner_name) AS partner_name_raw,
                     pml.partner_accName,
                     pml.bank_accNumber,
                     pml.bank_name,
@@ -533,17 +546,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     END AS amount_for_settlement
                 FROM partner_name_list pml
                 LEFT JOIN transaction_data td
-                    ON (
-                        NULLIF(TRIM(td.partner_id), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id), '') COLLATE utf8mb4_0900_ai_ci
-                        OR
-                        NULLIF(TRIM(td.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci
-                    )
+                    ON NULLIF(TRIM(td.owner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_name), '') COLLATE utf8mb4_0900_ai_ci
                 LEFT JOIN principal_adjustment_data pad
-                    ON (
-                        NULLIF(TRIM(pad.partner_id), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id), '') COLLATE utf8mb4_0900_ai_ci
-                        OR
-                        NULLIF(TRIM(pad.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci
-                    )
+                    ON NULLIF(TRIM(pad.owner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_name), '') COLLATE utf8mb4_0900_ai_ci
                 ORDER BY pml.partner_name";
 
     try {
@@ -1869,6 +1874,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 target.charges = toNumber(target.charges) + toNumber(source.charges);
                 target.principal_adjustment = toNumber(target.principal_adjustment) + toNumber(source.principal_adjustment);
                 target.amount_for_settlement = toNumber(target.amount_for_settlement) + toNumber(source.amount_for_settlement);
+                target.partner_name_raw = target.partner_name_raw || source.partner_name_raw || '';
                 target.partner_name = target.partner_name || source.partner_name || '';
                 target.partner_id = target.partner_id || source.partner_id || '';
                 target.partner_id_kpx = target.partner_id_kpx || source.partner_id_kpx || '';
@@ -1882,8 +1888,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
             const mergedRowsMap = new Map();
             rows.forEach(function(row) {
+                const displayPartnerName = (row.partner_name_raw || row.partner_name || '');
                 const partnerKey = [
-                    normalizeValue(row.partner_name),
+                    normalizeValue(displayPartnerName),
                     normalizeValue(row.partner_id),
                     normalizeValue(row.partner_id_kpx)
                 ].join('|');
@@ -1891,6 +1898,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 if (!mergedRowsMap.has(partnerKey)) {
                     mergedRowsMap.set(partnerKey, {
                         ...row,
+                        partner_name_raw: displayPartnerName,
                         volume_count: toNumber(row.volume_count),
                         principal_amount_paid: toNumber(row.principal_amount_paid),
                         charges: toNumber(row.charges),
@@ -1979,12 +1987,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     const isUnsettled = toNumber(row.has_unsettled) > 0;
                     const trClass = isUnsettled ? 'table-danger' : 'table-success';
                     const statusIcon = isUnsettled ? '<i class="fa-solid fa-xmark text-danger" title="Unsettled"></i>' : '<i class="fa-solid fa-check text-success" title="Settled"></i>';
+                    const partnerNameRaw = row.partner_name_raw || row.partner_name || '';
                     const tr = `
-                        <tr class="${trClass}" data-partner-id="${row.partner_id || ''}" data-partner-id-kpx="${row.partner_id_kpx || ''}" data-partner-name="${(row.partner_name||'').replace(/"/g,'&quot;')}" data-bank-name="${(row.bank_name||'').replace(/"/g,'&quot;')}" data-has-unsettled="${row.has_unsettled || 0}">
+                        <tr class="${trClass}" data-partner-id="${row.partner_id || ''}" data-partner-id-kpx="${row.partner_id_kpx || ''}" data-partner-name="${(partnerNameRaw||'').replace(/"/g,'&quot;')}" data-bank-name="${(row.bank_name||'').replace(/"/g,'&quot;')}" data-has-unsettled="${row.has_unsettled || 0}">
                             <td class="text-center"><input class="form-check-input row-select" type="checkbox" aria-label="Select row"></td>
                             <td class="text-center">${runningIndex}</td>
                             <td>
-                                ${row.partner_name || ''}
+                                ${partnerNameRaw}
                             </td>
                             <td>${row.partner_accName || ''}</td>
                             <td class="text-truncate">${row.bank_accNumber || ''}</td>

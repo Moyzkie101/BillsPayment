@@ -78,6 +78,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     $whereConditions = [];
     $params = [];
     $types = '';
+
+    // Always exclude these branch/status rows from report results
+    $whereConditions[] = "NOT (branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944') AND status IS NULL)";
     
     // Build WHERE conditions
     if (!empty($search)) {
@@ -88,7 +91,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     }
 
     if (!empty($partner) && $partner !== 'All') {
-        $whereConditions[] = "partner_name = ?";
+        if($partner === 'SECURITY BANK') {
+            $whereConditions[] = "(partner_name = ? AND sub_billers_name IS NULL)";
+        }elseif($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING'){
+            $whereConditions[] = "sub_billers_name = ?";
+        }else{
+            $whereConditions[] = "partner_name = ?";
+        }
         $params[] = $partner;
         $types .= 's';
     }
@@ -238,7 +247,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     
     // Main data query with pagination
     $dataQuery = "SELECT * FROM mldb.billspayment_transaction 
-                $whereClause 
+                $whereClause
                 ORDER BY datetime DESC 
                 LIMIT $rows_per_page OFFSET $offset";
     
@@ -409,6 +418,16 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
 
     <link rel="icon" href="../../../images/MLW logo.png" type="image/png">
     <style>
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            background: rgba(33, 37, 41, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         .scrollable-table tfoot th {
             position: sticky;
             bottom: 0;
@@ -498,8 +517,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
         <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
-        <div id="loading-overlay">
-            <div class="loading-spinner"></div>
+        <div id="loading-overlay" class="d-none" aria-live="polite" aria-busy="true">
+            <div class="bg-white rounded-3 shadow p-4 text-center">
+                <div class="spinner-border text-danger" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="mt-2 fw-semibold text-secondary">Loading transaction data...</div>
+            </div>
         </div>
         <div class="bp-section-header" role="region" aria-label="Page title">
             <div class="bp-section-title">
@@ -672,9 +696,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                 <table id="transactionReportTable" class="table table-bordered table-hover table-striped">
                                     <thead class="table-light sticky-top">
                                         <tr>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>CAD Status</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Billing Invoice</th>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>Transaction Status</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Transaction Date</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Cancelled Date</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Reference Number</th>
@@ -683,10 +705,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Source</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Partner Name</th>
                                             <th colspan="2" class='text-truncate text-center align-middle'>Partner ID</th>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>GL Code</th>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>GL Description</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Principal Amount</th>
                                             <th colspan="2" class='text-truncate text-center align-middle'>Charge to</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>GL Code</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>GL Description</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>CAD Status</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>Transaction Status</th>
                                         </tr>
                                         <tr>
                                             <th class="text-center">KP7</th>
@@ -700,10 +724,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                     </tbody>
                                         <tfoot class="sticky-bottom table-dark">
                                             <tr>
-                                                <th colspan="14" style="text-align:right">Total : </th>
+                                                <th colspan="10" style="text-align:right">Total : </th>
                                                 <th id="totalPrincipalAmount" class="text-end">0.00</th>
                                                 <th id="totalChargetoPartner" class="text-end">0.00</th>
                                                 <th id="totalChargetoCustomer" class="text-end">0.00</th>
+                                                <th colspan="4"></th>
                                             </tr>
                                         </tfoot>
                                 </table>
@@ -1410,26 +1435,29 @@ $(document).ready(function() {
         data.forEach(function(row, index) {
             const cadStatusBadge = getStatusBadge(row.post_transaction);
             const transactionStatusBadge = getTransactionStatusBadge(row.status);
+            const partner_name_raw = row.sub_billers_name && row.sub_billers_name.toString().trim() !== ''
+                ? row.sub_billers_name
+                : row.partner_name;
             
             const tr = `
                 <tr class="transaction-row" data-row-index="${index}" style="cursor: pointer;">
-                    <td class="text-center">${cadStatusBadge}</td>
                     <td>${escapeHtml(row.billing_invoice || '-')}</td>
-                    <td class="text-center">${transactionStatusBadge}</td>
                     <td>${formatDate(row.datetime) || '-'}</td>
                     <td>${formatDate(row.cancellation_date) || '-'}</td>
                     <td>${escapeHtml(row.reference_no || '-')}</td>
                     <td>${escapeHtml(row.branch_id || '-')}</td>
                     <td class="text-truncate">${escapeHtml(row.outlet || '-')}</td>
                     <td>${escapeHtml(row.source_file || '-')}</td>
-                    <td class="text-truncate">${escapeHtml(row.partner_name || '-')}</td>
+                    <td class="text-truncate">${escapeHtml(partner_name_raw || '-')}</td>
                     <td>${escapeHtml(row.partner_id || '-')}</td>
                     <td>${escapeHtml(row.partner_id_kpx || '-')}</td>
-                    <td>${escapeHtml(row.mpm_gl_code || '-')}</td>
-                    <td>${escapeHtml(row.mpm_gl_description || '-')}</td>
                     <td class="text-end">${formatCurrency(row.amount_paid)}</td>
                     <td class="text-end">${formatCurrency(row.charge_to_partner)}</td>
                     <td class="text-end">${formatCurrency(row.charge_to_customer)}</td>
+                    <td>${escapeHtml(row.mpm_gl_code || '-')}</td>
+                    <td>${escapeHtml(row.mpm_gl_description || '-')}</td>
+                    <td class="text-center">${cadStatusBadge}</td>
+                    <td class="text-center">${transactionStatusBadge}</td>
                 </tr>
             `;
             tbody.append(tr);
@@ -1642,11 +1670,11 @@ $(document).ready(function() {
     }
     
     function showLoading() {
-        $('#loading-overlay').show();
+        $('#loading-overlay').removeClass('d-none');
     }
     
     function hideLoading() {
-        $('#loading-overlay').hide();
+        $('#loading-overlay').addClass('d-none');
     }
     
     function showAlert(title, message, type) {
