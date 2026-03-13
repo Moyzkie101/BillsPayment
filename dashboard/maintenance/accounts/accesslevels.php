@@ -206,15 +206,16 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
         .perm-toggle-icon { transition: transform .18s ease; }
 
         /* Accent palette - used for group headers / titles */
-        .accent-0 { --accent: #ef4444; }
-        .accent-1 { --accent: #0ea5a4; }
-        .accent-2 { --accent: #f59e0b; }
-        .accent-3 { --accent: #3b82f6; }
-        .accent-4 { --accent: #8b5cf6; }
+        /* Use darker reds only (brand palette) to avoid pale/invisible accents */
+        .accent-0 { --accent: #7f1d1d; }
+        .accent-1 { --accent: #b91c1c; }
+        .accent-2 { --accent: #c62828; }
+        .accent-3 { --accent: #ef4444; }
+        .accent-4 { --accent: #f87171; }
 
         .perm-group-header .perm-group-title { color: var(--accent); }
         .permission-card .card-title { color: rgba(0,0,0,0.8); }
-        .permission-card.selected { box-shadow: 0 0 0 0.18rem rgba(99,102,241,0.12); }
+        .permission-card.selected { box-shadow: 0 0 0 0.18rem rgba(198,40,40,0.14); }
 
         #permissionCards {
             border: 1px solid #e5e7eb;
