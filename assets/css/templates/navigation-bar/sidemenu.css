@@ -53,8 +53,9 @@
 }
 
 .onetab:hover{
-    background-color: #fff5f5;
-    border-left-color: #dc3545;
+    /* neutral hover to avoid pink; keep red accent on the left border */
+    background-color: #f3f4f6; /* light gray */
+    border-left-color: #c62828;
     transform: translateX(2px);
 }
 
@@ -136,9 +137,10 @@
 }
 
 .tabcat.active {
-    background-color: #ffe5e5;
-    color: #dc3545;
-    border-left-color: #dc3545;
+    /* neutral active state with red accent */
+    background-color: #f3f4f6;
+    color: #c62828;
+    border-left-color: #c62828;
 }
 
 .tabcat h4{
@@ -183,14 +185,14 @@
     top: 0;
     height: 0;
     width: 2px;
-    background-color: #dc3545;
+    background-color: #c62828;
     transition: height 0.2s ease;
 }
 
 .sub:hover{
-    color: #dc3545;
-    background-color: #fff5f5;
-    border-left-color: #dc3545;
+    color: #c62828;
+    background-color: #f3f4f6;
+    border-left-color: #c62828;
 }
 
 .sub:hover::before {
@@ -198,9 +200,9 @@
 }
 
 .sub.active {
-    color: #dc3545;
-    background-color: #fff5f5;
-    border-left-color: #dc3545;
+    color: #c62828;
+    background-color: #f3f4f6;
+    border-left-color: #c62828;
     font-weight: 600;
 }
 
