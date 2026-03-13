@@ -444,8 +444,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         $partnerListWhereClause = ' AND ' . implode(' AND ', $partnerListConditions);
     }
 
-    $types = $partnerListTypes . $dateTypesPerCte . $dateTypesPerCte;
-    $params = array_merge($partnerListParams, $dateParamsPerCte, $dateParamsPerCte);
+    // The query uses date placeholders in four places: summary_vol, adjustment_vol, transaction_data, and principal_adjustment_data
+    $types = $partnerListTypes . str_repeat($dateTypesPerCte, 4);
+    $params = array_merge($partnerListParams, $dateParamsPerCte, $dateParamsPerCte, $dateParamsPerCte, $dateParamsPerCte);
+
+    // Ensure date conditions use the correct table alias inside the summary/adjustment CTEs
+    $dateConditionForBT = str_replace('mbt.', 'bt.', $transactionDateCondition);
 
     $dataQuery = "WITH partner_name_list AS (
                     SELECT
@@ -462,6 +466,66 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     $partnerBankJoin
                     WHERE mpm.status = 'ACTIVE'
                     $partnerListWhereClause
+                ),
+                summary_vol AS (
+                    SELECT
+                        CASE
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
+                        END COLLATE utf8mb4_general_ci AS partner_key,
+                        CASE
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            ELSE bt.partner_name
+                        END AS partner_name,
+                        MAX(bt.sub_billers_name) AS sub_billers_name,
+                        COUNT(*) AS vol1,
+                        SUM(bt.amount_paid) AS principal1,
+                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
+                    FROM mldb.billspayment_transaction AS bt
+                    WHERE $dateConditionForBT
+                        AND bt.status IS NULL
+                        AND NOT bt.branch_id IN ('1','2','4937','4938','4962','4987','4993','4944')
+                    GROUP BY
+                        CASE
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
+                        END COLLATE utf8mb4_general_ci,
+                        CASE
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            ELSE bt.partner_name
+                        END
+                ),
+                adjustment_vol AS (
+                    SELECT
+                        CASE
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
+                        END COLLATE utf8mb4_general_ci AS partner_key,
+                        CASE
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            ELSE bt.partner_name
+                        END AS partner_name,
+                        MAX(bt.sub_billers_name) AS sub_billers_name,
+                        COUNT(*) AS vol2,
+                        SUM(bt.amount_paid) AS principal2,
+                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
+                    FROM mldb.billspayment_transaction AS bt
+                    WHERE $dateConditionForBT
+                        AND bt.status = '*'
+                        AND NOT bt.branch_id IN ('1','2','4937','4938','4962','4987','4993','4944')
+                    GROUP BY
+                        CASE
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
+                        END COLLATE utf8mb4_general_ci,
+                        CASE
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            ELSE bt.partner_name
+                        END
                 ),
                 transaction_data AS (
                     SELECT
@@ -494,10 +558,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 principal_adjustment_data AS (
                     SELECT
                         CASE
-                            WHEN UPPER(TRIM(COALESCE(msabt.sub_billers_name, ''))) IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
-                                THEN msabt.sub_billers_name
+                            WHEN UPPER(TRIM(COALESCE(msabt.partner_name, ''))) IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                                THEN msabt.partner_name
                             WHEN UPPER(TRIM(COALESCE(msabt.partner_name, ''))) = 'SECURITY BANK'
-                                AND (msabt.sub_billers_name IS NULL OR TRIM(msabt.sub_billers_name) = '')
                                 THEN msabt.partner_name
                             ELSE msabt.partner_name
                         END AS owner_name,
@@ -534,21 +597,46 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     pml.settled_online_check,
                     pml.charge_to,
                     pml.charge_sched,
-                    COALESCE(td.unsettled_count, 0) AS has_unsettled,
-                    COALESCE(td.volume_count, 0) AS volume_count,
-                    COALESCE(td.principal_amount_paid, 0) AS principal_amount_paid,
-                    COALESCE(td.charges, 0) AS charges,
-                    COALESCE(pad.principal_adjustment - pad.charges, 0) AS principal_adjustment,
+                    SUM(COALESCE(td.unsettled_count, 0)) AS has_unsettled,
+                    SUM(COALESCE(td.volume_count, 0)) AS volume_count,
+                    SUM(COALESCE(td.principal_amount_paid, 0)) AS principal_amount_paid,
+                    SUM(COALESCE(td.charges, 0)) AS charges,
+                    (COALESCE(SUM(pad.principal_adjustment), 0) - COALESCE(SUM(pad.charges), 0)) AS principal_adjustment,
+                    SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
+                    SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
+                    SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
+                    SUM(COALESCE(av.vol2, 0)) AS adjustment_vol,
+                    SUM(COALESCE(ABS(av.principal2), 0)) AS adjustment_principal,
+                    SUM(COALESCE(ABS(av.charge2), 0)) AS adjustment_charges,
+                    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
+                    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_total_transaction,
+                    (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
+                    (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges,
                     CASE
-                        WHEN COALESCE(pad.principal_adjustment - pad.charges, 0) = 0
-                            THEN COALESCE(td.principal_amount_paid, 0)
-                        ELSE COALESCE((COALESCE(td.principal_amount_paid, 0) - COALESCE(td.charges, 0)) + (COALESCE(pad.principal_adjustment, 0) - COALESCE(pad.charges, 0)), 0)
+                        WHEN (COALESCE(SUM(pad.principal_adjustment), 0) - COALESCE(SUM(pad.charges), 0)) = 0
+                            THEN SUM(COALESCE(td.principal_amount_paid, 0))
+                        ELSE COALESCE((SUM(COALESCE(td.principal_amount_paid, 0)) - SUM(COALESCE(td.charges, 0))) + (COALESCE(SUM(pad.principal_adjustment), 0) - COALESCE(SUM(pad.charges), 0)), 0)
                     END AS amount_for_settlement
                 FROM partner_name_list pml
                 LEFT JOIN transaction_data td
                     ON NULLIF(TRIM(td.owner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_name), '') COLLATE utf8mb4_0900_ai_ci
                 LEFT JOIN principal_adjustment_data pad
                     ON NULLIF(TRIM(pad.owner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                LEFT JOIN summary_vol sv
+                    ON NULLIF(TRIM(sv.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                LEFT JOIN adjustment_vol av
+                    ON NULLIF(TRIM(av.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                GROUP BY
+                    pml.partner_id,
+                    pml.partner_id_kpx,
+                    pml.partner_name,
+                    pml.partner_accName,
+                    pml.bank_accNumber,
+                    pml.bank_name,
+                    pml.settled_online_check,
+                    pml.charge_to,
+                    pml.charge_sched,
+                    COALESCE(NULLIF(TRIM(td.owner_name), ''), pml.partner_name)
                 ORDER BY pml.partner_name";
 
     try {
@@ -1874,6 +1962,17 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 target.charges = toNumber(target.charges) + toNumber(source.charges);
                 target.principal_adjustment = toNumber(target.principal_adjustment) + toNumber(source.principal_adjustment);
                 target.amount_for_settlement = toNumber(target.amount_for_settlement) + toNumber(source.amount_for_settlement);
+                // aggregate summary/adjustment fields if present
+                target.summary_vol = toNumber(target.summary_vol) + toNumber(source.summary_vol);
+                target.summary_principal = toNumber(target.summary_principal) + toNumber(source.summary_principal);
+                target.summary_charges = toNumber(target.summary_charges) + toNumber(source.summary_charges);
+                target.adjustment_vol = toNumber(target.adjustment_vol) + toNumber(source.adjustment_vol);
+                target.adjustment_principal = toNumber(target.adjustment_principal) + toNumber(source.adjustment_principal);
+                target.adjustment_charges = toNumber(target.adjustment_charges) + toNumber(source.adjustment_charges);
+                // keep server-provided net if present, otherwise will compute later
+                target.net_vol = toNumber(target.net_vol) || 0;
+                target.net_principal = toNumber(target.net_principal) || 0;
+                target.net_charges = toNumber(target.net_charges) || 0;
                 target.partner_name_raw = target.partner_name_raw || source.partner_name_raw || '';
                 target.partner_name = target.partner_name || source.partner_name || '';
                 target.partner_id = target.partner_id || source.partner_id || '';
@@ -1974,12 +2073,24 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     const charges = toNumber(row.charges);
                     const principalAdjustment = toNumber(row.principal_adjustment);
                     const amountForSettlement = toNumber(row.amount_for_settlement);
+                    // compute net values: prefer server-provided net fields, else compute from summary - adjustment
+                    const summaryVol = toNumber(row.summary_vol);
+                    const adjustmentVol = toNumber(row.adjustment_vol);
+                    const summaryPrincipal = toNumber(row.summary_principal);
+                    const adjustmentPrincipal = toNumber(row.adjustment_principal);
+                    const summaryCharge = toNumber(row.summary_charges);
+                    const adjustmentCharge = toNumber(row.adjustment_charges);
+
+                    const netVol = toNumber(row.net_vol) || (summaryVol - adjustmentVol);
+                    const netPrincipal = toNumber(row.net_principal) || (summaryPrincipal - adjustmentPrincipal);
+                    const netCharge = toNumber(row.net_charges) || (summaryCharge - adjustmentCharge);
 
                     displayedRows.add(row);
 
-                    totalNetVolume += volumeCount;
-                    totalNetPrincipal += principalAmountPaid;
-                    totalNetCharge += charges;
+                    // Totals for Net Total Transaction should use net values
+                    totalNetVolume += netVol;
+                    totalNetPrincipal += netPrincipal;
+                    totalNetCharge += netCharge;
                     totalPrincipalAdjustment += principalAdjustment;
                     totalAmountForSettlement += amountForSettlement;
                     runningIndex += 1;
@@ -1997,9 +2108,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                             </td>
                             <td>${row.partner_accName || ''}</td>
                             <td class="text-truncate">${row.bank_accNumber || ''}</td>
-                            <td class="text-end">${volumeCount.toLocaleString()}</td>
-                            <td class="text-end">${principalAmountPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                            <td class="text-end">${charges.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td class="text-end">${parseInt(netVol || 0).toLocaleString()}</td>
+                            <td class="text-end">${parseFloat(netPrincipal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td class="text-end">${parseFloat(netCharge || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                             <td class="text-end">${principalAdjustment.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                             <td class="text-end">${amountForSettlement.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                             <td class="text-center">${statusIcon}</td>
