@@ -148,8 +148,8 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php'">
                 <a href="<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php">Cancellation</a>
             </div>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
         <?php endif; ?>
 
         <?php if (has_permission('BP Post Transaction')):?>
@@ -183,8 +183,8 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/settlement/settlement-per-bank.php'">
                 <a href="<?php echo $base_url; ?>billspayment/settlement/settlement-per-bank.php"><i class="fa-solid fa-chart-column"></i> Per Bank</a>
             </div>
-        </div>
             <?php endif; ?>
+        </div>
         <?php endif; ?>
 
         <?php if (has_any_permission(['BP Report Volume','BP Report EDI','BP Report Transaction Details','BP Report Transaction Summary','BP Report Cancellation','BP Report Balance Sheet'])): ?>

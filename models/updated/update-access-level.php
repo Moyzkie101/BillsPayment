@@ -388,16 +388,89 @@ try {
 
     if ($shouldUpdateSession) {
         $_SESSION['user_access_level'] = (int)$updatedRow['access_level'];
-        $_SESSION['user_permissions'] = $inputPermissions;
+
+        // Normalize and expand permissions for server-side checks so that
+        // ancestor/catalog keys (e.g., 'Bills Payment') are present when a
+        // leaf permission (e.g., 'BP Import Transaction') is granted.
+        $normalized = normalize_permissions($inputPermissions);
+
+        // build ancestor map from permission_catalog
+        $ancestorMap = [];
+        $catalog = isset($accessMap['permission_catalog']) && is_array($accessMap['permission_catalog']) ? $accessMap['permission_catalog'] : default_permission_catalog();
+        $stack = [];
+        $walk = function($nodes, $parents = []) use (&$walk, &$ancestorMap) {
+            foreach ($nodes as $n) {
+                if (!is_array($n) || empty($n['key'])) continue;
+                $key = trim($n['key']);
+                foreach ($parents as $p) {
+                    $ancestorMap[$key][] = $p;
+                }
+                $nextParents = $parents;
+                $nextParents[] = $key;
+                if (isset($n['children']) && is_array($n['children'])) {
+                    $walk($n['children'], $nextParents);
+                }
+            }
+        };
+        $walk($catalog, []);
+
+        $expanded = [];
+        foreach ($normalized as $p) {
+            $expanded[$p] = true;
+            if (isset($ancestorMap[$p]) && is_array($ancestorMap[$p])) {
+                foreach ($ancestorMap[$p] as $anc) $expanded[$anc] = true;
+            }
+        }
+
+        // store sorted normalized expanded permissions
+        $sessionPerms = array_values(array_unique(array_map('strval', array_keys($expanded))));
+        sort($sessionPerms, SORT_STRING);
+        $_SESSION['user_permissions'] = $sessionPerms;
+
         // Keep session in sync with current access map file mtime so middleware knows it's fresh
         $mapMtime = 0;
         if (file_exists($mapPath)) $mapMtime = @filemtime($mapPath);
         $_SESSION['access_map_mtime'] = $mapMtime;
     }
     // Persist explicit per-user permissions into DB column `permissions` (JSON),
-    // and keep the legacy file-backed storage for backward compatibility.
+    // but store an expanded set that includes ancestor/catalog keys so
+    // server-side middleware and templates see the same effective permissions
+    // as the client UI.
     try {
-        $jsonPerms = json_encode($inputPermissions, JSON_UNESCAPED_SLASHES);
+        // Normalize input perms
+        $normalized_input_perms = normalize_permissions($inputPermissions);
+
+        // Build ancestor map from permission catalog so we can expand leaves
+        $ancestorMap = [];
+        $catalog = isset($accessMap['permission_catalog']) && is_array($accessMap['permission_catalog']) ? $accessMap['permission_catalog'] : default_permission_catalog();
+        $walk = function($nodes, $parents = []) use (&$walk, &$ancestorMap) {
+            foreach ($nodes as $n) {
+                if (!is_array($n) || empty($n['key'])) continue;
+                $key = trim($n['key']);
+                foreach ($parents as $p) {
+                    $ancestorMap[$key][] = $p;
+                }
+                $nextParents = $parents;
+                $nextParents[] = $key;
+                if (isset($n['children']) && is_array($n['children'])) {
+                    $walk($n['children'], $nextParents);
+                }
+            }
+        };
+        $walk($catalog, []);
+
+        $expanded_for_persist = [];
+        foreach ($normalized_input_perms as $p) {
+            $expanded_for_persist[$p] = true;
+            if (isset($ancestorMap[$p]) && is_array($ancestorMap[$p])) {
+                foreach ($ancestorMap[$p] as $anc) $expanded_for_persist[$anc] = true;
+            }
+        }
+
+        $persistPerms = array_values(array_unique(array_map('strval', array_keys($expanded_for_persist))));
+        sort($persistPerms, SORT_STRING);
+
+        $jsonPerms = json_encode($persistPerms, JSON_UNESCAPED_SLASHES);
         if ($jsonPerms === false) $jsonPerms = json_encode([]);
 
         // update DB permissions column if present
