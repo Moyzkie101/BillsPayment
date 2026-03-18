@@ -724,17 +724,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                     <input type="date" class="form-control" name="endDate" required>
                                 </div>
 
-                                <!-- Action Button -->
-                                <div class="col-md-1 col-sm-6">
-                                    <div class="col-md-3 d-flex align-items-end">
+                                <!-- Action Buttons -->
+                                <div class="col-md-auto col-sm-12">
+                                    <div class="d-flex align-items-end flex-wrap" style="gap:8px;">
                                         <button type="button" class="btn btn-secondary" id="generateReport" disabled>Generate</button>
-                                    </div>
-                                    
-                                </div>
-
-                                <!-- Export + Debug Buttons (inline) -->
-                                <div class="col-md-1 col-sm-6">
-                                    <div class="d-flex align-items-end" style="gap:8px; white-space:nowrap;">
                                         <button class="btn btn-danger" id="exportButton" type="button" style="display:none;">Export to</button>
                                         <button class="btn btn-warning" id="debugButton" type="button" style="display:none;">Debug Report</button>
                                     </div>

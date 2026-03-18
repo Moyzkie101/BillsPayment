@@ -444,15 +444,29 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         $partnerListWhereClause = ' AND ' . implode(' AND ', $partnerListConditions);
     }
 
-    // The query uses date placeholders in four places: summary_vol, adjustment_vol, transaction_data, and principal_adjustment_data
-    $types = $partnerListTypes . str_repeat($dateTypesPerCte, 4);
-    $params = array_merge($partnerListParams, $dateParamsPerCte, $dateParamsPerCte, $dateParamsPerCte, $dateParamsPerCte);
+    // The query uses date placeholders in seven places:
+    // summary_vol(datetime + cancellation), adjustment_vol(datetime + cancellation),
+    // transaction_data(datetime + cancellation), and principal_adjustment_data(posting_date)
+    $types = $partnerListTypes . str_repeat($dateTypesPerCte, 7);
+    $params = array_merge(
+        $partnerListParams,
+        $dateParamsPerCte,
+        $dateParamsPerCte,
+        $dateParamsPerCte,
+        $dateParamsPerCte,
+        $dateParamsPerCte,
+        $dateParamsPerCte,
+        $dateParamsPerCte
+    );
 
-    // Ensure date conditions use the correct table alias inside the summary/adjustment CTEs
+    // Ensure date conditions use the correct table alias inside CTEs.
     $dateConditionForBT = str_replace('mbt.', 'bt.', $transactionDateCondition);
+    $cancellationDateConditionForBT = str_replace('bt.datetime', 'bt.cancellation_date', $dateConditionForBT);
+    $cancellationDateConditionForMBT = str_replace('mbt.datetime', 'mbt.cancellation_date', $transactionDateCondition);
 
     $dataQuery = "WITH partner_name_list AS (
                     SELECT
+                        COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
                         mpm.partner_id,
                         mpm.partner_id_kpx,
                         mpm.partner_name,
@@ -483,7 +497,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         SUM(bt.amount_paid) AS principal1,
                         SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
                     FROM mldb.billspayment_transaction AS bt
-                    WHERE $dateConditionForBT
+                    WHERE ($dateConditionForBT OR $cancellationDateConditionForBT)
                         AND bt.status IS NULL
                         AND NOT bt.branch_id IN ('1','2','4937','4938','4962','4987','4993','4944')
                     GROUP BY
@@ -513,7 +527,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         SUM(bt.amount_paid) AS principal2,
                         SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
                     FROM mldb.billspayment_transaction AS bt
-                    WHERE $dateConditionForBT
+                    WHERE ($dateConditionForBT OR $cancellationDateConditionForBT)
                         AND bt.status = '*'
                         AND NOT bt.branch_id IN ('1','2','4937','4938','4962','4987','4993','4944')
                     GROUP BY
@@ -552,7 +566,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         AND NULLIF(TRIM(mbt.reference_no), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(msabt.reference_no), '') COLLATE utf8mb4_0900_ai_ci
                     WHERE mbt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
                         AND msabt.reason_note IS NULL
-                        AND $transactionDateCondition 
+                        AND ($transactionDateCondition OR $cancellationDateConditionForMBT)
                     GROUP BY owner_name
                 ),
                 principal_adjustment_data AS (
@@ -585,59 +599,148 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     FROM mldb.settle_adjustment_branch_transaction msabt
                     WHERE $settlementDateCondition
                     GROUP BY owner_name
+                ),
+                all_partners AS (
+                    SELECT DISTINCT partner_name
+                    FROM partner_name_list
+                    WHERE partner_name IS NOT NULL AND TRIM(partner_name) <> ''
+                    UNION
+                    SELECT DISTINCT partner_name
+                    FROM summary_vol
+                    WHERE partner_name IS NOT NULL AND TRIM(partner_name) <> ''
+                    UNION
+                    SELECT DISTINCT partner_name
+                    FROM adjustment_vol
+                    WHERE partner_name IS NOT NULL AND TRIM(partner_name) <> ''
+                    UNION
+                    SELECT DISTINCT owner_name AS partner_name
+                    FROM transaction_data
+                    WHERE owner_name IS NOT NULL AND TRIM(owner_name) <> ''
+                ),
+                partner_meta AS (
+                    SELECT
+                        partner_name,
+                        MAX(NULLIF(TRIM(partner_id), '')) AS partner_id,
+                        MAX(NULLIF(TRIM(partner_id_kpx), '')) AS partner_id_kpx,
+                        MAX(partner_accName) AS partner_accName,
+                        MAX(bank_accNumber) AS bank_accNumber,
+                        MAX(bank_name) AS bank_name,
+                        MAX(settled_online_check) AS settled_online_check,
+                        MAX(charge_to) AS charge_to,
+                        MAX(charge_sched) AS charge_sched
+                    FROM partner_name_list
+                    GROUP BY partner_name
+                ),
+                summary_totals AS (
+                    SELECT
+                        partner_name,
+                        SUM(COALESCE(vol1, 0)) AS summary_vol,
+                        SUM(COALESCE(principal1, 0)) AS summary_principal,
+                        SUM(COALESCE(charge1, 0)) AS summary_charges
+                    FROM summary_vol
+                    GROUP BY partner_name
+                ),
+                adjustment_totals AS (
+                    SELECT
+                        partner_name,
+                        SUM(COALESCE(vol2, 0)) AS adjustment_vol,
+                        SUM(COALESCE(ABS(principal2), 0)) AS adjustment_principal,
+                        SUM(COALESCE(ABS(charge2), 0)) AS adjustment_charges
+                    FROM adjustment_vol
+                    GROUP BY partner_name
+                ),
+                transaction_totals AS (
+                    SELECT
+                        owner_name AS partner_name,
+                        SUM(COALESCE(unsettled_count, 0)) AS has_unsettled,
+                        SUM(COALESCE(volume_count, 0)) AS volume_count,
+                        SUM(COALESCE(principal_amount_paid, 0)) AS principal_amount_paid,
+                        SUM(COALESCE(charges, 0)) AS charges
+                    FROM transaction_data
+                    GROUP BY owner_name
+                ),
+                principal_adjustment_totals AS (
+                    SELECT
+                        owner_name AS partner_name,
+                        SUM(COALESCE(principal_adjustment, 0)) AS principal_adjustment_raw,
+                        SUM(COALESCE(charges, 0)) AS settle_adjustment_charges
+                    FROM principal_adjustment_data
+                    GROUP BY owner_name
+                ),
+                base_totals AS (
+                    SELECT
+                        ap.partner_name,
+                        pm.partner_id,
+                        pm.partner_id_kpx,
+                        pm.partner_accName,
+                        pm.bank_accNumber,
+                        pm.bank_name,
+                        pm.settled_online_check,
+                        pm.charge_to,
+                        pm.charge_sched,
+                        COALESCE(tt.has_unsettled, 0) AS has_unsettled,
+                        COALESCE(tt.volume_count, 0) AS volume_count,
+                        COALESCE(tt.principal_amount_paid, 0) AS principal_amount_paid,
+                        COALESCE(tt.charges, 0) AS charges,
+                        COALESCE(st.summary_vol, 0) AS summary_vol,
+                        COALESCE(st.summary_principal, 0) AS summary_principal,
+                        COALESCE(st.summary_charges, 0) AS summary_charges,
+                        COALESCE(at.adjustment_vol, 0) AS adjustment_vol,
+                        COALESCE(at.adjustment_principal, 0) AS adjustment_principal,
+                        COALESCE(at.adjustment_charges, 0) AS adjustment_charges,
+                        COALESCE(pat.principal_adjustment_raw, 0) AS principal_adjustment_raw,
+                        COALESCE(pat.settle_adjustment_charges, 0) AS settle_adjustment_charges
+                    FROM all_partners ap
+                    LEFT JOIN partner_meta pm
+                        ON NULLIF(TRIM(pm.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(ap.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                    LEFT JOIN summary_totals st
+                        ON NULLIF(TRIM(st.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(ap.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                    LEFT JOIN adjustment_totals at
+                        ON NULLIF(TRIM(at.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(ap.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                    LEFT JOIN transaction_totals tt
+                        ON NULLIF(TRIM(tt.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(ap.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                    LEFT JOIN principal_adjustment_totals pat
+                        ON NULLIF(TRIM(pat.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(ap.partner_name), '') COLLATE utf8mb4_0900_ai_ci
                 )
                 SELECT
-                    pml.partner_id,
-                    pml.partner_id_kpx,
-                    pml.partner_name,
-                    COALESCE(NULLIF(TRIM(td.owner_name), ''), pml.partner_name) AS partner_name_raw,
-                    pml.partner_accName,
-                    pml.bank_accNumber,
-                    pml.bank_name,
-                    pml.settled_online_check,
-                    pml.charge_to,
-                    pml.charge_sched,
-                    SUM(COALESCE(td.unsettled_count, 0)) AS has_unsettled,
-                    SUM(COALESCE(td.volume_count, 0)) AS volume_count,
-                    SUM(COALESCE(td.principal_amount_paid, 0)) AS principal_amount_paid,
-                    SUM(COALESCE(td.charges, 0)) AS charges,
-                    (COALESCE(SUM(pad.principal_adjustment), 0) - COALESCE(SUM(pad.charges), 0)) AS principal_adjustment,
-                    SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
-                    SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
-                    SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
-                    SUM(COALESCE(av.vol2, 0)) AS adjustment_vol,
-                    SUM(COALESCE(ABS(av.principal2), 0)) AS adjustment_principal,
-                    SUM(COALESCE(ABS(av.charge2), 0)) AS adjustment_charges,
-                    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
-                    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_total_transaction,
-                    (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
-                    (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges,
+                    bt.partner_id,
+                    bt.partner_id_kpx,
+                    bt.partner_name,
+                    bt.partner_name AS partner_name_raw,
+                    bt.partner_accName,
+                    bt.bank_accNumber,
+                    bt.bank_name,
+                    bt.settled_online_check,
+                    bt.charge_to,
+                    bt.charge_sched,
+                    bt.has_unsettled,
+                    bt.volume_count,
+                    bt.principal_amount_paid,
+                    bt.charges,
+                    (bt.principal_adjustment_raw - bt.settle_adjustment_charges) AS principal_adjustment,
+                    bt.summary_vol,
+                    bt.summary_principal,
+                    bt.summary_charges,
+                    bt.adjustment_vol,
+                    bt.adjustment_principal,
+                    bt.adjustment_charges,
+                    (bt.summary_vol - bt.adjustment_vol) AS net_vol,
+                    (bt.summary_vol - bt.adjustment_vol) AS net_total_transaction,
+                    (bt.summary_principal - bt.adjustment_principal) AS net_principal,
+                    (bt.summary_charges - bt.adjustment_charges) AS net_charges,
                     CASE
-                        WHEN (COALESCE(SUM(pad.principal_adjustment), 0) - COALESCE(SUM(pad.charges), 0)) = 0
-                            THEN SUM(COALESCE(td.principal_amount_paid, 0))
-                        ELSE COALESCE((SUM(COALESCE(td.principal_amount_paid, 0)) - SUM(COALESCE(td.charges, 0))) + (COALESCE(SUM(pad.principal_adjustment), 0) - COALESCE(SUM(pad.charges), 0)), 0)
+                        WHEN UPPER(TRIM(COALESCE(bt.charge_to, ''))) = 'CUSTOMER' THEN
+                            (bt.summary_principal - bt.adjustment_principal) + (bt.principal_adjustment_raw - bt.settle_adjustment_charges)
+                        WHEN UPPER(TRIM(COALESCE(bt.charge_to, ''))) = 'PARTNER'
+                            AND UPPER(TRIM(COALESCE(bt.charge_sched, ''))) IN ('DAILY','WEEKLY','SEMI-MONTHLY','MONTHLY') THEN
+                            ((bt.summary_principal - bt.adjustment_principal) - (bt.summary_charges - bt.adjustment_charges))
+                            - ((bt.principal_adjustment_raw - bt.settle_adjustment_charges))
+                        ELSE
+                            (bt.summary_principal - bt.adjustment_principal)
                     END AS amount_for_settlement
-                FROM partner_name_list pml
-                LEFT JOIN transaction_data td
-                    ON NULLIF(TRIM(td.owner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_name), '') COLLATE utf8mb4_0900_ai_ci
-                LEFT JOIN principal_adjustment_data pad
-                    ON NULLIF(TRIM(pad.owner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_name), '') COLLATE utf8mb4_0900_ai_ci
-                LEFT JOIN summary_vol sv
-                    ON NULLIF(TRIM(sv.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_name), '') COLLATE utf8mb4_0900_ai_ci
-                LEFT JOIN adjustment_vol av
-                    ON NULLIF(TRIM(av.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_name), '') COLLATE utf8mb4_0900_ai_ci
-                GROUP BY
-                    pml.partner_id,
-                    pml.partner_id_kpx,
-                    pml.partner_name,
-                    pml.partner_accName,
-                    pml.bank_accNumber,
-                    pml.bank_name,
-                    pml.settled_online_check,
-                    pml.charge_to,
-                    pml.charge_sched,
-                    COALESCE(NULLIF(TRIM(td.owner_name), ''), pml.partner_name)
-                ORDER BY pml.partner_name";
+                FROM base_totals bt
+                WHERE bt.partner_name IS NOT NULL
+                ORDER BY bt.partner_name";
 
     try {
         $stmt = $conn->prepare($dataQuery);
