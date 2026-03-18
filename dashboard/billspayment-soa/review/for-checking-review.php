@@ -47,6 +47,17 @@ function displayModal($message, $isError = false)
     ';
 }
 
+// Normalize DB numeric values that may already contain commas (e.g., "67,147.20").
+function formatMoneyForDisplay($value)
+{
+    if ($value === null || $value === '') {
+        return number_format(0, 2);
+    }
+
+    $normalized = is_string($value) ? str_replace(',', '', trim($value)) : $value;
+    return number_format((float)$normalized, 2);
+}
+
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['confirmBtn'])) {
@@ -764,11 +775,11 @@ if (isset($_POST['EditConfirmBtn'])) {
                                     <td class="soa-ta-center"><?php echo date('M j, Y', strtotime($row['to_date'])); ?></td>
                                     <td class="soa-ta-left"><?php echo htmlspecialchars($row['po_number'] ?? ''); ?></td>
                                     <td class="soa-ta-num"><?php echo number_format($row['number_of_transactions']); ?></td>
-                                    <td class="soa-ta-num"><?php echo number_format($row['amount'], 2); ?></td>
-                                    <td class="soa-ta-num"><?php echo number_format((float)$row['vat_amount'], 2); ?></td>
-                                    <td class="soa-ta-num"><?php echo number_format((float)$row['net_of_vat'], 2); ?></td>
-                                    <td class="soa-ta-num"><?php echo number_format((float)$row['withholding_tax'], 2); ?></td>
-                                    <td class="soa-ta-num"><?php echo number_format((float)$row['net_amount_due'], 2); ?></td>
+                                    <td class="soa-ta-num"><?php echo formatMoneyForDisplay($row['amount'] ?? 0); ?></td>
+                                    <td class="soa-ta-num"><?php echo formatMoneyForDisplay($row['vat_amount'] ?? 0); ?></td>
+                                    <td class="soa-ta-num"><?php echo formatMoneyForDisplay($row['net_of_vat'] ?? 0); ?></td>
+                                    <td class="soa-ta-num"><?php echo formatMoneyForDisplay($row['withholding_tax'] ?? 0); ?></td>
+                                    <td class="soa-ta-num"><?php echo formatMoneyForDisplay($row['net_amount_due'] ?? 0); ?></td>
                                     <td class="soa-ta-left"><?php echo htmlspecialchars($row['prepared_by'] ?? ''); ?></td>
                                     <td class="soa-ta-left"><?php echo htmlspecialchars($row['reviewed_by'] ?? ''); ?></td>
                                     <td class="soa-ta-left"><?php echo htmlspecialchars($row['noted_by'] ?? ''); ?></td>

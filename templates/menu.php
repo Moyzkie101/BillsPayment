@@ -207,6 +207,11 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="<?php echo $base_url; ?>billspayment/report/edi-report.php"><i class="fa-solid fa-file-lines"></i> EDI Report</a>
             </div>
             <?php endif; ?>
+            <?php if (has_permission('BP Report Billers')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/billers-report.php'">
+                <a href="<?php echo $base_url; ?>billspayment/report/billers-report.php"><i class="fa-solid fa-file-invoice"></i> Billers Report</a>
+            </div>
+            <?php endif; ?>
             <?php if (has_permission('BP Report Transaction Details')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/transaction-report.php'">
                 <a href="<?php echo $base_url; ?>billspayment/report/transaction-report.php"><i class="fa-solid fa-list-check"></i> Transaction Report (Details)</a>
