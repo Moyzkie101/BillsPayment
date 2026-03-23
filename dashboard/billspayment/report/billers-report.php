@@ -30,62 +30,190 @@ if (isset($_SESSION['user_type'])) {
 
 
 if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
-    $billerlist = $_POST['billerlist'];
-    $filterType = $_POST['filterType'];
-    $startDate = $_POST['startDate'];
-    $endDate = isset($_POST['endDate']) ? $_POST['endDate'] : '';
+    header('Content-Type: application/json');
 
-    // Build WHERE conditions based on filter type - prepare date parameters first
-    $dateParams = [];
-    $dateTypes = '';
+    $billerlist = isset($_POST['billerlist']) ? trim($_POST['billerlist']) : '';
+    $filterType = isset($_POST['filterType']) ? trim($_POST['filterType']) : '';
+    $startDate = isset($_POST['startDate']) ? trim($_POST['startDate']) : '';
+    $endDate = isset($_POST['endDate']) ? trim($_POST['endDate']) : '';
 
-    if(!empty($filterType)){
-        if($filterType === 'daily'){
-            $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ?)";
-            $dateParams = [$startDate, $endDate, $startDate, $endDate]; // 4 params for 2 CTEs
-            $dateTypes = 'ssss';
-        }elseif($filterType === 'weekly'){
-            $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-            $dateParams = [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate, $startDate, $endDate];
-            $dateTypes = 'ssssssss';
-        }elseif($filterType === 'monthly'){
-            $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-            $startMonth = $startDate . '-01';
-            $endMonth = date('Y-m-t', strtotime($endDate . '-01'));
-            $dateParams = [$startMonth, $endMonth, $startMonth, $endMonth, $startMonth, $endMonth, $startMonth, $endMonth];
-            $dateTypes = 'ssssssss';
-        }elseif($filterType === 'yearly'){
-            $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-            $startYear = $startDate . '-01-01';
-            $endYear = $endDate . '-12-31';
-            $dateParams = [$startYear, $endYear, $startYear, $endYear];
-            $dateTypes = 'ssss';
-        }
+    if ($filterType === 'daily') {
+        $endDate = $startDate;
     }
 
-    // Combine date parameters with other parameters
-    $params = array_merge($dateParams, $params);
-    $types = $dateTypes . $types;
-
-    if(!empty($billerlist)){
-        if($billerlist !== 'ALL'){
-            if($billerlist === 'main-biller'){
-                $billerCondition = "AND p.biller_type = '$billerlist' AND p.sub_biller_name IS NULL";
-            }elseif($billerlist === 'child-biller'){
-                $billerCondition = "AND p.biller_type = '$billerlist' AND p.sub_biller_name IS NOT NULL";
-            }
-        }else{
-            $billerCondition = "AND p.biller_type IN ('main-biller', 'child-biller')";
-        }
+    if ($filterType !== 'daily' && $endDate === '') {
+        echo json_encode(['status' => 'error', 'message' => 'End date is required.']);
+        exit();
     }
 
-    // Build WHERE clause for main query
-    $mainWhereClause = '';
-    if (!empty($whereConditions)) {
-        $mainWhereClause = 'AND ' . implode(' AND ', $whereConditions);
+    if ($startDate === '' || $filterType === '') {
+        echo json_encode(['status' => 'error', 'message' => 'Missing required filters.']);
+        exit();
     }
 
-    // Modified query to handle both main billers and child billers with sub_billers_name
+    if ($filterType === 'monthly') {
+        $startDate = $startDate . '-01';
+        $endDate = date('Y-m-t', strtotime($endDate . '-01'));
+    } elseif ($filterType === 'yearly') {
+        $startDate = $startDate . '-01-01';
+        $endDate = $endDate . '-12-31';
+    }
+
+    $billerWhere = " AND mpm.biller_type IN ('main-biller', 'child-biller')";
+    $billerParams = [];
+    $billerTypes = '';
+
+    if ($billerlist === 'main-biller' || $billerlist === 'child-biller') {
+        $billerWhere = ' AND mpm.biller_type = ?';
+        $billerParams[] = $billerlist;
+        $billerTypes .= 's';
+    }
+
+    $query = "
+        WITH partner_name_list AS (
+            SELECT
+                COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
+                mpm.partner_name,
+                mpm.biller_name,
+                mpm.biller_type
+            FROM masterdata.partner_masterfile mpm
+            WHERE mpm.status = 'ACTIVE' {$billerWhere}
+        ),
+        summary_vol AS (
+            SELECT
+                partner_key,
+                partner_name,
+                COUNT(*) AS vol1,
+                SUM(amount_paid) AS principal1,
+                SUM(charge_to_partner + charge_to_customer) AS charge1
+            FROM (
+                SELECT
+                    CASE
+                        WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                        WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                        ELSE CONCAT(
+                            'temp_',
+                            CASE
+                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                                    THEN bt.sub_billers_name
+                                ELSE bt.partner_name
+                            END
+                        )
+                    END COLLATE utf8mb4_general_ci AS partner_key,
+                    CASE
+                        WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                            THEN bt.sub_billers_name
+                        ELSE bt.partner_name
+                    END AS partner_name,
+                    bt.amount_paid,
+                    bt.charge_to_partner,
+                    bt.charge_to_customer
+                FROM mldb.billspayment_transaction bt
+                WHERE
+                    (DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)
+                    AND bt.status IS NULL
+                    AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+            ) x
+            GROUP BY partner_key, partner_name
+        ),
+        adjustment_vol AS (
+            SELECT
+                partner_key,
+                partner_name,
+                COUNT(*) AS vol2,
+                SUM(amount_paid) AS principal2,
+                SUM(charge_to_partner + charge_to_customer) AS charge2
+            FROM (
+                SELECT
+                    CASE
+                        WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                        WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                        ELSE CONCAT(
+                            'temp_',
+                            CASE
+                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                                    THEN bt.sub_billers_name
+                                ELSE bt.partner_name
+                            END
+                        )
+                    END COLLATE utf8mb4_general_ci AS partner_key,
+                    CASE
+                        WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                            THEN bt.sub_billers_name
+                        ELSE bt.partner_name
+                    END AS partner_name,
+                    bt.amount_paid,
+                    bt.charge_to_partner,
+                    bt.charge_to_customer
+                FROM mldb.billspayment_transaction bt
+                WHERE
+                    (DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)
+                    AND bt.status = '*'
+                    AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+            ) x
+            GROUP BY partner_key, partner_name
+        )
+        SELECT
+            pml.partner_name,
+            CASE WHEN pml.biller_type = 'child-biller' THEN pml.biller_name ELSE '' END AS sub_billers_name,
+            pml.biller_name,
+            pml.biller_type,
+            COALESCE(sv.vol1, 0) AS summary_vol,
+            COALESCE(sv.principal1, 0) AS summary_principal,
+            COALESCE(sv.charge1, 0) AS summary_charges,
+            COALESCE(av.vol2, 0) AS adjustment_vol,
+            COALESCE(ABS(av.principal2), 0) AS adjustment_principal,
+            COALESCE(ABS(av.charge2), 0) AS adjustment_charges,
+            (COALESCE(sv.vol1, 0) - COALESCE(av.vol2, 0)) AS net_vol,
+            (COALESCE(sv.principal1, 0) - COALESCE(ABS(av.principal2), 0)) AS net_principal,
+            (COALESCE(sv.charge1, 0) - COALESCE(ABS(av.charge2), 0)) AS net_charges
+        FROM partner_name_list pml
+        LEFT JOIN summary_vol sv
+            ON pml.partner_key = sv.partner_key
+        LEFT JOIN adjustment_vol av
+            ON pml.partner_key = av.partner_key
+        ORDER BY pml.partner_name
+    ";
+
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        echo json_encode(['status' => 'error', 'message' => 'Failed to prepare query: ' . $conn->error]);
+        exit();
+    }
+
+    $params = [];
+    $types = '';
+
+    if (!empty($billerParams)) {
+        $params = array_merge($params, $billerParams);
+        $types .= $billerTypes;
+    }
+
+    $dateParams = [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate, $startDate, $endDate];
+    $params = array_merge($params, $dateParams);
+    $types .= 'ssssssss';
+
+    $stmt->bind_param($types, ...$params);
+
+    if (!$stmt->execute()) {
+        echo json_encode(['status' => 'error', 'message' => 'Failed to execute query: ' . $stmt->error]);
+        $stmt->close();
+        exit();
+    }
+
+    $result = $stmt->get_result();
+    $rows = [];
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+
+    $stmt->close();
+
+    echo json_encode([
+        'status' => 'success',
+        'data' => $rows
+    ]);
+    exit();
 }
 
 
@@ -712,14 +840,18 @@ $(document).ready(function() {
         return rows;
     }
 
-    function fetchMockReport(partner, filterType, startDate, endDate) {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve({
-                    status: 'success',
-                    data: buildMockReportData(partner, filterType, startDate, endDate)
-                });
-            }, 250);
+    function fetchReportData(billerlist, filterType, startDate, endDate) {
+        return $.ajax({
+            url: window.location.pathname,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'generate_report',
+                billerlist: billerlist,
+                filterType: filterType,
+                startDate: startDate,
+                endDate: endDate
+            }
         });
     }
 
@@ -906,15 +1038,15 @@ $(document).ready(function() {
     // Generate button click handler
     $('#generateReport').on('click', function() {
         const filterType = $('select[name="filterType"]').val();
-        const partner = $('#partnerlistDropdown').val();
+        const billerType = $('select[name="billerlist"]').val();
         let startDate = $('input[name="startDate"]').val();
         let endDate = $('input[name="endDate"]').val();
         
-        if (!filterType || !partner) {
+        if (!filterType || !billerType) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Missing Information',
-                text: 'Please select both Filter Type and Partner before generating the report.'
+                text: 'Please select both Time Frame and Biller Type before generating the report.'
             });
             return;
         }
@@ -945,7 +1077,7 @@ $(document).ready(function() {
         
         console.log('Generating report with:', {
             filterType: filterType,
-            partner: partner,
+            billerType: billerType,
             startDate: startDate,
             endDate: endDate
         });
@@ -956,22 +1088,26 @@ $(document).ready(function() {
         // Show loading
         $('#loading-overlay').css('display', 'flex');
 
-        fetchMockReport(partner, filterType, startDate, endDate)
+        fetchReportData(billerType, filterType, startDate, endDate)
             .then(function(result) {
+                if (!result || result.status !== 'success') {
+                    throw new Error(result && result.message ? result.message : 'Failed to load report data.');
+                }
+                $('#loading-overlay').hide();
                 debugCache = {};
                 currentReportData = Array.isArray(result.data) ? result.data : [];
-                populateReportTable(currentReportData);
+                requestAnimationFrame(function() {
+                    populateReportTable(currentReportData);
+                });
             })
             .catch(function(error) {
-                console.error('Mock report error:', error);
+                $('#loading-overlay').hide();
+                console.error('Report error:', error);
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
-                    text: 'Failed to generate front-end mock report.'
+                    text: error && error.message ? error.message : 'Failed to generate report.'
                 });
-            })
-            .finally(function() {
-                $('#loading-overlay').hide();
             });
     });
 
@@ -1300,7 +1436,7 @@ $(document).ready(function() {
     
     function toggleGenerateButton() {
         const filterType = $('select[name="filterType"]').val();
-        const partner = $('#partnerlistDropdown').val();
+        const billerType = $('select[name="billerlist"]').val();
         const startDate = $('input[name="startDate"]').val();
         const endDate = $('input[name="endDate"]').val();
         
@@ -1312,7 +1448,7 @@ $(document).ready(function() {
             datesValid = startDate !== '' && endDate !== '';
         }
         
-        const enable = (filterType && partner && datesValid);
+        const enable = (filterType && billerType && datesValid);
         if (enable) {
             $('#generateReport').prop('disabled', false).removeClass('btn-secondary').addClass('btn-danger');
         } else {
@@ -1385,12 +1521,24 @@ $(document).ready(function() {
         }
         
         if (data.length === 0) {
-            tbody.append('<tr><td colspan="13" class="text-center">No data found for the selected criteria</td></tr>');
+            tbody.append('<tr><td colspan="12" class="text-center">No data found for the selected criteria</td></tr>');
         } else {
-            // Limit to first 15 rows for display, but calculate totals from all data
+            // Limit rendered rows to keep UI snappy on large results.
             const displayData = data.slice(0, 15);
 
-            data.forEach((row, index) => {
+            data.forEach((row) => {
+                totals.summaryVol += parseInt(row.summary_vol || 0);
+                totals.summaryPrincipal += parseFloat(row.summary_principal || 0);
+                totals.summaryCharge += parseFloat(row.summary_charges || 0);
+                totals.adjustmentVol += parseInt(row.adjustment_vol || 0);
+                totals.adjustmentPrincipal += parseFloat(row.adjustment_principal || 0);
+                totals.adjustmentCharge += parseFloat(row.adjustment_charges || 0);
+                totals.netVol += parseInt(row.net_vol || 0);
+                totals.netPrincipal += parseFloat(row.net_principal || 0);
+                totals.netCharge += parseFloat(row.net_charges || 0);
+            });
+
+            displayData.forEach((row, index) => {
                 const sub_billers_name_raw = (row.sub_billers_name || '').toString().trim();
                 const partner_name_value = (row.partner_name || '').toString().trim();
                 let partner_name_raw = partner_name_value;
@@ -1405,8 +1553,7 @@ $(document).ready(function() {
                 <tr>
                     <td>${index + 1}</td>
                     <td>${partner_name_raw}</td>
-                    <td></td>
-                    <td></td>
+                    <td>${sub_billers_name_raw}</td>
                     <td class="text-end">${parseInt(row.summary_vol || 0).toLocaleString()}</td>
                     <td class="text-end">${parseFloat(row.summary_principal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                     <td class="text-end">${parseFloat(row.summary_charges || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
@@ -1419,17 +1566,6 @@ $(document).ready(function() {
                 </tr>
             `);
                 tbody.append(tr);
-                
-                // Add to totals
-                totals.summaryVol += parseInt(row.summary_vol || 0);
-                totals.summaryPrincipal += parseFloat(row.summary_principal || 0);
-                totals.summaryCharge += parseFloat(row.summary_charges || 0);
-                totals.adjustmentVol += parseInt(row.adjustment_vol || 0);
-                totals.adjustmentPrincipal += parseFloat(row.adjustment_principal || 0);
-                totals.adjustmentCharge += parseFloat(row.adjustment_charges || 0);
-                totals.netVol += parseInt(row.net_vol || 0);
-                totals.netPrincipal += parseFloat(row.net_principal || 0);
-                totals.netCharge += parseFloat(row.net_charges || 0);
             });
         }
         
@@ -1497,6 +1633,16 @@ $(document).ready(function() {
         // Clear the report table
         clearReportTable();
         
+        toggleGenerateButton();
+    });
+
+    // Biller type selection change handler (active filter in current UI)
+    $('select[name="billerlist"]').on('change', function() {
+        $('.day-shortcut-container').hide();
+        resetFilterContainers();
+        $('#exportButton').hide();
+        $('#debugButton').hide();
+        clearReportTable();
         toggleGenerateButton();
     });
 
@@ -1826,7 +1972,6 @@ $(document).ready(function() {
                 <td></td>
                 <td></td>
                 <td></td>
-                <td></td>
             </tr>
         `);
         
@@ -1860,27 +2005,35 @@ $(document).ready(function() {
     // Add the missing generateFilteredReport function after the existing functions
 
     function generateFilteredReport(startDate, endDate) {
-        const partner = $('#partnerlistDropdown').val();
+        const billerType = $('select[name="billerlist"]').val();
         const filterType = $('select[name="filterType"]').val();
+
+        if (!billerType || !filterType) {
+            return;
+        }
         
         // Show loading
         $('#loading-overlay').show();
 
-        fetchMockReport(partner, filterType, startDate, endDate)
+        fetchReportData(billerType, filterType, startDate, endDate)
             .then(function(result) {
+                if (!result || result.status !== 'success') {
+                    throw new Error(result && result.message ? result.message : 'Failed to load filtered report data.');
+                }
+                $('#loading-overlay').hide();
                 currentReportData = Array.isArray(result.data) ? result.data : [];
-                populateReportTable(currentReportData);
+                requestAnimationFrame(function() {
+                    populateReportTable(currentReportData);
+                });
             })
             .catch(function(error) {
-                console.error('Filtered mock report error:', error);
+                $('#loading-overlay').hide();
+                console.error('Filtered report error:', error);
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
-                    text: 'Failed to generate filtered front-end report.'
+                    text: error && error.message ? error.message : 'Failed to generate filtered report.'
                 });
-            })
-            .finally(function() {
-                $('#loading-overlay').hide();
             });
     }
 }); // Final closing brace for $(document).ready
