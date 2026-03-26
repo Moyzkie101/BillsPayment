@@ -1187,10 +1187,6 @@ if (isset($_SESSION['user_type'])) {
                         Swal.fire({ icon: 'warning', title: 'Missing File Type', text: 'Please select a source file type (KPX or KP7).', confirmButtonText: 'OK' });
                         return false;
                     }
-                    if (selectedCompany === 'All' && fileType === 'KPX') {
-                        Swal.fire({ icon: 'error', title: 'Invalid Combination', text: 'No All Partners Available for KPX. Please select a specific partner.', confirmButtonText: 'OK' });
-                        return false;
-                    }
 
                     var fi = $('#manualFileInput')[0];
                     var hasNativeFile = !!(fi && fi.files && fi.files.length > 0);
@@ -1924,7 +1920,7 @@ if (isset($_SESSION['user_type'])) {
                     html: summaryHTML + detailsHTML,
                     icon: 'warning',
                     showCancelButton: true,
-                    showDenyButton: true,
+                    showDenyButton: false,
                     confirmButtonText: '<i class="fa-solid fa-rotate"></i> Override',
                     denyButtonText: '<i class="fa-solid fa-forward"></i> Skip',
                     cancelButtonText: '<i class="fa-solid fa-trash"></i> Remove',
