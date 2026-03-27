@@ -7,6 +7,8 @@ require '../../../vendor/autoload.php';
 session_start();
 // include shared permission helpers and resolve current user
 @include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 
 if (!isset($_SESSION['user_type']) || !in_array($_SESSION['user_type'], ['admin', 'user'], true)) {
     header("Location:../../../index.php");

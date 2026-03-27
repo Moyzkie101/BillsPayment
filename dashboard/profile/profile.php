@@ -9,6 +9,8 @@ if (empty($id)) {
     exit;
 }
 
+if (!function_exists('has_permission') || !has_permission('Profile')) { header('Location: ../home.php'); exit; }
+
 $row = get_user_row($id);
 $perms = get_current_user_permissions();
 $level = get_user_access_level();

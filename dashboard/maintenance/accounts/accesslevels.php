@@ -5,6 +5,10 @@ session_start();
 
 // include permission helpers (provides has_permission(), etc.)
 include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
+
+if (!function_exists('has_permission') || !has_permission('Access Levels')) { header('Location: ../../home.php'); exit; }
 
 if (isset($_SESSION['user_type'])) {
     $current_user_email = '';

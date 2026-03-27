@@ -3,6 +3,10 @@
 include '../../../config/config.php';
 require '../../../vendor/autoload.php';
 session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_permission') || !has_permission('Duplicate Transaction')) { header('Location: ../../home.php'); exit; }
 
 // simple user email for permission checks
 $current_user_email = '';

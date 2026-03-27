@@ -17,6 +17,8 @@ if (isset($_SESSION['user_type'])) {
 // Resolve current user id and fetch signature blob (if any)
 include '../../../templates/middleware.php';
 $current_user_id = resolve_user_identifier();
+if (empty($current_user_id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_permission') || !has_permission('Billing Invoice Service Charge')) { header('Location: ../../home.php'); exit; }
 $prepared_sig_blob = null;
 if (!empty($current_user_id)) {
     $stmtSig = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");

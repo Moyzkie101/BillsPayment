@@ -5,7 +5,12 @@ include '../../../config/config.php';
 require '../../../vendor/autoload.php';
 
 // Start the session
+
 session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_permission') || !has_permission('Import Cancellation')) { header('Location: ../../home.php'); exit; }
 
 
 if (isset($_SESSION['user_type'])) {
