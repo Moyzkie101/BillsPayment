@@ -248,6 +248,9 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div> -->
         </div>
 
+        <?php endif; ?>
+        <?php endif; ?>
+
         <?php if (has_any_permission(['TRL Import','TRL Entry','TRL Report'])): ?>
         <!-- Billspayment - TRL (Transaction Request Log) - top-level menu -->
         <div class="onetab" id="bp-trl-btn">
@@ -276,7 +279,6 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <?php endif; ?>
         </div>
         <?php endif; ?>
-        <?php endif; ?>
 
         <!-- <div class="tabcat" id="action-report-btn" style="display: none;">
             <i class="fa-solid fa-chevron-right" id="closed-action-report" style="display: block"></i>
@@ -285,7 +287,6 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         </div> -->
 
         <!-- Action Log submenu removed as requested -->
-        <?php endif; ?>
 
     
 
