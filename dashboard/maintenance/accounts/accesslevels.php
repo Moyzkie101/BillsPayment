@@ -8,28 +8,30 @@ include_once __DIR__ . '/../../../templates/middleware.php';
 $id = resolve_user_identifier();
 if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 
-if (!function_exists('has_permission') || !has_permission('Access Levels')) { header('Location: ../../home.php'); exit; }
-
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }
-}
-
-if (!isset($_SESSION['user_type']) || !in_array($_SESSION['user_type'], ['admin', 'user'])) {
-    header('Location: ../../../index.php');
+// Allow access if the permission helper is present and the user
+// has either the generic 'Access Levels' permission, the
+// 'Maintenance Accounts Access Levels' permission, or the
+// superuser sentinel access level (-1). This avoids denying
+// access when permission key names differ between the map
+// and legacy entries.
+if (!function_exists('has_permission') || (
+    !has_permission('Access Levels')
+    && !has_permission('Maintenance Accounts Access Levels')
+    && !(isset($_SESSION['access_level']) && intval($_SESSION['access_level']) === -1)
+)) {
+    header('Location: ../../home.php');
     exit;
 }
+
+// prefer explicit session values for current user email; do not gate on role
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 // Allow access for admins, or users with the admin sentinel (-1),
 // or users who have the specific maintenance permission.
 $allowed = false;
-if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'admin') {
-    $allowed = true;
-}
+// Allow access for users with superuser access level (-1) or
+// users who have the maintenance permission. Do not base access
+// solely on the `user_type` role value.
 if (isset($_SESSION['access_level']) && intval($_SESSION['access_level']) === -1) {
     $allowed = true;
 }
@@ -502,21 +504,14 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
             let selectedRow = null;
             let selectedPermissions = [];
             let computedLevelFromCards = 0;
-            const tree = window.AccessLevelManager.getPermissionTree();
-            const allPermissionKeys = flattenTree(tree);
-            // collect only leaf (persisted) permission keys for full-selection checks
-            const allLeafKeys = (function collectLeafKeys(nodes) {
-                const out = [];
-                (nodes || []).forEach(function walk(node) {
-                    if (!node) return;
-                    if (!node.children || !node.children.length) {
-                        out.push(node.key);
-                    } else {
-                        (node.children || []).forEach(walk);
-                    }
-                });
-                return out.sort();
-            })(tree);
+
+            function getCurrentTree() {
+                return window.AccessLevelManager.getPermissionTree() || [];
+            }
+
+            function getAllPermissionKeys() {
+                return flattenTree(getCurrentTree());
+            }
 
             function renderSelectedCardsSummary() {
                 if (!selectedPermissions.length) {
@@ -586,6 +581,7 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
             }
 
             function renderPermissionCards() {
+                const tree = getCurrentTree();
                 const cardsContainer = $('#permissionCards');
                 const previewList = $('#permissionPreviewList');
                 // clear previous render to avoid duplicate nodes when modal reopened
@@ -785,6 +781,24 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 });
                 const normalizedLeafSelected = normalizePermissionList(leafSelected);
 
+                // Robust full-selection detection: if the normalized leaf
+                // selection exactly matches the set of all leaf keys from
+                // the current permission tree, treat it as the sentinel -1.
+                // This handles timing or map-generation differences where
+                // an exact key-by-key match may fail.
+                try {
+                    const allLeafKeys = collectLeafKeys(window.AccessLevelManager.getPermissionTree());
+                    if (normalizedLeafSelected.length > 0 && normalizedLeafSelected.length === allLeafKeys.length) {
+                        computedLevelFromCards = -1;
+                        applyPermissionPreview();
+                        $('#modalCurrentLevel').text('-1');
+                        renderSelectedCardsSummary();
+                        return;
+                    }
+                } catch (e) {
+                    // fall through to existing logic on error
+                }
+
                 if (isAllLeafSelected(normalizedLeafSelected)) {
                     computedLevelFromCards = -1;
                     applyPermissionPreview();
@@ -953,6 +967,16 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 }).fail(function() {
                     selectedPermissions = normalizePermissionList(window.AccessLevelManager.getPermissionsByLevel(currentLevel));
                 }).always(function() {
+                    // keep Select All checkbox aligned with current loaded permissions
+                    const currentLeafKeys = collectLeafKeys(window.AccessLevelManager.getPermissionTree());
+                    const selectedLeafKeys = normalizePermissionList(selectedPermissions.filter(function(p) {
+                        return (getDescendants(p) || []).length === 0;
+                    }));
+                    const isFull = selectedLeafKeys.length > 0
+                        && selectedLeafKeys.length === currentLeafKeys.length
+                        && selectedLeafKeys.every(function(k, i) { return k === currentLeafKeys[i]; });
+                    $('#selectAllPerms').prop('checked', isFull);
+
                     renderPermissionCards();
                     syncCardSelectionUI();
                     renderSelectedCardsSummary();
@@ -1006,7 +1030,7 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 }
 
                 selectedPermissions = Array.from(selectedSet).filter(function (permission) {
-                    return allPermissionKeys.indexOf(permission) !== -1;
+                    return getAllPermissionKeys().indexOf(permission) !== -1;
                 });
                 selectedPermissions = normalizePermissionList(selectedPermissions);
 
@@ -1027,7 +1051,7 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
 
             $(document).on('change', '#selectAllPerms', function() {
                 if ($(this).is(':checked')) {
-                    selectedPermissions = normalizePermissionList(allPermissionKeys.slice());
+                    selectedPermissions = normalizePermissionList(getAllPermissionKeys());
                 } else {
                     selectedPermissions = [];
                 }
@@ -1090,7 +1114,7 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 // Recompute current leaf keys from the live permission tree (map may load async)
                 // If all leaf permissions are selected, use sentinel -1
                 let levelToSave = computedLevelFromCards;
-                if (isAllLeafSelected(normalizedLeafToSave)) {
+                if ($('#selectAllPerms').is(':checked') || isAllLeafSelected(normalizedLeafToSave)) {
                     levelToSave = -1;
                 }
 

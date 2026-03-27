@@ -11,14 +11,8 @@ if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 if (!function_exists('has_permission') || !has_permission('View Partner List')) { header('Location: ../../home.php'); exit; }
 
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }
-}
+// prefer explicit session values for current user email
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 // get table display for partners
 if (isset($_POST['action']) && $_POST['action'] === 'generate_partner_list') {

@@ -6,19 +6,10 @@ session_start();
 $id = resolve_user_identifier();
 if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 
-if (!function_exists('has_permission') || !has_permission('Cancellation Report')) { header('Location: ../../home.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Cancellation Report','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
-if (!isset($_SESSION['user_type'])) {
-    header('Location: ../../../index.php');
-    exit();
-}
-
-$current_user_email = '';
-if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-    $current_user_email = $_SESSION['admin_email'];
-} elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-    $current_user_email = $_SESSION['user_email'];
-}
+// prefer explicit session values for current user email; avoid role-based gating
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 // AJAX handler for fetching cancellation data
 if (isset($_POST['action']) && $_POST['action'] === 'get_cancellation_data') {

@@ -5,8 +5,8 @@ include '../../../templates/middleware.php';
 // canonical auth guard
 $id = resolve_user_identifier();
 if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
-// page-level permission enforcement
-if (!has_permission('TRL Entry')) { header('Location: ../../home.php'); exit; }
+// page-level permission enforcement (allow existing 'Bills Payment' holders too)
+if (!function_exists('has_any_permission') || !has_any_permission(['TRL Entry','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 ?>
 <!DOCTYPE html>
 <html lang="en">

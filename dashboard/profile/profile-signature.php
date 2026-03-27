@@ -7,7 +7,7 @@ $id = resolve_user_identifier();
 if (empty($id)) { header('Location: ../../login_form.php'); exit; }
 
 // fetch signature
-if (!function_exists('has_permission') || !has_permission('Profile Signature')) { header('Location: ../home.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Profile Signature','Profile','Profile View'])) { header('Location: ../home.php'); exit; }
 $sig = null;
 $stmt = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");
 if ($stmt) {

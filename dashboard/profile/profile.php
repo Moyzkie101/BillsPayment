@@ -9,7 +9,7 @@ if (empty($id)) {
     exit;
 }
 
-if (!function_exists('has_permission') || !has_permission('Profile')) { header('Location: ../home.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Profile','Profile View','Profile Signature'])) { header('Location: ../home.php'); exit; }
 
 $row = get_user_row($id);
 $perms = get_current_user_permissions();

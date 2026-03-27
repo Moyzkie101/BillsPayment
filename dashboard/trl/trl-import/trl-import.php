@@ -5,8 +5,15 @@ include '../../../templates/middleware.php';
 // canonical auth guard
 $id = resolve_user_identifier();
 if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
-// page-level permission enforcement
-if (!has_permission('TRL Import')) { header('Location: ../../home.php'); exit; }
+// quick debug endpoint: show middleware info when requested by a superuser or
+// a user with the appropriate maintenance permission. Do not rely on role.
+if (isset($_GET['__showperms']) && ((isset($_SESSION['access_level']) && intval($_SESSION['access_level']) === -1) || (function_exists('has_permission') && has_permission('Access Levels')))) {
+    header('Content-Type: application/json');
+    echo json_encode(middleware_debug_info());
+    exit;
+}
+// page-level permission enforcement (allow existing 'Bills Payment' holders too)
+if (!function_exists('has_any_permission') || !has_any_permission(['TRL Import','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 ?>
 <!DOCTYPE html>
 <html lang="en">

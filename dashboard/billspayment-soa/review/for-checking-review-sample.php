@@ -9,16 +9,10 @@ session_start();
 $id = resolve_user_identifier();
 if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 
-if (!function_exists('has_permission') || !has_permission('For Checking Review')) { header('Location: ../../home.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['For Checking Review','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }
-}
+// prefer explicit session values for current user email
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
     $partner_options = 'SELECT DISTINCT partner_Name FROM mldb.soa_transaction WHERE status = "Prepared" group by partner_Name';
     $partner_result = mysqli_query($conn, $partner_options);
