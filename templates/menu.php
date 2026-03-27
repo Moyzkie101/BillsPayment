@@ -236,6 +236,11 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     <a href="<?php echo $base_url; ?>billspayment/report/balance-sheet-report.php" id="balance-sheet-report-link"><i class="fa-solid fa-chart-bar"></i> Balance Sheet Report</a>
                 </div>
             <?php endif;?>
+            <?php if (has_permission('BP Report Recon')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/recon-report.php'">
+                    <a href="<?php echo $base_url; ?>billspayment/report/recon-report.php" id="recon-report-link"><i class="fa-solid fa-file-chart-line"></i> Recon Report</a>
+                </div>
+            <?php endif; ?>
             <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/report/monthly-volume.php'">
                 <a href="<?php //echo $base_url; ?>billspayment/report/monthly-volume.php">Monthly Volume Report</a>
             </div> -->
