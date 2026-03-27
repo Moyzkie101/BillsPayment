@@ -4,7 +4,9 @@
         "BP Report EDI"
     ],
     "2020": [
-        "BP Import Transaction"
+        "Support Ticket BPO",
+        "Support Ticket CAD",
+        "Support Ticket Create"
     ],
     "20235678": [
         "Accounts",
@@ -31,6 +33,12 @@
         "Maintenance Masterfiles Bank List",
         "Maintenance Masterfiles Partner List",
         "Masterfiles View Bank List",
+        "Masterfiles View Partner List",
+        "Profile Signature",
+        "Profile View",
+        "Support Ticket BPO",
+        "Support Ticket CAD",
+        "Support Ticket Create",
         "Tools Branch Maker",
         "Tools File Fetch",
         "Tools KPX Generator"

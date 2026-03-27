@@ -391,6 +391,31 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <?php endif; ?>
         </div>
         <?php endif; ?>
+        <?php if (has_any_permission(['Support Ticket Create','Support Ticket BPO','Support Ticket CAD'])): ?>
+            <div class="onetab" id="support-ticket-btn">
+                <h6><i class="fa-solid fa-ticket-simple"></i> Support Ticket</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-support-ticket" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-support-ticket" style="display: none"></i>
+            </div>
+
+            <div class="onetab-sub" id="support-ticket-nav" style="display: none;">
+                <?php if (has_permission('Support Ticket Create')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/create-ticket.php'">
+                    <a href="<?php echo $base_url; ?>support_ticket/create-ticket.php"><i class="fa-solid fa-plus"></i> Create Ticket</a>
+                </div>
+                <?php endif; ?>
+                <?php if (has_permission('Support Ticket BPO')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/bpo-ticket.php'">
+                    <a href="<?php echo $base_url; ?>support_ticket/bpo-ticket.php"><i class="fa-solid fa-headset"></i> BPO Ticket</a>
+                </div>
+                <?php endif; ?>
+                <?php if (has_permission('Support Ticket CAD')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/cad-ticket.php'">
+                    <a href="<?php echo $base_url; ?>support_ticket/cad-ticket.php"><i class="fa-solid fa-tools"></i> CAD Ticket</a>
+                </div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
 
         <?php if (has_any_permission(['Accounts','Maintenance Accounts User Management','Maintenance Accounts Access Levels','Maintenance Duplicate Transaction','Maintenance Masterfiles Partner List','Maintenance Masterfiles Bank List'])): ?>
             <!-- Show/Hide Set Maintenance Main-menu -->
@@ -747,5 +772,57 @@ const underConstructionIds = [
             }
         });
     }
+});
+</script>
+<script>
+// Generic binder: wire main `.onetab` buttons to their following `.tabcat` and `.onetab-sub` siblings
+(function onReady(handler){
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', handler);
+    } else {
+        handler();
+    }
+})(function() {
+    function setArrowExpanded(menuElement, expanded) {
+        if (!menuElement) return;
+        const openIcon = menuElement.querySelector('[id^="open-"]');
+        const closedIcon = menuElement.querySelector('[id^="closed-"]');
+        if (openIcon) openIcon.style.display = expanded ? 'block' : 'none';
+        if (closedIcon) closedIcon.style.display = expanded ? 'none' : 'block';
+    }
+
+    document.querySelectorAll('.onetab[id$="-btn"]').forEach(function(btn){
+        // avoid double-binding
+        if (btn.dataset.genericWired) return;
+        btn.dataset.genericWired = '1';
+
+        btn.addEventListener('click', function(){
+            // find first following .tabcat and first following .onetab-sub until next .onetab
+            var node = btn.nextElementSibling;
+            var foundTabcat = null;
+            var foundNav = null;
+            while(node && !node.classList.contains('onetab')){
+                if (!foundTabcat && node.classList && node.classList.contains('tabcat')) foundTabcat = node;
+                if (!foundNav && node.classList && node.classList.contains('onetab-sub')) foundNav = node;
+                node = node.nextElementSibling;
+            }
+
+            if (!foundNav) {
+                // nothing to toggle
+                return;
+            }
+
+            var isHidden = window.getComputedStyle(foundNav).display === 'none';
+            if (isHidden) {
+                foundNav.style.display = 'block';
+                if (foundTabcat) { foundTabcat.style.display = 'flex'; }
+                setArrowExpanded(btn, true);
+            } else {
+                foundNav.style.display = 'none';
+                if (foundTabcat) { foundTabcat.style.display = 'none'; }
+                setArrowExpanded(btn, false);
+            }
+        });
+    });
 });
 </script>

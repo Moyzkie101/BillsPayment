@@ -135,28 +135,6 @@
             ]
         },
         {
-            "key": "Support Ticket",
-            "label": "Support Ticket",
-            "icon": "check_circle",
-            "children": [
-                {
-                    "key": "Support Ticket BPO",
-                    "label": "Support Ticket BPO",
-                    "icon": "check_circle"
-                },
-                {
-                    "key": "Support Ticket CAD",
-                    "label": "Support Ticket CAD",
-                    "icon": "check_circle"
-                },
-                {
-                    "key": "Support Ticket Create",
-                    "label": "Support Ticket Create",
-                    "icon": "check_circle"
-                }
-            ]
-        },
-        {
             "key": "Maintenance",
             "label": "Maintenance",
             "icon": "check_circle",
@@ -211,6 +189,28 @@
                 {
                     "key": "Tools KPX Generator",
                     "label": "Tools KPX Generator",
+                    "icon": "check_circle"
+                }
+            ]
+        },
+        {
+            "key": "Support Ticket",
+            "label": "Support Ticket",
+            "icon": "check_circle",
+            "children": [
+                {
+                    "key": "Support Ticket BPO",
+                    "label": "Support Ticket BPO",
+                    "icon": "check_circle"
+                },
+                {
+                    "key": "Support Ticket CAD",
+                    "label": "Support Ticket CAD",
+                    "icon": "check_circle"
+                },
+                {
+                    "key": "Support Ticket Create",
+                    "label": "Support Ticket Create",
                     "icon": "check_circle"
                 }
             ]
@@ -463,24 +463,31 @@
         {
             "access_level": 16,
             "permissions": [
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Accounts",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List"
             ]
         },
         {
             "access_level": 17,
             "permissions": [
+                "Accounts",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
                 "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Profile View"
             ]
         },
         {
             "access_level": 18,
             "permissions": [
+                "Accounts",
                 "BP Import Cancellation",
                 "BP Import Transaction",
                 "BP Post Transaction",
@@ -493,14 +500,17 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List"
             ]
         },
         {
             "access_level": 19,
             "permissions": [
+                "Accounts",
                 "BP Import Cancellation",
                 "BP Import Transaction",
                 "BP Post Transaction",
@@ -513,44 +523,53 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
                 "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Profile View"
             ]
         },
         {
             "access_level": 20,
             "permissions": [
+                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List"
             ]
         },
         {
             "access_level": 21,
             "permissions": [
+                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
                 "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Profile View"
             ]
         },
         {
             "access_level": 22,
             "permissions": [
+                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
@@ -568,14 +587,17 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List"
             ]
         },
         {
             "access_level": 23,
             "permissions": [
+                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
@@ -593,38 +615,47 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
                 "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Profile View"
             ]
         },
         {
             "access_level": 24,
             "permissions": [
+                "Accounts",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Masterfiles View Partner List"
             ]
         },
         {
             "access_level": 25,
             "permissions": [
+                "Accounts",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Profile View"
             ]
         },
         {
             "access_level": 26,
             "permissions": [
+                "Accounts",
                 "BP Import Cancellation",
                 "BP Import Transaction",
                 "BP Post Transaction",
@@ -637,16 +668,19 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Masterfiles View Partner List"
             ]
         },
         {
             "access_level": 27,
             "permissions": [
+                "Accounts",
                 "BP Import Cancellation",
                 "BP Import Transaction",
                 "BP Post Transaction",
@@ -659,50 +693,360 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Profile View"
             ]
         },
         {
             "access_level": 28,
             "permissions": [
+                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Masterfiles View Partner List"
             ]
         },
         {
             "access_level": 29,
             "permissions": [
+                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Profile View"
             ]
         },
         {
             "access_level": 30,
             "permissions": [
+                "Accounts",
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Invoice Approval",
+                "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List"
+            ]
+        },
+        {
+            "access_level": 31,
+            "permissions": [
+                "Accounts",
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Invoice Approval",
+                "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Profile Signature",
+                "Profile View"
+            ]
+        },
+        {
+            "access_level": 32,
+            "permissions": [
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 33,
+            "permissions": [
+                "Profile Signature",
+                "Profile View",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 34,
+            "permissions": [
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 35,
+            "permissions": [
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Profile Signature",
+                "Profile View",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 36,
+            "permissions": [
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "Invoice Approval",
+                "Invoice Review",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 37,
+            "permissions": [
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "Invoice Approval",
+                "Invoice Review",
+                "Profile Signature",
+                "Profile View",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 38,
+            "permissions": [
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Invoice Approval",
+                "Invoice Review",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 39,
+            "permissions": [
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Invoice Approval",
+                "Invoice Review",
+                "Profile Signature",
+                "Profile View",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 40,
+            "permissions": [
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 41,
+            "permissions": [
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 42,
+            "permissions": [
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 43,
+            "permissions": [
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 44,
+            "permissions": [
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "Invoice Approval",
+                "Invoice Review",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 45,
+            "permissions": [
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "Invoice Approval",
+                "Invoice Review",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
+            ]
+        },
+        {
+            "access_level": 46,
+            "permissions": [
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
@@ -722,13 +1066,13 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
-            "access_level": 31,
+            "access_level": 47,
             "permissions": [
                 "BI Create Automated",
                 "BI Create Manual",
@@ -751,353 +1095,9 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
-            ]
-        },
-        {
-            "access_level": 32,
-            "permissions": [
-                "Accounts",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List"
-            ]
-        },
-        {
-            "access_level": 33,
-            "permissions": [
-                "Accounts",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Profile Signature",
-                "Profile View"
-            ]
-        },
-        {
-            "access_level": 34,
-            "permissions": [
-                "Accounts",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List"
-            ]
-        },
-        {
-            "access_level": 35,
-            "permissions": [
-                "Accounts",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Profile Signature",
-                "Profile View"
-            ]
-        },
-        {
-            "access_level": 36,
-            "permissions": [
-                "Accounts",
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "Invoice Approval",
-                "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List"
-            ]
-        },
-        {
-            "access_level": 37,
-            "permissions": [
-                "Accounts",
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "Invoice Approval",
-                "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Profile Signature",
-                "Profile View"
-            ]
-        },
-        {
-            "access_level": 38,
-            "permissions": [
-                "Accounts",
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Invoice Approval",
-                "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List"
-            ]
-        },
-        {
-            "access_level": 39,
-            "permissions": [
-                "Accounts",
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Invoice Approval",
-                "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Profile Signature",
-                "Profile View"
-            ]
-        },
-        {
-            "access_level": 40,
-            "permissions": [
-                "Accounts",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List"
-            ]
-        },
-        {
-            "access_level": 41,
-            "permissions": [
-                "Accounts",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Profile Signature",
-                "Profile View"
-            ]
-        },
-        {
-            "access_level": 42,
-            "permissions": [
-                "Accounts",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List"
-            ]
-        },
-        {
-            "access_level": 43,
-            "permissions": [
-                "Accounts",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Profile Signature",
-                "Profile View"
-            ]
-        },
-        {
-            "access_level": 44,
-            "permissions": [
-                "Accounts",
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "Invoice Approval",
-                "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List"
-            ]
-        },
-        {
-            "access_level": 45,
-            "permissions": [
-                "Accounts",
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "Invoice Approval",
-                "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Profile Signature",
-                "Profile View"
-            ]
-        },
-        {
-            "access_level": 46,
-            "permissions": [
-                "Accounts",
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Invoice Approval",
-                "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List"
-            ]
-        },
-        {
-            "access_level": 47,
-            "permissions": [
-                "Accounts",
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Invoice Approval",
-                "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Profile Signature",
-                "Profile View"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1109,9 +1109,9 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1125,9 +1125,9 @@
                 "Maintenance Masterfiles Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1151,9 +1151,9 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1179,9 +1179,9 @@
                 "Maintenance Masterfiles Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1198,9 +1198,9 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1219,9 +1219,9 @@
                 "Maintenance Masterfiles Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1250,9 +1250,9 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1283,9 +1283,9 @@
                 "Maintenance Masterfiles Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1299,9 +1299,9 @@
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1317,9 +1317,9 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1345,9 +1345,9 @@
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1375,9 +1375,9 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1396,9 +1396,9 @@
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1419,9 +1419,9 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1452,9 +1452,9 @@
                 "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
@@ -1487,17 +1487,17 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create"
+                "Tools Branch Maker",
+                "Tools File Fetch",
+                "Tools KPX Generator"
             ]
         },
         {
             "access_level": 64,
             "permissions": [
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1505,9 +1505,9 @@
             "permissions": [
                 "Profile Signature",
                 "Profile View",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1525,9 +1525,9 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1547,9 +1547,9 @@
                 "Bills Payment",
                 "Profile Signature",
                 "Profile View",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1560,9 +1560,9 @@
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1575,9 +1575,9 @@
                 "Invoice Review",
                 "Profile Signature",
                 "Profile View",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1600,9 +1600,9 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1627,9 +1627,9 @@
                 "Invoice Review",
                 "Profile Signature",
                 "Profile View",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1637,9 +1637,9 @@
             "permissions": [
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1649,9 +1649,9 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1671,9 +1671,9 @@
                 "Bills Payment",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1695,9 +1695,9 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1710,9 +1710,9 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1727,9 +1727,9 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1754,9 +1754,9 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
@@ -1783,357 +1783,13 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
             ]
         },
         {
             "access_level": 80,
-            "permissions": [
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 81,
-            "permissions": [
-                "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 82,
-            "permissions": [
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 83,
-            "permissions": [
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 84,
-            "permissions": [
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "Invoice Approval",
-                "Invoice Review",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 85,
-            "permissions": [
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "Invoice Approval",
-                "Invoice Review",
-                "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 86,
-            "permissions": [
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Invoice Approval",
-                "Invoice Review",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 87,
-            "permissions": [
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Invoice Approval",
-                "Invoice Review",
-                "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 88,
-            "permissions": [
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 89,
-            "permissions": [
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 90,
-            "permissions": [
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 91,
-            "permissions": [
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 92,
-            "permissions": [
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "Invoice Approval",
-                "Invoice Review",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 93,
-            "permissions": [
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "Invoice Approval",
-                "Invoice Review",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 94,
-            "permissions": [
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Invoice Approval",
-                "Invoice Review",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 95,
-            "permissions": [
-                "BI Create Automated",
-                "BI Create Manual",
-                "BI Report Billing Invoice",
-                "BP Import Cancellation",
-                "BP Import Transaction",
-                "BP Post Transaction",
-                "BP Report Balance Sheet",
-                "BP Report Cancellation",
-                "BP Report EDI",
-                "BP Report Transaction Details",
-                "BP Report Transaction Summary",
-                "BP Report Volume",
-                "BP Settlement Adjustment Entry",
-                "BP Settlement Per Bank",
-                "Bills Payment",
-                "Invoice Approval",
-                "Invoice Review",
-                "Masterfiles View Bank List",
-                "Masterfiles View Partner List",
-                "Profile Signature",
-                "Profile View",
-                "Support Ticket BPO",
-                "Support Ticket CAD",
-                "Support Ticket Create",
-                "Tools Branch Maker",
-                "Tools File Fetch",
-                "Tools KPX Generator"
-            ]
-        },
-        {
-            "access_level": 96,
             "permissions": [
                 "Accounts",
                 "Maintenance Accounts Access Levels",
@@ -2141,6 +1797,395 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 81,
+            "permissions": [
+                "Accounts",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 82,
+            "permissions": [
+                "Accounts",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 83,
+            "permissions": [
+                "Accounts",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 84,
+            "permissions": [
+                "Accounts",
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "Invoice Approval",
+                "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 85,
+            "permissions": [
+                "Accounts",
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "Invoice Approval",
+                "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 86,
+            "permissions": [
+                "Accounts",
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Invoice Approval",
+                "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 87,
+            "permissions": [
+                "Accounts",
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Invoice Approval",
+                "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 88,
+            "permissions": [
+                "Accounts",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 89,
+            "permissions": [
+                "Accounts",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 90,
+            "permissions": [
+                "Accounts",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 91,
+            "permissions": [
+                "Accounts",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 92,
+            "permissions": [
+                "Accounts",
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "Invoice Approval",
+                "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 93,
+            "permissions": [
+                "Accounts",
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "Invoice Approval",
+                "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 94,
+            "permissions": [
+                "Accounts",
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Invoice Approval",
+                "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 95,
+            "permissions": [
+                "Accounts",
+                "BI Create Automated",
+                "BI Create Manual",
+                "BI Report Billing Invoice",
+                "BP Import Cancellation",
+                "BP Import Transaction",
+                "BP Post Transaction",
+                "BP Report Balance Sheet",
+                "BP Report Cancellation",
+                "BP Report EDI",
+                "BP Report Transaction Details",
+                "BP Report Transaction Summary",
+                "BP Report Volume",
+                "BP Settlement Adjustment Entry",
+                "BP Settlement Per Bank",
+                "Bills Payment",
+                "Invoice Approval",
+                "Invoice Review",
+                "Maintenance Accounts Access Levels",
+                "Maintenance Accounts User Management",
+                "Maintenance Duplicate Transaction",
+                "Maintenance Masterfiles Bank List",
+                "Maintenance Masterfiles Partner List",
+                "Masterfiles View Bank List",
+                "Masterfiles View Partner List",
+                "Profile Signature",
+                "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create"
+            ]
+        },
+        {
+            "access_level": 96,
+            "permissions": [
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2149,14 +2194,11 @@
         {
             "access_level": 97,
             "permissions": [
-                "Accounts",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Profile Signature",
                 "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2165,7 +2207,6 @@
         {
             "access_level": 98,
             "permissions": [
-                "Accounts",
                 "BP Import Cancellation",
                 "BP Import Transaction",
                 "BP Post Transaction",
@@ -2178,11 +2219,9 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2191,7 +2230,6 @@
         {
             "access_level": 99,
             "permissions": [
-                "Accounts",
                 "BP Import Cancellation",
                 "BP Import Transaction",
                 "BP Post Transaction",
@@ -2204,13 +2242,11 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Profile Signature",
                 "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2219,17 +2255,14 @@
         {
             "access_level": 100,
             "permissions": [
-                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2238,19 +2271,16 @@
         {
             "access_level": 101,
             "permissions": [
-                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Profile Signature",
                 "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2259,7 +2289,6 @@
         {
             "access_level": 102,
             "permissions": [
-                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
@@ -2277,11 +2306,9 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2290,7 +2317,6 @@
         {
             "access_level": 103,
             "permissions": [
-                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
@@ -2308,13 +2334,11 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Profile Signature",
                 "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2323,14 +2347,11 @@
         {
             "access_level": 104,
             "permissions": [
-                "Accounts",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2339,16 +2360,13 @@
         {
             "access_level": 105,
             "permissions": [
-                "Accounts",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2357,7 +2375,6 @@
         {
             "access_level": 106,
             "permissions": [
-                "Accounts",
                 "BP Import Cancellation",
                 "BP Import Transaction",
                 "BP Post Transaction",
@@ -2370,13 +2387,11 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2385,7 +2400,6 @@
         {
             "access_level": 107,
             "permissions": [
-                "Accounts",
                 "BP Import Cancellation",
                 "BP Import Transaction",
                 "BP Post Transaction",
@@ -2398,15 +2412,13 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2415,19 +2427,16 @@
         {
             "access_level": 108,
             "permissions": [
-                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2436,21 +2445,18 @@
         {
             "access_level": 109,
             "permissions": [
-                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2459,7 +2465,6 @@
         {
             "access_level": 110,
             "permissions": [
-                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
@@ -2477,13 +2482,11 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -2492,7 +2495,6 @@
         {
             "access_level": 111,
             "permissions": [
-                "Accounts",
                 "BI Create Automated",
                 "BI Create Manual",
                 "BI Report Billing Invoice",
@@ -2510,15 +2512,13 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Maintenance Accounts Access Levels",
-                "Maintenance Accounts User Management",
-                "Maintenance Duplicate Transaction",
-                "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
+                "Support Ticket BPO",
+                "Support Ticket CAD",
+                "Support Ticket Create",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
