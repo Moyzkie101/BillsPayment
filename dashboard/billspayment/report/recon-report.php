@@ -501,7 +501,7 @@ $(document).ready(function(){
         const v = $filterType.val();
         // hide both first
         $dayContainer.hide(); $monthContainer.hide();
-        if (v === 'daily') {
+        if (v === 'weekly') {
             $dayContainer.show();
             // generate day buttons for single day (just that day)
             generateDayButtons($startInput.val(), $endInput.val() || $startInput.val());
@@ -531,8 +531,13 @@ function generateDayButtons(startDate, endDate){
         const btn = $('<button>').addClass('day-button day-number-button').text(label).attr('data-date', `${yyyy}-${mm}-${dd}`);
         wrapper.append(btn);
     }
-    // style first as active
-    wrapper.find('.day-button:not(.day-button-all)').first().addClass('day-button-active');
+        // decide active state: if more than one day in range, activate "All" pill; otherwise activate the single day
+        const $dayButtons = wrapper.find('.day-button:not(.day-button-all)');
+        if ($dayButtons.length > 1) {
+            wrapper.find('.day-button-all').addClass('day-button-active');
+        } else {
+            $dayButtons.first().addClass('day-button-active');
+        }
     // show container
     $('#dayFilterContainer').show();
 }
@@ -551,7 +556,13 @@ function generateMonthButtons(startMonth, endMonth){
         const btn = $('<button>').addClass('day-button month-button').text(`${monthName} ${yyyy}`).attr('data-date', val);
         wrapper.append(btn);
     }
-    wrapper.find('.day-button:not(.day-button-all)').first().addClass('day-button-active');
+        // decide active state: if more than one month in range, activate "All" pill; otherwise activate the single month
+        const $monthButtons = wrapper.find('.day-button:not(.day-button-all)');
+        if ($monthButtons.length > 1) {
+            wrapper.find('.day-button-all').addClass('day-button-active');
+        } else {
+            $monthButtons.first().addClass('day-button-active');
+        }
     $('#monthFilterContainer').show();
 }
 </script>
