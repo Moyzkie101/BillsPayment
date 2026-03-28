@@ -35,18 +35,33 @@ $sql = "INSERT INTO mldb.trl (
     account_no,
     name,
     payment_branch_id,
+    payment_branch,
     amount,
     type_of_request,
-    correct_biller_id,
-    correct_biller_name,
     reason
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+$wrongSql = "INSERT INTO mldb.trl_wrongbiller (
+    trl_no,
+    correct_biller_id,
+    correct_biller_name
+) VALUES (?, ?, ?)";
 
 $stmt = $conn->prepare($sql);
 if (!$stmt) {
     $_SESSION['trl_import_flash'] = [
         'type' => 'error',
         'message' => 'Failed to prepare insert statement: ' . $conn->error
+    ];
+    header('Location: ../trl-import-preview.php');
+    exit;
+}
+
+$wrongStmt = $conn->prepare($wrongSql);
+if (!$wrongStmt) {
+    $_SESSION['trl_import_flash'] = [
+        'type' => 'error',
+        'message' => 'Failed to prepare wrong biller insert statement: ' . $conn->error
     ];
     header('Location: ../trl-import-preview.php');
     exit;
@@ -63,6 +78,7 @@ try {
         $accountNo = trim((string) ($row['account_no'] ?? ''));
         $name = trim((string) ($row['name'] ?? ''));
         $paymentBranchId = trim((string) ($row['payment_branch_id'] ?? ''));
+        $paymentBranch = trim((string) ($row['payment_branch'] ?? ''));
         $amount = (float) ($row['amount'] ?? 0);
         $typeOfRequest = trim((string) ($row['type_of_request'] ?? ''));
         $correctBillerId = trim((string) ($row['correct_biller_id'] ?? ''));
@@ -70,7 +86,7 @@ try {
         $reason = trim((string) ($row['reason'] ?? ''));
 
         $stmt->bind_param(
-            'sssssssdssss',
+            'ssssssssdss',
             $transferDatetime,
             $refNo,
             $wrongBillerId,
@@ -78,18 +94,37 @@ try {
             $accountNo,
             $name,
             $paymentBranchId,
+            $paymentBranch,
             $amount,
             $typeOfRequest,
-            $correctBillerId,
-            $correctBillerName,
             $reason
         );
 
-        if ($stmt->execute()) {
-            $inserted++;
-        } else {
+        if (!$stmt->execute()) {
             $failed++;
+            continue;
         }
+
+        $trlNo = (int) $conn->insert_id;
+        if ($trlNo <= 0) {
+            $failed++;
+            continue;
+        }
+
+        if (strcasecmp($typeOfRequest, 'WRONG BILLER') === 0) {
+            if ($correctBillerId === '' || $correctBillerName === '') {
+                $failed++;
+                continue;
+            }
+
+            $wrongStmt->bind_param('iss', $trlNo, $correctBillerId, $correctBillerName);
+            if (!$wrongStmt->execute()) {
+                $failed++;
+                continue;
+            }
+        }
+
+        $inserted++;
     }
 
     if ($failed > 0) {
@@ -102,7 +137,8 @@ try {
         $conn->commit();
         $_SESSION['trl_import_flash'] = [
             'type' => 'success',
-            'message' => "TRL import complete. Inserted {$inserted} row(s) into mldb.trl."
+            'message' => "TRL import complete. Inserted {$inserted} row(s) into mldb.trl.",
+            'rows' => (int) $inserted
         ];
         unset($_SESSION['trl_import_rows'], $_SESSION['trl_import_summary'], $_SESSION['trl_import_duplicate_result']);
     }
@@ -115,6 +151,7 @@ try {
 }
 
 $stmt->close();
+$wrongStmt->close();
 $conn->autocommit(true);
 
 header('Location: ../trl-import-preview.php');

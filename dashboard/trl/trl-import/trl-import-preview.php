@@ -17,6 +17,8 @@ if (!function_exists('has_any_permission') || !has_any_permission(['TRL Import',
 $rows = $_SESSION['trl_import_rows'] ?? [];
 $summary = $_SESSION['trl_import_summary'] ?? ['total_rows' => 0, 'duplicate_rows' => 0, 'unique_rows' => 0];
 $flash = $_SESSION['trl_import_flash'] ?? null;
+$duplicateList = $_SESSION['trl_import_duplicate_result']['duplicates'] ?? [];
+$importedRows = (int) (($flash['rows'] ?? 0));
 unset($_SESSION['trl_import_flash']);
 ?>
 <!DOCTYPE html>
@@ -49,7 +51,7 @@ unset($_SESSION['trl_import_flash']);
                 </div>
             </div>
 
-            <?php if ($flash): ?>
+            <?php if ($flash && (($flash['type'] ?? '') !== 'success')): ?>
             <div class="trl-alert <?php echo htmlspecialchars($flash['type'] ?? 'info'); ?>">
                 <?php echo htmlspecialchars($flash['message'] ?? ''); ?>
             </div>
@@ -80,6 +82,7 @@ unset($_SESSION['trl_import_flash']);
                             <tr>
                                 <th>TRANS. DATE/TIME</th>
                                 <th>REF. NO.</th>
+                                <th>DUPLICATE</th>
                                 <th>WRONG BILLER ID</th>
                                 <th>BILLER NAME</th>
                                 <th>ACCOUNT NO.</th>
@@ -99,12 +102,22 @@ unset($_SESSION['trl_import_flash']);
                             <tr>
                                 <td><?php echo htmlspecialchars((string) ($row['transfer_datetime'] ?? '')); ?></td>
                                 <td><?php echo htmlspecialchars((string) ($row['ref_no'] ?? '')); ?></td>
+                                <td><?php
+                                    $ref = (string) ($row['ref_no'] ?? '');
+                                    $isDup = false;
+                                    if (isset($row['duplicate_ok']) && $row['duplicate_ok'] === false) {
+                                        $isDup = true;
+                                    } elseif ($ref !== '' && in_array($ref, $duplicateList, true)) {
+                                        $isDup = true;
+                                    }
+                                    echo $isDup ? '<span class="dup-badge">DUPLICATE</span>' : '';
+                                ?></td>
                                 <td><?php echo htmlspecialchars((string) ($row['wrong_biller_id'] ?? '')); ?></td>
                                 <td><?php echo htmlspecialchars((string) ($row['biller_name'] ?? '')); ?></td>
                                 <td><?php echo htmlspecialchars((string) ($row['account_no'] ?? '')); ?></td>
                                 <td><?php echo htmlspecialchars((string) ($row['name'] ?? '')); ?></td>
                                 <td><?php echo htmlspecialchars((string) ($row['payment_branch_id'] ?? '')); ?></td>
-                                <td><?php echo htmlspecialchars((string) ($row['payment_branch'] ?? '')); ?></td>
+                                <td><?php echo htmlspecialchars((string) (($row['payment_branch'] ?? ($row['payment_branch_name'] ?? '')))); ?></td>
                                 <td class="amount"><?php echo number_format((float) ($row['amount'] ?? 0), 2); ?></td>
                                 <td><?php echo htmlspecialchars((string) ($row['type_of_request'] ?? '')); ?></td>
                                 <td><?php echo htmlspecialchars((string) ($row['correct_biller_id'] ?? '')); ?></td>
@@ -124,22 +137,36 @@ unset($_SESSION['trl_import_flash']);
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         var back = document.getElementById('backToImport');
-        if (!back) return;
-        back.addEventListener('click', function(e) {
-            e.preventDefault();
-            Swal.fire({
-                title: 'Are you sure?',
-                html: 'Going back will cancel the current import. Do you want to continue?',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Yes, go back',
-                cancelButtonText: 'No, stay'
-            }).then(function(result) {
-                if (result.isConfirmed) {
-                    window.location.href = back.getAttribute('href');
-                }
+        if (back) {
+            back.addEventListener('click', function(e) {
+                e.preventDefault();
+                Swal.fire({
+                    title: 'Are you sure?',
+                    html: 'Going back will cancel the current import. Do you want to continue?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, go back',
+                    cancelButtonText: 'No, stay'
+                }).then(function(result) {
+                    if (result.isConfirmed) {
+                        window.location.href = back.getAttribute('href');
+                    }
+                });
             });
+        }
+
+        <?php if ($flash && (($flash['type'] ?? '') === 'success')): ?>
+        Swal.fire({
+            title: 'Successfully imported',
+            html: '<?php echo (int) $importedRows; ?> rows',
+            icon: 'success',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            confirmButtonText: 'OK'
+        }).then(function() {
+            window.location.href = 'trl-import.php';
         });
+        <?php endif; ?>
     });
     </script>
 </body>

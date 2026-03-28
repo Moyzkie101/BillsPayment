@@ -7,6 +7,14 @@ $id = resolve_user_identifier();
 if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 // page-level permission enforcement (allow existing 'Bills Payment' holders too)
 if (!function_exists('has_any_permission') || !has_any_permission(['TRL Entry','Bills Payment'])) { header('Location: ../../home.php'); exit; }
+
+$mode = strtolower(trim((string) ($_GET['mode'] ?? 'auto')));
+if ($mode !== 'manual') {
+    $mode = 'auto';
+}
+
+$entryFlash = $_SESSION['trl_entry_flash'] ?? null;
+unset($_SESSION['trl_entry_flash']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -17,6 +25,11 @@ if (!function_exists('has_any_permission') || !has_any_permission(['TRL Entry','
     <link rel="icon" href="../../../images/MLW%20logo.png" type="image/png">
     <link rel="stylesheet" href="../../../assets/css/templates/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="trl-entry.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="components/trl-entry-auto.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="components/trl-entry-manual.css?v=<?php echo time(); ?>">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
 </head>
 <body>
     <div class="main-container">
@@ -26,14 +39,346 @@ if (!function_exists('has_any_permission') || !has_any_permission(['TRL Entry','
         <?php bp_section_header_html('fa-solid fa-pen-to-square', 'TRL - Entry', 'Transaction Request Log - Entry'); ?>
 
         <div class="bp-card container-fluid mt-3 p-4">
-            <div class="row">
-                <div class="col-12">
-                    <div class="card p-3">
-                        <p>This is the TRL Entry placeholder page.</p>
-                    </div>
+            <div class="entry-toolbar">
+                <div class="mode-cards" id="modeCards">
+                    <label class="mode-card <?php echo $mode === 'auto' ? 'selected' : ''; ?>" data-mode="auto">
+                        <input type="radio" name="entryMode" value="auto" <?php echo $mode === 'auto' ? 'checked' : ''; ?>>
+                        <div class="mode-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                        <div class="mode-text">
+                            <p class="mode-label">AUTO</p>
+                            <small>Search by Reference No.</small>
+                        </div>
+                    </label>
+                    <label class="mode-card <?php echo $mode === 'manual' ? 'selected' : ''; ?>" data-mode="manual">
+                        <input type="radio" name="entryMode" value="manual" <?php echo $mode === 'manual' ? 'checked' : ''; ?>>
+                        <div class="mode-icon"><i class="fa-solid fa-keyboard"></i></div>
+                        <div class="mode-text">
+                            <p class="mode-label">MANUAL</p>
+                            <small>Input all fields directly</small>
+                        </div>
+                    </label>
                 </div>
+
+                <button id="entrySubmitBtn" class="btn btn-danger" type="submit" style="display:none;">Submit</button>
+            </div>
+
+            <?php if ($entryFlash): ?>
+                <div class="entry-alert <?php echo htmlspecialchars($entryFlash['type'] ?? 'info'); ?>">
+                    <?php echo htmlspecialchars($entryFlash['message'] ?? ''); ?>
+                </div>
+            <?php endif; ?>
+
+            <div id="autoPanel" class="mode-panel <?php echo $mode === 'auto' ? '' : 'hidden'; ?>">
+                <?php require __DIR__ . '/components/trl-entry-auto.php'; ?>
+            </div>
+
+            <div id="manualPanel" class="mode-panel <?php echo $mode === 'manual' ? '' : 'hidden'; ?>">
+                <?php require __DIR__ . '/components/trl-entry-manual.php'; ?>
             </div>
         </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
+        <script>
+        (function() {
+            var modeInputs = document.querySelectorAll('input[name="entryMode"]');
+            var modeCards = document.querySelectorAll('.mode-card');
+            var autoPanel = document.getElementById('autoPanel');
+            var manualPanel = document.getElementById('manualPanel');
+            var submitBtn = document.getElementById('entrySubmitBtn');
+
+            function activeMode() {
+                var checked = document.querySelector('input[name="entryMode"]:checked');
+                return checked ? checked.value : 'auto';
+            }
+
+            function getActiveForm() {
+                var mode = activeMode();
+                if (mode === 'auto') {
+                    return document.getElementById('autoEntryForm');
+                }
+                return document.getElementById('manualEntryForm');
+            }
+
+            function allRequiredFilled(form) {
+                if (!form) return false;
+                var fields = form.querySelectorAll('.required-field[required]');
+                if (!fields.length) return false;
+                for (var i = 0; i < fields.length; i++) {
+                    var f = fields[i];
+                    var val = (f.value || '').trim();
+                    if (val === '') return false;
+                }
+                return true;
+            }
+
+            function updateSubmitVisibility() {
+                var form = getActiveForm();
+                var show = allRequiredFilled(form);
+                if (!form) {
+                    submitBtn.style.display = 'none';
+                    submitBtn.removeAttribute('form');
+                    submitBtn.disabled = true;
+                    return;
+                }
+
+                submitBtn.setAttribute('form', form.id);
+                submitBtn.style.display = show ? 'inline-flex' : 'none';
+                submitBtn.disabled = !show;
+            }
+
+            function setMode(mode) {
+                modeCards.forEach(function(card) {
+                    card.classList.toggle('selected', card.getAttribute('data-mode') === mode);
+                });
+                autoPanel.classList.toggle('hidden', mode !== 'auto');
+                manualPanel.classList.toggle('hidden', mode !== 'manual');
+                updateSubmitVisibility();
+            }
+
+            // Build a simple summary HTML for the form (only visible fields)
+            function escapeHtml(str) {
+                if (str == null) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function getFieldDisplayValue(form, fieldName) {
+                var el = form.querySelector('[name="' + fieldName + '"]');
+                if (!el) return '';
+                if (el.tagName === 'SELECT') {
+                    var option = el.options[el.selectedIndex];
+                    return option ? option.text : '';
+                }
+                if (el.type === 'checkbox') {
+                    return el.checked ? 'Yes' : 'No';
+                }
+                if (el.type === 'radio') {
+                    var selected = form.querySelector('input[name="' + fieldName + '"]:checked');
+                    return selected ? selected.value : '';
+                }
+                if (fieldName === 'amount') {
+                    var num = parseFloat(el.value || '0');
+                    if (!isNaN(num)) {
+                        return 'P ' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+                }
+                return el.value || '';
+            }
+
+            function buildSummaryRows(form, items) {
+                return items.map(function(item) {
+                    var value = getFieldDisplayValue(form, item.name);
+                    return '<div class="trl-summary-row">' +
+                        '<div class="trl-summary-key">' + escapeHtml(item.label) + '</div>' +
+                        '<div class="trl-summary-val">' + escapeHtml(value) + '</div>' +
+                        '</div>';
+                }).join('');
+            }
+
+            function buildSummaryHtml(form) {
+                if (!form) return '<div>No data</div>';
+
+                var transactionFields = [
+                    { name: 'ref_no', label: 'REFERENCE NO.' },
+                    { name: 'transfer_datetime', label: 'TRANSACTION DATE/TIME' },
+                    { name: 'account_no', label: 'ACCOUNT NUMBER' },
+                    { name: 'name', label: 'ACCOUNT NAME' },
+                    { name: 'payment_branch_id', label: 'BRANCH ID' },
+                    { name: 'payment_branch_name', label: 'PAYMENT BRANCH' },
+                    { name: 'amount', label: 'AMOUNT' }
+                ];
+
+                var requestFields = [
+                    { name: 'type_of_request', label: 'TYPE OF REQUEST' },
+                    { name: 'wrong_biller_id', label: 'WRONG BILLER ID' },
+                    { name: 'biller_name', label: 'BILLER NAME' },
+                    { name: 'correct_biller_id', label: 'CORRECT BILLER ID' },
+                    { name: 'correct_biller_name', label: 'CORRECT BILER NAME' },
+                    { name: 'reason', label: 'REASON' }
+                ];
+
+                var style = '<style>' +
+                    '.trl-summary-wrap{padding-top:8px}' +
+                    '.trl-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}' +
+                    '.trl-summary-card{border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#fff}' +
+                    '.trl-transaction-card{border-left:6px solid #2196f3}' +
+                    '.trl-request-card{border-left:6px solid #ffb300}' +
+                    '.trl-summary-head{padding:10px 12px;font-size:12px;letter-spacing:.6px;font-weight:700;color:#334155}' +
+                    '.trl-transaction-head{background:#e8f3ff;color:#0b5394}' +
+                    '.trl-request-head{background:#fff9e6;color:#8a5a00}' +
+                    '.trl-summary-body{padding:12px 20px 12px 16px}' +
+                    '.trl-summary-row{display:grid;grid-template-columns:43% 57%;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;align-items:start}' +
+                    '.trl-summary-row:last-child{border-bottom:none}' +
+                    '.trl-summary-key{font-size:12px;font-weight:700;color:#475569;line-height:1.35;justify-self:start;text-align:left;padding-left:6px}' +
+                    '.trl-summary-val{font-size:13px;color:#0f172a;word-break:break-word;white-space:pre-wrap;line-height:1.4;justify-self:end;text-align:right;max-width:100%;padding-right:14px;box-sizing:border-box}' +
+                    '@media (max-width:900px){.trl-summary-grid{grid-template-columns:1fr}.trl-summary-row{grid-template-columns:1fr}.trl-summary-key{margin-bottom:6px;justify-self:start;text-align:left}.trl-summary-val{justify-self:start;text-align:left;padding-right:0}}' +
+                    '</style>';
+
+                var html = '' +
+                    '<div class="trl-summary-wrap">' +
+                        '<div class="trl-summary-grid">' +
+                            '<section class="trl-summary-card trl-transaction-card">' +
+                                '<div class="trl-summary-head trl-transaction-head">TRANSACTION DETAILS</div>' +
+                                '<div class="trl-summary-body">' + buildSummaryRows(form, transactionFields) + '</div>' +
+                            '</section>' +
+                            '<section class="trl-summary-card trl-request-card">' +
+                                '<div class="trl-summary-head trl-request-head">REQUEST DETAILS</div>' +
+                                '<div class="trl-summary-body">' + buildSummaryRows(form, requestFields) + '</div>' +
+                            '</section>' +
+                        '</div>' +
+                    '</div>';
+
+                return style + html;
+            }
+
+            // Send form via fetch and show result modals
+            function sendForm(form) {
+                var formData = new FormData(form);
+                var actionUrl = form.getAttribute('action');
+
+                Swal.fire({
+                    title: 'Submitting...',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    didOpen: function() {
+                        Swal.showLoading();
+                    }
+                });
+
+                fetch(actionUrl, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(function(data) {
+                    Swal.close();
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Transaction Request Log',
+                            text: 'Your submission has been recorded successfully!',
+                            confirmButtonColor: '#4caf50',
+                            confirmButtonText: 'Acknowledged',
+                            allowOutsideClick: false,
+                            allowEscapeKey: false,
+                            didOpen: function(modal) {
+                                modal.classList.add('trl-success-modal');
+                            }
+                        }).then(function(result) {
+                            if (result.isConfirmed) {
+                                window.location.reload();
+                            }
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Submission Failed',
+                            text: data.message || 'An error occurred while submitting the form. Please try again.',
+                            confirmButtonColor: '#f44336',
+                            confirmButtonText: 'Try Again'
+                        });
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    Swal.close();
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'An error occurred. Please check your connection and try again.',
+                        confirmButtonColor: '#f44336',
+                        confirmButtonText: 'Try Again'
+                    });
+                });
+            }
+
+            // Form submission with confirmation modal
+            function setupFormSubmission(form) {
+                if (!form) return;
+
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var summaryHtml = buildSummaryHtml(form);
+
+                    Swal.fire({
+                        title: 'Please review and confirm',
+                        html: '<p>Please verify the information below before confirming submission:</p>' + summaryHtml,
+                        width: '980px',
+                        customClass: {
+                            popup: 'trl-confirm-popup'
+                        },
+                        showCancelButton: true,
+                        confirmButtonText: 'Confirm & Submit',
+                        cancelButtonText: 'Edit',
+                        focusConfirm: false
+                    }).then(function(result) {
+                        if (result.isConfirmed) {
+                            sendForm(form);
+                        }
+                    });
+                });
+            }
+
+            modeInputs.forEach(function(input) {
+                input.addEventListener('change', function() {
+                    setMode(input.value);
+                    var params = new URLSearchParams(window.location.search);
+                    params.set('mode', input.value);
+                    if (input.value !== 'auto') {
+                        params.delete('search_ref');
+                    }
+                    history.replaceState(null, '', window.location.pathname + '?' + params.toString());
+                });
+            });
+
+            document.addEventListener('input', updateSubmitVisibility);
+            document.addEventListener('change', updateSubmitVisibility);
+
+            // Manage conditional visibility for correct biller fields
+            function manageCorrectBillerFields(form) {
+                if (!form) return;
+                var typeSelect = form.querySelector('[name="type_of_request"]');
+                var correctId = form.querySelector('[name="correct_biller_id"]');
+                var correctName = form.querySelector('[name="correct_biller_name"]');
+                var idGroup = correctId ? correctId.closest('.field-group') : null;
+                var nameGroup = correctName ? correctName.closest('.field-group') : null;
+                var show = typeSelect && typeSelect.value === 'WRONG BILLER';
+                if (idGroup) idGroup.style.display = show ? '' : 'none';
+                if (nameGroup) nameGroup.style.display = show ? '' : 'none';
+                if (correctId) { correctId.required = show; if (!show) correctId.value = ''; }
+                if (correctName) { correctName.required = show; if (!show) correctName.value = ''; }
+            }
+
+            // Initialize and bind change handlers for both forms
+            [document.getElementById('autoEntryForm'), document.getElementById('manualEntryForm')].forEach(function(frm) {
+                if (!frm) return;
+                var sel = frm.querySelector('[name="type_of_request"]');
+                if (sel) {
+                    sel.addEventListener('change', function() {
+                        manageCorrectBillerFields(frm);
+                        updateSubmitVisibility();
+                    });
+                }
+                // set initial visibility
+                manageCorrectBillerFields(frm);
+            });
+
+            // Setup form submission handlers
+            setupFormSubmission(document.getElementById('autoEntryForm'));
+            setupFormSubmission(document.getElementById('manualEntryForm'));
+
+            setMode(activeMode());
+        })();
+        </script>
 
         <?php include '../../../templates/footer.php'; ?>
     </div>

@@ -54,7 +54,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     echo json_encode([
         'success' => true,
         'message' => 'Duplicates removed from session rows.',
-        'redirect' => 'trl-import-preview.php'
+        'redirect' => 'trl-import-preview.php',
+        'total_rows' => count($filtered),
+        'no_new_rows' => count($filtered) === 0
     ]);
     exit;
 }
