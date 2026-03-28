@@ -251,7 +251,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <?php endif; ?>
         <?php endif; ?>
 
-        <?php if (has_any_permission(['TRL Import','TRL Entry','TRL Report'])): ?>
+        <?php if (has_any_permission(['TRL Import','TRL Entry','TRL Review','TRL Report'])): ?>
         <!-- Billspayment - TRL (Transaction Request Log) - top-level menu -->
         <div class="onetab" id="bp-trl-btn">
             <h6><i class="fa-solid fa-list"></i> Billspayment - TRL</h6>
@@ -269,6 +269,12 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <?php if (has_permission('TRL Entry')): ?>
             <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-entry/trl-entry.php'">
                 <a href="<?php echo $auth_url; ?>dashboard/trl/trl-entry/trl-entry.php"><i class="fa-solid fa-pen-to-square"></i> TRL - Entry</a>
+            </div>
+            <?php endif; ?>
+
+            <?php if (has_permission('TRL Review')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-review/trl-review.php'">
+                <a href="<?php echo $auth_url; ?>dashboard/trl/trl-review/trl-review.php"><i class="fa-solid fa-clipboard-check"></i> TRL - Review</a>
             </div>
             <?php endif; ?>
 

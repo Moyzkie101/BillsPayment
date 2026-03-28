@@ -1,0 +1,157 @@
+/* TRL Review page styles */
+.trl-review-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.trl-review-topbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.trl-filters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
+    gap: 12px;
+    flex: 1;
+}
+
+.trl-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.trl-field label {
+    font-size: 12px;
+    color: #555;
+    font-weight: 600;
+}
+
+.trl-field input,
+.trl-field select,
+.trl-field textarea {
+    width: 100%;
+    border: 1px solid #d9dee5;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    outline: none;
+    background: #fff;
+}
+
+.trl-field input:focus,
+.trl-field select:focus,
+.trl-field textarea:focus {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.12);
+}
+
+.trl-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 16px;
+}
+
+.trl-card {
+    background: #fff;
+    border: 1px solid #ebedf0;
+    border-radius: 10px;
+    padding: 14px;
+}
+
+.trl-card h3 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+}
+
+.trl-muted {
+    margin: 0 0 12px 0;
+    color: #6c757d;
+    font-size: 13px;
+}
+
+.trl-table-wrap {
+    overflow-x: auto;
+}
+
+.trl-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 680px;
+}
+
+.trl-table th,
+.trl-table td {
+    border-bottom: 1px solid #eef1f4;
+    padding: 10px 8px;
+    text-align: left;
+    font-size: 13px;
+}
+
+.trl-table th {
+    font-weight: 700;
+    color: #344054;
+    background: #f9fafb;
+}
+
+.trl-table .amount {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.status-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.status-chip.pending {
+    color: #8a6100;
+    background: #fff7db;
+}
+
+.status-chip.review {
+    color: #0f5132;
+    background: #d1f7e3;
+}
+
+.status-chip.settled {
+    color: #084298;
+    background: #dbeafe;
+}
+
+.trl-top-actions,
+.trl-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.trl-actions {
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+@media (max-width: 1024px) {
+    .trl-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .trl-filters {
+        grid-template-columns: 1fr;
+    }
+
+    .trl-top-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
