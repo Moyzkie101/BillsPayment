@@ -212,6 +212,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_settle_status') {
         $partnerIdKpx = $_POST['partner_id_kpx'] ?? '';
         $partnerIds = $_POST['partner_ids'] ?? ($_POST['partner_ids[]'] ?? []);
         $partnerIdKpxs = $_POST['partner_id_kpxs'] ?? ($_POST['partner_id_kpxs[]'] ?? []);
+        $filterType = strtolower(trim($_POST['filterType'] ?? ''));
         $startDate = $_POST['startDate'] ?? '';
         $endDate = $_POST['endDate'] ?? '';
 
@@ -291,11 +292,33 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_settle_status') {
 
         $params = array_merge($params, $whereParams);
 
-        if ($startDate !== '' && $endDate !== '') {
-            $sql .= " AND DATE(datetime) BETWEEN ? AND ?";
+        // Apply date filter scope based on selected time frame to avoid updating all historical rows.
+        // Fall back to cancellation_date when datetime is empty so cancelled rows can still be settled/unsettled.
+        if ($filterType === 'daily') {
+            if ($startDate !== '') {
+                $sql .= " AND DATE(CASE WHEN datetime IS NULL THEN cancellation_date ELSE datetime END) = ?";
+                $types .= 's';
+                $params[] = $startDate;
+            }
+        } elseif ($filterType === 'monthly') {
+            if ($startDate !== '') {
+                $monthStart = $startDate . '-01';
+                $monthEnd = date('Y-m-t', strtotime($monthStart));
+                $sql .= " AND DATE(CASE WHEN datetime IS NULL THEN cancellation_date ELSE datetime END) BETWEEN ? AND ?";
+                $types .= 'ss';
+                $params[] = $monthStart;
+                $params[] = $monthEnd;
+            }
+        } elseif ($startDate !== '' && $endDate !== '') {
+            $sql .= " AND DATE(CASE WHEN datetime IS NULL THEN cancellation_date ELSE datetime END) BETWEEN ? AND ?";
             $types .= 'ss';
             $params[] = $startDate;
             $params[] = $endDate;
+        } elseif ($startDate !== '') {
+            // Safe fallback for single-date inputs.
+            $sql .= " AND DATE(CASE WHEN datetime IS NULL THEN cancellation_date ELSE datetime END) = ?";
+            $types .= 's';
+            $params[] = $startDate;
         }
 
         $stmt = $conn->prepare($sql);
@@ -717,7 +740,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     bt.volume_count,
                     bt.principal_amount_paid,
                     bt.charges,
-                    (bt.principal_adjustment_raw - bt.settle_adjustment_charges) AS principal_adjustment,
+                    -- Principal adjustment should reflect adjustment principal minus adjustment charges
+                    (bt.adjustment_principal - bt.adjustment_charges) AS principal_adjustment,
+                    -- Gross Total Transaction: show summary volume (not net)
                     bt.summary_vol,
                     bt.summary_principal,
                     bt.summary_charges,
@@ -725,19 +750,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     bt.adjustment_principal,
                     bt.adjustment_charges,
                     (bt.summary_vol - bt.adjustment_vol) AS net_vol,
-                    (bt.summary_vol - bt.adjustment_vol) AS net_total_transaction,
+                    -- Gross total transaction column should be summary_vol per requirement
+                    bt.summary_vol AS net_total_transaction,
                     (bt.summary_principal - bt.adjustment_principal) AS net_principal,
                     (bt.summary_charges - bt.adjustment_charges) AS net_charges,
-                    CASE
-                        WHEN UPPER(TRIM(COALESCE(bt.charge_to, ''))) = 'CUSTOMER' THEN
-                            (bt.summary_principal - bt.adjustment_principal) + (bt.principal_adjustment_raw - bt.settle_adjustment_charges)
-                        WHEN UPPER(TRIM(COALESCE(bt.charge_to, ''))) = 'PARTNER'
-                            AND UPPER(TRIM(COALESCE(bt.charge_sched, ''))) IN ('DAILY','WEEKLY','SEMI-MONTHLY','MONTHLY') THEN
-                            ((bt.summary_principal - bt.adjustment_principal) - (bt.summary_charges - bt.adjustment_charges))
-                            - ((bt.principal_adjustment_raw - bt.settle_adjustment_charges))
-                        ELSE
-                            (bt.summary_principal - bt.adjustment_principal)
-                    END AS amount_for_settlement
+                    -- Amount for settlement = (summary_principal - summary_charges) - (adjustment_principal - adjustment_charges)
+                    ((bt.summary_principal - bt.summary_charges) - (bt.adjustment_principal - bt.adjustment_charges)) AS amount_for_settlement
                 FROM base_totals bt
                 WHERE bt.partner_name IS NOT NULL
                 ORDER BY bt.partner_name";
@@ -965,7 +983,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         
                         <div class="card-body">
                             <div class="table-responsive" id="tableContainer" style="overflow-y: auto;">
-                                <table id="transactionReportTable" class="table table-bordered table-hover table-striped">
+                                 <table id="transactionReportTable" class="table table-bordered table-hover table-striped">
                                     <thead class="table-light sticky-top">
                                         <tr>
                                             <th rowspan="2" class='text-truncate text-center align-middle'><input id="selectAllRows" type="checkbox" aria-label="Select all" /></th>
@@ -973,13 +991,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Partner Name</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Account Name</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Account Number</th>
-                                            <th colspan="3" class='text-truncate text-center align-middle'>Net Total Transaction</th>
+                                            <th colspan="3" class='text-truncate text-center align-middle'>Gross Total Transaction</th>
                                             <th class='text-truncate text-center align-middle'>Principal Adjustment</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Amount for Settlement</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Status</th>
                                         </tr>
                                         <tr>
-                                            <!-- Column header for Net -->
+                                            <!-- Column header for Gross -->
                                             <th class='text-center'>Vol.</th>
                                             <th class='text-center'>Principal</th>
                                             <th class='text-center'>Charge</th>
@@ -1493,11 +1511,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         }
 
         function performSettleAction(partnerIds, partnerIdKpxs, action, $rowOrRows, settlePayload = null) {
+            const filterType = $('select[name="filterType"]').val() || '';
             const startDate = $('input[name="startDate"]').val() || '';
             const endDate = $('input[name="endDate"]').val() || '';
             const data = {
                 action: 'update_settle_status',
                 status: action,
+                filterType: filterType,
                 startDate: startDate,
                 endDate: endDate
             };
@@ -2190,10 +2210,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
                     displayedRows.add(row);
 
-                    // Totals for Net Total Transaction should use net values
-                    totalNetVolume += netVol;
-                    totalNetPrincipal += netPrincipal;
-                    totalNetCharge += netCharge;
+                    // Totals: Gross columns should show summary values (user requested)
+                    const grossVol = summaryVol;
+                    const grossPrincipal = summaryPrincipal;
+                    const grossCharge = summaryCharge;
+
+                    totalNetVolume += grossVol;
+                    totalNetPrincipal += grossPrincipal;
+                    totalNetCharge += grossCharge;
                     totalPrincipalAdjustment += principalAdjustment;
                     totalAmountForSettlement += amountForSettlement;
                     runningIndex += 1;
@@ -2211,9 +2235,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                             </td>
                             <td>${row.partner_accName || ''}</td>
                             <td class="text-truncate">${row.bank_accNumber || ''}</td>
-                            <td class="text-end">${parseInt(netVol || 0).toLocaleString()}</td>
-                            <td class="text-end">${parseFloat(netPrincipal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                            <td class="text-end">${parseFloat(netCharge || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td class="text-end">${parseInt(grossVol || 0).toLocaleString()}</td>
+                            <td class="text-end">${parseFloat(grossPrincipal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td class="text-end">${parseFloat(grossCharge || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                             <td class="text-end">${principalAdjustment.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                             <td class="text-end">${amountForSettlement.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                             <td class="text-center">${statusIcon}</td>

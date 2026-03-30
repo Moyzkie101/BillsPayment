@@ -427,7 +427,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="../../../assets/js/sweetalert2.all.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
 
     <link rel="icon" href="../../../images/MLW logo.png" type="image/png">
@@ -729,7 +728,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                 <div class="col-md-auto col-sm-12">
                                     <div class="d-flex align-items-end flex-wrap" style="gap:8px;">
                                         <button type="button" class="btn btn-secondary" id="generateReport" disabled>Generate</button>
-                                        <button class="btn btn-danger" id="reconButton" type="button" style="display:none;">Recon</button>
                                         <button class="btn btn-danger" id="exportButton" type="button" style="display:none;">Export to</button>
                                         <button class="btn btn-warning" id="debugButton" type="button" style="display:none;">Debug Report</button>
                                     </div>
@@ -966,22 +964,10 @@ $(document).ready(function() {
     
     // Hide export button initially
     $('#exportButton').hide();
-    // Hide recon button initially
-    $('#reconButton').hide();
     // Client-side cache for debug responses
     var debugCache = {};
     // Keep latest generated report rows for recon comparison
     var latestGeneratedReportData = [];
-    // Keep latest uploaded recon payload for reuse/debugging
-    var latestReconUploadJson = '';
-
-    function toggleReconButton(show) {
-        if (show) {
-            $('#reconButton').show();
-        } else {
-            $('#reconButton').hide();
-        }
-    }
     
     // Handle date input changes
     $('input[name="startDate"], input[name="endDate"]').on('change', function() {
@@ -1006,9 +992,6 @@ $(document).ready(function() {
         
         // Hide export button when filter type changes
         $('#exportButton').hide();
-        // Hide recon button when filter type changes
-        toggleReconButton(false);
-        
         // Clear the report table
         clearReportTable();
         
@@ -1181,9 +1164,7 @@ $(document).ready(function() {
                     if (result.status) {
                         if (result.status === 'success') {
                             populateReportTable(result.data);
-                            toggleReconButton(filterType === 'weekly');
                         } else {
-                            toggleReconButton(false);
                             console.error('Server error:', result.message);
                             Swal.fire({
                                 icon: 'error',
@@ -1194,10 +1175,8 @@ $(document).ready(function() {
                     } else {
                         // Handle legacy response format (array of data)
                         populateReportTable(result);
-                        toggleReconButton(filterType === 'weekly');
                     }
                 } catch (e) {
-                    toggleReconButton(false);
                     console.error('Error parsing response:', e);
                     console.log('Raw response:', response);
                     Swal.fire({
@@ -1208,7 +1187,6 @@ $(document).ready(function() {
                 }
             },
             error: function(xhr, status, error) {
-                toggleReconButton(false);
                 console.error('AJAX error:', {xhr: xhr, status: status, error: error});
                 Swal.fire({
                     icon: 'error',
@@ -1756,9 +1734,6 @@ $(document).ready(function() {
         
         // Hide export button when partner changes
         $('#exportButton').hide();
-        // Hide recon button when partner changes
-        toggleReconButton(false);
-        
         // Clear the report table
         clearReportTable();
         
@@ -1835,28 +1810,6 @@ $(document).ready(function() {
         });
     });
 
-    function isExcelFile(file) {
-        if (!file) return false;
-
-        const name = (file.name || '').toLowerCase();
-        const validExtensions = ['.xls', '.xlsx'];
-        const hasValidExtension = validExtensions.some(ext => name.endsWith(ext));
-
-        const mime = (file.type || '').toLowerCase();
-        const validMimes = [
-            'application/vnd.ms-excel',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/octet-stream'
-        ];
-        const hasValidMime = validMimes.includes(mime) || mime === '';
-
-        return hasValidExtension && hasValidMime;
-    }
-
-    function normalizePartnerName(name) {
-        return (name || '').toString().trim().replace(/\s+/g, ' ').toUpperCase();
-    }
-
     function toNumber(value) {
         if (typeof value === 'number') return value;
         if (value === null || value === undefined) return 0;
@@ -1872,155 +1825,6 @@ $(document).ready(function() {
         return negativeParen ? -Math.abs(numeric) : numeric;
     }
 
-    function formatDateKey(dateObj) {
-        const yyyy = dateObj.getFullYear();
-        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const dd = String(dateObj.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-    }
-
-    function parseDateKey(value) {
-        if (value === null || value === undefined) return '';
-
-        if (Object.prototype.toString.call(value) === '[object Date]' && !Number.isNaN(value.getTime())) {
-            return formatDateKey(value);
-        }
-
-        if (typeof value === 'number') {
-            const parsed = XLSX.SSF.parse_date_code(value);
-            if (parsed && parsed.y && parsed.m && parsed.d) {
-                return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
-            }
-        }
-
-        const str = value.toString().trim();
-        if (!str) return '';
-
-        const direct = new Date(str);
-        if (!Number.isNaN(direct.getTime())) {
-            return formatDateKey(direct);
-        }
-
-        const mdy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
-        if (mdy) {
-            let year = parseInt(mdy[3], 10);
-            if (year < 100) year += 2000;
-            const month = parseInt(mdy[1], 10);
-            const day = parseInt(mdy[2], 10);
-            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        }
-
-        return '';
-    }
-
-    function getSystemReconRows() {
-        const rows = [];
-
-        (latestGeneratedReportData || []).forEach(row => {
-            const subBillers = (row.sub_billers_name || '').toString().trim();
-            const partnerName = (row.partner_name || '').toString().trim();
-
-            let displayPartner = partnerName;
-            if (subBillers === 'MYLORA CORPORATION' || subBillers === 'JUNANS MARKETING') {
-                displayPartner = subBillers;
-            } else if (subBillers === '' && partnerName === 'SECURITY BANK') {
-                displayPartner = partnerName;
-            }
-
-            rows.push({
-                partnerName: displayPartner,
-                netVol: parseInt(row.net_vol || 0, 10) || 0,
-                netPrincipal: parseFloat(row.net_principal || 0) || 0,
-                netCharge: parseFloat(row.net_charges || 0) || 0
-            });
-        });
-
-        return rows;
-    }
-
-    function parseReconExcelFile(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-
-            reader.onload = function(e) {
-                try {
-                    const workbook = XLSX.read(e.target.result, { type: 'array' });
-                    const parsedRows = [];
-
-                    workbook.SheetNames.forEach(sheetName => {
-                        const worksheet = workbook.Sheets[sheetName];
-                        const rows = XLSX.utils.sheet_to_json(worksheet, {
-                            header: 1,
-                            raw: false,
-                            defval: ''
-                        });
-
-                        rows.forEach(row => {
-                            const dayKey = parseDateKey(row[0]); // Column A (Date)
-                            const partnerName = (row[1] || '').toString().trim(); // Column B
-                            const netVol = toNumber(row[12]); // Column M
-                            const netPrincipal = toNumber(row[13]); // Column N
-                            const netCharge = toNumber(row[14]); // Column O
-
-                            const hasPartner = partnerName !== '';
-                            const hasValues = netVol !== 0 || netPrincipal !== 0 || netCharge !== 0;
-
-                            if (!hasPartner || !hasValues) return;
-
-                            parsedRows.push({
-                                sheetName: sheetName,
-                                dayKey: dayKey,
-                                partnerName: partnerName,
-                                netVol: netVol,
-                                netPrincipal: netPrincipal,
-                                netCharge: netCharge
-                            });
-                        });
-                    });
-
-                    resolve(parsedRows);
-                } catch (err) {
-                    reject(err);
-                }
-            };
-
-            reader.onerror = function() {
-                reject(new Error('Failed to read Excel file.'));
-            };
-
-            reader.readAsArrayBuffer(file);
-        });
-    }
-
-    function aggregateByPartner(rows) {
-        const map = {};
-
-        (rows || []).forEach(item => {
-            const key = normalizePartnerName(item.partnerName);
-            if (!key) return;
-
-            if (!map[key]) {
-                map[key] = {
-                    partnerName: item.partnerName,
-                    netVol: 0,
-                    netPrincipal: 0,
-                    netCharge: 0,
-                    sheetNames: new Set()
-                };
-            }
-
-            map[key].netVol += toNumber(item.netVol);
-            map[key].netPrincipal += toNumber(item.netPrincipal);
-            map[key].netCharge += toNumber(item.netCharge);
-
-            if (item.sheetName) {
-                map[key].sheetNames.add(item.sheetName);
-            }
-        });
-
-        return map;
-    }
-
     function formatInt(value) {
         return Math.round(value || 0).toLocaleString('en-US');
     }
@@ -2028,288 +1832,6 @@ $(document).ready(function() {
     function formatMoney(value) {
         return (value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
-
-    function buildReconResultsTableHtml(systemRows, manualRows, selectedDayKey) {
-        const filteredManualRows = selectedDayKey && selectedDayKey !== 'ALL'
-            ? (manualRows || []).filter(item => item.dayKey === selectedDayKey)
-            : (manualRows || []);
-
-        const systemMap = aggregateByPartner(systemRows);
-        const manualMap = aggregateByPartner(filteredManualRows);
-
-        const keys = Array.from(new Set([
-            ...Object.keys(systemMap),
-            ...Object.keys(manualMap)
-        ])).sort();
-
-        let html = '';
-        html += '<div style="max-height:60vh; overflow:auto;">';
-        html += '<table class="table table-bordered table-sm" style="font-size:12px; margin-bottom:0;">';
-        html += '<thead>';
-        html += '<tr>';
-        html += '<th rowspan="2" style="vertical-align:middle; text-align:center;">No</th>';
-        html += '<th rowspan="2" style="vertical-align:middle; text-align:center;">Partner Name</th>';
-        html += '<th colspan="3" style="text-align:center;">System Generated Net</th>';
-        html += '<th colspan="3" style="text-align:center;">Manual Uploaded Net</th>';
-        html += '<th colspan="3" style="text-align:center;">Variance (System VS Manual)</th>';
-        html += '</tr>';
-        html += '<tr>';
-        html += '<th style="text-align:center;">Vol</th>';
-        html += '<th style="text-align:center;">Principal</th>';
-        html += '<th style="text-align:center;">Charge</th>';
-        html += '<th style="text-align:center;">Vol</th>';
-        html += '<th style="text-align:center;">Principal</th>';
-        html += '<th style="text-align:center;">Charge</th>';
-        html += '<th style="text-align:center;">Vol</th>';
-        html += '<th style="text-align:center;">Principal</th>';
-        html += '<th style="text-align:center;">Charge</th>';
-        html += '</tr>';
-        html += '</thead>';
-        html += '<tbody>';
-
-        if (!keys.length) {
-            html += '<tr><td colspan="11" style="text-align:center;">No recon data to compare.</td></tr>';
-        } else {
-            keys.forEach((key, index) => {
-                const s = systemMap[key] || { partnerName: key, netVol: 0, netPrincipal: 0, netCharge: 0 };
-                const m = manualMap[key] || { partnerName: key, netVol: 0, netPrincipal: 0, netCharge: 0 };
-
-                const varianceVol = s.netVol - m.netVol;
-                const variancePrincipal = s.netPrincipal - m.netPrincipal;
-                const varianceCharge = s.netCharge - m.netCharge;
-
-                html += '<tr>';
-                html += '<td style="text-align:center;">' + (index + 1) + '</td>';
-                html += '<td>' + (s.partnerName || m.partnerName || '') + '</td>';
-                html += '<td style="text-align:right;">' + formatInt(s.netVol) + '</td>';
-                html += '<td style="text-align:right;">' + formatMoney(s.netPrincipal) + '</td>';
-                html += '<td style="text-align:right;">' + formatMoney(s.netCharge) + '</td>';
-                html += '<td style="text-align:right;">' + formatInt(m.netVol) + '</td>';
-                html += '<td style="text-align:right;">' + formatMoney(m.netPrincipal) + '</td>';
-                html += '<td style="text-align:right;">' + formatMoney(m.netCharge) + '</td>';
-                html += '<td style="text-align:right;">' + formatInt(varianceVol) + '</td>';
-                html += '<td style="text-align:right;">' + formatMoney(variancePrincipal) + '</td>';
-                html += '<td style="text-align:right;">' + formatMoney(varianceCharge) + '</td>';
-                html += '</tr>';
-            });
-        }
-
-        html += '</tbody>';
-        html += '</table>';
-        html += '</div>';
-
-        return html;
-    }
-
-    function renderReconResults(systemRows, manualRows, sourceFileName) {
-        const dayOptions = Array.from(new Set((manualRows || [])
-            .map(item => item.dayKey)
-            .filter(Boolean)
-        )).sort();
-
-        const canFilterByDay = dayOptions.length > 0;
-
-        function getDayLabel(dayKey) {
-            const d = new Date(dayKey);
-            if (Number.isNaN(d.getTime())) return dayKey;
-            const day = d.getDate();
-            const month = d.toLocaleDateString('en-US', { month: 'short' });
-            return `${day} ${month}`;
-        }
-
-        function renderBody(selectedDayKey) {
-            let dayFilterHtml = '';
-            dayFilterHtml += '<div class="day-shortcut-container" style="margin:6px 0 10px 0; display:flex;">';
-            dayFilterHtml += '<div class="day-buttons-label" style="padding-left:0;">Filter by Day:</div>';
-            dayFilterHtml += '<div class="day-buttons-wrapper" id="reconDayButtonsWrap" style="max-height:90px;">';
-            dayFilterHtml += '<button type="button" class="day-button day-button-all recon-day-btn recon-day-all ' + (selectedDayKey === 'ALL' ? 'day-button-active' : '') + '" data-day="ALL" ' + (canFilterByDay ? '' : 'disabled') + '>All</button>';
-            dayOptions.forEach(dayKey => {
-                const activeClass = selectedDayKey === dayKey ? 'day-button-active' : '';
-                dayFilterHtml += '<button type="button" class="day-button day-number-button recon-day-btn ' + activeClass + '" data-day="' + dayKey + '" title="' + dayKey + '" ' + (canFilterByDay ? '' : 'disabled') + '>' + getDayLabel(dayKey) + '</button>';
-            });
-            dayFilterHtml += '</div>';
-            dayFilterHtml += '</div>';
-
-            let html = '';
-            html += '<div style="text-align:left; margin-bottom:4px; font-size:12px; color:#6c757d;">';
-            html += 'Source file: <strong>' + (sourceFileName || '-') + '</strong>';
-            html += '</div>';
-            html += dayFilterHtml;
-            html += buildReconResultsTableHtml(systemRows, manualRows, selectedDayKey);
-
-            return html;
-        }
-
-        Swal.fire({
-            title: 'Recon Results',
-            html: '<div id="reconResultsContainer"></div>',
-            width: 1200,
-            confirmButtonText: 'Close',
-            confirmButtonColor: '#dc3545',
-            didOpen: () => {
-                let selectedDayKey = 'ALL';
-
-                function paint() {
-                    const container = document.getElementById('reconResultsContainer');
-                    if (!container) return;
-
-                    container.innerHTML = renderBody(selectedDayKey);
-                    const dayButtons = container.querySelectorAll('.recon-day-btn');
-                    dayButtons.forEach(btn => {
-                        btn.addEventListener('click', function() {
-                            const nextDay = this.getAttribute('data-day') || 'ALL';
-                            selectedDayKey = nextDay;
-                            paint();
-                        });
-                    });
-                }
-
-                paint();
-            }
-        });
-    }
-
-    function processReconFile(file) {
-        const systemRows = getSystemReconRows();
-
-        if (!Array.isArray(systemRows) || !systemRows.length) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'No System Data',
-                text: 'Please generate the report first before running recon.'
-            });
-            return;
-        }
-
-        $('#loading-overlay').css('display', 'flex');
-
-        parseReconExcelFile(file)
-            .then(manualRows => {
-                const payload = {
-                    fileName: file.name,
-                    generatedAt: new Date().toISOString(),
-                    rows: manualRows
-                };
-                latestReconUploadJson = JSON.stringify(payload);
-
-                // Keep the loading overlay visible briefly to show processing state
-                setTimeout(() => {
-                    $('#loading-overlay').hide();
-                    renderReconResults(systemRows, manualRows, file.name);
-                }, 1200);
-            })
-            .catch(err => {
-                $('#loading-overlay').hide();
-                console.error('Recon parse error:', err);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Recon Failed',
-                    text: 'Unable to process the Excel file. Please check the format and try again.'
-                });
-            });
-    }
-
-    function openReconUploadModal() {
-        Swal.fire({
-            title: 'Recon Upload',
-            width: 420,
-            html: `
-                <div style="text-align:left;">
-                    <div id="reconDropZone" style="border:2px dashed #dc3545; border-radius:10px; padding:18px 12px; text-align:center; background:#fff7f7; cursor:pointer; transition:all 0.2s ease;">
-                        <i class="fa-solid fa-file-excel" style="font-size:28px; color:#198754;"></i>
-                        <p style="margin:10px 0 4px 0; font-weight:600;">Drag Excel file here</p>
-                        <p style="margin:0; color:#6c757d; font-size:12px;">or click to browse (.xls, .xlsx)</p>
-                        <input id="reconFileInput" type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
-                    </div>
-                    <p id="reconFileName" style="margin:10px 0 0 0; font-size:12px; color:#6c757d; text-align:center;">No file selected</p>
-                </div>
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'Process',
-            cancelButtonText: 'Cancel',
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            allowEnterKey: false,
-            confirmButtonColor: '#dc3545',
-            focusConfirm: false,
-            preConfirm: () => {
-                const fileInput = document.getElementById('reconFileInput');
-                const file = fileInput && fileInput.files ? fileInput.files[0] : null;
-
-                if (!file) {
-                    Swal.showValidationMessage('Please choose an Excel file first.');
-                    return false;
-                }
-
-                if (!isExcelFile(file)) {
-                    Swal.showValidationMessage('Invalid file format. Please upload .xls or .xlsx only.');
-                    return false;
-                }
-
-                return file;
-            },
-            didOpen: () => {
-                const dropZone = document.getElementById('reconDropZone');
-                const fileInput = document.getElementById('reconFileInput');
-                const fileName = document.getElementById('reconFileName');
-
-                function updateSelectedFile(file) {
-                    if (!file) {
-                        fileName.textContent = 'No file selected';
-                        fileName.style.color = '#6c757d';
-                        return;
-                    }
-
-                    fileName.textContent = `Selected: ${file.name}`;
-                    fileName.style.color = '#198754';
-                }
-
-                dropZone.addEventListener('click', function() {
-                    fileInput.click();
-                });
-
-                fileInput.addEventListener('change', function() {
-                    updateSelectedFile(this.files && this.files[0] ? this.files[0] : null);
-                });
-
-                ['dragenter', 'dragover'].forEach(eventName => {
-                    dropZone.addEventListener(eventName, function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        dropZone.style.background = '#ffe9e9';
-                        dropZone.style.borderColor = '#b02a37';
-                    });
-                });
-
-                ['dragleave', 'drop'].forEach(eventName => {
-                    dropZone.addEventListener(eventName, function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        dropZone.style.background = '#fff7f7';
-                        dropZone.style.borderColor = '#dc3545';
-                    });
-                });
-
-                dropZone.addEventListener('drop', function(e) {
-                    const files = e.dataTransfer ? e.dataTransfer.files : null;
-                    if (!files || !files.length) return;
-
-                    const dt = new DataTransfer();
-                    dt.items.add(files[0]);
-                    fileInput.files = dt.files;
-                    updateSelectedFile(files[0]);
-                });
-            }
-        }).then((result) => {
-            if (result.isConfirmed && result.value) {
-                processReconFile(result.value);
-            }
-        });
-    }
-
-    $('#reconButton').on('click', function() {
-        openReconUploadModal();
-    });
 
     // Build and render debug modal from response
     function renderDebugModal(resp) {
@@ -2616,9 +2138,6 @@ $(document).ready(function() {
         
         // Hide export button when dates change
         $('#exportButton').hide();
-        // Hide recon button when dates change
-        toggleReconButton(false);
-        
         // Clear the report table
         clearReportTable();
         
@@ -2654,9 +2173,7 @@ $(document).ready(function() {
                     if (result.status) {
                         if (result.status === 'success') {
                             populateReportTable(result.data);
-                            toggleReconButton(filterType === 'weekly');
                         } else {
-                            toggleReconButton(false);
                             console.error('Server error:', result.message);
                             Swal.fire({
                                 icon: 'error',
@@ -2667,10 +2184,8 @@ $(document).ready(function() {
                     } else {
                         // Handle legacy response format (array of data)
                         populateReportTable(result);
-                        toggleReconButton(filterType === 'weekly');
                     }
                 } catch (e) {
-                    toggleReconButton(false);
                     console.error('Error parsing response:', e);
                     console.log('Raw response:', response);
                     Swal.fire({
@@ -2681,7 +2196,6 @@ $(document).ready(function() {
                 }
             },
             error: function(xhr, status, error) {
-                toggleReconButton(false);
                 console.error('AJAX error:', {xhr: xhr, status: status, error: error});
                 Swal.fire({
                     icon: 'error',
