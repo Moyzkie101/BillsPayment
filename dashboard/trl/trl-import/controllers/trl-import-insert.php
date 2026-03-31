@@ -47,6 +47,19 @@ $wrongSql = "INSERT INTO mldb.trl_wrongbiller (
     correct_biller_name
 ) VALUES (?, ?, ?)";
 
+$osSql = "INSERT INTO mldb.trl_overstatedamount (
+    trl_no,
+    reported_value,
+    actual_value,
+    difference
+) VALUES (?, ?, ?, ?)";
+
+$ctSql = "INSERT INTO mldb.trl_cancelledtransaction (
+    trl_no,
+    reported_value,
+    actual_value
+) VALUES (?, ?, ?)";
+
 $stmt = $conn->prepare($sql);
 if (!$stmt) {
     $_SESSION['trl_import_flash'] = [
@@ -62,6 +75,26 @@ if (!$wrongStmt) {
     $_SESSION['trl_import_flash'] = [
         'type' => 'error',
         'message' => 'Failed to prepare wrong biller insert statement: ' . $conn->error
+    ];
+    header('Location: ../trl-import-preview.php');
+    exit;
+}
+
+$osStmt = $conn->prepare($osSql);
+if (!$osStmt) {
+    $_SESSION['trl_import_flash'] = [
+        'type' => 'error',
+        'message' => 'Failed to prepare overstated amount insert statement: ' . $conn->error
+    ];
+    header('Location: ../trl-import-preview.php');
+    exit;
+}
+
+$ctStmt = $conn->prepare($ctSql);
+if (!$ctStmt) {
+    $_SESSION['trl_import_flash'] = [
+        'type' => 'error',
+        'message' => 'Failed to prepare cancelled transaction insert statement: ' . $conn->error
     ];
     header('Location: ../trl-import-preview.php');
     exit;
@@ -119,6 +152,65 @@ try {
 
             $wrongStmt->bind_param('iss', $trlNo, $correctBillerId, $correctBillerName);
             if (!$wrongStmt->execute()) {
+                $failed++;
+                continue;
+            }
+        }
+
+        // If OVERSTATED AMOUNT, persist into separate table
+        if (strcasecmp($typeOfRequest, 'OVERSTATED AMOUNT') === 0) {
+            // obtain reported/actual/difference from import row if present
+            $reported = null;
+            $actual = null;
+            $difference = null;
+            if (isset($row['reported_value']) && $row['reported_value'] !== '') {
+                $reported = is_numeric($row['reported_value']) ? (float) $row['reported_value'] : (float) str_replace(',', '', (string) $row['reported_value']);
+            } else {
+                // fallback: use amount as reported
+                $reported = $amount;
+            }
+            if (isset($row['actual_value']) && $row['actual_value'] !== '') {
+                $actual = is_numeric($row['actual_value']) ? (float) $row['actual_value'] : (float) str_replace(',', '', (string) $row['actual_value']);
+            }
+            if (isset($row['difference_value']) && $row['difference_value'] !== '') {
+                $difference = is_numeric($row['difference_value']) ? (float) $row['difference_value'] : (float) str_replace(',', '', (string) $row['difference_value']);
+            }
+
+            // compute difference if both reported and actual present and difference missing
+            if ($difference === null && $reported !== null && $actual !== null) {
+                $difference = $reported - $actual;
+            }
+
+            // Bind and insert (allow NULLs for actual/difference if not provided)
+            $repVal = $reported !== null ? $reported : null;
+            $actVal = $actual !== null ? $actual : null;
+            $diffVal = $difference !== null ? $difference : null;
+
+            $osStmt->bind_param('iddd', $trlNo, $repVal, $actVal, $diffVal);
+            if (!$osStmt->execute()) {
+                $failed++;
+                continue;
+            }
+        }
+
+        // If CANCELLED TRANSACTION, persist into cancelled table
+        if (strcasecmp($typeOfRequest, 'CANCELLED TRANSACTION') === 0) {
+            $reported = null;
+            $actual = null;
+            if (isset($row['reported_value']) && $row['reported_value'] !== '') {
+                $reported = is_numeric($row['reported_value']) ? (float) $row['reported_value'] : (float) str_replace(',', '', (string) $row['reported_value']);
+            } else {
+                $reported = $amount;
+            }
+            if (isset($row['actual_value']) && $row['actual_value'] !== '') {
+                $actual = is_numeric($row['actual_value']) ? (float) $row['actual_value'] : (float) str_replace(',', '', (string) $row['actual_value']);
+            }
+
+            $repVal = $reported !== null ? $reported : null;
+            $actVal = $actual !== null ? $actual : null;
+
+            $ctStmt->bind_param('idd', $trlNo, $repVal, $actVal);
+            if (!$ctStmt->execute()) {
                 $failed++;
                 continue;
             }

@@ -86,7 +86,10 @@ function trl_find_header_row($sheet, $maxRows = 30) {
         'TYPE OF REQUEST', // mldb.trl.type_of_request
         'CORRECT BILLER ID', // mldb.trl.correct_biller_id
         'CORRECT BILLER NAME', // mldb.trl.correct_biller_name
-        'REASON' // mldb.trl.reason
+            'REASON', // mldb.trl.reason
+            'REPORTED VALUE', // mldb.trl_overstatedamount.reported_value or mldb.trl_cancelledtransaction.reported_value
+            'ACTUAL VALUE', // mldb.trl_overstatedamount.actual_value or mldb.trl_cancelledtransaction.actual_value
+            'DIFFERENCE' // mldb.trl_overstatedamount.difference
     ];
 
     $highestColumn = $sheet->getHighestColumn();
@@ -190,7 +193,10 @@ for ($i = 0; $i < $fileCount; $i++) {
             'TYPE OF REQUEST' => 'type_of_request',
             'CORRECT BILLER ID' => 'correct_biller_id',
             'CORRECT BILLER NAME' => 'correct_biller_name',
-            'REASON' => 'reason'
+            'REASON' => 'reason',
+            'REPORTED VALUE' => 'reported_value',
+            'ACTUAL VALUE' => 'actual_value',
+            'DIFFERENCE' => 'difference_value'
         ];
 
         $highestRow = $sheet->getHighestRow();
@@ -232,7 +238,7 @@ for ($i = 0; $i < $fileCount; $i++) {
 
                 if ($fieldName === 'transfer_datetime') {
                     $record[$fieldName] = trl_parse_datetime($value);
-                } elseif ($fieldName === 'amount') {
+                } elseif ($fieldName === 'amount' || $fieldName === 'reported_value' || $fieldName === 'actual_value' || $fieldName === 'difference_value') {
                     $record[$fieldName] = is_numeric($value) ? (float) $value : (float) str_replace(',', '', (string) $value);
                 } else {
                     $record[$fieldName] = trim((string) $value);
