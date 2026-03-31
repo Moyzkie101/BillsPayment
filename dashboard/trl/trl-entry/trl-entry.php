@@ -347,15 +347,36 @@ unset($_SESSION['trl_entry_flash']);
             function manageCorrectBillerFields(form) {
                 if (!form) return;
                 var typeSelect = form.querySelector('[name="type_of_request"]');
+
+                // Correct biller fields (only shown when WRONG BILLER is selected)
                 var correctId = form.querySelector('[name="correct_biller_id"]');
                 var correctName = form.querySelector('[name="correct_biller_name"]');
-                var idGroup = correctId ? correctId.closest('.field-group') : null;
-                var nameGroup = correctName ? correctName.closest('.field-group') : null;
-                var show = typeSelect && typeSelect.value === 'WRONG BILLER';
-                if (idGroup) idGroup.style.display = show ? '' : 'none';
-                if (nameGroup) nameGroup.style.display = show ? '' : 'none';
-                if (correctId) { correctId.required = show; if (!show) correctId.value = ''; }
-                if (correctName) { correctName.required = show; if (!show) correctName.value = ''; }
+                var correctIdGroup = correctId ? correctId.closest('.field-group') : null;
+                var correctNameGroup = correctName ? correctName.closest('.field-group') : null;
+                var showCorrect = typeSelect && typeSelect.value === 'WRONG BILLER';
+                if (correctIdGroup) correctIdGroup.style.display = showCorrect ? '' : 'none';
+                if (correctNameGroup) correctNameGroup.style.display = showCorrect ? '' : 'none';
+                if (correctId) { correctId.required = showCorrect; if (!showCorrect) correctId.value = ''; }
+                if (correctName) { correctName.required = showCorrect; if (!showCorrect) correctName.value = ''; }
+
+                // Fields to hide when the select is the default (empty)
+                var wrongId = form.querySelector('[name="wrong_biller_id"]');
+                var billerName = form.querySelector('[name="biller_name"]');
+                var reasonField = form.querySelector('[name="reason"]');
+                var wrongIdGroup = wrongId ? wrongId.closest('.field-group') : null;
+                var billerNameGroup = billerName ? billerName.closest('.field-group') : null;
+                var reasonGroup = reasonField ? reasonField.closest('.field-group') : null;
+
+                var isEmptyType = !typeSelect || (typeSelect.value === '' || typeSelect.value === null);
+
+                // If the user hasn't chosen a request type, hide these supplemental fields
+                if (wrongIdGroup) wrongIdGroup.style.display = isEmptyType ? 'none' : '';
+                if (billerNameGroup) billerNameGroup.style.display = isEmptyType ? 'none' : '';
+                if (reasonGroup) reasonGroup.style.display = isEmptyType ? 'none' : '';
+
+                if (wrongId) { wrongId.required = !isEmptyType; if (isEmptyType) wrongId.value = ''; }
+                if (billerName) { billerName.required = !isEmptyType; if (isEmptyType) billerName.value = ''; }
+                if (reasonField) { reasonField.required = !isEmptyType; if (isEmptyType) reasonField.value = ''; }
             }
 
             // Initialize and bind change handlers for both forms
