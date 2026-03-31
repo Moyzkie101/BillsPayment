@@ -10,7 +10,7 @@ if ($searchRef !== '') {
     if ($res && mysqli_num_rows($res) > 0) {
         $autoFound = mysqli_fetch_assoc($res);
     } else {
-        $autoError = 'Reference number not found in mldb.billspayment_transaction.';
+        $autoError = 'Reference number not found';
     }
 }
 ?>
@@ -144,6 +144,22 @@ if ($searchRef !== '') {
                         <div class="field-group">
                             <label for="autoBillerName"><span class="material-icons">business</span> Biller Name</label>
                             <input id="autoBillerName" name="biller_name" class="field-input required-field" type="text" placeholder="Enter biller name" required>
+                        </div>
+
+                        <!-- OVERSTATED AMOUNT supplemental inputs -->
+                        <div class="field-group overstated-group" style="display:none;">
+                            <label for="autoReportedValue"><span class="material-icons">payments</span> Reported Value</label>
+                            <input id="autoReportedValue" name="reported_value" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
+                        </div>
+
+                        <div class="field-group overstated-group" style="display:none;">
+                            <label for="autoActualValue"><span class="material-icons">payments</span> Actual Value</label>
+                            <input id="autoActualValue" name="actual_value" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
+                        </div>
+
+                        <div class="field-group overstated-group" style="display:none;">
+                            <label for="autoDifferenceValue"><span class="material-icons">calculate</span> Difference</label>
+                            <input id="autoDifferenceValue" name="difference_value" class="field-input currency-input" type="text" readonly placeholder="0.00">
                         </div>
 
                         <div class="field-group">

@@ -27,6 +27,7 @@
     billerSelect: document.getElementById('billerSelect'),
     billerList: document.getElementById('billerList')
   };
+  dom.typeSelect = document.getElementById('typeSelect');
   // allowed Type of Request values
   const allowedTypes = [
     'NO PAYMENT RECEIVED',
@@ -109,6 +110,8 @@
 
   // currently selected wrong biller; null => use random per-row (All)
   var selectedWrongBiller = null;
+  // selected request type from dropdown; empty string = default (Select request type)
+  var selectedRequestType = '';
 
   function makeRow(){
     var wrong;
@@ -134,7 +137,10 @@
     }
 
     // choose type and build reason accordingly
-    const type = pick(allowedTypes);
+    const type = (selectedRequestType && selectedRequestType.trim() !== '') ? selectedRequestType : pick(allowedTypes);
+
+    // fields for reported/actual/difference when relevant
+    var reportedVal = null, actualVal = null, diffVal = null;
 
     // helper to format currency like 11,092.00
     function fmtAmt(v){
@@ -172,6 +178,9 @@
         // make amount overstated vs correct
         const correctAmt = Math.max(50, amount - randInt(1000, 50000));
         const diff = amount - correctAmt;
+        reportedVal = amount;
+        actualVal = correctAmt;
+        diffVal = diff;
         reason = pick([
           'OVERSTATED AMOUNT PHP ' + fmtAmt(amount) + ' INSTEAD OF PHP ' + fmtAmt(correctAmt) + ' WITH THE DIFFERENCE OF PHP ' + fmtAmt(diff),
           'OVERPOSTED AMOUNT: PHP ' + fmtAmt(amount) + ' SHOULD BE PHP ' + fmtAmt(correctAmt) + ' (DIFF PHP ' + fmtAmt(diff) + ')'
@@ -198,6 +207,8 @@
         const correctedHigher = maybe(0.5);
         const correctAmt2 = correctedHigher ? (posted + adjustment) : Math.max(50, posted - adjustment);
         amount = posted;
+        reportedVal = posted;
+        actualVal = correctAmt2;
         reason = pick([
           'CANCELLED TRANSACTION - Wrong amount posted (' + fmtAmt(posted) + ') instead of (' + fmtAmt(correctAmt2) + ')',
           'CANCELLED TRANSACTION WRONG AMOUNT ENCODED (' + fmtAmt(posted) + ') instead of (' + fmtAmt(correctAmt2) + ')'
@@ -207,7 +218,8 @@
         reason = 'INTENDED FOR ' + correct.name;
     }
 
-    return {
+    // Build row with conditional columns based on selectedRequestType
+    const row = {
       'TRANS. DATE/TIME': formatDate(new Date(Date.now() - randInt(0,60*60*24*365)*1000)),
       'REF. NO.': randomRef(),
       'WRONG BILLER ID': wrong.id,
@@ -217,20 +229,62 @@
       'PAYMENT BRANCH ID': branchId,
       'PAYMENT BRANCH': branchName,
       'AMOUNT': amount,
-      'TYPE OF REQUEST': type,
-      'CORRECT BILLER ID': correct.id,
-      'CORRECT BILLER NAME': correct.name,
-      'REASON': reason
+      'TYPE OF REQUEST': type
     };
+
+    // Default behavior (when dropdown is left as 'Select request type') keeps CORRECT BILLER columns shown
+    if (!selectedRequestType || selectedRequestType.trim() === '') {
+      row['CORRECT BILLER ID'] = correct.id;
+      row['CORRECT BILLER NAME'] = correct.name;
+    } else {
+      // Show type-specific supplemental columns
+      if (type === 'WRONG BILLER') {
+        row['CORRECT BILLER ID'] = correct.id;
+        row['CORRECT BILLER NAME'] = correct.name;
+      }
+      if (type === 'OVERSTATED AMOUNT') {
+        row['REPORTED VALUE'] = fmtAmt(reportedVal || amount);
+        row['ACTUAL VALUE'] = fmtAmt(actualVal || 0);
+        row['DIFFERENCE'] = fmtAmt(diffVal || 0);
+      }
+      if (type === 'CANCELLED TRANSACTION') {
+        row['REPORTED VALUE'] = fmtAmt(reportedVal || amount);
+        row['ACTUAL VALUE'] = fmtAmt(actualVal || 0);
+      }
+    }
+
+    row['REASON'] = reason;
+
+    return row;
   }
 
   function renderTable(rows){
+    // Render header dynamically based on first row keys
+    const table = document.getElementById('sampleTable');
+    const thead = table.querySelector('thead');
+    if (rows.length === 0) {
+      if (thead) thead.innerHTML = '';
+      dom.tableBody.innerHTML = '';
+      return;
+    }
+    const keys = Object.keys(rows[0]);
+    if (thead) {
+      thead.innerHTML = '';
+      const trh = document.createElement('tr');
+      keys.forEach(k=>{
+        const th = document.createElement('th');
+        th.textContent = k;
+        trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+    }
+
     dom.tableBody.innerHTML = '';
     rows.forEach(r=>{
       const tr = document.createElement('tr');
-      Object.keys(r).forEach(k=>{
+      keys.forEach(k=>{
         const td = document.createElement('td');
-        td.textContent = r[k];
+        td.textContent = r[k] !== undefined && r[k] !== null ? r[k] : '';
         tr.appendChild(td);
       });
       dom.tableBody.appendChild(tr);
@@ -271,6 +325,23 @@
     if (genEl) genEl.textContent = n;
     dom.downloadBtn.disabled = false;
   });
+
+  // When the type selector changes, regenerate current rows with the same count to reflect column changes
+  if (dom.typeSelect) {
+    dom.typeSelect.addEventListener('change', function(e){
+      selectedRequestType = (dom.typeSelect.value || '').trim();
+      // if there are existing generated rows, regenerate a new batch preserving the count
+      const count = currentRows.length || Math.max(1, parseInt(dom.rowsInput.value) || 100);
+      generatedRefs = new Set(); generatedAccounts = new Set(); generationSeq = 0;
+      const newRows = [];
+      for (let i=0;i<count;i++) { newRows.push(makeRow()); }
+      currentRows = newRows;
+      renderTable(newRows.slice(0,500));
+      const genEl2 = document.getElementById('generatedCount');
+      if (genEl2) genEl2.textContent = count;
+      dom.downloadBtn.disabled = false;
+    });
+  }
 
   // populate biller datalist and wire selection behavior
   function sanitizeFileName(name) {

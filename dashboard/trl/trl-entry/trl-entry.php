@@ -146,6 +146,55 @@ unset($_SESSION['trl_entry_flash']);
                     .replace(/'/g, '&#39;');
             }
 
+            // Parse a currency-formatted string (remove commas) and return a number
+            function parseCurrencyToNumber(str) {
+                if (str == null) return NaN;
+                var s = String(str).replace(/,/g, '').trim();
+                if (s === '') return NaN;
+                return parseFloat(s);
+            }
+
+            // Format a number into currency with commas and two decimals (e.g. 10,123.00)
+            function formatCurrencyNumber(num) {
+                if (num == null || isNaN(num)) return '';
+                return Number(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            // Format an input's value into currency form while typing/blur
+            function formatInputCurrency(el) {
+                if (!el) return;
+                var raw = el.value || '';
+                var cleaned = String(raw).replace(/[^\d\.\-]/g, '');
+                if (cleaned === '' || cleaned === '-' || cleaned === '.' || cleaned === '-.') {
+                    el.value = '';
+                    return;
+                }
+                var n = parseFloat(cleaned);
+                if (isNaN(n)) { el.value = ''; return; }
+                el.value = formatCurrencyNumber(n);
+            }
+
+            // On focus, remove formatting so the user can edit the raw numeric value
+            function unformatInputCurrency(el) {
+                if (!el) return;
+                var v = el.value || '';
+                var cleaned = String(v).replace(/,/g, '').trim();
+                if (cleaned === '' || cleaned === '-' || cleaned === '.' || cleaned === '-.') {
+                    el.value = '';
+                    return;
+                }
+                // Keep numeric string with decimal point (no grouping separators)
+                // If it's a formatted currency like "10,123.00" this becomes "10123.00"
+                el.value = cleaned;
+                // move caret to end for convenient editing
+                try {
+                    var len = el.value.length;
+                    el.setSelectionRange(len, len);
+                } catch (e) {
+                    // ignore if setSelectionRange is not supported
+                }
+            }
+
             function getFieldDisplayValue(form, fieldName) {
                 var el = form.querySelector('[name="' + fieldName + '"]');
                 if (!el) return '';
@@ -161,22 +210,53 @@ unset($_SESSION['trl_entry_flash']);
                     return selected ? selected.value : '';
                 }
                 if (fieldName === 'amount') {
-                    var num = parseFloat(el.value || '0');
+                    var num = parseCurrencyToNumber(el.value || '0');
                     if (!isNaN(num)) {
-                        return 'P ' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        return 'P ' + formatCurrencyNumber(num);
                     }
                 }
+
+                // Format reported/actual/difference for display in the summary
+                if (fieldName === 'reported_value' || fieldName === 'actual_value' || fieldName === 'difference_value') {
+                    var n = parseCurrencyToNumber(el.value || '0');
+                    if (!isNaN(n)) {
+                        return 'PHP ' + formatCurrencyNumber(n);
+                    }
+                    return el.value || '';
+                }
+
                 return el.value || '';
             }
 
             function buildSummaryRows(form, items) {
-                return items.map(function(item) {
+                var rows = items.map(function(item) {
+                    // Find the form element for this item
+                    var el = form.querySelector('[name="' + item.name + '"]');
+
+                    // If the element exists inside a .field-group that is hidden, skip it
+                    if (el) {
+                        var group = el.closest && el.closest('.field-group');
+                        if (group) {
+                            var cs = window.getComputedStyle(group);
+                            if (!cs || cs.display === 'none' || cs.visibility === 'hidden' || group.offsetParent === null) {
+                                return '';
+                            }
+                        }
+                    } else {
+                        // No element for this field in the form — skip
+                        return '';
+                    }
+
                     var value = getFieldDisplayValue(form, item.name);
+                    if (value === '' || value == null) return '';
+
                     return '<div class="trl-summary-row">' +
                         '<div class="trl-summary-key">' + escapeHtml(item.label) + '</div>' +
                         '<div class="trl-summary-val">' + escapeHtml(value) + '</div>' +
                         '</div>';
-                }).join('');
+                }).filter(function(r) { return r && r !== ''; });
+
+                return rows.join('');
             }
 
             function buildSummaryHtml(form) {
@@ -196,6 +276,9 @@ unset($_SESSION['trl_entry_flash']);
                     { name: 'type_of_request', label: 'TYPE OF REQUEST' },
                     { name: 'wrong_biller_id', label: 'WRONG BILLER ID' },
                     { name: 'biller_name', label: 'BILLER NAME' },
+                    { name: 'reported_value', label: 'REPORTED VALUE' },
+                    { name: 'actual_value', label: 'ACTUAL VALUE' },
+                    { name: 'difference_value', label: 'DIFFERENCE' },
                     { name: 'correct_biller_id', label: 'CORRECT BILLER ID' },
                     { name: 'correct_biller_name', label: 'CORRECT BILER NAME' },
                     { name: 'reason', label: 'REASON' }
@@ -239,6 +322,7 @@ unset($_SESSION['trl_entry_flash']);
             function sendForm(form) {
                 var formData = new FormData(form);
                 var actionUrl = form.getAttribute('action');
+                var submittedRef = (form.querySelector('[name="ref_no"]') ? form.querySelector('[name="ref_no"]').value : '');
 
                 Swal.fire({
                     title: 'Submitting...',
@@ -279,13 +363,25 @@ unset($_SESSION['trl_entry_flash']);
                             }
                         });
                     } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Submission Failed',
-                            text: data.message || 'An error occurred while submitting the form. Please try again.',
-                            confirmButtonColor: '#f44336',
-                            confirmButtonText: 'Try Again'
-                        });
+                        // Handle duplicate reference specially
+                        if (data && data.code === 'DUPLICATE_REF_NO') {
+                            var dupRef = data.ref_no || submittedRef || '';
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error!!!',
+                                html: '<div style="font-weight:700">REFERENCE NO: ' + escapeHtml(dupRef) + '</div><div>is already written</div>',
+                                confirmButtonColor: '#f44336',
+                                confirmButtonText: 'Acknowledge'
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Submission Failed',
+                                text: data.message || 'An error occurred while submitting the form. Please try again.',
+                                confirmButtonColor: '#f44336',
+                                confirmButtonText: 'Try Again'
+                            });
+                        }
                     }
                 })
                 .catch(function(error) {
@@ -377,6 +473,75 @@ unset($_SESSION['trl_entry_flash']);
                 if (wrongId) { wrongId.required = !isEmptyType; if (isEmptyType) wrongId.value = ''; }
                 if (billerName) { billerName.required = !isEmptyType; if (isEmptyType) billerName.value = ''; }
                 if (reasonField) { reasonField.required = !isEmptyType; if (isEmptyType) reasonField.value = ''; }
+
+                // OVERSTATED AMOUNT: show reported/actual/difference only when selected
+                var reportedEl = form.querySelector('[name="reported_value"]');
+                var actualEl = form.querySelector('[name="actual_value"]');
+                var diffEl = form.querySelector('[name="difference_value"]');
+                var reportedGroup = reportedEl ? reportedEl.closest('.field-group') : null;
+                var actualGroup = actualEl ? actualEl.closest('.field-group') : null;
+                var diffGroup = diffEl ? diffEl.closest('.field-group') : null;
+                var isOverstated = typeSelect && typeSelect.value === 'OVERSTATED AMOUNT';
+                var isCancelled = typeSelect && typeSelect.value === 'CANCELLED TRANSACTION';
+                var showReportedActual = isOverstated || isCancelled;
+                if (reportedGroup) reportedGroup.style.display = showReportedActual ? '' : 'none';
+                if (actualGroup) actualGroup.style.display = showReportedActual ? '' : 'none';
+                if (diffGroup) diffGroup.style.display = isOverstated ? '' : 'none';
+                if (reportedEl) { reportedEl.required = showReportedActual; if (!showReportedActual) reportedEl.value = ''; }
+                if (actualEl) { actualEl.required = showReportedActual; if (!showReportedActual) actualEl.value = ''; }
+                if (diffEl) { if (!isOverstated) diffEl.value = ''; }
+
+                // Compute values and autofill reason when either overstated or cancelled
+                if (showReportedActual) {
+                    computeOverstatedFields(form);
+                }
+            }
+
+            // Compute difference and auto-fill reason for OVERSTATED AMOUNT and CANCELLED TRANSACTION
+            function computeOverstatedFields(form) {
+                if (!form) return;
+                var repEl = form.querySelector('[name="reported_value"]');
+                var actEl = form.querySelector('[name="actual_value"]');
+                var diffEl = form.querySelector('[name="difference_value"]');
+                var reasonEl = form.querySelector('[name="reason"]');
+                if (!repEl || !actEl) return;
+
+                var r = parseCurrencyToNumber(repEl.value) || 0;
+                var a = parseCurrencyToNumber(actEl.value) || 0;
+                var d = r - a;
+
+                var repFmt = formatCurrencyNumber(r);
+                var actFmt = formatCurrencyNumber(a);
+                var diffFmt = formatCurrencyNumber(d);
+
+                // Determine request type
+                var typeSelect = form.querySelector('[name="type_of_request"]');
+                var typeVal = typeSelect ? typeSelect.value : '';
+
+                if (typeVal === 'OVERSTATED AMOUNT') {
+                    if (diffEl) diffEl.value = formatCurrencyNumber(d);
+                    var autoReason = 'OVERSTATED AMOUNT PHP ' + repFmt + ' INSTEAD OF PHP ' + actFmt + ' WITH THE DIFFERENCE OF PHP ' + diffFmt;
+                    if (reasonEl) {
+                        var lastAuto = reasonEl.dataset.lastAuto || '';
+                        var current = (reasonEl.value || '').trim();
+                        if (current === '' || current === lastAuto) {
+                            reasonEl.value = autoReason;
+                            reasonEl.dataset.lastAuto = autoReason;
+                        }
+                    }
+                } else if (typeVal === 'CANCELLED TRANSACTION') {
+                    // For cancelled, do not set difference; only auto-fill reason
+                    if (diffEl) diffEl.value = '';
+                    var autoReason = 'Wrong amount posted PHP ' + repFmt + ' instead of PHP ' + actFmt;
+                    if (reasonEl) {
+                        var lastAuto2 = reasonEl.dataset.lastAuto || '';
+                        var current2 = (reasonEl.value || '').trim();
+                        if (current2 === '' || current2 === lastAuto2) {
+                            reasonEl.value = autoReason;
+                            reasonEl.dataset.lastAuto = autoReason;
+                        }
+                    }
+                }
             }
 
             // Initialize and bind change handlers for both forms
@@ -386,11 +551,31 @@ unset($_SESSION['trl_entry_flash']);
                 if (sel) {
                     sel.addEventListener('change', function() {
                         manageCorrectBillerFields(frm);
+                        // compute overstated values if needed
+                        computeOverstatedFields(frm);
                         updateSubmitVisibility();
                     });
                 }
                 // set initial visibility
                 manageCorrectBillerFields(frm);
+                // Attach input listeners for overstated value calculation
+                var repField = frm.querySelector('[name="reported_value"]');
+                var actField = frm.querySelector('[name="actual_value"]');
+                if (repField) {
+                    // Compute on input, but format only on blur to avoid blocking typing
+                    repField.addEventListener('input', function() { computeOverstatedFields(frm); updateSubmitVisibility(); });
+                    repField.addEventListener('blur', function() { formatInputCurrency(repField); computeOverstatedFields(frm); updateSubmitVisibility(); });
+                    repField.addEventListener('focus', function() { unformatInputCurrency(repField); });
+                    if (repField.value) formatInputCurrency(repField);
+                }
+                if (actField) {
+                    actField.addEventListener('input', function() { computeOverstatedFields(frm); updateSubmitVisibility(); });
+                    actField.addEventListener('blur', function() { formatInputCurrency(actField); computeOverstatedFields(frm); updateSubmitVisibility(); });
+                    actField.addEventListener('focus', function() { unformatInputCurrency(actField); });
+                    if (actField.value) formatInputCurrency(actField);
+                }
+                // initial compute if fields present
+                computeOverstatedFields(frm);
             });
 
             // Setup form submission handlers

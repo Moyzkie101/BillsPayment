@@ -39,6 +39,9 @@ $payload = [
     'type_of_request' => trl_required('type_of_request'),
     'correct_biller_id' => trl_required('correct_biller_id'),
     'correct_biller_name' => trl_required('correct_biller_name'),
+    'reported_value' => trl_required('reported_value'),
+    'actual_value' => trl_required('actual_value'),
+    'difference_value' => trl_required('difference_value'),
     'reason' => trl_required('reason')
 ];
 
@@ -51,6 +54,12 @@ $requiredKeys = [
 if (strcasecmp($payload['type_of_request'], 'WRONG BILLER') === 0) {
     $requiredKeys[] = 'correct_biller_id';
     $requiredKeys[] = 'correct_biller_name';
+}
+
+// If the request type requires reported/actual values
+if (strcasecmp($payload['type_of_request'], 'OVERSTATED AMOUNT') === 0 || strcasecmp($payload['type_of_request'], 'CANCELLED TRANSACTION') === 0) {
+    $requiredKeys[] = 'reported_value';
+    $requiredKeys[] = 'actual_value';
 }
 
 $missing = [];
@@ -70,6 +79,20 @@ if (!empty($missing)) {
 
 $amount = is_numeric($payload['amount']) ? (float) $payload['amount'] : (float) str_replace(',', '', $payload['amount']);
 
+// Parse reported/actual/difference if provided
+$reported = null;
+$actual = null;
+$difference = null;
+if ($payload['reported_value'] !== '') {
+    $reported = is_numeric($payload['reported_value']) ? (float) $payload['reported_value'] : (float) str_replace(',', '', $payload['reported_value']);
+}
+if ($payload['actual_value'] !== '') {
+    $actual = is_numeric($payload['actual_value']) ? (float) $payload['actual_value'] : (float) str_replace(',', '', $payload['actual_value']);
+}
+if ($payload['difference_value'] !== '') {
+    $difference = is_numeric($payload['difference_value']) ? (float) $payload['difference_value'] : (float) str_replace(',', '', $payload['difference_value']);
+}
+
 // Prefer payment_branch (requested target), fallback to payment_branch_name only if needed.
 $branchColumn = 'payment_branch';
 $colCheck = mysqli_query($conn, "SHOW COLUMNS FROM mldb.trl LIKE 'payment_branch'");
@@ -78,6 +101,34 @@ if (!$colCheck || mysqli_num_rows($colCheck) === 0) {
 }
 
 $paymentBranchValue = $payload['payment_branch_name'] !== '' ? $payload['payment_branch_name'] : $payload['payment_branch'];
+
+// Duplicate check: ensure reference number isn't already present
+$refToCheck = trim((string) $payload['ref_no']);
+if ($refToCheck !== '') {
+    $chkSql = "SELECT trl_no FROM mldb.trl WHERE ref_no = ? LIMIT 1";
+    $chkStmt = $conn->prepare($chkSql);
+    if ($chkStmt) {
+        $chkStmt->bind_param('s', $refToCheck);
+        if (!$chkStmt->execute()) {
+            $chkStmt->close();
+            echo json_encode(['success' => false, 'message' => 'Unable to verify reference number.', 'code' => 'REF_CHECK_FAILED']);
+            exit;
+        }
+        $chkStmt->bind_result($existingTrlNo);
+        if ($chkStmt->fetch()) {
+            $chkStmt->close();
+            echo json_encode([
+                'success' => false,
+                'message' => sprintf('REFERENCE NO: %s is already written', $refToCheck),
+                'code' => 'DUPLICATE_REF_NO',
+                'ref_no' => $refToCheck,
+                'existing_trl_no' => (int)$existingTrlNo
+            ]);
+            exit;
+        }
+        $chkStmt->close();
+    }
+}
 
 $sql = "INSERT INTO mldb.trl (
     transfer_datetime,
@@ -149,6 +200,76 @@ try {
         }
 
         $wrongStmt->close();
+    }
+
+    // If the request type is OVERSTATED AMOUNT, insert overstated amount details into separate table
+    if (strcasecmp($payload['type_of_request'], 'OVERSTATED AMOUNT') === 0) {
+        $osSql = "INSERT INTO mldb.trl_overstatedamount (trl_no, reported_value, actual_value, difference) VALUES (?, ?, ?, ?)";
+        $osStmt = $conn->prepare($osSql);
+        if (!$osStmt) {
+            throw new Exception('Unable to prepare overstated amount insert statement.');
+        }
+
+        // compute difference if not provided
+        $repVal = $reported !== null ? $reported : 0.0;
+        $actVal = $actual !== null ? $actual : 0.0;
+        $diffVal = $difference !== null ? $difference : ($repVal - $actVal);
+
+        $osStmt->bind_param(
+            'iddd',
+            $trlNo,
+            $repVal,
+            $actVal,
+            $diffVal
+        );
+
+        if (!$osStmt->execute()) {
+            $osStmt->close();
+            throw new Exception('Failed to insert overstated amount details.');
+        }
+
+        $osStmt->close();
+    }
+
+    // If the request type is CANCELLED TRANSACTION, insert cancelled transaction details
+    if (strcasecmp($payload['type_of_request'], 'CANCELLED TRANSACTION') === 0) {
+        $ctSql = "INSERT INTO mldb.trl_cancelledtransaction (trl_no, reported_value, actual_value) VALUES (?, ?, ?)";
+        $ctStmt = $conn->prepare($ctSql);
+        if (!$ctStmt) {
+            throw new Exception('Unable to prepare cancelled transaction insert statement.');
+        }
+
+        $repValC = $reported !== null ? $reported : 0.0;
+        $actValC = $actual !== null ? $actual : 0.0;
+
+        $ctStmt->bind_param('idd', $trlNo, $repValC, $actValC);
+
+        if (!$ctStmt->execute()) {
+            $ctStmt->close();
+            throw new Exception('Failed to insert cancelled transaction details.');
+        }
+
+        $ctStmt->close();
+    }
+
+    // If reason is empty, attempt to auto-build it for certain request types
+    if (trim((string)$payload['reason']) === '') {
+        $tor = strtoupper(trim((string)$payload['type_of_request']));
+        if ($tor === 'OVERSTATED AMOUNT' && $reported !== null && $actual !== null) {
+            $diff = $difference !== null ? $difference : ($reported - $actual);
+            $payload['reason'] = sprintf(
+                'OVERSTATED AMOUNT PHP %s INSTEAD OF PHP %s WITH THE DIFFERENCE OF PHP %s',
+                number_format($reported, 2, '.', ','),
+                number_format($actual, 2, '.', ','),
+                number_format($diff, 2, '.', ',')
+            );
+        } elseif ($tor === 'CANCELLED TRANSACTION' && $reported !== null && $actual !== null) {
+            $payload['reason'] = sprintf(
+                'Wrong amount posted PHP %s instead of PHP %s',
+                number_format($reported, 2, '.', ','),
+                number_format($actual, 2, '.', ',')
+            );
+        }
     }
 
     $conn->commit();

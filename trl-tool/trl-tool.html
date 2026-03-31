@@ -33,10 +33,22 @@
               <label for="rowsCount">Rows</label>
               <input id="rowsCount" class="input" type="number" value="100" min="1" max="10000" />
               <span id="generatedCount" class="muted" style="margin-left:8px"></span>
+
+              <label for="typeSelect">Type of Request</label>
+              <select id="typeSelect" class="input">
+                <option value="">Select request type</option>
+                <option>NO PAYMENT RECEIVED</option>
+                <option>DOUBLE POSTING</option>
+                <option>TRIPLE POSTING</option>
+                <option>WRONG BILLER</option>
+                <option>OVERSTATED AMOUNT</option>
+                <option>CANCELLED TRANSACTION</option>
+                <option>UNREFLECTED TRXN</option>
+              </select>
+
               <label for="billerSelect">Wrong Biller</label>
               <input list="billerList" id="billerSelect" class="input" placeholder="All" />
               <datalist id="billerList"></datalist>
-              <!-- Type of Request is fixed to allowed values during generation (no UI selection) -->
               <button id="generateBtn" class="primary">Generate</button>
               <button id="clearBtn" class="ghost" onclick="location.reload()">Reset</button>
             </div>

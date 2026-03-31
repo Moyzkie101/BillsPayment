@@ -99,6 +99,22 @@
                         <input id="mBillerName" name="biller_name" class="field-input required-field" type="text" placeholder="Enter biller name" required>
                     </div>
 
+                    <!-- OVERSTATED AMOUNT supplemental inputs -->
+                    <div class="field-group overstated-group" style="display:none;">
+                        <label for="mReportedValue"><span class="material-icons">payments</span> Reported Value</label>
+                        <input id="mReportedValue" name="reported_value" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
+                    </div>
+
+                    <div class="field-group overstated-group" style="display:none;">
+                        <label for="mActualValue"><span class="material-icons">payments</span> Actual Value</label>
+                        <input id="mActualValue" name="actual_value" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
+                    </div>
+
+                    <div class="field-group overstated-group" style="display:none;">
+                        <label for="mDifferenceValue"><span class="material-icons">calculate</span> Difference</label>
+                        <input id="mDifferenceValue" name="difference_value" class="field-input currency-input" type="text" readonly placeholder="0.00">
+                    </div>
+
                     <div class="field-group">
                         <label for="mCorrectBillerId"><span class="material-icons">check_circle</span> Correct Biller ID</label>
                         <input id="mCorrectBillerId" name="correct_biller_id" class="field-input required-field" type="text" placeholder="Enter correct biller ID" required>
