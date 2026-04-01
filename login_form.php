@@ -7,6 +7,9 @@ include 'config/config.php';
 
 session_start();
 
+// Start output buffering so we can safely send HTTP headers later
+if (!ob_get_level()) ob_start();
+
 // Include shared header (scripts/styles used across the app)
 @include_once __DIR__ . '/templates/header.php';
 
@@ -606,3 +609,9 @@ document.addEventListener('DOMContentLoaded', function () {
 <?php @include_once __DIR__ . '/templates/footer.php'; ?>
 </body>
 </html>
+<?php
+// Flush and end output buffering if started here
+if (ob_get_level()) {
+   ob_end_flush();
+}
+?>

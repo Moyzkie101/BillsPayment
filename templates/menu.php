@@ -426,6 +426,11 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     <a href="<?php echo $base_url; ?>maintenance/accounts/user-management.php"><i class="fa-solid fa-user-cog"></i> User Management</a>
                 </div>
                 <?php endif; ?>
+                <?php if (has_permission('Maintenance Accounts User Signature')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/accounts/user-signature.php'">
+                    <a href="<?php echo $base_url; ?>maintenance/accounts/user-signature.php"><i class="fa-solid fa-signature"></i> User Signature</a>
+                </div>
+                <?php endif; ?>
                 <?php if (has_permission('Maintenance Accounts Access Levels')): ?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/accounts/accesslevels.php'">
                     <a href="<?php echo $base_url; ?>maintenance/accounts/accesslevels.php"><i class="fa-solid fa-key"></i> Access Levels</a>
