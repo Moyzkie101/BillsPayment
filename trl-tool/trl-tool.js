@@ -32,6 +32,7 @@
   const allowedTypes = [
     'NO PAYMENT RECEIVED',
     'DOUBLE POSTING',
+    'MULTI POSTING',
     'WRONG BILLER',
     'OVERSTATED AMOUNT',
     'CANCELLED TRANSACTION',
@@ -112,7 +113,6 @@
   var selectedWrongBiller = null;
   // selected request type from dropdown; empty string = default (Select request type)
   var selectedRequestType = '';
-
   function makeRow(){
     var wrong;
     if (selectedWrongBiller && selectedWrongBiller.id) {
@@ -137,9 +137,10 @@
     }
 
     // choose type and build reason accordingly
-    const type = (selectedRequestType && selectedRequestType.trim() !== '') ? selectedRequestType : pick(allowedTypes);
+    const showAll = (selectedRequestType && selectedRequestType.toUpperCase() === 'ALL');
+    const type = (selectedRequestType && selectedRequestType.trim() !== '' && !showAll) ? selectedRequestType : pick(allowedTypes);
 
-    // fields for reported/actual/difference when relevant
+    // fields for wrong/correct/difference when relevant
     var reportedVal = null, actualVal = null, diffVal = null;
 
     // helper to format currency like 11,092.00
@@ -160,6 +161,7 @@
         ]);
         break;
       case 'DOUBLE POSTING':
+      case 'MULTI POSTING':
         reason = pick([
           'DOUBLE POSTING',
           'TRANSACTION POSTED TWICE',
@@ -232,25 +234,30 @@
       'TYPE OF REQUEST': type
     };
 
-    // Default behavior (when dropdown is left as 'Select request type') keeps CORRECT BILLER columns shown
-    if (!selectedRequestType || selectedRequestType.trim() === '') {
+    // Show type-specific supplemental columns
+    if (type === 'WRONG BILLER') {
       row['CORRECT BILLER ID'] = correct.id;
       row['CORRECT BILLER NAME'] = correct.name;
-    } else {
-      // Show type-specific supplemental columns
-      if (type === 'WRONG BILLER') {
-        row['CORRECT BILLER ID'] = correct.id;
-        row['CORRECT BILLER NAME'] = correct.name;
-      }
-      if (type === 'OVERSTATED AMOUNT') {
-        row['REPORTED VALUE'] = fmtAmt(reportedVal || amount);
-        row['ACTUAL VALUE'] = fmtAmt(actualVal || 0);
-        row['DIFFERENCE'] = fmtAmt(diffVal || 0);
-      }
-      if (type === 'CANCELLED TRANSACTION') {
-        row['REPORTED VALUE'] = fmtAmt(reportedVal || amount);
-        row['ACTUAL VALUE'] = fmtAmt(actualVal || 0);
-      }
+    }
+    if (type === 'OVERSTATED AMOUNT') {
+      row['WRONG AMOUNT'] = (reportedVal !== null && reportedVal !== undefined) ? fmtAmt(reportedVal) : '';
+      row['CORRECT AMOUNT'] = (actualVal !== null && actualVal !== undefined) ? fmtAmt(actualVal) : '';
+      row['DIFFERENCE'] = (diffVal !== null && diffVal !== undefined) ? fmtAmt(diffVal) : '';
+    }
+    if (type === 'CANCELLED TRANSACTION') {
+      row['WRONG AMOUNT'] = (reportedVal !== null && reportedVal !== undefined) ? fmtAmt(reportedVal) : '';
+      row['CORRECT AMOUNT'] = (actualVal !== null && actualVal !== undefined) ? fmtAmt(actualVal) : '';
+    }
+
+    // If the user selected "All", always include supplemental columns (empty when not applicable)
+    if (showAll) {
+      // correct biller fields belong only to WRONG BILLER rows
+      row['CORRECT BILLER ID'] = (type === 'WRONG BILLER') ? (correct.id || '') : '';
+      row['CORRECT BILLER NAME'] = (type === 'WRONG BILLER') ? (correct.name || '') : '';
+      // ensure amount-related supplemental columns exist (empty string when not applicable)
+      row['WRONG AMOUNT'] = (reportedVal !== null && reportedVal !== undefined) ? fmtAmt(reportedVal) : (row['WRONG AMOUNT'] !== undefined ? row['WRONG AMOUNT'] : '');
+      row['CORRECT AMOUNT'] = (actualVal !== null && actualVal !== undefined) ? fmtAmt(actualVal) : (row['CORRECT AMOUNT'] !== undefined ? row['CORRECT AMOUNT'] : '');
+      row['DIFFERENCE'] = (diffVal !== null && diffVal !== undefined) ? fmtAmt(diffVal) : (row['DIFFERENCE'] !== undefined ? row['DIFFERENCE'] : '');
     }
 
     row['REASON'] = reason;
@@ -294,8 +301,43 @@
   function exportXLSX(rows, filename){
     const ws_data = [];
     if (rows.length === 0) return;
-    ws_data.push(Object.keys(rows[0]));
-    rows.forEach(r=>{ ws_data.push(Object.values(r)); });
+
+    // Use a stable header order so exported values never shift columns.
+    const preferredHeaders = [
+      'TRANS. DATE/TIME',
+      'REF. NO.',
+      'WRONG BILLER ID',
+      'BILLER NAME',
+      'ACCOUNT NO.',
+      'NAME',
+      'PAYMENT BRANCH ID',
+      'PAYMENT BRANCH',
+      'AMOUNT',
+      'TYPE OF REQUEST',
+      'CORRECT BILLER ID',
+      'CORRECT BILLER NAME',
+      'WRONG AMOUNT',
+      'CORRECT AMOUNT',
+      'DIFFERENCE',
+      'REASON'
+    ];
+
+    const headerSet = {};
+    rows.forEach(function(r){
+      Object.keys(r).forEach(function(k){
+        headerSet[k] = true;
+      });
+    });
+
+    const headers = preferredHeaders.filter(function(h){ return !!headerSet[h]; });
+    ws_data.push(headers);
+    rows.forEach(function(r){
+      ws_data.push(headers.map(function(h){
+        const v = r[h];
+        return (v === undefined || v === null) ? '' : v;
+      }));
+    });
+
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(ws_data);
     XLSX.utils.book_append_sheet(wb, ws, 'TRL');

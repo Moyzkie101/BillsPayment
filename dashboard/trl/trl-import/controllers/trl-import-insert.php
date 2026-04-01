@@ -49,15 +49,15 @@ $wrongSql = "INSERT INTO mldb.trl_wrongbiller (
 
 $osSql = "INSERT INTO mldb.trl_overstatedamount (
     trl_no,
-    reported_value,
-    actual_value,
+    wrong_amount,
+    correct_amount,
     difference
 ) VALUES (?, ?, ?, ?)";
 
 $ctSql = "INSERT INTO mldb.trl_cancelledtransaction (
     trl_no,
-    reported_value,
-    actual_value
+    wrong_amount,
+    correct_amount
 ) VALUES (?, ?, ?)";
 
 $stmt = $conn->prepare($sql);
@@ -159,18 +159,18 @@ try {
 
         // If OVERSTATED AMOUNT, persist into separate table
         if (strcasecmp($typeOfRequest, 'OVERSTATED AMOUNT') === 0) {
-            // obtain reported/actual/difference from import row if present
+            // obtain wrong/correct/difference from import row if present
             $reported = null;
             $actual = null;
             $difference = null;
-            if (isset($row['reported_value']) && $row['reported_value'] !== '') {
-                $reported = is_numeric($row['reported_value']) ? (float) $row['reported_value'] : (float) str_replace(',', '', (string) $row['reported_value']);
+            if (isset($row['wrong_amount']) && $row['wrong_amount'] !== '') {
+                $reported = is_numeric($row['wrong_amount']) ? (float) $row['wrong_amount'] : (float) str_replace(',', '', (string) $row['wrong_amount']);
             } else {
-                // fallback: use amount as reported
+                // fallback: use amount as wrong amount
                 $reported = $amount;
             }
-            if (isset($row['actual_value']) && $row['actual_value'] !== '') {
-                $actual = is_numeric($row['actual_value']) ? (float) $row['actual_value'] : (float) str_replace(',', '', (string) $row['actual_value']);
+            if (isset($row['correct_amount']) && $row['correct_amount'] !== '') {
+                $actual = is_numeric($row['correct_amount']) ? (float) $row['correct_amount'] : (float) str_replace(',', '', (string) $row['correct_amount']);
             }
             if (isset($row['difference_value']) && $row['difference_value'] !== '') {
                 $difference = is_numeric($row['difference_value']) ? (float) $row['difference_value'] : (float) str_replace(',', '', (string) $row['difference_value']);
@@ -197,13 +197,13 @@ try {
         if (strcasecmp($typeOfRequest, 'CANCELLED TRANSACTION') === 0) {
             $reported = null;
             $actual = null;
-            if (isset($row['reported_value']) && $row['reported_value'] !== '') {
-                $reported = is_numeric($row['reported_value']) ? (float) $row['reported_value'] : (float) str_replace(',', '', (string) $row['reported_value']);
+            if (isset($row['wrong_amount']) && $row['wrong_amount'] !== '') {
+                $reported = is_numeric($row['wrong_amount']) ? (float) $row['wrong_amount'] : (float) str_replace(',', '', (string) $row['wrong_amount']);
             } else {
                 $reported = $amount;
             }
-            if (isset($row['actual_value']) && $row['actual_value'] !== '') {
-                $actual = is_numeric($row['actual_value']) ? (float) $row['actual_value'] : (float) str_replace(',', '', (string) $row['actual_value']);
+            if (isset($row['correct_amount']) && $row['correct_amount'] !== '') {
+                $actual = is_numeric($row['correct_amount']) ? (float) $row['correct_amount'] : (float) str_replace(',', '', (string) $row['correct_amount']);
             }
 
             $repVal = $reported !== null ? $reported : null;
@@ -244,6 +244,8 @@ try {
 
 $stmt->close();
 $wrongStmt->close();
+$osStmt->close();
+$ctStmt->close();
 $conn->autocommit(true);
 
 header('Location: ../trl-import-preview.php');

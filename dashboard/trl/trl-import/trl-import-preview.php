@@ -21,16 +21,20 @@ $duplicateList = $_SESSION['trl_import_duplicate_result']['duplicates'] ?? [];
 $importedRows = (int) (($flash['rows'] ?? 0));
 unset($_SESSION['trl_import_flash']);
 
+function trl_preview_normalize_type($value) {
+    $type = strtoupper(trim((string) $value));
+    return $type !== '' ? $type : 'UNSPECIFIED';
+}
+
 // Group rows by normalized request type for preview sections
 $grouped = [];
 $typeLabels = [];
 if (!empty($rows) && is_array($rows)) {
     foreach ($rows as $r) {
-        $rawType = trim((string) ($r['type_of_request'] ?? ''));
-        $norm = $rawType !== '' ? strtoupper($rawType) : 'UNSPECIFIED';
+        $norm = trl_preview_normalize_type($r['type_of_request'] ?? '');
         if (!isset($grouped[$norm])) $grouped[$norm] = [];
         $grouped[$norm][] = $r;
-        if (!isset($typeLabels[$norm])) $typeLabels[$norm] = $rawType !== '' ? $rawType : $norm;
+        if (!isset($typeLabels[$norm])) $typeLabels[$norm] = $norm;
     }
 }
 ?>
@@ -106,17 +110,11 @@ if (!empty($rows) && is_array($rows)) {
                     <div id="typeSections">
                         <?php foreach ($grouped as $norm => $grows): ?>
                             <?php
-                                // Determine which supplemental columns are present for this group
-                                $hasCorrect = false;
-                                $hasReported = false;
-                                $hasActual = false;
-                                $hasDifference = false;
-                                foreach ($grows as $gr) {
-                                    if (isset($gr['correct_biller_id']) && trim((string)$gr['correct_biller_id']) !== '') $hasCorrect = true;
-                                    if (array_key_exists('reported_value', $gr) && trim((string)$gr['reported_value']) !== '') $hasReported = true;
-                                    if (array_key_exists('actual_value', $gr) && trim((string)$gr['actual_value']) !== '') $hasActual = true;
-                                    if (array_key_exists('difference_value', $gr) && trim((string)$gr['difference_value']) !== '') $hasDifference = true;
-                                }
+                                // Supplemental columns are determined by request type ownership.
+                                $hasCorrect = ($norm === 'WRONG BILLER');
+                                $hasReported = ($norm === 'OVERSTATED AMOUNT' || $norm === 'CANCELLED TRANSACTION');
+                                $hasActual = ($norm === 'OVERSTATED AMOUNT' || $norm === 'CANCELLED TRANSACTION');
+                                $hasDifference = ($norm === 'OVERSTATED AMOUNT');
 
                                 $sectionId = 'section-' . md5($norm);
                             ?>
@@ -149,8 +147,8 @@ if (!empty($rows) && is_array($rows)) {
                                                     <th>CORRECT BILLER NAME</th>
                                                 <?php endif; ?>
                                                 <?php if ($hasReported || $hasActual || $hasDifference): ?>
-                                                    <?php if ($hasReported): ?><th>REPORTED VALUE</th><?php endif; ?>
-                                                    <?php if ($hasActual): ?><th>ACTUAL VALUE</th><?php endif; ?>
+                                                    <?php if ($hasReported): ?><th>WRONG AMOUNT</th><?php endif; ?>
+                                                    <?php if ($hasActual): ?><th>CORRECT AMOUNT</th><?php endif; ?>
                                                     <?php if ($hasDifference): ?><th>DIFFERENCE</th><?php endif; ?>
                                                 <?php endif; ?>
                                                 <th>REASON</th>
@@ -178,14 +176,14 @@ if (!empty($rows) && is_array($rows)) {
                                                 <td><?php echo htmlspecialchars((string) ($row['payment_branch_id'] ?? '')); ?></td>
                                                 <td><?php echo htmlspecialchars((string) (($row['payment_branch'] ?? ($row['payment_branch_name'] ?? '')))); ?></td>
                                                 <td class="amount"><?php echo number_format((float) ($row['amount'] ?? 0), 2); ?></td>
-                                                <td><?php echo htmlspecialchars((string) ($row['type_of_request'] ?? '')); ?></td>
+                                                <td><?php echo htmlspecialchars((string) trl_preview_normalize_type($row['type_of_request'] ?? '')); ?></td>
                                                 <?php if ($hasCorrect): ?>
                                                     <td><?php echo htmlspecialchars((string) ($row['correct_biller_id'] ?? '')); ?></td>
                                                     <td><?php echo htmlspecialchars((string) ($row['correct_biller_name'] ?? '')); ?></td>
                                                 <?php endif; ?>
                                                 <?php if ($hasReported || $hasActual || $hasDifference): ?>
-                                                    <?php if ($hasReported): ?><td><?php echo isset($row['reported_value']) ? number_format((float)$row['reported_value'],2) : ''; ?></td><?php endif; ?>
-                                                    <?php if ($hasActual): ?><td><?php echo isset($row['actual_value']) ? number_format((float)$row['actual_value'],2) : ''; ?></td><?php endif; ?>
+                                                    <?php if ($hasReported): ?><td><?php echo isset($row['wrong_amount']) ? number_format((float)$row['wrong_amount'],2) : ''; ?></td><?php endif; ?>
+                                                    <?php if ($hasActual): ?><td><?php echo isset($row['correct_amount']) ? number_format((float)$row['correct_amount'],2) : ''; ?></td><?php endif; ?>
                                                     <?php if ($hasDifference): ?><td><?php echo isset($row['difference_value']) ? number_format((float)$row['difference_value'],2) : ''; ?></td><?php endif; ?>
                                                 <?php endif; ?>
                                                 <td><?php echo htmlspecialchars((string) ($row['reason'] ?? '')); ?></td>

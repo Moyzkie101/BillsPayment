@@ -81,6 +81,7 @@
                             <option value="">Select request type</option>
                             <option>NO PAYMENT RECEIVED</option>
                             <option>DOUBLE POSTING</option>
+                            <option>MULTI POSTING</option>
                             <option>TRIPLE POSTING</option>
                             <option>WRONG BILLER</option>
                             <option>OVERSTATED AMOUNT</option>
@@ -101,13 +102,13 @@
 
                     <!-- OVERSTATED AMOUNT supplemental inputs -->
                     <div class="field-group overstated-group" style="display:none;">
-                        <label for="mReportedValue"><span class="material-icons">payments</span> Reported Value</label>
-                        <input id="mReportedValue" name="reported_value" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
+                        <label for="mWrongAmount"><span class="material-icons">payments</span> Wrong Amount</label>
+                        <input id="mWrongAmount" name="wrong_amount" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
                     </div>
 
                     <div class="field-group overstated-group" style="display:none;">
-                        <label for="mActualValue"><span class="material-icons">payments</span> Actual Value</label>
-                        <input id="mActualValue" name="actual_value" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
+                        <label for="mCorrectAmount"><span class="material-icons">payments</span> Correct Amount</label>
+                        <input id="mCorrectAmount" name="correct_amount" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
                     </div>
 
                     <div class="field-group overstated-group" style="display:none;">

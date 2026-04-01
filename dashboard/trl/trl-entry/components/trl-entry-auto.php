@@ -128,6 +128,7 @@ if ($searchRef !== '') {
                                 <option value="">Select request type</option>
                                 <option>NO PAYMENT RECEIVED</option>
                                 <option>DOUBLE POSTING</option>
+                                <option>MULTI POSTING</option>
                                 <option>TRIPLE POSTING</option>
                                 <option>WRONG BILLER</option>
                                 <option>OVERSTATED AMOUNT</option>
@@ -148,13 +149,13 @@ if ($searchRef !== '') {
 
                         <!-- OVERSTATED AMOUNT supplemental inputs -->
                         <div class="field-group overstated-group" style="display:none;">
-                            <label for="autoReportedValue"><span class="material-icons">payments</span> Reported Value</label>
-                            <input id="autoReportedValue" name="reported_value" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
+                            <label for="autoWrongAmount"><span class="material-icons">payments</span> Wrong Amount</label>
+                            <input id="autoWrongAmount" name="wrong_amount" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
                         </div>
 
                         <div class="field-group overstated-group" style="display:none;">
-                            <label for="autoActualValue"><span class="material-icons">payments</span> Actual Value</label>
-                            <input id="autoActualValue" name="actual_value" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
+                            <label for="autoCorrectAmount"><span class="material-icons">payments</span> Correct Amount</label>
+                            <input id="autoCorrectAmount" name="correct_amount" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
                         </div>
 
                         <div class="field-group overstated-group" style="display:none;">

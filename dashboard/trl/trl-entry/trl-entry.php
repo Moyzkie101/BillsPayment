@@ -216,8 +216,8 @@ unset($_SESSION['trl_entry_flash']);
                     }
                 }
 
-                // Format reported/actual/difference for display in the summary
-                if (fieldName === 'reported_value' || fieldName === 'actual_value' || fieldName === 'difference_value') {
+                // Format wrong/correct/difference for display in the summary
+                if (fieldName === 'wrong_amount' || fieldName === 'correct_amount' || fieldName === 'difference_value') {
                     var n = parseCurrencyToNumber(el.value || '0');
                     if (!isNaN(n)) {
                         return 'PHP ' + formatCurrencyNumber(n);
@@ -276,8 +276,8 @@ unset($_SESSION['trl_entry_flash']);
                     { name: 'type_of_request', label: 'TYPE OF REQUEST' },
                     { name: 'wrong_biller_id', label: 'WRONG BILLER ID' },
                     { name: 'biller_name', label: 'BILLER NAME' },
-                    { name: 'reported_value', label: 'REPORTED VALUE' },
-                    { name: 'actual_value', label: 'ACTUAL VALUE' },
+                    { name: 'wrong_amount', label: 'WRONG AMOUNT' },
+                    { name: 'correct_amount', label: 'CORRECT AMOUNT' },
                     { name: 'difference_value', label: 'DIFFERENCE' },
                     { name: 'correct_biller_id', label: 'CORRECT BILLER ID' },
                     { name: 'correct_biller_name', label: 'CORRECT BILER NAME' },
@@ -475,8 +475,8 @@ unset($_SESSION['trl_entry_flash']);
                 if (reasonField) { reasonField.required = !isEmptyType; if (isEmptyType) reasonField.value = ''; }
 
                 // OVERSTATED AMOUNT: show reported/actual/difference only when selected
-                var reportedEl = form.querySelector('[name="reported_value"]');
-                var actualEl = form.querySelector('[name="actual_value"]');
+                var reportedEl = form.querySelector('[name="wrong_amount"]');
+                var actualEl = form.querySelector('[name="correct_amount"]');
                 var diffEl = form.querySelector('[name="difference_value"]');
                 var reportedGroup = reportedEl ? reportedEl.closest('.field-group') : null;
                 var actualGroup = actualEl ? actualEl.closest('.field-group') : null;
@@ -500,8 +500,8 @@ unset($_SESSION['trl_entry_flash']);
             // Compute difference and auto-fill reason for OVERSTATED AMOUNT and CANCELLED TRANSACTION
             function computeOverstatedFields(form) {
                 if (!form) return;
-                var repEl = form.querySelector('[name="reported_value"]');
-                var actEl = form.querySelector('[name="actual_value"]');
+                var repEl = form.querySelector('[name="wrong_amount"]');
+                var actEl = form.querySelector('[name="correct_amount"]');
                 var diffEl = form.querySelector('[name="difference_value"]');
                 var reasonEl = form.querySelector('[name="reason"]');
                 if (!repEl || !actEl) return;
@@ -559,8 +559,8 @@ unset($_SESSION['trl_entry_flash']);
                 // set initial visibility
                 manageCorrectBillerFields(frm);
                 // Attach input listeners for overstated value calculation
-                var repField = frm.querySelector('[name="reported_value"]');
-                var actField = frm.querySelector('[name="actual_value"]');
+                var repField = frm.querySelector('[name="wrong_amount"]');
+                var actField = frm.querySelector('[name="correct_amount"]');
                 if (repField) {
                     // Compute on input, but format only on blur to avoid blocking typing
                     repField.addEventListener('input', function() { computeOverstatedFields(frm); updateSubmitVisibility(); });

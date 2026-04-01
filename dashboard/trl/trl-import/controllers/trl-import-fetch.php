@@ -86,10 +86,12 @@ function trl_find_header_row($sheet, $maxRows = 30) {
         'TYPE OF REQUEST', // mldb.trl.type_of_request
         'CORRECT BILLER ID', // mldb.trl.correct_biller_id
         'CORRECT BILLER NAME', // mldb.trl.correct_biller_name
-            'REASON', // mldb.trl.reason
-            'REPORTED VALUE', // mldb.trl_overstatedamount.reported_value or mldb.trl_cancelledtransaction.reported_value
-            'ACTUAL VALUE', // mldb.trl_overstatedamount.actual_value or mldb.trl_cancelledtransaction.actual_value
-            'DIFFERENCE' // mldb.trl_overstatedamount.difference
+        'REASON', // mldb.trl.reason
+        'WRONG AMOUNT', // mldb.trl_overstatedamount.wrong_amount or mldb.trl_cancelledtransaction.wrong_amount
+        'CORRECT AMOUNT', // mldb.trl_overstatedamount.correct_amount or mldb.trl_cancelledtransaction.correct_amount
+        'REPORTED VALUE', // backward-compatible alias for wrong_amount
+        'ACTUAL VALUE', // backward-compatible alias for correct_amount
+        'DIFFERENCE' // mldb.trl_overstatedamount.difference
     ];
 
     $highestColumn = $sheet->getHighestColumn();
@@ -139,6 +141,10 @@ function trl_parse_datetime($value) {
     }
 
     return date('Y-m-d H:i:s', $timestamp);
+}
+
+function trl_normalize_request_type($value) {
+    return strtoupper(trim((string) $value));
 }
 
 $allRows = [];
@@ -194,8 +200,10 @@ for ($i = 0; $i < $fileCount; $i++) {
             'CORRECT BILLER ID' => 'correct_biller_id',
             'CORRECT BILLER NAME' => 'correct_biller_name',
             'REASON' => 'reason',
-            'REPORTED VALUE' => 'reported_value',
-            'ACTUAL VALUE' => 'actual_value',
+            'WRONG AMOUNT' => 'wrong_amount',
+            'CORRECT AMOUNT' => 'correct_amount',
+            'REPORTED VALUE' => 'wrong_amount',
+            'ACTUAL VALUE' => 'correct_amount',
             'DIFFERENCE' => 'difference_value'
         ];
 
@@ -216,6 +224,9 @@ for ($i = 0; $i < $fileCount; $i++) {
                 'type_of_request' => '',
                 'correct_biller_id' => '',
                 'correct_biller_name' => '',
+                'wrong_amount' => null,
+                'correct_amount' => null,
+                'difference_value' => null,
                 'reason' => '',
                 'duplicate_ok' => true,
                 'source_file' => $fileName
@@ -238,11 +249,41 @@ for ($i = 0; $i < $fileCount; $i++) {
 
                 if ($fieldName === 'transfer_datetime') {
                     $record[$fieldName] = trl_parse_datetime($value);
-                } elseif ($fieldName === 'amount' || $fieldName === 'reported_value' || $fieldName === 'actual_value' || $fieldName === 'difference_value') {
+                } elseif ($fieldName === 'amount') {
+                    // AMOUNT is a core column; keep numeric conversion with 0 fallback.
                     $record[$fieldName] = is_numeric($value) ? (float) $value : (float) str_replace(',', '', (string) $value);
+                } elseif ($fieldName === 'wrong_amount' || $fieldName === 'correct_amount' || $fieldName === 'difference_value') {
+                    // Optional supplemental numeric columns should remain NULL when empty.
+                    if ($value === null || $value === '') {
+                        $record[$fieldName] = null;
+                    } else {
+                        $parsed = is_numeric($value) ? (float) $value : (float) str_replace(',', '', (string) $value);
+                        $record[$fieldName] = $parsed;
+                    }
                 } else {
                     $record[$fieldName] = trim((string) $value);
                 }
+            }
+
+            // Canonicalize request type and keep only type-owned supplemental fields.
+            $type = trl_normalize_request_type($record['type_of_request'] ?? '');
+            $record['type_of_request'] = $type;
+
+            // Correct biller fields belong only to WRONG BILLER rows.
+            if ($type !== 'WRONG BILLER') {
+                $record['correct_biller_id'] = '';
+                $record['correct_biller_name'] = '';
+            }
+
+            // Amount supplemental fields belong only to OVERSTATED/CANCELLED.
+            if ($type !== 'OVERSTATED AMOUNT' && $type !== 'CANCELLED TRANSACTION') {
+                $record['wrong_amount'] = null;
+                $record['correct_amount'] = null;
+            }
+
+            // Difference belongs only to OVERSTATED AMOUNT.
+            if ($type !== 'OVERSTATED AMOUNT') {
+                $record['difference_value'] = null;
             }
 
             if (!$hasData) {

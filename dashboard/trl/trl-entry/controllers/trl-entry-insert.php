@@ -25,6 +25,16 @@ function trl_required($key) {
     return trim((string) ($_POST[$key] ?? ''));
 }
 
+function trl_required_any($keys) {
+    foreach ($keys as $k) {
+        $v = trim((string) ($_POST[$k] ?? ''));
+        if ($v !== '') {
+            return $v;
+        }
+    }
+    return '';
+}
+
 $payload = [
     'transfer_datetime' => trl_required('transfer_datetime'),
     'ref_no' => trl_required('ref_no'),
@@ -39,8 +49,9 @@ $payload = [
     'type_of_request' => trl_required('type_of_request'),
     'correct_biller_id' => trl_required('correct_biller_id'),
     'correct_biller_name' => trl_required('correct_biller_name'),
-    'reported_value' => trl_required('reported_value'),
-    'actual_value' => trl_required('actual_value'),
+    // support new field names and fallback to old names for compatibility
+    'wrong_amount' => trl_required_any(['wrong_amount', 'reported_value']),
+    'correct_amount' => trl_required_any(['correct_amount', 'actual_value']),
     'difference_value' => trl_required('difference_value'),
     'reason' => trl_required('reason')
 ];
@@ -58,8 +69,8 @@ if (strcasecmp($payload['type_of_request'], 'WRONG BILLER') === 0) {
 
 // If the request type requires reported/actual values
 if (strcasecmp($payload['type_of_request'], 'OVERSTATED AMOUNT') === 0 || strcasecmp($payload['type_of_request'], 'CANCELLED TRANSACTION') === 0) {
-    $requiredKeys[] = 'reported_value';
-    $requiredKeys[] = 'actual_value';
+    $requiredKeys[] = 'wrong_amount';
+    $requiredKeys[] = 'correct_amount';
 }
 
 $missing = [];
@@ -83,11 +94,11 @@ $amount = is_numeric($payload['amount']) ? (float) $payload['amount'] : (float) 
 $reported = null;
 $actual = null;
 $difference = null;
-if ($payload['reported_value'] !== '') {
-    $reported = is_numeric($payload['reported_value']) ? (float) $payload['reported_value'] : (float) str_replace(',', '', $payload['reported_value']);
+if ($payload['wrong_amount'] !== '') {
+    $reported = is_numeric($payload['wrong_amount']) ? (float) $payload['wrong_amount'] : (float) str_replace(',', '', $payload['wrong_amount']);
 }
-if ($payload['actual_value'] !== '') {
-    $actual = is_numeric($payload['actual_value']) ? (float) $payload['actual_value'] : (float) str_replace(',', '', $payload['actual_value']);
+if ($payload['correct_amount'] !== '') {
+    $actual = is_numeric($payload['correct_amount']) ? (float) $payload['correct_amount'] : (float) str_replace(',', '', $payload['correct_amount']);
 }
 if ($payload['difference_value'] !== '') {
     $difference = is_numeric($payload['difference_value']) ? (float) $payload['difference_value'] : (float) str_replace(',', '', $payload['difference_value']);
@@ -204,7 +215,7 @@ try {
 
     // If the request type is OVERSTATED AMOUNT, insert overstated amount details into separate table
     if (strcasecmp($payload['type_of_request'], 'OVERSTATED AMOUNT') === 0) {
-        $osSql = "INSERT INTO mldb.trl_overstatedamount (trl_no, reported_value, actual_value, difference) VALUES (?, ?, ?, ?)";
+        $osSql = "INSERT INTO mldb.trl_overstatedamount (trl_no, wrong_amount, correct_amount, difference) VALUES (?, ?, ?, ?)";
         $osStmt = $conn->prepare($osSql);
         if (!$osStmt) {
             throw new Exception('Unable to prepare overstated amount insert statement.');
@@ -233,7 +244,7 @@ try {
 
     // If the request type is CANCELLED TRANSACTION, insert cancelled transaction details
     if (strcasecmp($payload['type_of_request'], 'CANCELLED TRANSACTION') === 0) {
-        $ctSql = "INSERT INTO mldb.trl_cancelledtransaction (trl_no, reported_value, actual_value) VALUES (?, ?, ?)";
+        $ctSql = "INSERT INTO mldb.trl_cancelledtransaction (trl_no, wrong_amount, correct_amount) VALUES (?, ?, ?)";
         $ctStmt = $conn->prepare($ctSql);
         if (!$ctStmt) {
             throw new Exception('Unable to prepare cancelled transaction insert statement.');
