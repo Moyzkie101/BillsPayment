@@ -538,11 +538,42 @@ unset($_SESSION['trl_entry_flash']);
             [document.getElementById('autoEntryForm'), document.getElementById('manualEntryForm')].forEach(function(frm) {
                 if (!frm) return;
                 var sel = frm.querySelector('[name="type_of_request"]');
+                var reasonEl = frm.querySelector('[name="reason"]');
+                // initialize per-type storage on the reason field
+                if (reasonEl) {
+                    if (!reasonEl._perType) reasonEl._perType = {};
+                }
+
                 if (sel) {
+                    // remember initial type
+                    sel._prevType = sel.value || '';
                     sel.addEventListener('change', function() {
+                        try {
+                            var prev = sel._prevType || '';
+                            // store current reason value for previous type
+                            if (reasonEl) {
+                                reasonEl._perType = reasonEl._perType || {};
+                                reasonEl._perType[prev] = reasonEl.value || '';
+                            }
+                        } catch (e) {
+                            // ignore
+                        }
+
+                        // update visibility and compute fields for the new type
                         manageCorrectBillerFields(frm);
-                        // compute overstated values if needed
                         computeOverstatedFields(frm);
+
+                        // restore stored reason for this newly selected type if present
+                        try {
+                            var cur = sel.value || '';
+                            if (reasonEl && reasonEl._perType && Object.prototype.hasOwnProperty.call(reasonEl._perType, cur)) {
+                                reasonEl.value = reasonEl._perType[cur] || '';
+                            }
+                        } catch (e) {
+                            // ignore
+                        }
+
+                        sel._prevType = sel.value || '';
                         updateSubmitVisibility();
                     });
                 }

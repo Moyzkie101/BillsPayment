@@ -20,25 +20,6 @@ if (!in_array($refFilter, ['all', 'empty'], true)) {
     $refFilter = 'all';
 }
 
-// Server-side request type filter (optional)
-$serverTypeFilter = trim((string) ($_GET['type_filter'] ?? ''));
-
-// Load available request types for the server-side filter dropdown (pending rows only)
-$availableTypes = [];
-$typeListSql = "SELECT DISTINCT COALESCE(NULLIF(TRIM(type_of_request), ''), 'UNSPECIFIED') AS ttype FROM mldb.trl WHERE status IS NULL ORDER BY UPPER(ttype) ASC";
-$typeListStmt = $conn->prepare($typeListSql);
-if ($typeListStmt) {
-    if ($typeListStmt->execute()) {
-        $typeListRes = $typeListStmt->get_result();
-        if ($typeListRes) {
-            while ($tr = $typeListRes->fetch_assoc()) {
-                $availableTypes[] = (string) ($tr['ttype'] ?? 'UNSPECIFIED');
-            }
-        }
-    }
-    $typeListStmt->close();
-}
-
 function trl_review_normalize_type($value) {
     $type = strtoupper(trim((string) $value));
     return $type !== '' ? $type : 'UNSPECIFIED';
@@ -99,17 +80,6 @@ $sql = "SELECT
 
 $types = '';
 $params = [];
-
-if ($refFilter === 'empty') {
-    $sql .= " AND (t.ref_no IS NULL OR TRIM(t.ref_no) = '')";
-}
-
-// Apply server-side request type filter when provided
-if ($serverTypeFilter !== '') {
-    $sql .= " AND UPPER(COALESCE(NULLIF(TRIM(t.type_of_request), ''), 'UNSPECIFIED')) = ?";
-    $types .= 's';
-    $params[] = strtoupper($serverTypeFilter);
-}
 
 if ($searchRef !== '') {
     $sql .= " AND t.ref_no LIKE ?";
@@ -215,44 +185,15 @@ unset($_SESSION['trl_review_flash']);
 
         <div class="bp-card container-fluid mt-3 p-4 trl-review-wrap">
             <div class="trl-review-topbar">
-                <div class="trl-filters">
-                    <!-- Search form: submits only the search_ref (preserves current filter values via hidden inputs) -->
-                    <form method="get" class="trl-search-form" autocomplete="off">
-                        <div class="trl-field">
-                            <label for="searchRefNo">Reference No. Search</label>
-                            <div class="trl-search-input-wrap">
-                                <input id="searchRefNo" name="search_ref" type="text" placeholder="Enter reference number" value="<?php echo htmlspecialchars($searchRef); ?>">
-                                <button type="submit" class="btn btn-danger search-btn">Search</button>
-                            </div>
+                <form method="get" class="trl-search-top" autocomplete="off">
+                    <div class="trl-field">
+                        <label for="searchRefNo">Reference No. Search</label>
+                        <div class="trl-search-input-wrap">
+                            <input id="searchRefNo" name="search_ref" type="text" placeholder="Enter reference number" value="<?php echo htmlspecialchars($searchRef); ?>">
+                            <button type="submit" class="btn btn-danger search-btn">Search</button>
                         </div>
-                        <input type="hidden" name="ref_filter" value="<?php echo htmlspecialchars($refFilter); ?>">
-                        <input type="hidden" name="type_filter" value="<?php echo htmlspecialchars($serverTypeFilter); ?>">
-                    </form>
-
-                    <!-- Filter form: controls reference filter and server-side request type, Apply will submit these -->
-                    <form method="get" class="trl-filter-form" autocomplete="off">
-                        <div class="trl-field">
-                            <label for="refFilter">Reference Filter</label>
-                            <select id="refFilter" name="ref_filter">
-                                <option value="all" <?php echo $refFilter === 'all' ? 'selected' : ''; ?>>All</option>
-                                <option value="empty" <?php echo $refFilter === 'empty' ? 'selected' : ''; ?>>Empty Reference No.</option>
-                            </select>
-                        </div>
-                        <div class="trl-field">
-                            <label for="typeFilterServer">Request Type</label>
-                            <select id="typeFilterServer" name="type_filter">
-                                <option value="">All Types</option>
-                                <?php foreach ($availableTypes as $atype): ?>
-                                    <option value="<?php echo htmlspecialchars($atype); ?>" <?php echo ($serverTypeFilter !== '' && strtoupper($serverTypeFilter) === strtoupper($atype)) ? 'selected' : ''; ?>><?php echo htmlspecialchars($atype); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="trl-top-actions">
-                            <a class="btn btn-outline-secondary" href="trl-review.php">Reset</a>
-                            <button type="submit" class="btn btn-danger">Apply</button>
-                        </div>
-                    </form>
-                </div>
+                    </div>
+                </form>
             </div>
 
             <?php if ($flash): ?>
@@ -270,10 +211,6 @@ unset($_SESSION['trl_review_flash']);
                     <span>Request Type Groups</span>
                     <strong><?php echo count($grouped); ?></strong>
                 </div>
-                <div class="summary-card">
-                    <span>Ref Filter</span>
-                    <strong><?php echo $refFilter === 'empty' ? 'EMPTY REF NO.' : 'ALL'; ?></strong>
-                </div>
             </section>
 
             <section class="trl-table-section">
@@ -288,6 +225,13 @@ unset($_SESSION['trl_review_flash']);
                                 <option value="<?php echo htmlspecialchars($norm); ?>"><?php echo htmlspecialchars($lbl); ?> (<?php echo count($grouped[$norm]); ?>)</option>
                             <?php endforeach; ?>
                         </select>
+
+                        <label for="refFilterBottom">Reference Filter</label>
+                        <select id="refFilterBottom">
+                            <option value="">All</option>
+                            <option value="empty">Empty Reference No.</option>
+                        </select>
+
                         <div class="trl-filter-actions">
                             <button id="toggleExpandAll" class="btn btn-outline-secondary">Collapse All</button>
                         </div>
@@ -632,33 +576,48 @@ unset($_SESSION['trl_review_flash']);
                     if (!tbody || !pager) return;
 
                     var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
-                    var total = rows.length;
-                    var totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
                     var pageInfo = pager.querySelector('.page-info');
                     var prevBtn = pager.querySelector('.page-prev');
                     var nextBtn = pager.querySelector('.page-next');
                     var currentPage = 1;
 
+                    var refFilterEl = document.getElementById('refFilterBottom');
+                    var typeFilterEl = document.getElementById('typeFilter');
+
+                    function getFilteredRows() {
+                        var rf = refFilterEl ? (refFilterEl.value || '') : '';
+                        return rows.filter(function(r) {
+                            var refCell = r.querySelector('td:nth-child(3)');
+                            var refText = refCell ? refCell.textContent.trim() : '';
+                            if (rf === 'empty') return refText === '';
+                            return true;
+                        });
+                    }
+
                     function renderPage() {
+                        var filtered = getFilteredRows();
+                        var total = filtered.length;
+                        var totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
                         var start = (currentPage - 1) * PAGE_SIZE;
                         var end = start + PAGE_SIZE;
 
-                        rows.forEach(function(r, idx) {
-                            r.style.display = (idx >= start && idx < end) ? '' : 'none';
-                        });
+                        // hide all rows then show only the page slice of filtered rows
+                        rows.forEach(function(r) { r.style.display = 'none'; });
+                        for (var i = start; i < end && i < filtered.length; i++) {
+                            filtered[i].style.display = '';
+                        }
 
                         if (pageInfo) {
                             pageInfo.textContent = 'Page ' + currentPage + ' of ' + totalPages + ' (' + total + ' rows)';
                         }
                         if (prevBtn) prevBtn.disabled = currentPage <= 1;
                         if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
+
+                        // hide pager when not needed
+                        pager.style.display = (total <= PAGE_SIZE) ? 'none' : '';
                     }
 
-                    if (total <= PAGE_SIZE) {
-                        pager.style.display = 'none';
-                        return;
-                    }
-
+                    // prev/next handlers
                     if (prevBtn) {
                         prevBtn.addEventListener('click', function() {
                             if (currentPage > 1) {
@@ -669,10 +628,29 @@ unset($_SESSION['trl_review_flash']);
                     }
                     if (nextBtn) {
                         nextBtn.addEventListener('click', function() {
+                            var filtered = getFilteredRows();
+                            var total = filtered.length;
+                            var totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
                             if (currentPage < totalPages) {
                                 currentPage++;
                                 renderPage();
                             }
+                        });
+                    }
+
+                    // re-render when reference filter changes
+                    if (refFilterEl) {
+                        refFilterEl.addEventListener('change', function() {
+                            currentPage = 1;
+                            renderPage();
+                        });
+                    }
+
+                    // re-render when type filter changes (so counts/pagers update)
+                    if (typeFilterEl) {
+                        typeFilterEl.addEventListener('change', function() {
+                            currentPage = 1;
+                            renderPage();
                         });
                     }
 

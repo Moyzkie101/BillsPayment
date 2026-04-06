@@ -11,8 +11,8 @@
 
 .trl-filters {
     display: grid;
-    /* four columns: search, ref filter, request type, actions */
-    grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) minmax(180px, 240px) auto;
+    /* three columns: search, ref filter, actions */
+    grid-template-columns: minmax(260px, 1fr) minmax(160px, 220px) auto;
     gap: 12px;
     align-items: end;
 }
