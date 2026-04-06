@@ -564,6 +564,31 @@ unset($_SESSION['trl_entry_flash']);
                     actField.addEventListener('focus', function() { unformatInputCurrency(actField); });
                     if (actField.value) formatInputCurrency(actField);
                 }
+                // Manual form: handle Reference No toggle (hide by default)
+                if (frm.id === 'manualEntryForm') {
+                    var refToggle = frm.querySelector('#mRefToggle');
+                    var refGroup = frm.querySelector('[data-ref-group]');
+                    var refInput = frm.querySelector('[name="ref_no"]');
+
+                    function setRefVisibility(show) {
+                        if (refGroup) refGroup.style.display = show ? '' : 'none';
+                        if (refInput) {
+                            refInput.required = !!show;
+                            if (!show) refInput.value = '';
+                        }
+                    }
+
+                    if (refToggle) {
+                        refToggle.addEventListener('change', function() {
+                            setRefVisibility(refToggle.checked);
+                            updateSubmitVisibility();
+                        });
+                        // initialize hidden (default unchecked)
+                        setRefVisibility(!!refToggle.checked);
+                    } else {
+                        setRefVisibility(false);
+                    }
+                }
                 // initial compute if fields present
                 computeOverstatedFields(frm);
             });

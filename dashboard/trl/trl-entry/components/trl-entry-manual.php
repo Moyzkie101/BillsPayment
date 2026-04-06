@@ -8,13 +8,22 @@
                 <div class="auto-data-header">
                     <span class="material-icons">folder_open</span>
                     <h3>Transaction Details (Manual)</h3>
+                    <div class="manual-ref-toggle" style="margin-left:12px;">
+                        <div class="toggle-wrapper" style="display:flex;align-items:center;gap:8px;font-weight:600;">
+                            <span style="font-size:13px;color:#334155">Include Reference No.</span>
+                            <label class="switch" aria-label="Include Reference No.">
+                                <input id="mRefToggle" name="include_ref_no" type="checkbox" value="1">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 <div class="auto-data-card">
-                    <div class="data-item">
+                    <div class="data-item" data-ref-group style="display:none;">
                         <div class="data-icon"><span class="material-icons">confirmation_number</span></div>
                         <div class="data-content">
                             <span class="data-label">Reference No.</span>
-                            <input id="mRefNo" name="ref_no" class="data-value field-input required-field" type="text" placeholder="Enter reference number" required>
+                            <input id="mRefNo" name="ref_no" class="data-value field-input required-field" type="text" placeholder="Enter reference number">
                         </div>
                     </div>
 

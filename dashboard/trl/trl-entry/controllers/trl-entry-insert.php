@@ -38,6 +38,8 @@ function trl_required_any($keys) {
 $payload = [
     'transfer_datetime' => trl_required('transfer_datetime'),
     'ref_no' => trl_required('ref_no'),
+    'source_mode' => trl_required('source_mode'),
+    'include_ref_no' => trl_required('include_ref_no'),
     // accept values from either the request form keys or the original transaction columns
     'wrong_biller_id' => trl_required_any(['wrong_biller_id', 'sub_billers_id', 'subbiller_id', 'subbiller', 'subbillerid']),
     'biller_name' => trl_required_any(['biller_name', 'sub_billers_name', 'subbiller', 'subbiller_name']),
@@ -58,7 +60,7 @@ $payload = [
 ];
 
 $requiredKeys = [
-    'transfer_datetime', 'ref_no', 'wrong_biller_id', 'biller_name', 'account_no', 'name',
+    'transfer_datetime', 'wrong_biller_id', 'biller_name', 'account_no', 'name',
     'payment_branch_id', 'payment_branch_name', 'amount', 'type_of_request', 'reason'
 ];
 
@@ -72,6 +74,11 @@ if (strcasecmp($payload['type_of_request'], 'WRONG BILLER') === 0) {
 if (strcasecmp($payload['type_of_request'], 'OVERSTATED AMOUNT') === 0 || strcasecmp($payload['type_of_request'], 'CANCELLED TRANSACTION') === 0) {
     $requiredKeys[] = 'wrong_amount';
     $requiredKeys[] = 'correct_amount';
+}
+
+// Reference number is required for AUTO mode, or when manual includes it via the toggle
+if (strcasecmp($payload['source_mode'], 'auto') === 0 || $payload['include_ref_no'] === '1') {
+    $requiredKeys[] = 'ref_no';
 }
 
 $missing = [];
