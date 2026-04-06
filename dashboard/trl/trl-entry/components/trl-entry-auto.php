@@ -5,7 +5,7 @@ $autoError = '';
 
 if ($searchRef !== '') {
     $escapedRef = mysqli_real_escape_string($conn, $searchRef);
-    $sql = "SELECT reference_no, datetime, account_no, account_name, branch_id, outlet, amount_paid FROM mldb.billspayment_transaction WHERE reference_no = '{$escapedRef}' LIMIT 1";
+    $sql = "SELECT reference_no, datetime, account_no, account_name, branch_id, outlet, amount_paid, sub_billers_name, sub_billers_id FROM mldb.billspayment_transaction WHERE reference_no = '{$escapedRef}' LIMIT 1";
     $res = mysqli_query($conn, $sql);
     if ($res && mysqli_num_rows($res) > 0) {
         $autoFound = mysqli_fetch_assoc($res);
@@ -50,6 +50,8 @@ if ($searchRef !== '') {
             <input type="hidden" name="payment_branch_id" value="<?php echo htmlspecialchars((string) ($autoFound['branch_id'] ?? '')); ?>">
             <input type="hidden" name="payment_branch_name" value="<?php echo htmlspecialchars((string) ($autoFound['outlet'] ?? '')); ?>">
             <input type="hidden" name="amount" value="<?php echo htmlspecialchars((string) ($autoFound['amount_paid'] ?? '0')); ?>">
+            <input type="hidden" name="wrong_biller_id" value="<?php echo htmlspecialchars((string) ($autoFound['sub_billers_id'] ?? '')); ?>">
+            <input type="hidden" name="biller_name" value="<?php echo htmlspecialchars((string) ($autoFound['sub_billers_name'] ?? '')); ?>">
 
             <div class="auto-content-grid">
                 <div class="auto-data-column">
@@ -107,6 +109,22 @@ if ($searchRef !== '') {
                         </div>
 
                         <div class="data-item">
+                            <div class="data-icon"><span class="material-icons">warning</span></div>
+                            <div class="data-content">
+                                <span class="data-label">Biller ID</span>
+                                <span class="data-value"><?php echo htmlspecialchars((string) ($autoFound['sub_billers_id'] ?? '')); ?></span>
+                            </div>
+                        </div>
+
+                        <div class="data-item">
+                            <div class="data-icon"><span class="material-icons">business</span></div>
+                            <div class="data-content">
+                                <span class="data-label">Biller Name</span>
+                                <span class="data-value"><?php echo htmlspecialchars((string) ($autoFound['sub_billers_name'] ?? '')); ?></span>
+                            </div>
+                        </div>
+
+                        <div class="data-item">
                             <div class="data-icon"><span class="material-icons">attach_money</span></div>
                             <div class="data-content">
                                 <span class="data-label">Amount</span>
@@ -137,15 +155,7 @@ if ($searchRef !== '') {
                             </select>
                         </div>
 
-                        <div class="field-group">
-                            <label for="autoWrongBillerId"><span class="material-icons">warning</span> Wrong Biller ID</label>
-                            <input id="autoWrongBillerId" name="wrong_biller_id" class="field-input required-field" type="text" placeholder="Enter wrong biller ID" required>
-                        </div>
-
-                        <div class="field-group">
-                            <label for="autoBillerName"><span class="material-icons">business</span> Biller Name</label>
-                            <input id="autoBillerName" name="biller_name" class="field-input required-field" type="text" placeholder="Enter biller name" required>
-                        </div>
+                        <!-- Biller info will be shown in Transaction Details (populated from the source transaction) -->
 
                         <!-- OVERSTATED AMOUNT supplemental inputs -->
                         <div class="field-group overstated-group" style="display:none;">

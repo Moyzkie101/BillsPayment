@@ -269,13 +269,13 @@ unset($_SESSION['trl_entry_flash']);
                     { name: 'name', label: 'ACCOUNT NAME' },
                     { name: 'payment_branch_id', label: 'BRANCH ID' },
                     { name: 'payment_branch_name', label: 'PAYMENT BRANCH' },
+                    { name: 'wrong_biller_id', label: 'BILLER ID' },
+                    { name: 'biller_name', label: 'BILLER NAME' },
                     { name: 'amount', label: 'AMOUNT' }
                 ];
 
                 var requestFields = [
                     { name: 'type_of_request', label: 'TYPE OF REQUEST' },
-                    { name: 'wrong_biller_id', label: 'WRONG BILLER ID' },
-                    { name: 'biller_name', label: 'BILLER NAME' },
                     { name: 'wrong_amount', label: 'WRONG AMOUNT' },
                     { name: 'correct_amount', label: 'CORRECT AMOUNT' },
                     { name: 'difference_value', label: 'DIFFERENCE' },
@@ -455,23 +455,13 @@ unset($_SESSION['trl_entry_flash']);
                 if (correctId) { correctId.required = showCorrect; if (!showCorrect) correctId.value = ''; }
                 if (correctName) { correctName.required = showCorrect; if (!showCorrect) correctName.value = ''; }
 
-                // Fields to hide when the select is the default (empty)
-                var wrongId = form.querySelector('[name="wrong_biller_id"]');
-                var billerName = form.querySelector('[name="biller_name"]');
+                // Fields to hide when the select is the default (empty) — only manage the reason field here
                 var reasonField = form.querySelector('[name="reason"]');
-                var wrongIdGroup = wrongId ? wrongId.closest('.field-group') : null;
-                var billerNameGroup = billerName ? billerName.closest('.field-group') : null;
                 var reasonGroup = reasonField ? reasonField.closest('.field-group') : null;
 
                 var isEmptyType = !typeSelect || (typeSelect.value === '' || typeSelect.value === null);
 
-                // If the user hasn't chosen a request type, hide these supplemental fields
-                if (wrongIdGroup) wrongIdGroup.style.display = isEmptyType ? 'none' : '';
-                if (billerNameGroup) billerNameGroup.style.display = isEmptyType ? 'none' : '';
                 if (reasonGroup) reasonGroup.style.display = isEmptyType ? 'none' : '';
-
-                if (wrongId) { wrongId.required = !isEmptyType; if (isEmptyType) wrongId.value = ''; }
-                if (billerName) { billerName.required = !isEmptyType; if (isEmptyType) billerName.value = ''; }
                 if (reasonField) { reasonField.required = !isEmptyType; if (isEmptyType) reasonField.value = ''; }
 
                 // OVERSTATED AMOUNT: show reported/actual/difference only when selected

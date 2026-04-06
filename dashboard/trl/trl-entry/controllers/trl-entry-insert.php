@@ -38,8 +38,9 @@ function trl_required_any($keys) {
 $payload = [
     'transfer_datetime' => trl_required('transfer_datetime'),
     'ref_no' => trl_required('ref_no'),
-    'wrong_biller_id' => trl_required('wrong_biller_id'),
-    'biller_name' => trl_required('biller_name'),
+    // accept values from either the request form keys or the original transaction columns
+    'wrong_biller_id' => trl_required_any(['wrong_biller_id', 'sub_billers_id', 'subbiller_id', 'subbiller', 'subbillerid']),
+    'biller_name' => trl_required_any(['biller_name', 'sub_billers_name', 'subbiller', 'subbiller_name']),
     'account_no' => trl_required('account_no'),
     'name' => trl_required('name'),
     'payment_branch_id' => trl_required('payment_branch_id'),

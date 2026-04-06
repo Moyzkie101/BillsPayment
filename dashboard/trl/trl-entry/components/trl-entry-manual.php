@@ -59,6 +59,22 @@
                     </div>
 
                     <div class="data-item">
+                        <div class="data-icon"><span class="material-icons">warning</span></div>
+                        <div class="data-content">
+                            <span class="data-label">Biller ID</span>
+                            <input id="mBillerId" name="wrong_biller_id" class="data-value field-input required-field" type="text" placeholder="Enter biller id" required>
+                        </div>
+                    </div>
+
+                    <div class="data-item">
+                        <div class="data-icon"><span class="material-icons">business</span></div>
+                        <div class="data-content">
+                            <span class="data-label">Biller Name</span>
+                            <input id="mBillerName" name="biller_name" class="data-value field-input required-field" type="text" placeholder="Enter biller name" required>
+                        </div>
+                    </div>
+
+                    <div class="data-item">
                         <div class="data-icon"><span class="material-icons">attach_money</span></div>
                         <div class="data-content">
                             <span class="data-label">Amount</span>
@@ -90,15 +106,7 @@
                         </select>
                     </div>
 
-                    <div class="field-group">
-                        <label for="mWrongBillerId"><span class="material-icons">warning</span> Wrong Biller ID</label>
-                        <input id="mWrongBillerId" name="wrong_biller_id" class="field-input required-field" type="text" placeholder="Enter wrong biller ID" required>
-                    </div>
-
-                    <div class="field-group">
-                        <label for="mBillerName"><span class="material-icons">business</span> Biller Name</label>
-                        <input id="mBillerName" name="biller_name" class="field-input required-field" type="text" placeholder="Enter biller name" required>
-                    </div>
+                    <!-- Biller info moved to Transaction Details (manual) -->
 
                     <!-- OVERSTATED AMOUNT supplemental inputs -->
                     <div class="field-group overstated-group" style="display:none;">
