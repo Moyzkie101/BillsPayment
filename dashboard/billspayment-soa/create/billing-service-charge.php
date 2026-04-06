@@ -366,13 +366,15 @@ if (isset($_SESSION['user_type'])) {
                                         <input type="text" id="preparedFix_signature" class="preparedFix_signature" name="preparedFix_signature" value="" readonly>
                                     </div>
                                     <div class="prepared-inp">
-                                        <?php if (!empty($prepared_sig_blob)): ?>
-                                            <div style="text-align:center;margin-bottom:6px;">
-                                                <img id="prepared-signature-preview" src="data:image/png;base64,<?php echo base64_encode($prepared_sig_blob); ?>" alt="Signature" style="max-height:56px;display:block;margin:0 auto;object-fit:contain;" />
-                                            </div>
-                                        <?php else: ?>
-                                            <div style="text-align:center;margin-bottom:6px;color:#6c757d;font-size:12px;">No signature</div>
-                                        <?php endif; ?>
+                                        <div id="prepared-signature-block" style="display:none;">
+                                            <?php if (!empty($prepared_sig_blob)): ?>
+                                                <div style="text-align:center;margin-bottom:6px;">
+                                                    <img id="prepared-signature-preview" src="data:image/png;base64,<?php echo base64_encode($prepared_sig_blob); ?>" alt="Signature" style="max-height:56px;display:block;margin:0 auto;object-fit:contain;" />
+                                                </div>
+                                            <?php else: ?>
+                                                <div id="prepared-signature-missing" style="text-align:center;margin-bottom:6px;color:#6c757d;font-size:12px;">No signature</div>
+                                            <?php endif; ?>
+                                        </div>
                                         <input type="text" id="preparedInput" class="preparedInput" name="preparedInput" value="" readonly>
                                         <input type="hidden" id="prepared_signature_ref" name="prepared_signature" value="<?php echo htmlspecialchars($current_user_id ?? ''); ?>">
                                     </div>
@@ -620,6 +622,8 @@ if (isset($_SESSION['user_type'])) {
             }
             document.addEventListener('DOMContentLoaded', function() {
                 var processButton = document.getElementById('process');
+                var preparedInput = document.getElementById('preparedInput');
+                var preparedSignatureBlock = document.getElementById('prepared-signature-block');
                 var amountInput = document.getElementById('amount');
                 var addAmountInput = document.getElementById('addAmount');
                 var numberOfDaysInput = document.getElementById('multiplyAmount');
@@ -711,7 +715,7 @@ if (isset($_SESSION['user_type'])) {
                         amountMinusWTax += addAmount * numOfDays;
                     }
 
-                    var userName = "<?php echo $_SESSION['user_name'] ?? $_SESSION['admin_name']; ?>"; // Retrieve the username from PHP session
+                    var userName = <?php echo json_encode($_SESSION['user_name'] ?? $_SESSION['admin_name'] ?? ''); ?>; // Retrieve the current user's full name from session
                     var fromDateInput = document.getElementById('from-date');
                     var fromDateDisplay = document.getElementById('from-date-range')
                     var toDateInput = document.getElementById('to-date');
@@ -722,7 +726,12 @@ if (isset($_SESSION['user_type'])) {
                     var serviceChargeValue = serviceChargeInput.value;
                     var transactionNumberValue = transactionNumberInput.value;
 
-                    preparedInput.value = userName;
+                    if (preparedInput) {
+                        preparedInput.value = userName;
+                    }
+                    if (preparedSignatureBlock) {
+                        preparedSignatureBlock.style.display = 'block';
+                    }
                     if (formula.value === 'NON-VAT' && formula_withheld.value === 'Yes') {
                         amountDisplay.value = amount.toFixed(2);
                         totalAmountDisplay.value = formatNumber(amount);

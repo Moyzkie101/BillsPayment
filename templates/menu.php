@@ -120,7 +120,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div>
             <?php endif; ?>
 
-        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Post Transaction','BP Settlement Adjustment Entry','BP Settlement Per Bank','BP Report Volume','BP Report EDI','BP Report Transaction Details','BP Report Transaction Summary','BP Report Cancellation','BP Report Balance Sheet'])): ?>
+        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Import Partner Data','BP Post Transaction','BP Settlement Adjustment Entry','BP Settlement Per Bank','BP Report Volume','BP Report EDI','BP Report Transaction Details','BP Report Transaction Summary','BP Report Cancellation','BP Report Balance Sheet'])): ?>
         <!-- Show/Hide Paramount -->
         <div class="onetab" id="para-btn">
             <h6><i class="fa-solid fa-money-bill-wave"></i> Bills Payment Transaction</h6>
@@ -128,7 +128,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <i class="fa-solid fa-chevron-down" id="open-para" style="display: none"></i>
         </div>
 
-        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation'])): ?>
+        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Import Partner Data'])): ?>
         <div class="tabcat" id="para-import-btn" style="display: none;">
             <h6><i class="fa-solid fa-file-import"></i> Import</h6>
             <i class="fa-solid fa-chevron-right" id="closed-para-import" style="display: block"></i>
@@ -137,7 +137,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <?php endif; ?>
 
         <!-- Paramount Import Buttons -->
-        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation'])): ?>
+        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Import Partner Data'])): ?>
         <div class="onetab-sub" id="para-import-nav" style="display: none;">
             <?php if (has_permission('BP Import Transaction')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-transaction.php'">
@@ -147,6 +147,11 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <?php if (has_permission('BP Import Cancellation')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php'">
                 <a href="<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php">Cancellation</a>
+            </div>
+            <?php endif; ?>
+            <?php if (has_permission('BP Import Partner Data')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-partner-data.php'">
+                <a href="<?php echo $base_url; ?>billspayment/import/billspay-partner-data.php">Partner Data</a>
             </div>
             <?php endif; ?>
         </div>

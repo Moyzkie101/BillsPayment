@@ -10,9 +10,6 @@ session_start();
 // Start output buffering so we can safely send HTTP headers later
 if (!ob_get_level()) ob_start();
 
-// Include shared header (scripts/styles used across the app)
-@include_once __DIR__ . '/templates/header.php';
-
 // Handle password change success/error messages FIRST before redirect check
 if(isset($_SESSION['success_message']) || isset($_SESSION['error_message'])){
    // Don't redirect to dashboard if we have messages to show
@@ -24,6 +21,10 @@ if(isset($_SESSION['success_message']) || isset($_SESSION['error_message'])){
       exit();
    }
 }
+
+// Include shared header (scripts/styles used across the app)
+// Keep this after redirect checks to avoid "headers already sent" warnings.
+@include_once __DIR__ . '/templates/header.php';
 
 echo '<script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>';
 echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>';

@@ -29,11 +29,6 @@
                     "icon": "check_circle"
                 },
                 {
-                    "key": "BP Import Partner Data",
-                    "label": "BP Import Partner Data",
-                    "icon": "check_circle"
-                },
-                {
                     "key": "BP Import Transaction",
                     "label": "BP Import Transaction",
                     "icon": "check_circle"
@@ -226,7 +221,6 @@
             "access_level": 2,
             "permissions": [
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -246,7 +240,6 @@
             "access_level": 3,
             "permissions": [
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -293,7 +286,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -318,7 +310,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -358,7 +349,6 @@
             "access_level": 10,
             "permissions": [
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -380,7 +370,6 @@
             "access_level": 11,
             "permissions": [
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -433,7 +422,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -460,7 +448,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -513,7 +500,6 @@
             "permissions": [
                 "Accounts",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -540,7 +526,6 @@
             "permissions": [
                 "Accounts",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -608,7 +593,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -640,7 +624,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -701,7 +684,6 @@
             "permissions": [
                 "Accounts",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -730,7 +712,6 @@
             "permissions": [
                 "Accounts",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -804,7 +785,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -838,7 +818,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -888,7 +867,6 @@
             "access_level": 34,
             "permissions": [
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -911,7 +889,6 @@
             "access_level": 35,
             "permissions": [
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -967,7 +944,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -995,7 +971,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1044,7 +1019,6 @@
             "access_level": 42,
             "permissions": [
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1069,7 +1043,6 @@
             "access_level": 43,
             "permissions": [
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1131,7 +1104,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1161,7 +1133,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1223,7 +1194,6 @@
             "permissions": [
                 "Accounts",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1253,7 +1223,6 @@
             "permissions": [
                 "Accounts",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1330,7 +1299,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1365,7 +1333,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1435,7 +1402,6 @@
             "permissions": [
                 "Accounts",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1467,7 +1433,6 @@
             "permissions": [
                 "Accounts",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1550,7 +1515,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1587,7 +1551,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",
@@ -1626,7 +1589,6 @@
                 "BI Create Manual",
                 "BI Report Billing Invoice",
                 "BP Import Cancellation",
-                "BP Import Partner Data",
                 "BP Import Transaction",
                 "BP Post Transaction",
                 "BP Report Balance Sheet",

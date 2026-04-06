@@ -12,6 +12,7 @@
         "BI Create Manual",
         "BI Report Billing Invoice",
         "BP Import Cancellation",
+        "BP Import Partner Data",
         "BP Import Transaction",
         "BP Post Transaction",
         "BP Report Balance Sheet",
