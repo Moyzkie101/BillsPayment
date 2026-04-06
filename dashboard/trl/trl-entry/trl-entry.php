@@ -566,8 +566,24 @@ unset($_SESSION['trl_entry_flash']);
                         // restore stored reason for this newly selected type if present
                         try {
                             var cur = sel.value || '';
+                            // request types that auto-generate a reason
+                            var autoTypes = {
+                                'OVERSTATED AMOUNT': 1,
+                                'CANCELLED TRANSACTION': 1
+                            };
+
                             if (reasonEl && reasonEl._perType && Object.prototype.hasOwnProperty.call(reasonEl._perType, cur)) {
+                                // restore previously stored value for this type
                                 reasonEl.value = reasonEl._perType[cur] || '';
+                            } else {
+                                // If this is an auto-generated type, let computeOverstatedFields handle it.
+                                // Otherwise clear the reason so it doesn't carry over from the previous selection.
+                                if (!(cur in autoTypes)) {
+                                    if (reasonEl) {
+                                        reasonEl.value = '';
+                                        try { reasonEl.removeAttribute('data-last-auto'); } catch (e) {}
+                                    }
+                                }
                             }
                         } catch (e) {
                             // ignore
