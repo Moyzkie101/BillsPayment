@@ -142,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cancelled_date = $_POST['cancel_date'];
 
         // Update the status of the selected row to "Cancelled" and set cancelled_by value
-        $updateQuery = "UPDATE soa_transaction SET status = 'Cancelled', reasonOf_cancellation = '$reasonOf_cancellation', cancelled_by = '$cancelledBy', cancelled_date = '$cancelled_date' WHERE reference_number = '$referenceNumber' AND status = ''";
+        $updateQuery = "UPDATE soa_transaction SET status = 'Cancelled', reasonOf_cancellation = '$reasonOf_cancellation', cancelled_by = '$cancelledBy', cancelled_date = '$cancelled_date' WHERE reference_number = '$referenceNumber'";
         if (mysqli_query($conn, $updateQuery)) {
             $successMessage = "Selected row(s) updated to 'Cancelled Status'\<br>";
             $successMessage .= " Cancelled by: " . $cancelledBy;
@@ -1531,10 +1531,14 @@ if (isset($_POST['EditConfirmBtn'])) {
 
         document.getElementById('msgCloseBtn').addEventListener('click', function () {
             document.getElementById('messageModal').classList.remove('active');
+            try { location.replace(window.location.pathname); } catch (err) { console.warn('Navigation failed', err); }
         });
 
         document.getElementById('messageModal').addEventListener('click', function (e) {
-            if (e.target === this) this.classList.remove('active');
+            if (e.target === this) {
+                this.classList.remove('active');
+                try { location.replace(window.location.pathname); } catch (err) { console.warn('Navigation failed', err); }
+            }
         });
 
         /* ================================================================

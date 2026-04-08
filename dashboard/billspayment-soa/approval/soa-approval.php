@@ -802,10 +802,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         document.getElementById('msgCloseBtn').addEventListener('click', function () {
             document.getElementById('messageModal').classList.remove('active');
+            // navigate to the same page (replace history) to avoid re-submitting POST
+            try { location.replace(window.location.pathname); } catch (err) { console.warn('Navigation failed', err); }
         });
 
         document.getElementById('messageModal').addEventListener('click', function (e) {
-            if (e.target === this) this.classList.remove('active');
+            if (e.target === this) {
+                this.classList.remove('active');
+                try { location.replace(window.location.pathname); } catch (err) { console.warn('Navigation failed', err); }
+            }
         });
 
         document.addEventListener('DOMContentLoaded', function () {

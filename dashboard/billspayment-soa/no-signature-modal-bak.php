@@ -6,20 +6,10 @@
 // Do not call session_start() here; including pages already start the session.
 @include_once __DIR__ . '/../../templates/middleware.php';
 
-// IDs that are allowed to proceed without a signature
-$exemptIds = [
-    '1013333',
-    '94005055'
-];
-
 $showModal = false;
 if (function_exists('resolve_user_identifier')) {
     $current_user = resolve_user_identifier();
     if (!empty($current_user) && isset($GLOBALS['conn'])) {
-        // if current user is exempt, do not show the modal
-        if (in_array((string)$current_user, $exemptIds, true)) {
-            $showModal = false;
-        } else {
         $sig = null;
         $stmt = $GLOBALS['conn']->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");
         if ($stmt) {
@@ -29,9 +19,9 @@ if (function_exists('resolve_user_identifier')) {
             if ($stmt->fetch()) $sig = $sig_blob;
             $stmt->close();
         }
+
         if (empty($sig)) {
             $showModal = true;
-        }
         }
     }
 }

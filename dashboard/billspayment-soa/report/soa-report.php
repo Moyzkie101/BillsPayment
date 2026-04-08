@@ -915,16 +915,30 @@ function showSOADetails(row) {
     const approvedForElement = document.getElementById('modal-approved-for');
     
     if (preparedElectronicSig) {
-        if (preparedSignature && preparedSignature.indexOf('data:image/') === 0) {
+        if (preparedSignature && preparedSignature.indexOf('data:image/') === 1) {
             preparedElectronicSig.innerHTML = '<img src="' + preparedSignature + '" alt="Prepared signature" style="max-height:72px;object-fit:contain;display:block;margin:0;" />';
         } else {
             preparedElectronicSig.textContent = preparedSignature || '';
         }
     }
     if (preparedElectronicDate) preparedElectronicDate.textContent = formatSignatureDate(preparedDateSignature);
-    if (reviewedElectronicSig) reviewedElectronicSig.textContent = reviewedSignature || '';
+    if (reviewedElectronicSig) {
+        if (reviewedSignature && reviewedSignature.indexOf('data:image/') === 1) {
+            reviewedElectronicSig.innerHTML = '<img src="' + reviewedSignature + '" alt="Reviewed signature" style="max-height:72px;object-fit:contain;display:block;margin:0;" />';
+        } else {
+            reviewedElectronicSig.textContent = reviewedSignature || '';
+        }
+    }
     if (reviewedElectronicDate) reviewedElectronicDate.textContent = formatSignatureDate(reviewedDateSignature);
-    if (approvedElectronicSig) approvedElectronicSig.textContent = notedSignature || '';
+    if (approvedElectronicSig) {
+        if (notedSignature && notedSignature.indexOf('data:image/') === 0) {
+            approvedElectronicSig.innerHTML = '<img src="' + notedSignature + '" alt="Approved signature" style="max-height:72px;object-fit:contain;display:block;margin:0;" />';
+        } else if (notedSignature === 'electronically signed') {
+            approvedElectronicSig.textContent = 'electronically signed';
+        } else {
+            approvedElectronicSig.textContent = notedSignature || '';
+        }
+    }
     if (approvedElectronicDate) approvedElectronicDate.textContent = formatSignatureDate(notedDateSignature);
     if (approvedForElement) approvedForElement.textContent = notedFor || '';
     
