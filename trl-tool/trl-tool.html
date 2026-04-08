@@ -49,8 +49,9 @@
               </select>
 
               <label for="billerSelect">Wrong Biller</label>
-              <input list="billerList" id="billerSelect" class="input" placeholder="All" />
-              <datalist id="billerList"></datalist>
+              <select id="billerSelect" class="input">
+                <option value="All">All</option>
+              </select>
               <button id="generateBtn" class="primary">Generate</button>
               <button id="clearBtn" class="ghost" onclick="location.reload()">Reset</button>
             </div>

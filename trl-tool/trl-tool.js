@@ -1,7 +1,50 @@
 // TRL Tool: generate sample TRL Excel files
 (async function(){
-  const dataRes = await fetch('trl-tool.json');
-  const billers = await dataRes.json();
+  // Robust loader for `trl-tool.json`: try several candidate URLs and fall back to empty array.
+  async function loadBillersFromCandidates() {
+    const tried = [];
+    const candidates = [
+      'trl-tool.json',
+      './trl-tool.json'
+    ];
+    try {
+      const pathbase = (location.pathname || '').substring(0, (location.pathname || '').lastIndexOf('/') + 1);
+      if (pathbase) candidates.push(pathbase + 'trl-tool.json');
+      if (window.location && window.location.origin) candidates.push(window.location.origin + pathbase + 'trl-tool.json');
+    } catch (e) {}
+
+    for (const url of candidates) {
+      try {
+        tried.push(url);
+        const res = await fetch(url);
+        if (!res.ok) {
+          console.warn('trl-tool.json fetch not OK:', url, res.status);
+          continue;
+        }
+        const j = await res.json();
+        // accept array or object with `data` array
+        if (Array.isArray(j)) {
+          console.info('Loaded billers from', url);
+          return j;
+        }
+        if (j && Array.isArray(j.data)) {
+          console.info('Loaded billers.data from', url);
+          return j.data;
+        }
+        console.warn('trl-tool.json did not contain expected array at', url);
+      } catch (err) {
+        console.warn('Failed to fetch trl-tool.json from', url, err);
+      }
+    }
+    console.error('Unable to load trl-tool.json. Tried:', tried);
+    return [];
+  }
+
+  if (location.protocol === 'file:') {
+    console.warn('Page opened via file:// — fetching local JSON may be blocked. Serve via a local HTTP server (XAMPP) and open via http://localhost/...');
+  }
+
+  const billers = await loadBillersFromCandidates();
   // load branches for PAYMENT BRANCH fields
   let branches = [];
   try {
@@ -25,7 +68,7 @@
     downloadBtn: document.getElementById('downloadBtn'),
     fileNameInput: document.getElementById('fileName'),
     billerSelect: document.getElementById('billerSelect'),
-    billerList: document.getElementById('billerList')
+    billerList: document.getElementById('billerList') // may be null now that we use a select
   };
   dom.typeSelect = document.getElementById('typeSelect');
   // allowed Type of Request values
@@ -224,7 +267,14 @@
     const row = {
       'TRANS. DATE/TIME': formatDate(new Date(Date.now() - randInt(0,60*60*24*365)*1000)),
       'REF. NO.': randomRef(),
-      'WRONG BILLER ID': wrong.id,
+      // Use numeric prefix for ID when possible (e.g., "1028-01" -> "1028")
+      'WRONG BILLER ID': (function(id){
+        try {
+          var s = String(id || '');
+          var m = s.match(/^(\d+)/);
+          return m ? m[1] : s;
+        } catch(e) { return String(id || ''); }
+      })(wrong.id),
       'BILLER NAME': wrong.name,
       'ACCOUNT NO.': randomAccountNo(),
       'NAME': randomCustomerName(),
@@ -236,7 +286,13 @@
 
     // Show type-specific supplemental columns
     if (type === 'WRONG BILLER') {
-      row['CORRECT BILLER ID'] = correct.id;
+      row['CORRECT BILLER ID'] = (function(id){
+        try {
+          var s = String(id || '');
+          var m = s.match(/^(\d+)/);
+          return m ? m[1] : s;
+        } catch(e) { return String(id || ''); }
+      })(correct.id);
       row['CORRECT BILLER NAME'] = correct.name;
     }
     if (type === 'OVERSTATED AMOUNT') {
@@ -252,7 +308,7 @@
     // If the user selected "All", always include supplemental columns (empty when not applicable)
     if (showAll) {
       // correct biller fields belong only to WRONG BILLER rows
-      row['CORRECT BILLER ID'] = (type === 'WRONG BILLER') ? (correct.id || '') : '';
+      row['CORRECT BILLER ID'] = (type === 'WRONG BILLER') ? (function(id){ try { var s=String(id||''); var m=s.match(/^(\d+)/); return m?m[1]:s; } catch(e){return String(id||'');} })(correct.id) : '';
       row['CORRECT BILLER NAME'] = (type === 'WRONG BILLER') ? (correct.name || '') : '';
       // ensure amount-related supplemental columns exist (empty string when not applicable)
       row['WRONG AMOUNT'] = (reportedVal !== null && reportedVal !== undefined) ? fmtAmt(reportedVal) : (row['WRONG AMOUNT'] !== undefined ? row['WRONG AMOUNT'] : '');
@@ -390,33 +446,60 @@
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   }
 
-  // Fill datalist options (include an 'All' pseudo-option as placeholder)
+  // Fill biller select (include an 'All' pseudo-option as placeholder)
   (function populateBillers(){
-    var optAll = document.createElement('option');
-    optAll.value = 'All';
-    dom.billerList.appendChild(optAll);
+    const targetList = dom.billerList || dom.billerSelect;
+    if (!targetList) return;
+
+    // ensure 'All' exists for select as first option
+    if (dom.billerSelect && dom.billerSelect.tagName === 'SELECT') {
+      // keep existing All option already present in HTML
+    } else if (dom.billerList) {
+      const optAll = document.createElement('option');
+      optAll.value = 'All';
+      dom.billerList.appendChild(optAll);
+    }
+
     billers.forEach(function(b){
       var o = document.createElement('option');
-      // display as "<id> - <name>" so user can find by id or name
-      o.value = b.id + ' - ' + b.name;
-      dom.billerList.appendChild(o);
+      o.value = b.name || '';
+      // for <select>, also show text
+      if (targetList.tagName === 'SELECT') o.textContent = b.name || '';
+      targetList.appendChild(o);
     });
     // default placeholder
     dom.billerSelect.value = 'All';
     selectedWrongBiller = null;
-    dom.billerSelect.addEventListener('input', function(e){
-      var v = (e.target.value || '').trim();
+
+    function handleBillerChange(e){
+      var v = (dom.billerSelect.value || '').trim();
       if (!v || v.toLowerCase() === 'all') {
         selectedWrongBiller = null;
         dom.fileNameInput.value = 'trl-sample-all.xlsx';
         return;
       }
 
-      // try to parse id at start like "123 - NAME"
-      var m = v.match(/^\s*(\d+)\s*-\s*(.+)$/);
+      // 1) exact name match (case-insensitive)
+      var foundByExactName = billers.find(function(b){ return b.name && b.name.toLowerCase() === v.toLowerCase(); });
+      if (foundByExactName) {
+        selectedWrongBiller = foundByExactName;
+        dom.fileNameInput.value = 'trl-sample-' + sanitizeFileName(foundByExactName.name) + '.xlsx';
+        return;
+      }
+
+      // 2) try id string match like "1028-01"
+      var foundById = billers.find(function(b){ return String(b.id) === v; });
+      if (foundById) {
+        selectedWrongBiller = foundById;
+        dom.fileNameInput.value = 'trl-sample-' + sanitizeFileName(foundById.name) + '.xlsx';
+        return;
+      }
+
+      // 3) try to parse "id - name" in case someone typed it manually
+      var m = v.match(/^\s*(.*?)\s*-\s*(.+)$/);
       if (m) {
-        var id = parseInt(m[1],10);
-        var found = billers.find(function(b){ return Number(b.id) === id; });
+        var idStr = (m[1] || '').trim();
+        var found = billers.find(function(b){ return String(b.id) === idStr; });
         if (found) {
           selectedWrongBiller = found;
           dom.fileNameInput.value = 'trl-sample-' + sanitizeFileName(found.name) + '.xlsx';
@@ -424,8 +507,8 @@
         }
       }
 
-      // try to match by name (case-insensitive contains)
-      var foundByName = billers.find(function(b){ return b.name.toLowerCase().indexOf(v.toLowerCase()) !== -1; });
+      // 4) try contains name (case-insensitive)
+      var foundByName = billers.find(function(b){ return b.name && b.name.toLowerCase().indexOf(v.toLowerCase()) !== -1; });
       if (foundByName) {
         selectedWrongBiller = foundByName;
         dom.fileNameInput.value = 'trl-sample-' + sanitizeFileName(foundByName.name) + '.xlsx';
@@ -435,7 +518,11 @@
       // fallback to All
       selectedWrongBiller = null;
       dom.fileNameInput.value = 'trl-sample-all.xlsx';
-    });
+    }
+
+    // attach handler to both input and change to cover both input/select use
+    dom.billerSelect.addEventListener('change', handleBillerChange);
+    dom.billerSelect.addEventListener('input', handleBillerChange);
   })();
 
   dom.downloadBtn.addEventListener('click', function(){
