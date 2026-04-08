@@ -31,6 +31,9 @@ $yearColumns = [];
 $rowsBySubBiller = [];
 $totalsByYear = [];
 $grandTotal = 0.0;
+$exportUrl = $selectedPartnerId !== ''
+    ? ('controllers/trl-report-excel.php?partner_id=' . rawurlencode($selectedPartnerId))
+    : '';
 
 if ($selectedPartnerId !== '') {
     $sql = "
@@ -93,22 +96,34 @@ ksort($rowsBySubBiller, SORT_NATURAL | SORT_FLAG_CASE);
 
 <div class="trl-summary-card">
     <div class="trl-summary-head">
-        <h3>Summary Mode</h3>
-        <p>Select a partner to view yearly receivables by mapped sub-biller.</p>
+        <h3>Summary Details</h3>
+        <p>Choose a partner to view yearly received amounts for each biller mapped to that partner.</p>
     </div>
 
-    <form method="get" class="trl-summary-filters">
-        <input type="hidden" name="mode" value="summary">
-        <label for="partner_id">Partner</label>
-        <select id="partner_id" name="partner_id" class="trl-summary-select" onchange="this.form.submit()">
-            <option value="">Select Partner</option>
-            <?php foreach ($partners as $pid => $pname): ?>
-                <option value="<?php echo htmlspecialchars($pid); ?>" <?php echo $selectedPartnerId === (string) $pid ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars($pname); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-    </form>
+    <div class="trl-summary-filter-row">
+        <form method="get" class="trl-summary-filters">
+            <input type="hidden" name="mode" value="summary">
+            <label for="partner_id">Partner</label>
+            <select id="partner_id" name="partner_id" class="trl-summary-select" onchange="this.form.submit()">
+                <option value="">Select Partner</option>
+                <?php foreach ($partners as $pid => $pname): ?>
+                    <option value="<?php echo htmlspecialchars($pid); ?>" <?php echo $selectedPartnerId === (string) $pid ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($pname); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </form>
+
+        <div class="trl-summary-actions">
+            <a
+                href="<?php echo htmlspecialchars($exportUrl !== '' ? $exportUrl : '#'); ?>"
+                id="trlExportBtn"
+                class="btn btn-danger trl-export-btn <?php echo $selectedPartnerId === '' ? 'is-disabled' : ''; ?>"
+                data-partner="<?php echo htmlspecialchars($selectedPartnerId); ?>"
+                data-partner-name="<?php echo htmlspecialchars($selectedPartnerName); ?>"
+            >Export Excel</a>
+        </div>
+    </div>
 
     <?php if ($selectedPartnerId === ''): ?>
         <div class="trl-summary-empty">Choose a partner to generate the Summary report table.</div>
@@ -166,3 +181,49 @@ ksort($rowsBySubBiller, SORT_NATURAL | SORT_FLAG_CASE);
         </div>
     <?php endif; ?>
 </div>
+
+<script>
+(function() {
+    var btn = document.getElementById('trlExportBtn');
+    if (!btn) return;
+
+    btn.addEventListener('click', function(e) {
+        var partnerId = (btn.getAttribute('data-partner') || '').trim();
+        var partnerName = (btn.getAttribute('data-partner-name') || 'selected partner').trim();
+        var href = btn.getAttribute('href') || '#';
+
+        if (!partnerId || href === '#') {
+            e.preventDefault();
+            if (window.Swal) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Select Partner First',
+                    text: 'Please choose a partner before exporting the report.'
+                });
+            }
+            return;
+        }
+
+        e.preventDefault();
+        if (!window.Swal) {
+            window.location.href = href;
+            return;
+        }
+
+        Swal.fire({
+            icon: 'question',
+            title: 'Export Report?',
+            html: 'Export Excel report for <b>' + String(partnerName)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;') + '</b>?',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, Export',
+            cancelButtonText: 'Cancel'
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                window.location.href = href;
+            }
+        });
+    });
+})();
+</script>
