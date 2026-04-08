@@ -41,8 +41,9 @@ if ($selectedPartnerId !== '') {
         FROM mldb.trl t
         INNER JOIN mldb.subbiller s
             ON CAST(t.wrong_biller_id AS CHAR) = CAST(s.sub_billers_id AS CHAR)
-        WHERE s.partner_id_kpx = ?
-          AND t.transfer_datetime IS NOT NULL
+                WHERE s.partner_id_kpx = ?
+                    AND t.transfer_datetime IS NOT NULL
+                    AND t.status IS NULL
         GROUP BY COALESCE(NULLIF(TRIM(s.sub_billers_name), ''), 'UNKNOWN BILLER'), YEAR(t.transfer_datetime)
         ORDER BY sub_biller_name ASC, report_year ASC
     ";

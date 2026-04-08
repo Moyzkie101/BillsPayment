@@ -152,6 +152,18 @@
     return `${yyyy}-${mm}-${dd} ${hhs}:${mins}:${secs} ${ampm}`;
   }
 
+  // Generate a random Date object with year between minYear and maxYear (inclusive)
+  function randomDateBetweenYears(minYear, maxYear) {
+    var y = randInt(minYear, maxYear);
+    var monthIdx = randInt(0, 11); // 0-based month index
+    var daysInMonth = new Date(y, monthIdx + 1, 0).getDate();
+    var day = randInt(1, daysInMonth);
+    var hour = randInt(0, 23);
+    var minute = randInt(0, 59);
+    var second = randInt(0, 59);
+    return new Date(y, monthIdx, day, hour, minute, second);
+  }
+
   // currently selected wrong biller; null => use random per-row (All)
   var selectedWrongBiller = null;
   // selected request type from dropdown; empty string = default (Select request type)
@@ -265,7 +277,8 @@
 
     // Build row with conditional columns based on selectedRequestType
     const row = {
-      'TRANS. DATE/TIME': formatDate(new Date(Date.now() - randInt(0,60*60*24*365)*1000)),
+      // random transfer datetime between 2015 and 2026 (inclusive)
+      'TRANS. DATE/TIME': formatDate(randomDateBetweenYears(2015, 2026)),
       'REF. NO.': randomRef(),
       // Use numeric prefix for ID when possible (e.g., "1028-01" -> "1028")
       'WRONG BILLER ID': (function(id){
