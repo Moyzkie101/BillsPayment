@@ -63,9 +63,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['confirmBtn'])) {
         $referenceNumber = $_POST['reference'];
         $reviewedBy = $_SESSION['user_name'];
-        $reviewedSignature = 'electronically signed';
+        // try to fetch the actual signature blob for the reviewer
+        $reviewerId = function_exists('resolve_user_identifier') ? resolve_user_identifier() : null;
+        $reviewedSignatureBlob = null;
+        if (!empty($reviewerId)) {
+            $sigStmt = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");
+            if ($sigStmt) {
+                $sigStmt->bind_param('s', $reviewerId);
+                $sigStmt->execute();
+                $sigStmt->bind_result($sig_blob);
+                if ($sigStmt->fetch()) {
+                    $reviewedSignatureBlob = $sig_blob;
+                }
+                $sigStmt->close();
+            }
+        }
         $currentDate = date("m-d-Y"); // Get the current date
         $reviewedFix_signature = 'ELVIE CILLO';
+        // store the reviewer id (if available) instead of the large base64 string
+        $reviewedSignature = $reviewerId ? $reviewerId : ($reviewedSignatureBlob ? 'data:image/png;base64,' . base64_encode($reviewedSignatureBlob) : 'electronically signed');
 
         // Retrieve prepared_by value from the database
         $preparedByQuery = "SELECT prepared_by FROM soa_transaction WHERE reference_number = '$referenceNumber'";
@@ -78,12 +94,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errorMessage = "Please assign another person to review.";
             displayModal($errorMessage, true);
         } else {
-            $updateQuery = "UPDATE soa_transaction SET status = 'Reviewed', reviewed_signature = '$reviewedSignature', reviewed_by = '$reviewedBy', reviewedDate_signature = '$currentDate', reviewedFix_signature = '$reviewedFix_signature' WHERE reference_number = '$referenceNumber'";
-            if (mysqli_query($conn, $updateQuery)) {
-                $successMessage = "Selected row(s) updated to 'Reviewed'.";
-                displayModal($successMessage);
+            $stmt = $conn->prepare("UPDATE soa_transaction SET status = 'Reviewed', reviewed_signature = ?, reviewed_by = ?, reviewedDate_signature = ?, reviewedFix_signature = ? WHERE reference_number = ?");
+            if ($stmt) {
+                $stmt->bind_param('sssss', $reviewedSignature, $reviewedBy, $currentDate, $reviewedFix_signature, $referenceNumber);
+                if ($stmt->execute()) {
+                    $successMessage = "Selected row(s) updated to 'Reviewed'.";
+                    displayModal($successMessage);
+                } else {
+                    $errorMessage = "Error updating transaction: " . $stmt->error;
+                    displayModal($errorMessage, true);
+                }
+                $stmt->close();
             } else {
-                $errorMessage = "Error updating transaction: " . mysqli_error($conn);
+                $errorMessage = "Failed to prepare update statement: " . mysqli_error($conn);
                 displayModal($errorMessage, true);
             }
         }
@@ -93,9 +116,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Process the selected rows
             $selectedRows = $_POST['selectedRows'];
             $reviewedBy = $_SESSION['user_name'];
-            $reviewedSignature = 'electronically signed';
+            // attempt to get reviewer signature blob (reuse logic)
+            $reviewerId = function_exists('resolve_user_identifier') ? resolve_user_identifier() : null;
+            $reviewedSignatureBlob = null;
+            if (!empty($reviewerId)) {
+                $sigStmt = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");
+                if ($sigStmt) {
+                    $sigStmt->bind_param('s', $reviewerId);
+                    $sigStmt->execute();
+                    $sigStmt->bind_result($sig_blob);
+                    if ($sigStmt->fetch()) {
+                        $reviewedSignatureBlob = $sig_blob;
+                    }
+                    $sigStmt->close();
+                }
+            }
             $currentDate = date("m-d-Y"); // Get the current date
             $reviewedFix_signature = 'ELVIE CILLO';
+            // store reviewer id when possible to avoid oversized data in the signature column
+            $reviewedSignature = $reviewerId ? $reviewerId : ($reviewedSignatureBlob ? 'data:image/png;base64,' . base64_encode($reviewedSignatureBlob) : 'electronically signed');
 
             // Check if the prepared_by and reviewed_by have the same value for any selected row
             $selectQuery = "SELECT prepared_by FROM soa_transaction WHERE reference_number IN ('" . implode("','", $selectedRows) . "') AND prepared_by = '$reviewedBy'";
@@ -105,12 +144,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 displayModal($errorMessage, true);
             } else {
                 // Update the status of selected rows to "Reviewed"
-                $updateQuery = "UPDATE soa_transaction SET status = 'Reviewed', reviewed_signature = '$reviewedSignature', reviewed_by = '$reviewedBy', reviewedDate_signature = '$currentDate', reviewedFix_signature = '$reviewedFix_signature' WHERE reference_number IN ('" . implode("','", $selectedRows) . "')";
-                if (mysqli_query($conn, $updateQuery)) {
-                    $successMessage = "Selected row(s) updated to 'Reviewed'.";
-                    displayModal($successMessage);
+                // update each selected row using prepared statement to safely store signature
+                $stmt = $conn->prepare("UPDATE soa_transaction SET status = 'Reviewed', reviewed_signature = ?, reviewed_by = ?, reviewedDate_signature = ?, reviewedFix_signature = ? WHERE reference_number = ?");
+                if ($stmt) {
+                    $failed = false;
+                    foreach ($selectedRows as $ref) {
+                        $stmt->bind_param('sssss', $reviewedSignature, $reviewedBy, $currentDate, $reviewedFix_signature, $ref);
+                        if (!$stmt->execute()) {
+                            $failed = true;
+                            break;
+                        }
+                    }
+                    $stmt->close();
+                    if (!$failed) {
+                        $successMessage = "Selected row(s) updated to 'Reviewed'.";
+                        displayModal($successMessage);
+                    } else {
+                        $errorMessage = "Error updating selected row(s).";
+                        displayModal($errorMessage, true);
+                    }
                 } else {
-                    $errorMessage = "Error updating selected row(s): " . mysqli_error($conn);
+                    $errorMessage = "Failed to prepare update statement: " . mysqli_error($conn);
                     displayModal($errorMessage, true);
                 }
             }
