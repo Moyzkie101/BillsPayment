@@ -361,3 +361,14 @@
         width: 100%;
     }
 }
+
+/* Custom SweetAlert2 popup tweaks for refund review modal */
+.trl-confirm-popup .swal2-title {
+    text-align: left !important;
+}
+.trl-confirm-popup .swal2-html-container {
+    text-align: left !important;
+}
+.trl-confirm-popup .swal2-actions {
+    justify-content: flex-end;
+}
