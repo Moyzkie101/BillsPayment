@@ -131,17 +131,18 @@ if ($selectedPartnerId !== '') {
         <p>List of refunded transactions for the selected partner.</p>
     </div>
 
-    <form method="get" class="trl-summary-filters">
+    <form method="get" class="trl-summary-filters" id="refundedFilterForm">
         <input type="hidden" name="mode" value="refunded">
-        <label for="partner_id">Partner</label>
-        <select id="partner_id" name="partner_id" class="trl-summary-select" onchange="this.form.submit()">
-            <option value="">Select Partner</option>
-            <?php foreach ($partners as $pid => $pname): ?>
-                <option value="<?php echo htmlspecialchars($pid); ?>" <?php echo $selectedPartnerId === (string) $pid ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars($pname); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
+        <label for="partner_id_refunded">Partner</label>
+        <div class="subbiller-dropdown partner-dropdown" id="partnerDropdownRefunded">
+            <button type="button" id="partnerToggleRefunded" class="subbiller-toggle partner-toggle"><?php echo $selectedPartnerName !== '' ? htmlspecialchars($selectedPartnerName) : 'Select Partner'; ?> <i class="fa-solid fa-caret-down" aria-hidden="true"></i></button>
+            <div class="subbiller-list partner-list" id="partnerListRefunded" aria-hidden="true">
+                <?php foreach ($partners as $pid => $pname): ?>
+                    <button type="button" class="partner-item" data-value="<?php echo htmlspecialchars($pid); ?>"><?php echo htmlspecialchars($pname); ?></button>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <input type="hidden" id="partner_id_refunded" name="partner_id" value="<?php echo htmlspecialchars($selectedPartnerId); ?>">
     </form>
 
     <?php if ($selectedPartnerId === ''): ?>
@@ -202,4 +203,35 @@ if ($selectedPartnerId !== '') {
         </div>
     <?php endif; ?>
 </div>
+
+<script>
+(function() {
+    // Partner dropdown for Refunded (custom UI)
+    var pToggle = document.getElementById('partnerToggleRefunded');
+    var pList = document.getElementById('partnerListRefunded');
+    var pInput = document.getElementById('partner_id_refunded');
+    var pForm = document.getElementById('refundedFilterForm');
+
+    if (pToggle && pList && pInput) {
+        pToggle.addEventListener('click', function(e) {
+            pList.classList.toggle('open');
+            e.stopPropagation();
+        });
+        document.addEventListener('click', function(ev) {
+            if (pList.classList.contains('open') && !pList.contains(ev.target) && !pToggle.contains(ev.target)) {
+                pList.classList.remove('open');
+            }
+        });
+        var pItems = pList.querySelectorAll('.partner-item');
+        pItems.forEach(function(it) {
+            it.addEventListener('click', function() {
+                var val = it.getAttribute('data-value') || '';
+                pInput.value = val;
+                pToggle.innerHTML = it.textContent + ' <i class="fa-solid fa-caret-down" aria-hidden="true"></i>';
+                if (pForm) pForm.submit();
+            });
+        });
+    }
+})();
+</script>
 

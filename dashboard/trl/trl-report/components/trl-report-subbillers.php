@@ -63,10 +63,8 @@ if (!empty($_GET['subbiller']) && is_array($_GET['subbiller'])) {
     }
 }
 
-// Default to all only when the user hasn't explicitly submitted the filter form
-if (!$applyClicked && empty($selectedSub) && !empty($subbillers)) {
-    $selectedSub = array_keys($subbillers);
-}
+// Do not default to selecting all sub-billers. Let the user choose explicitly.
+// (If the user submits the form with no selection, we respect the empty selection.)
 
 // Build data (similar to summary) filtered by selected subbillers
 $yearColumns = [];
@@ -134,14 +132,12 @@ $yearColumns = array_keys($yearColumns);
 sort($yearColumns);
 ksort($rowsBySubBiller, SORT_NATURAL | SORT_FLAG_CASE);
 
-// build export URL base (will append include_summary flag later)
+// build export URL base (only when sub-billers are explicitly selected)
 $exportBase = '';
-if ($selectedPartnerId !== '') {
+if ($selectedPartnerId !== '' && !empty($selectedSub)) {
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $baseDir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
     $exportBase = $scheme . '://' . $_SERVER['HTTP_HOST'] . $baseDir . '/controllers/trl-report-excel-subbiler.php?partner_id=' . rawurlencode($selectedPartnerId);
-}
-if (!empty($selectedSub)) {
     $exportBase .= ($exportBase === '' ? '?' : '&') . 'subbiller_ids=' . rawurlencode(implode(',', $selectedSub));
 }
 
@@ -156,15 +152,16 @@ if (!empty($selectedSub)) {
     <div class="trl-subbillers-filter-row">
         <form method="get" class="trl-subbillers-filters" id="subbillerFilterForm">
             <input type="hidden" name="mode" value="subbillers">
-            <label for="partner_id">Partner</label>
-            <select id="partner_id" name="partner_id" class="trl-summary-select" onchange="this.form.submit()">
-                <option value="">Select Partner</option>
-                <?php foreach ($partners as $pid => $pname): ?>
-                    <option value="<?php echo htmlspecialchars($pid); ?>" <?php echo $selectedPartnerId === (string) $pid ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($pname); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
+            <label for="partner_id_sub">Partner</label>
+            <div class="subbiller-dropdown partner-dropdown" id="partnerDropdownSub">
+                <button type="button" id="partnerToggleSub" class="subbiller-toggle partner-toggle"><?php echo $selectedPartnerName !== '' ? htmlspecialchars($selectedPartnerName) : 'Select Partner'; ?> <i class="fa-solid fa-caret-down" aria-hidden="true"></i></button>
+                <div class="subbiller-list partner-list" id="partnerListSub" aria-hidden="true">
+                    <?php foreach ($partners as $pid => $pname): ?>
+                        <button type="button" class="partner-item" data-value="<?php echo htmlspecialchars($pid); ?>"><?php echo htmlspecialchars($pname); ?></button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <input type="hidden" id="partner_id_sub" name="partner_id" value="<?php echo htmlspecialchars($selectedPartnerId); ?>">
 
             <?php if ($selectedPartnerId !== ''): ?>
                 <div class="subbiller-dropdown" id="subbillerDropdown">
@@ -187,7 +184,7 @@ if (!empty($selectedSub)) {
         </form>
 
         <div class="trl-subbillers-actions">
-            <a href="<?php echo htmlspecialchars($exportBase !== '' ? $exportBase : '#'); ?>" id="trlExportSubBtn" class="btn btn-danger <?php echo $selectedPartnerId === '' ? 'is-disabled' : ''; ?>" data-export-base="<?php echo htmlspecialchars($exportBase); ?>" data-partner-name="<?php echo htmlspecialchars($selectedPartnerName); ?>">Export Sub-biller(s)</a>
+            <a href="<?php echo htmlspecialchars($exportBase !== '' ? $exportBase : '#'); ?>" id="trlExportSubBtn" class="btn btn-danger <?php echo ($selectedPartnerId === '' || empty($selectedSub)) ? 'is-disabled' : ''; ?>" data-export-base="<?php echo htmlspecialchars($exportBase); ?>" data-partner-name="<?php echo htmlspecialchars($selectedPartnerName); ?>">Export Sub-biller(s)</a>
         </div>
     </div>
 
@@ -261,9 +258,27 @@ if (!empty($selectedSub)) {
     var toggle = document.getElementById('subbillerToggle');
     var list = document.getElementById('subbillerList');
     var all = document.getElementById('subbiller_all');
-    var partnerSelect = document.getElementById('partner_id');
-    var partnerId = partnerSelect ? partnerSelect.value : '';
+    var partnerInput = document.getElementById('partner_id_sub');
+    var partnerId = partnerInput ? partnerInput.value : '';
     var storageKey = 'trl_subbiller_selected_' + partnerId;
+
+    // Partner dropdown behavior (subbillers panel)
+    var pToggle = document.getElementById('partnerToggleSub');
+    var pList = document.getElementById('partnerListSub');
+    var pForm = document.getElementById('subbillerFilterForm');
+    if (pToggle && pList && partnerInput) {
+        pToggle.addEventListener('click', function(e){ pList.classList.toggle('open'); e.stopPropagation(); });
+        document.addEventListener('click', function(ev){ if (pList.classList.contains('open') && !pList.contains(ev.target) && !pToggle.contains(ev.target)) { pList.classList.remove('open'); } });
+        var pItems = pList.querySelectorAll('.partner-item');
+        pItems.forEach(function(it){
+            it.addEventListener('click', function(){
+                var val = it.getAttribute('data-value') || '';
+                partnerInput.value = val;
+                pToggle.innerHTML = it.textContent + ' <i class="fa-solid fa-caret-down" aria-hidden="true"></i>';
+                if (pForm) pForm.submit();
+            });
+        });
+    }
 
     function getStored(){ try { var s = localStorage.getItem(storageKey); return s ? JSON.parse(s) : null; } catch(e){ return null; } }
     function setStored(arr){ try { localStorage.setItem(storageKey, JSON.stringify(arr)); } catch(e){} }
@@ -288,16 +303,10 @@ if (!empty($selectedSub)) {
     if (list) {
         var checks = Array.prototype.slice.call(list.querySelectorAll('input[type="checkbox"][name="subbiller[]"]'));
 
-        // If nothing is checked (e.g. browser nav/back), try to restore from localStorage
-        var anyChecked = checks.some(function(c){ return c.checked; });
-        if (!anyChecked) {
-            var stored = getStored();
-            if (stored && Array.isArray(stored) && stored.length) {
-                checks.forEach(function(c){ c.checked = stored.indexOf(c.value) !== -1; });
-            }
-        }
+        // Do NOT auto-restore selections from localStorage on initial load.
+        // Only persist selections when the user actively changes them (below).
 
-        // sync the 'All' checkbox state
+        // sync the 'All' checkbox state (based on actual checked inputs)
         if (all) {
             all.checked = checks.length > 0 && checks.every(function(c){ return c.checked; });
             all.addEventListener('change', function(){ checks.forEach(function(c){ c.checked = all.checked; }); setStored(checks.filter(function(c){return c.checked;}).map(function(x){return x.value;})); updateToggleLabel(); });
@@ -331,7 +340,7 @@ if (!empty($selectedSub)) {
                   '<p><label><input type="checkbox" id="includeSummary"> Include Summary sheet</label></p>',
             showCancelButton: true,
             confirmButtonText: 'Export',
-            preConfirm: function(){ return { include: document.getElementById('includeSummary').checked }; }
+            preConfirm: function(){ return { include: document.getElementById('includeSummary') ? document.getElementById('includeSummary').checked : false }; }
         }).then(function(result){
             if (result.isConfirmed) {
                 var include = result.value && result.value.include ? '1' : '0';

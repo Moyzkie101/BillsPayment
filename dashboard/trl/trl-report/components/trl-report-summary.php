@@ -104,17 +104,18 @@ ksort($rowsBySubBiller, SORT_NATURAL | SORT_FLAG_CASE);
     </div>
 
     <div class="trl-summary-filter-row">
-        <form method="get" class="trl-summary-filters">
+        <form method="get" class="trl-summary-filters" id="summaryFilterForm">
             <input type="hidden" name="mode" value="summary">
-            <label for="partner_id">Partner</label>
-            <select id="partner_id" name="partner_id" class="trl-summary-select" onchange="this.form.submit()">
-                <option value="">Select Partner</option>
-                <?php foreach ($partners as $pid => $pname): ?>
-                    <option value="<?php echo htmlspecialchars($pid); ?>" <?php echo $selectedPartnerId === (string) $pid ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($pname); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
+            <label for="partner_id_summary">Partner</label>
+            <div class="subbiller-dropdown partner-dropdown" id="partnerDropdownSummary">
+                <button type="button" id="partnerToggleSummary" class="subbiller-toggle partner-toggle"><?php echo $selectedPartnerName !== '' ? htmlspecialchars($selectedPartnerName) : 'Select Partner'; ?> <i class="fa-solid fa-caret-down" aria-hidden="true"></i></button>
+                <div class="subbiller-list partner-list" id="partnerListSummary" aria-hidden="true">
+                    <?php foreach ($partners as $pid => $pname): ?>
+                        <button type="button" class="partner-item" data-value="<?php echo htmlspecialchars($pid); ?>"><?php echo htmlspecialchars($pname); ?></button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <input type="hidden" id="partner_id_summary" name="partner_id" value="<?php echo htmlspecialchars($selectedPartnerId); ?>">
         </form>
 
         <div class="trl-summary-actions">
@@ -199,6 +200,33 @@ ksort($rowsBySubBiller, SORT_NATURAL | SORT_FLAG_CASE);
 
 <script>
 (function() {
+    // Partner dropdown for Summary (custom UI)
+    var pToggle = document.getElementById('partnerToggleSummary');
+    var pList = document.getElementById('partnerListSummary');
+    var pInput = document.getElementById('partner_id_summary');
+    var pForm = document.getElementById('summaryFilterForm');
+
+    if (pToggle && pList && pInput) {
+        pToggle.addEventListener('click', function(e) {
+            pList.classList.toggle('open');
+            e.stopPropagation();
+        });
+        document.addEventListener('click', function(ev) {
+            if (pList.classList.contains('open') && !pList.contains(ev.target) && !pToggle.contains(ev.target)) {
+                pList.classList.remove('open');
+            }
+        });
+        var pItems = pList.querySelectorAll('.partner-item');
+        pItems.forEach(function(it) {
+            it.addEventListener('click', function() {
+                var val = it.getAttribute('data-value') || '';
+                pInput.value = val;
+                pToggle.innerHTML = it.textContent + ' <i class="fa-solid fa-caret-down" aria-hidden="true"></i>';
+                if (pForm) pForm.submit();
+            });
+        });
+    }
+
     var btn = document.getElementById('trlExportBtn');
     if (!btn) return;
 
