@@ -31,9 +31,12 @@ $yearColumns = [];
 $rowsBySubBiller = [];
 $totalsByYear = [];
 $grandTotal = 0.0;
-$exportUrl = $selectedPartnerId !== ''
-    ? ('controllers/trl-report-excel.php?partner_id=' . rawurlencode($selectedPartnerId))
-    : '';
+$exportUrl = '';
+if ($selectedPartnerId !== '') {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $baseDir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
+    $exportUrl = $scheme . '://' . $_SERVER['HTTP_HOST'] . $baseDir . '/controllers/trl-report-excel.php?partner_id=' . rawurlencode($selectedPartnerId);
+}
 
 if ($selectedPartnerId !== '') {
     $sql = "

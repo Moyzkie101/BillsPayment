@@ -9,7 +9,7 @@ if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 if (!function_exists('has_any_permission') || !has_any_permission(['TRL Report','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 $mode = isset($_GET['mode']) ? strtolower(trim((string) $_GET['mode'])) : 'summary';
-if ($mode !== 'summary' && $mode !== 'refunded') {
+if ($mode !== 'summary' && $mode !== 'refunded' && $mode !== 'subbillers') {
     $mode = 'summary';
 }
 ?>
@@ -24,6 +24,7 @@ if ($mode !== 'summary' && $mode !== 'refunded') {
     <link rel="stylesheet" href="trl-report.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="components/trl-report-summary.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="components/trl-report-refunded.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="components/trl-report-subbillers.css?v=<?php echo time(); ?>">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -54,6 +55,15 @@ if ($mode !== 'summary' && $mode !== 'refunded') {
                         <small>Refunded transactions</small>
                     </div>
                 </label>
+
+                <label class="mode-card <?php echo $mode === 'subbillers' ? 'selected' : ''; ?>" data-mode="subbillers">
+                    <input type="radio" name="reportMode" value="subbillers" <?php echo $mode === 'subbillers' ? 'checked' : ''; ?>>
+                    <div class="mode-icon"><i class="fa-solid fa-layer-group"></i></div>
+                    <div class="mode-text">
+                        <p class="mode-label">SUB BILLERS</p>
+                        <small>Specific sub-biller report</small>
+                    </div>
+                </label>
             </div>
 
             <div id="summaryPanel" class="mode-panel <?php echo $mode === 'summary' ? '' : 'hidden'; ?>">
@@ -63,6 +73,10 @@ if ($mode !== 'summary' && $mode !== 'refunded') {
             <div id="refundedPanel" class="mode-panel <?php echo $mode === 'refunded' ? '' : 'hidden'; ?>">
                 <?php include __DIR__ . '/components/trl-report-refunded.php'; ?>
             </div>
+
+            <div id="subbillersPanel" class="mode-panel <?php echo $mode === 'subbillers' ? '' : 'hidden'; ?>">
+                <?php include __DIR__ . '/components/trl-report-subbillers.php'; ?>
+            </div>
         </div>
 
         <script>
@@ -71,6 +85,7 @@ if ($mode !== 'summary' && $mode !== 'refunded') {
             var modeCards = document.querySelectorAll('.mode-card');
             var summaryPanel = document.getElementById('summaryPanel');
             var refundedPanel = document.getElementById('refundedPanel');
+            var subbillersPanel = document.getElementById('subbillersPanel');
 
             function activeMode() {
                 var checked = document.querySelector('input[name="reportMode"]:checked');
@@ -83,6 +98,7 @@ if ($mode !== 'summary' && $mode !== 'refunded') {
                 });
                 if (summaryPanel) summaryPanel.classList.toggle('hidden', mode !== 'summary');
                 if (refundedPanel) refundedPanel.classList.toggle('hidden', mode !== 'refunded');
+                if (subbillersPanel) subbillersPanel.classList.toggle('hidden', mode !== 'subbillers');
 
                 var params = new URLSearchParams(window.location.search);
                 params.set('mode', mode);
