@@ -280,9 +280,9 @@ if (isset($_SESSION['user_type'])) {
                             </div>
                         </div>
                         <div class="card-body">
-                            <div class="mb-3">
+                            <!-- <div class="mb-3">
                                 <label class="h6 text-muted">Total Amount: ₱<span id="total-amount"> 0.00</span></label>
-                            </div>
+                            </div> -->
                             <div class="table-responsive" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
                                 <table class="table table-hover table-striped" id="users-table" style="min-width: 1800px;">
                                     <thead class="table-light sticky-top">
