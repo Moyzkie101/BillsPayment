@@ -265,7 +265,7 @@ $spreadsheet = new Spreadsheet();
 $sheet = $spreadsheet->getActiveSheet();
 $sheet->setTitle('SUMMARY');
 
-$firstHeader = strtoupper((string) $partnerName) . "\nBILLERS";
+    $firstHeader = strtoupper((string) $partnerName) . "\nSUB BILLERS";
 $summaryHeaders = [$firstHeader];
 foreach ($yearColumns as $year) {
     $summaryHeaders[] = (string) $year;
@@ -301,6 +301,38 @@ $totalsLine[] = (float) $grandTotal;
 $sheet->fromArray($totalsLine, null, 'A' . $rowIdx);
 $endColSummary = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($summaryHeaders));
 $sheet->getStyle('A' . $rowIdx . ':' . $endColSummary . $rowIdx)->getFont()->setBold(true);
+
+// style per-row totals (make per-row total values red) and highlight overall/grand totals
+$lastColIdx = count($summaryHeaders);
+$lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastColIdx);
+if ($rowIdx > 2) {
+    // rows 2..(rowIdx-1) are data rows - highlight their total values in red
+    $sheet->getStyle($lastColLetter . '2:' . $lastColLetter . ($rowIdx - 1))
+        ->getFont()->getColor()->setARGB('FFFF0000');
+}
+
+// highlight overall total cell (last cell of totals row)
+$sheet->getStyle($lastColLetter . $rowIdx)
+    ->getFill()->setFillType(Fill::FILL_SOLID)
+    ->getStartColor()->setARGB('FFFFFF00');
+$sheet->getStyle($lastColLetter . $rowIdx)->getFont()->getColor()->setARGB('FF000000');
+$sheet->getStyle($lastColLetter . $rowIdx)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+// add one spacer row then a separate Grand Total row (label left, value right, highlighted)
+$spacerRow = $rowIdx + 1;
+$sheet->setCellValue('A' . $spacerRow, '');
+
+$grandRow = $spacerRow + 1;
+$penultColIdx = max(1, $lastColIdx - 1);
+$penultColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($penultColIdx);
+$sheet->setCellValue($penultColLetter . $grandRow, 'Grand Total');
+$sheet->setCellValue($lastColLetter . $grandRow, (float) $grandTotal);
+$sheet->getStyle($penultColLetter . $grandRow)->getFont()->setBold(true)->getColor()->setARGB('FF000000');
+$sheet->getStyle($penultColLetter . $grandRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFF00');
+$sheet->getStyle($lastColLetter . $grandRow)->getFont()->setBold(true)->getColor()->setARGB('FF000000');
+$sheet->getStyle($lastColLetter . $grandRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFF00');
+$sheet->getStyle($lastColLetter . $grandRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+$sheet->getStyle($penultColLetter . $grandRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
 // Sheet 2: REFUNDED
 $refundedSheet = $spreadsheet->createSheet();

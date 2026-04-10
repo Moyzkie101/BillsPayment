@@ -171,3 +171,30 @@
     background: #fff7ed;
     border-top: 2px solid #fed7aa;
 }
+
+/* per-row total value in red */
+.trl-summary-table td.total {
+    color: #d9534f;
+}
+
+/* highlight overall and grand total cells with yellow background and black text */
+.trl-summary-table tfoot th.overall-total,
+.trl-summary-table tfoot th.grand-total {
+    background: #fff59d;
+    color: #000;
+}
+
+.trl-summary-table tfoot th.grand-label {
+    text-align: right;
+    font-weight: 800;
+    background: #fff59d;
+    color: #000;
+}
+
+/* spacer row in footer to create a small gap before Grand Total */
+.trl-summary-table tfoot tr.spacer-row th {
+    border: 0;
+    background: transparent;
+    height: 10px;
+    padding: 0;
+}

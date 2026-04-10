@@ -131,7 +131,7 @@ ksort($rowsBySubBiller, SORT_NATURAL | SORT_FLAG_CASE);
         <div class="trl-summary-empty">No TRL rows found for the selected partner.</div>
     <?php else: ?>
         <div class="trl-summary-title">
-            <?php echo htmlspecialchars(strtoupper($selectedPartnerName) . ' BILLERS'); ?>
+            <?php echo htmlspecialchars(strtoupper($selectedPartnerName) . ' SUB BILLERS'); ?>
         </div>
 
         <div class="trl-summary-table-wrap">
@@ -148,7 +148,7 @@ ksort($rowsBySubBiller, SORT_NATURAL | SORT_FLAG_CASE);
                     <tr>
                         <th class="partner-col-head">
                             <?php echo htmlspecialchars(strtoupper((string) $selectedPartnerName)); ?><br>
-                            <span>BILLERS</span>
+                            <span>SUB BILLERS</span>
                         </th>
                         <?php foreach ($yearColumns as $year): ?>
                             <th><?php echo htmlspecialchars((string) $year); ?></th>
@@ -174,7 +174,19 @@ ksort($rowsBySubBiller, SORT_NATURAL | SORT_FLAG_CASE);
                         <?php foreach ($yearColumns as $year): ?>
                             <th class="amt"><?php echo isset($totalsByYear[$year]) ? number_format((float) $totalsByYear[$year], 2) : '-'; ?></th>
                         <?php endforeach; ?>
-                        <th class="amt"><?php echo number_format((float) $grandTotal, 2); ?></th>
+                        <th class="amt overall-total"><?php echo number_format((float) $grandTotal, 2); ?></th>
+                    </tr>
+                    <tr class="spacer-row">
+                        <th colspan="<?php echo 1 + count($yearColumns); ?>"></th>
+                        <th></th>
+                    </tr>
+                    <tr>
+                        <?php $blankCount = count($yearColumns); ?>
+                        <?php for ($i = 0; $i < $blankCount; $i++): ?>
+                            <th></th>
+                        <?php endfor; ?>
+                        <th class="grand-label">Grand Total</th>
+                        <th class="amt grand-total"><?php echo number_format((float) $grandTotal, 2); ?></th>
                     </tr>
                 </tfoot>
             </table>
