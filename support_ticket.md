@@ -41,8 +41,7 @@ tickets
 
 - reference_number (VARCHAR) -- manually entered by Branch at creation
 - source (ENUM: 'KPX', 'KP7') -- selected at creation
-- partner_name (VARCHAR or FK → partners.id) -- selected via searchable dropdown at creation
-- ticket_type (ENUM or FK → ticket_types.id) -- selected via dropdown at creation
+- partner_ext_id (VARCHAR, nullable) -- derived from selected `mldb.subbiller.partner_id_kpx`
 
 - created_by (FK → users.id)
 - created_by_role (ENUM: 'BRANCH', 'VPO', 'CAD') -- role of creator at time of creation
@@ -54,14 +53,12 @@ tickets
 - current_handler_role (ENUM: 'BRANCH', 'VPO', 'CAD') -- who currently holds the ticket
 
 - status (ENUM:
-    'open',       -- newly created, waiting for VPO
-    'accepted',   -- VPO has accepted
-    'resolving',  -- CAD has accepted
-    'resolved',   -- VPO or CAD marked resolved, awaiting auto-close
-    'closed'      -- closed (auto or immediately)
+  'open',       -- newly created, waiting for VPO
+  'accepted',   -- VPO has accepted
+  'resolving',  -- CAD has accepted
+  'resolved',   -- VPO or CAD marked resolved, awaiting auto-close
+  'closed'      -- closed (auto or immediately)
 )
-
-- reason (TEXT) -- free-form textbox, entered at creation
 
 - allow_branch_reply (BOOLEAN, default TRUE) -- Branch can ALWAYS reply; this is always TRUE
 
@@ -73,20 +70,142 @@ tickets
 - updated_at
 ```
 
-> **Note on `allow_branch_reply`:** Branch can reply at any time regardless of ticket state. This field is kept for schema completeness but is always effectively TRUE. No footer hiding for Branch.
+> **Note:** `ticket_type` and `reason` are no longer stored on the top-level `tickets` row. Those fields (and other request-specific details) live in the connected `ticket_info` table described below. This keeps the main `tickets` table lightweight and focused on routing/ownership/state.
 
 ---
 
-## 2. `partners` (lookup table)
+## 1a. `ticket_info` (details linked to `tickets`)
 
 ```sql
-partners
+ticket_info
+- ticket_number (PK, FK → tickets.ticket_number)  -- primary key is the ticket_number and foreign-key to `tickets`
+- ticket_type (ENUM or FK → ticket_types.id)      -- chosen by Branch at creation
+- reason (TEXT)                                    -- initial message / reason
+
+-- fields mirrored from the TRL/manual entry model (store request-specific data):
+- transfer_datetime (DATETIME, nullable)
+- ref_no (VARCHAR, nullable)
+- wrong_biller_id (VARCHAR, nullable)
+- biller_name (VARCHAR, nullable)
+- account_no (VARCHAR, nullable)
+- account_name (VARCHAR, nullable)
+- payment_branch_id (VARCHAR, nullable)
+- payment_branch_name (VARCHAR, nullable)
+- amount (DECIMAL)
+- type_of_request (VARCHAR) -- e.g. WRONG BILLER, OVERSTATED AMOUNT, CANCELLED TRANSACTION, etc.
+- meta (JSON, nullable)     -- any extra structured data
+- created_at
+- updated_at
+```
+
+> Notes:
+- `ticket_info` is one-to-one with `tickets`. It uses `ticket_number` both as its PK and as a FK to `tickets.ticket_number` to guarantee a single info row per ticket while keeping referential integrity.
+- This table mirrors the structure used in `mldb.trl`'s manual-entry flow so that manual transaction-like reports can be stored alongside traditional ticket metadata.
+
+---
+
+## 1b. Supplemental/detail tables connected to `ticket_info`
+
+These store correction-specific payloads that are present only for certain `type_of_request` values. Each references `ticket_info.ticket_number`.
+
+```sql
+ticket_info_wrongbiller
 - id (PK)
-- name (VARCHAR)
+- ticket_number (FK → ticket_info.ticket_number)
+- correct_biller_id
+- correct_biller_name
+- created_at
+
+ticket_info_overstatedamount
+- id (PK)
+- ticket_number (FK → ticket_info.ticket_number)
+- wrong_amount (DECIMAL)
+- correct_amount (DECIMAL)
+- difference (DECIMAL)
+- created_at
+
+ticket_info_cancelledtransaction
+- id (PK)
+- ticket_number (FK → ticket_info.ticket_number)
+- wrong_amount (DECIMAL)
+- correct_amount (DECIMAL)
 - created_at
 ```
 
-> Used to populate the searchable Partner Name dropdown on ticket creation.
+These subtables follow the same pattern used in the TRL manual insert flow (`trl_wrongbiller`, `trl_overstatedamount`, `trl_cancelledtransaction`) and are inserted only when relevant to the chosen `type_of_request`.
+
+---
+
+## 1c. Integration with Legacy TRL (partners & subbillers)
+
+Support-ticket must read `mldb.subbiller` directly. Create read-only views in the `support_ticket` schema that select partners and sub-billers from `mldb.subbiller`, and use those views to populate dropdowns and validate inputs at create time — no local `subbillers` table is required.
+
+Sample views (live-read)
+```sql
+-- partners view (distinct partner ids + names from TRL)
+CREATE OR REPLACE VIEW support_ticket.vw_mldb_partners AS
+SELECT DISTINCT
+  TRIM(COALESCE(partner_id_kpx, '')) AS partner_ext_id,
+  TRIM(COALESCE(partner_name, '')) AS partner_name
+FROM mldb.subbiller
+WHERE COALESCE(TRIM(partner_id_kpx), '') <> ''
+  AND COALESCE(TRIM(partner_name), '') <> '';
+
+-- subbillers view
+CREATE OR REPLACE VIEW support_ticket.vw_mldb_subbillers AS
+SELECT
+  CAST(sub_billers_id AS CHAR) AS subbiller_ext_id,
+  TRIM(COALESCE(sub_billers_name, 'UNKNOWN')) AS subbiller_name,
+  TRIM(COALESCE(partner_id_kpx, '')) AS partner_ext_id
+FROM mldb.subbiller;
+```
+
+Field mapping and recommendations
+- `ticket_info.wrong_biller_id` should store the TRL sub-biller id (match `vw_mldb_subbillers.subbiller_ext_id`). Validate the incoming value in the create flow to ensure it matches an existing TRL sub-biller.
+- `ticket_info.biller_name` maps to the TRL `sub_billers_name` value; prefer reading the canonical name from `vw_mldb_subbillers` at display time to avoid drift.
+- `tickets.partner_ext_id` should store `vw_mldb_subbillers.partner_ext_id` from the selected subbiller for routing/filtering.
+
+Usage examples
+- Query partners for a dropdown (same SQL used in `trl-report-summary.php`):
+
+```sql
+SELECT DISTINCT
+  TRIM(COALESCE(partner_id_kpx, '')) AS partner_id_kpx,
+  TRIM(COALESCE(partner_name, '')) AS partner_name
+FROM mldb.subbiller
+WHERE COALESCE(TRIM(partner_id_kpx), '') <> ''
+  AND COALESCE(TRIM(partner_name), '') <> ''
+ORDER BY partner_name ASC;
+```
+
+- Join a ticket to its canonical sub-biller/partner names (using views):
+
+```sql
+SELECT t.ticket_number, ti.type_of_request, sb.subbiller_name, p.partner_name
+FROM tickets t
+LEFT JOIN ticket_info ti ON ti.ticket_number = t.ticket_number
+LEFT JOIN vw_mldb_subbillers sb ON sb.subbiller_ext_id = ti.wrong_biller_id
+LEFT JOIN vw_mldb_partners p ON p.partner_ext_id = sb.partner_ext_id;
+```
+
+Operational notes
+- Ensure your DB user has `SELECT` permission on `mldb.subbiller`.
+- Reuse the validation and insert patterns in `dashboard/trl/trl-entry/controllers/trl-entry-insert.php` for `ticket_info` population when Branch fills the manual form — the same supplemental inserts (`wrongbiller`, `overstatedamount`, `cancelledtransaction`) apply.
+
+---
+
+## 2. `subbillers` (primary lookup for Branch create flow)
+
+Use `mldb.subbiller` directly (via the `vw_mldb_subbillers` view). Populate the Subbiller dropdown from `vw_mldb_subbillers` and on selection write the canonical values into `ticket_info`:
+
+- `ticket_info.wrong_biller_id = sb.subbiller_ext_id`
+- `ticket_info.biller_name = sb.subbiller_name`
+
+Derive routing from `sb.partner_ext_id` and store it directly in `tickets.partner_ext_id`.
+
+Quick reference (from `vw_mldb_subbillers`): `subbiller_ext_id`, `subbiller_name`, `partner_ext_id`.
+
+Operational note: prefer `subbiller` as the primary dropdown for Branch create; show Partner as a read-only field to avoid mismatches.
 
 ---
 
@@ -558,7 +677,12 @@ For each matching ticket:
 
 # 🎫 TICKET CREATION FORM (Branch Only)
 
-The create ticket form must capture the following fields in this exact layout:
+The Branch creation UI collects two logical groups of information:
+
+- Ticket metadata (stored in `tickets`) — routing and ownership fields.
+- Ticket details (stored in `ticket_info`) — `ticket_type`, `reason` and any manual-entry fields (wrong biller, amounts, ref_no, etc.).
+
+The form layout (Branch-only) should look and behave like this:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -566,10 +690,13 @@ The create ticket form must capture the following fields in this exact layout:
 ├─────────────────────────────────────────────────────┤
 │  Reference Number:  [Text input]                    │
 │  Source:            [ KPX | KP7 ] (radio or select) │
-│  Partner Name:      [Searchable dropdown]           │
-│  Ticket Type:       [Dropdown]                      │
+│  Subbiller (Biller): [Searchable dropdown]          │
+│  Partner (derived):   [Read-only, populated from selected subbiller] │
+│  (Ticket details below stored in `ticket_info`)     │
 ├─────────────────────────────────────────────────────┤
+│  Ticket Type:       [Dropdown]                      │
 │  Reason:            [Textarea / Textbox]            │
+│  Type-specific inputs (wrong biller / amounts...)   │
 ├─────────────────────────────────────────────────────┤
 │  [ + Attach Files ]                                 │
 │                                                     │
@@ -577,22 +704,38 @@ The create ticket form must capture the following fields in this exact layout:
 └─────────────────────────────────────────────────────┘
 ```
 
-### Field Rules
+UI notes (Manual-style entry):
+
+- Follow the pattern used in `dashboard/trl/trl-entry/components/trl-entry-manual.php` for the Request Information group: include `type_of_request` (WRONG BILLER, OVERSTATED AMOUNT, CANCELLED TRANSACTION, etc.), supplemental fields (correct biller, wrong_amount/correct_amount), and an optional toggle to include a Reference No.
+- Show/hide supplemental inputs based on `ticket_type` / `type_of_request` (e.g., show overstated inputs only for OVERSTATED AMOUNT).
+- The visible Ticket Type and Reason inputs map directly to `ticket_info.ticket_type` and `ticket_info.reason`.
+
+### Field Rules (high-level)
+
+
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | Ticket # | Display only | — | Auto-generated (TKT-YYYYMMDD-XXXX), shown but not editable |
 | Reference Number | Text input | Yes | Manual entry by Branch |
 | Source | Radio / Select | Yes | Options: KPX, KP7 |
-| Partner Name | Searchable dropdown | Yes | Populated from `partners` table |
-| Ticket Type | Dropdown | Yes | Populated from `ticket_types` table |
-| Reason | Textarea | Yes | Free-form text |
-| Attachments | File upload | No | Multiple files allowed |
+| Subbiller (Biller) | Searchable dropdown | Yes | Populated from `vw_mldb_subbillers` (live); selecting subbiller sets `ticket_info.wrong_biller_id`, `ticket_info.biller_name`, and `tickets.partner_ext_id` |
+| Ticket Type | Dropdown | Yes | Stored in `ticket_info.ticket_type` |
+| Reason | Textarea | Yes | Stored in `ticket_info.reason` |
+| Attachments | File upload | No | Multiple files allowed; files attached to first trail entry |
 
-On Submit:
-* Ticket is created with `status: open`, `current_handler_role: VPO`
-* A `ticket_trail` entry of `type: message` is created with the Reason as the initial message body
-* Any attachments are saved to `ticket_attachments` linked to this first trail entry
+On Submit (server-side sequence — transactional):
+
+1. Validate required fields and any type-specific supplemental fields (mirror the validation in `trl-entry-insert.php`).
+2. Begin DB transaction.
+3. Insert a row into `tickets` (generate `ticket_number` with format `TKT-YYYYMMDD-XXXX`). This creates the routing/ownership row used by queues.
+4. Insert the corresponding `ticket_info` row using the newly generated `ticket_number` as the PK and FK, populating `ticket_type`, `reason`, and any manual-entry fields (transfer_datetime, ref_no, wrong_biller_id, amount, etc.).
+5. If required by `type_of_request`, insert into the supplemental tables: `ticket_info_wrongbiller`, `ticket_info_overstatedamount`, or `ticket_info_cancelledtransaction`.
+6. Create the initial `ticket_trails` entry of `type: message` referencing the `tickets.id` (or `ticket_number`) with `message` set to the `reason` and `sender_role: 'BRANCH'`.
+7. Save any uploaded attachments into `ticket_attachments` linked to the created trail entry.
+8. Commit the DB transaction and return success. If anything fails, rollback and return a detailed error.
+
+This ordering mirrors the safe flow used by the TRL manual insert controller (`trl-entry-insert.php`) and keeps the ticket visible in queues immediately after creation while keeping the request payload in `ticket_info`.
 
 ---
 
@@ -634,13 +777,14 @@ On Submit:
 4. **VPO closes without ever sending to CAD** — `cad_owner` remains NULL; ticket appears only in VPO Closed section
 5. **Ticket has no trails yet** — show empty timeline with a placeholder card
 6. **Large file attachment** — validate file size before upload; recommend max 10MB per file, configurable
-7. **Partner search returns no results** — show "No partner found" state with option to type manually or contact admin
+7. **Subbiller search returns no results** — show "No subbiller found" state and advise user to contact admin (do not allow free-text biller entry)
 
 ---
 
 # 🗂️ RECOMMENDED FILE STRUCTURE
 
 ```
+/dashboard
 /support-ticket
   /create-ticket
     create-ticket.php
@@ -740,3 +884,6 @@ Create (Branch) → Accept (VPO) → [Reply ↔ Branch] → Submit to CAD
 * Every trail card shows **DateTime** for full transparency
 * Automation messages fire on key state changes (transfer, accept, close, resolve)
 * Be extensible — future roles or statuses should require minimal schema changes
+
+
+

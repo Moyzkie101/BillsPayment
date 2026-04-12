@@ -435,7 +435,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <?php endif; ?>
                 <?php if (has_permission('Support Ticket BPO')): ?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/bpo-ticket.php'">
-                    <a href="<?php echo $base_url; ?>support_ticket/bpo-ticket.php"><i class="fa-solid fa-headset"></i> BPO Ticket</a>
+                    <a href="<?php echo $base_url; ?>support_ticket/bpo-ticket.php"><i class="fa-solid fa-headset"></i> VPO Ticket</a>
                 </div>
                 <?php endif; ?>
                 <?php if (has_permission('Support Ticket CAD')): ?>
