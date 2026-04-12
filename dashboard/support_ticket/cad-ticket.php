@@ -257,7 +257,7 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                     $ticketTypeText = (string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request']);
                     $statusLower = strtolower((string) ($ticket['status'] ?? ''));
                     $isClosed = $statusLower === 'closed';
-                    $isOpen = $statusLower === 'open';
+                    $isOpen = in_array($statusLower, ['open', 'transferred'], true);
                     $isActive = !$isClosed && !$isOpen;
                     $ticketNumber = (string) ($ticket['ticket_number'] ?? '');
                     $ticketSupplemental = $ticketSupplementalByTicketNumber[$ticketNumber] ?? [];
@@ -488,14 +488,35 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                             <div class="tm-footer tm-footer--open">
                                 <div class="tm-footer-inner" style="display:block;">
                                     <form method="post" action="controllers/cad/submit-ticket.php" style="display:flex;gap:8px;align-items:stretch;margin-bottom:8px;width:100%;">
+                                        <input type="hidden" name="action" value="reply">
                                         <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
                                         <div class="tm-textarea-container" style="flex:1;min-width:0;">
                                             <textarea name="message" class="tm-textarea" placeholder="Type your reply..." required></textarea>
                                         </div>
-                                        <div style="flex:0 0 auto;">
+                                        <div style="display:flex;gap:8px;align-items:stretch;flex:0 0 auto;">
                                             <button type="submit" class="tm-btn tm-btn--red">Submit</button>
+                                            <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-open="stTransferToVpoConfirm-<?php echo $ticketId; ?>">Transfer to VPO</button>
                                         </div>
                                     </form>
+
+                                    <form id="stTransferToVpoForm-<?php echo $ticketId; ?>" method="post" action="controllers/cad/submit-ticket.php" style="display:none;">
+                                        <input type="hidden" name="action" value="transfer_to_vpo">
+                                        <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                        <input type="hidden" name="message" value="">
+                                    </form>
+
+                                    <div class="tm-submodal-overlay" id="stTransferToVpoConfirm-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
+                                        <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Transfer to VPO confirmation">
+                                            <div class="tm-submodal-title">Transfer Ticket to VPO?</div>
+                                            <div class="tm-submodal-ticket-info">Ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
+                                            <hr class="tm-submodal-divider">
+                                            <div class="tm-submodal-footer">
+                                                <button type="button" class="tm-btn tm-btn--outline" data-confirm-transfer-cancel="stTransferToVpoConfirm-<?php echo $ticketId; ?>">Cancel</button>
+                                                <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-submit="stTransferToVpoConfirm-<?php echo $ticketId; ?>" data-transfer-form="stTransferToVpoForm-<?php echo $ticketId; ?>">Transfer to VPO</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                         <div style="margin-top:4px;display:flex;justify-content:flex-end;">
                                         <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-close-picker-open="stClosePickerCad-<?php echo $ticketId; ?>"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Close Ticket</button>
                                     </div>

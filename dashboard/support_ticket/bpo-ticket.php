@@ -259,6 +259,9 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                     $isClosed = $statusLower === 'closed';
                     $isOpen = $statusLower === 'open';
                     $isActive = !$isClosed && !$isOpen;
+                    $currentHandlerRole = strtoupper((string) ($ticket['current_handler_role'] ?? ''));
+                    $assignedToId = (int) ($ticket['assigned_to'] ?? 0);
+                    $isVpoActionable = ($userId !== null && $currentHandlerRole === 'VPO' && $assignedToId === (int) $userId);
                     $ticketNumber = (string) ($ticket['ticket_number'] ?? '');
                     $ticketSupplemental = $ticketSupplementalByTicketNumber[$ticketNumber] ?? [];
                     $vpoOwnerId = (int) ($ticket['vpo_owner'] ?? 0);
@@ -486,6 +489,7 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                             </div>
                         <?php elseif ($isActive): ?>
                             <div class="tm-footer tm-footer--open">
+                                <?php if ($isVpoActionable): ?>
                                 <div class="tm-footer-inner" style="display:block;">
                                     <form method="post" action="controllers/vpo/submit-ticket.php" style="display:flex;gap:8px;align-items:stretch;margin-bottom:8px;width:100%;">
                                         <input type="hidden" name="action" value="reply">
@@ -544,6 +548,9 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                         </div>
                                     </div>
                                 </div>
+                                <?php else: ?>
+                                <div class="tm-footer tm-footer--closed">Ticket is currently handled by CAD. You can still view the conversation timeline.</div>
+                                <?php endif; ?>
                             </div>
                         <?php else: ?>
                             <div class="tm-footer tm-footer--closed">Ticket is closed.</div>

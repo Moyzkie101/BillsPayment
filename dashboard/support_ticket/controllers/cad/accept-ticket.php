@@ -29,7 +29,7 @@ try {
                   WHERE id = ?
                     AND current_handler_role = 'CAD'
                     AND assigned_to IS NULL
-                    AND status IN ('accepted', 'resolving')";
+                                        AND status IN ('open', 'transferred')";
     $stmt = $conn->prepare($updateSql);
     if (!$stmt) {
         throw new Exception('Unable to prepare accept update.');

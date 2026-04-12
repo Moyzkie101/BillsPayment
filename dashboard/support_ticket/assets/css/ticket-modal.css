@@ -50,6 +50,9 @@
   --tm-status-resolved-text: #1a5c35;
   --tm-status-closed-bg:     #2a2926;
   --tm-status-closed-text:   #d0cfc8;
+  --tm-status-transferred-bg: #6f42c1;
+  --tm-status-transferred-text: #ffffff;
+  --tm-status-transferred-border: #5a34a8;
 
   /* Semantic */
   --tm-danger-bg:      #faeae5;
@@ -221,6 +224,7 @@
 .tm-status--accepted  { background: var(--tm-status-accepted-bg);  color: var(--tm-status-accepted-text); }
 .tm-status--resolving { background: var(--tm-status-resolving-bg); color: var(--tm-status-resolving-text); }
 .tm-status--resolved  { background: var(--tm-status-resolved-bg);  color: var(--tm-status-resolved-text); }
+.tm-status--transferred{ background: var(--tm-status-transferred-bg); color: var(--tm-status-transferred-text); border: 1px solid var(--tm-status-transferred-border); }
 .tm-status--closed    { background: var(--tm-status-closed-bg);    color: var(--tm-status-closed-text); }
 
 /* Close (X) button */
@@ -825,6 +829,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  text-decoration: none;
 }
 
 .tm-btn:hover    { background: var(--tm-bg-tertiary); }

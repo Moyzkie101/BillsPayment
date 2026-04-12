@@ -32,7 +32,7 @@ $conn->autocommit(false);
 try {
     $schema = st_schema();
 
-    $lockSql = "SELECT id, status, current_handler_role, assigned_to
+    $lockSql = "SELECT id, status, current_handler_role, assigned_to, vpo_owner
                 FROM {$schema}.tickets
                 WHERE id = ? FOR UPDATE";
     $lockStmt = $conn->prepare($lockSql);
@@ -54,8 +54,18 @@ try {
         throw new Exception('Ticket not found.');
     }
 
-    if ((string) $ticket['current_handler_role'] !== 'VPO' || (int) $ticket['assigned_to'] !== (int) $userId) {
-        throw new Exception('Ticket is not assigned to you as VPO.');
+    $currentHandler = strtoupper((string) ($ticket['current_handler_role'] ?? ''));
+    $assignedTo = (int) ($ticket['assigned_to'] ?? 0);
+    $vpoOwner = (int) ($ticket['vpo_owner'] ?? 0);
+    $isAssignedVpo = ($currentHandler === 'VPO' && $assignedTo === (int) $userId);
+    $isVpoParticipant = ($vpoOwner > 0 && $vpoOwner === (int) $userId);
+
+    if ($action === 'transfer_to_cad' && !$isAssignedVpo) {
+        throw new Exception('Ticket is no longer assigned to you for transfer.');
+    }
+
+    if ($action === 'reply' && !($isAssignedVpo || $isVpoParticipant)) {
+        throw new Exception('Ticket is not associated with your VPO account.');
     }
 
     if ((string) $ticket['status'] === 'closed') {
@@ -63,7 +73,8 @@ try {
     }
 
     if ($action === 'reply') {
-        st_insert_trail($conn, $ticketId, 'message', $userId, 'VPO', 'BRANCH', $message, null);
+        $replyTargetRole = $currentHandler === 'CAD' ? 'CAD' : 'BRANCH';
+        st_insert_trail($conn, $ticketId, 'message', $userId, 'VPO', $replyTargetRole, $message, null);
         $conn->commit();
         $conn->autocommit(true);
         st_redirect_with_flash('vpo_ticket', 'success', 'Reply submitted.', $redirectBack);
@@ -74,7 +85,8 @@ try {
     $updSql = "UPDATE {$schema}.tickets
                SET current_handler_role = 'CAD',
                    assigned_to = NULL,
-                   status = 'accepted',
+                   cad_owner = NULL,
+                   status = 'transferred',
                    updated_at = NOW()
                WHERE id = ? AND current_handler_role = 'VPO' AND assigned_to = ?";
     $updStmt = $conn->prepare($updSql);

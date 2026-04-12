@@ -214,9 +214,9 @@ if (!function_exists('st_get_vpo_active_tickets')) {
     {
         return st_fetch_tickets(
             $conn,
-            "WHERE t.assigned_to = ? AND t.current_handler_role = 'VPO' AND t.status <> 'closed'",
-            [(int) $userId],
-            'i'
+            "WHERE t.status <> 'closed' AND ((t.assigned_to = ? AND t.current_handler_role = 'VPO') OR (t.vpo_owner = ? AND t.current_handler_role = 'CAD'))",
+            [(int) $userId, (int) $userId],
+            'ii'
         );
     }
 }
@@ -238,7 +238,7 @@ if (!function_exists('st_get_cad_open_tickets')) {
     {
         return st_fetch_tickets(
             $conn,
-            "WHERE t.current_handler_role = 'CAD' AND t.assigned_to IS NULL AND t.status <> 'closed'"
+            "WHERE t.current_handler_role = 'CAD' AND t.assigned_to IS NULL AND t.status IN ('open', 'transferred')"
         );
     }
 }

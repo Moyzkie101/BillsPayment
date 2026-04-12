@@ -270,7 +270,7 @@
             });
         });
 
-        var transferModals = document.querySelectorAll('.tm-submodal-overlay[id^="stTransferToCadConfirm-"]');
+        var transferModals = document.querySelectorAll('.tm-submodal-overlay[id^="stTransferTo"]');
         transferModals.forEach(function (overlay) {
             overlay.addEventListener('click', function (e) {
                 if (e.target === overlay) {

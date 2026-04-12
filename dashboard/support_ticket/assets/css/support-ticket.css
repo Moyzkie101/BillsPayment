@@ -318,6 +318,11 @@
     color: #166534;
 }
 
+.st-status-transferred {
+    background: #6f42c1;
+    color: #ffffff;
+}
+
 .st-status-closed {
     background: #111827;
     color: #ffffff;
