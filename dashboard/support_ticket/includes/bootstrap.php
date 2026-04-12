@@ -256,6 +256,9 @@ if (!defined('SUPPORT_TICKET_BOOTSTRAP_LOADED')) {
         $trailId = (int) $conn->insert_id;
         $stmt->close();
 
+        // Update unread counters whenever a trail entry is added.
+        st_ticket_badge_on_new_trail($conn, (int) $ticketId, (string) $senderRole);
+
         return $trailId;
     }
 
@@ -325,5 +328,406 @@ if (!defined('SUPPORT_TICKET_BOOTSTRAP_LOADED')) {
         }
 
         return $list;
+    }
+
+    function st_table_exists($conn, $tableName)
+    {
+        static $cache = [];
+        $schema = st_schema();
+        $key = $schema . '.' . $tableName;
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        $sql = 'SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = ? LIMIT 1';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            $cache[$key] = false;
+            return false;
+        }
+
+        $stmt->bind_param('ss', $schema, $tableName);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            $cache[$key] = false;
+            return false;
+        }
+
+        $res = $stmt->get_result();
+        $exists = ($res && $res->num_rows > 0);
+        $stmt->close();
+
+        $cache[$key] = $exists;
+        return $exists;
+    }
+
+    function st_ticket_badge_tables_ready($conn)
+    {
+        return st_table_exists($conn, 'ticket_badge') && st_table_exists($conn, 'ticket_active');
+    }
+
+    function st_ensure_ticket_badge_row($conn, $ticketNumber)
+    {
+        if (!st_table_exists($conn, 'ticket_badge')) {
+            return;
+        }
+
+        $schema = st_schema();
+        $sql = "INSERT INTO {$schema}.ticket_badge
+                (ticket_number, branch_count, branch_seen, vpo_count, vpo_seen, cad_count, cad_seen)
+                VALUES (?, NULL, 1, NULL, 1, NULL, 1)
+                ON DUPLICATE KEY UPDATE ticket_number = ticket_number";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+
+        $stmt->bind_param('s', $ticketNumber);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    function st_ticket_badge_increment_role($conn, $ticketNumber, $role)
+    {
+        if (!st_table_exists($conn, 'ticket_badge')) {
+            return;
+        }
+
+        $r = strtoupper(trim((string) $role));
+        $schema = st_schema();
+        $sql = null;
+        if ($r === 'BRANCH') {
+            $sql = "UPDATE {$schema}.ticket_badge
+                    SET branch_count = COALESCE(branch_count, 0) + 1,
+                        branch_seen = 0
+                    WHERE ticket_number = ?";
+        } elseif ($r === 'VPO') {
+            $sql = "UPDATE {$schema}.ticket_badge
+                    SET vpo_count = COALESCE(vpo_count, 0) + 1,
+                        vpo_seen = 0
+                    WHERE ticket_number = ?";
+        } elseif ($r === 'CAD') {
+            $sql = "UPDATE {$schema}.ticket_badge
+                    SET cad_count = COALESCE(cad_count, 0) + 1,
+                        cad_seen = 0
+                    WHERE ticket_number = ?";
+        }
+
+        if ($sql === null) {
+            return;
+        }
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+
+        $stmt->bind_param('s', $ticketNumber);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    function st_ticket_badge_mark_seen($conn, $ticketNumber, $role)
+    {
+        if (!st_table_exists($conn, 'ticket_badge')) {
+            return;
+        }
+
+        $r = strtoupper(trim((string) $role));
+        $schema = st_schema();
+        $sql = null;
+        if ($r === 'BRANCH') {
+            $sql = "UPDATE {$schema}.ticket_badge
+                    SET branch_count = NULL,
+                        branch_seen = 1
+                    WHERE ticket_number = ?";
+        } elseif ($r === 'VPO') {
+            $sql = "UPDATE {$schema}.ticket_badge
+                    SET vpo_count = NULL,
+                        vpo_seen = 1
+                    WHERE ticket_number = ?";
+        } elseif ($r === 'CAD') {
+            $sql = "UPDATE {$schema}.ticket_badge
+                    SET cad_count = NULL,
+                        cad_seen = 1
+                    WHERE ticket_number = ?";
+        }
+
+        if ($sql === null) {
+            return;
+        }
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+
+        $stmt->bind_param('s', $ticketNumber);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    function st_sync_ticket_active_counts($conn, $userId)
+    {
+        if (!st_table_exists($conn, 'ticket_active') || $userId === null) {
+            return;
+        }
+
+        $schema = st_schema();
+        $vpoCount = 0;
+        $cadCount = 0;
+
+        $vpoSql = "SELECT COUNT(*) AS c
+                   FROM {$schema}.tickets
+                                     WHERE status NOT IN ('closed', 'resolved')
+                                         AND ((assigned_to = ? AND current_handler_role = 'VPO')
+                                                    OR (vpo_owner = ? AND current_handler_role = 'CAD'))";
+        $vpoStmt = $conn->prepare($vpoSql);
+        if ($vpoStmt) {
+                        $vpoStmt->bind_param('ii', $userId, $userId);
+            if ($vpoStmt->execute()) {
+                $res = $vpoStmt->get_result();
+                $row = $res ? $res->fetch_assoc() : null;
+                $vpoCount = (int) ($row['c'] ?? 0);
+            }
+            $vpoStmt->close();
+        }
+
+                $cadSql = "SELECT COUNT(*) AS c
+                                     FROM {$schema}.tickets
+                                     WHERE assigned_to = ?
+                                         AND current_handler_role = 'CAD'
+                                         AND status NOT IN ('closed', 'resolved')";
+        $cadStmt = $conn->prepare($cadSql);
+        if ($cadStmt) {
+            $cadStmt->bind_param('i', $userId);
+            if ($cadStmt->execute()) {
+                $res = $cadStmt->get_result();
+                $row = $res ? $res->fetch_assoc() : null;
+                $cadCount = (int) ($row['c'] ?? 0);
+            }
+            $cadStmt->close();
+        }
+
+        $vpoCountParam = $vpoCount > 0 ? $vpoCount : null;
+        $cadCountParam = $cadCount > 0 ? $cadCount : null;
+
+        $upsertSql = "INSERT INTO {$schema}.ticket_active (id_number, vpo_count, vpo_seen, cad_count, cad_seen)
+                      VALUES (?, ?, 1, ?, 1)
+                      ON DUPLICATE KEY UPDATE vpo_count = VALUES(vpo_count), cad_count = VALUES(cad_count)";
+        $upStmt = $conn->prepare($upsertSql);
+        if (!$upStmt) {
+            return;
+        }
+
+        $upStmt->bind_param('iii', $userId, $vpoCountParam, $cadCountParam);
+        $upStmt->execute();
+        $upStmt->close();
+    }
+
+    function st_get_ticket_active_row($conn, $userId)
+    {
+        if (!st_table_exists($conn, 'ticket_active') || $userId === null) {
+            return ['vpo_count' => null, 'vpo_seen' => 1, 'cad_count' => null, 'cad_seen' => 1];
+        }
+
+        $schema = st_schema();
+        $sql = "SELECT vpo_count, vpo_seen, cad_count, cad_seen
+                FROM {$schema}.ticket_active
+                WHERE id_number = ?
+                LIMIT 1";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return ['vpo_count' => null, 'vpo_seen' => 1, 'cad_count' => null, 'cad_seen' => 1];
+        }
+
+        $stmt->bind_param('i', $userId);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return ['vpo_count' => null, 'vpo_seen' => 1, 'cad_count' => null, 'cad_seen' => 1];
+        }
+
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return $row ?: ['vpo_count' => null, 'vpo_seen' => 1, 'cad_count' => null, 'cad_seen' => 1];
+    }
+
+    function st_ticket_active_mark_seen($conn, $userId, $role)
+    {
+        if (!st_table_exists($conn, 'ticket_active') || $userId === null) {
+            return;
+        }
+
+        $schema = st_schema();
+        $r = strtoupper(trim((string) $role));
+        $sql = null;
+        if ($r === 'VPO') {
+            $sql = "UPDATE {$schema}.ticket_active SET vpo_seen = 1 WHERE id_number = ?";
+        } elseif ($r === 'CAD') {
+            $sql = "UPDATE {$schema}.ticket_active SET cad_seen = 1 WHERE id_number = ?";
+        }
+        if ($sql === null) {
+            return;
+        }
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    function st_ticket_active_mark_unseen($conn, $userId, $role)
+    {
+        if (!st_table_exists($conn, 'ticket_active') || $userId === null) {
+            return;
+        }
+
+        $schema = st_schema();
+        $r = strtoupper(trim((string) $role));
+        $sql = null;
+        if ($r === 'VPO') {
+            $sql = "UPDATE {$schema}.ticket_active SET vpo_seen = 0 WHERE id_number = ?";
+        } elseif ($r === 'CAD') {
+            $sql = "UPDATE {$schema}.ticket_active SET cad_seen = 0 WHERE id_number = ?";
+        }
+        if ($sql === null) {
+            return;
+        }
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    function st_get_ticket_badge_counts($conn, $ticketNumbers, $role)
+    {
+        if (!st_table_exists($conn, 'ticket_badge')) {
+            return [];
+        }
+
+        $col = null;
+        $r = strtoupper(trim((string) $role));
+        if ($r === 'BRANCH') {
+            $col = 'branch_count';
+        } elseif ($r === 'VPO') {
+            $col = 'vpo_count';
+        } elseif ($r === 'CAD') {
+            $col = 'cad_count';
+        }
+        if ($col === null) {
+            return [];
+        }
+
+        $numbers = [];
+        foreach ((array) $ticketNumbers as $n) {
+            $t = trim((string) $n);
+            if ($t !== '') {
+                $numbers[] = $t;
+            }
+        }
+        $numbers = array_values(array_unique($numbers));
+        if (empty($numbers)) {
+            return [];
+        }
+
+        $schema = st_schema();
+        $placeholders = implode(',', array_fill(0, count($numbers), '?'));
+        $types = str_repeat('s', count($numbers));
+        $sql = "SELECT ticket_number, {$col} AS role_count
+                FROM {$schema}.ticket_badge
+                WHERE ticket_number IN ({$placeholders})";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param($types, ...$numbers);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
+
+        $res = $stmt->get_result();
+        $map = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $ticketNumber = (string) ($row['ticket_number'] ?? '');
+                if ($ticketNumber === '') {
+                    continue;
+                }
+                $countVal = $row['role_count'];
+                $map[$ticketNumber] = $countVal === null ? null : (int) $countVal;
+            }
+        }
+
+        $stmt->close();
+        return $map;
+    }
+
+    function st_ticket_badge_on_new_trail($conn, $ticketId, $senderRole)
+    {
+        if (!st_ticket_badge_tables_ready($conn)) {
+            return;
+        }
+
+        $schema = st_schema();
+        $sql = "SELECT ticket_number, created_by, vpo_owner, cad_owner
+                FROM {$schema}.tickets
+                WHERE id = ?
+                LIMIT 1";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+
+        $stmt->bind_param('i', $ticketId);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return;
+        }
+
+        $res = $stmt->get_result();
+        $ticket = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        if (!$ticket) {
+            return;
+        }
+
+        $ticketNumber = trim((string) ($ticket['ticket_number'] ?? ''));
+        if ($ticketNumber === '') {
+            return;
+        }
+
+        st_ensure_ticket_badge_row($conn, $ticketNumber);
+
+        $sender = strtoupper(trim((string) $senderRole));
+        $participants = [
+            'BRANCH' => (int) ($ticket['created_by'] ?? 0),
+            'VPO' => (int) ($ticket['vpo_owner'] ?? 0),
+            'CAD' => (int) ($ticket['cad_owner'] ?? 0),
+        ];
+
+        foreach ($participants as $role => $ownerId) {
+            if ($ownerId <= 0) {
+                continue;
+            }
+            if ($sender !== 'SYSTEM' && $sender === $role) {
+                continue;
+            }
+            st_ticket_badge_increment_role($conn, $ticketNumber, $role);
+            if ($role === 'VPO' || $role === 'CAD') {
+                st_sync_ticket_active_counts($conn, $ownerId);
+                st_ticket_active_mark_unseen($conn, $ownerId, $role);
+            }
+        }
     }
 }

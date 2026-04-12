@@ -2,7 +2,11 @@
 include_once __DIR__ . '/../../includes/bootstrap.php';
 
 st_require_login('../../../../login_form.php');
+$returnMode = strtolower(trim((string) ($_POST['return_mode'] ?? '')));
 $redirectBack = '../../create-ticket.php';
+if (in_array($returnMode, ['open', 'closed'], true)) {
+    $redirectBack .= '?mode=' . $returnMode;
+}
 
 st_require_permission_page(['Support Ticket Create'], '../../../home.php');
 

@@ -122,6 +122,18 @@ foreach ($allCadTickets as $ticket) {
 }
 
 $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
+st_sync_ticket_active_counts($conn, $userId);
+$activeBadgeRowCad = st_get_ticket_active_row($conn, $userId);
+$cadActiveBadgeCount = (int) ($activeBadgeRowCad['cad_count'] ?? count($cadActive));
+
+$ticketNumbersCad = [];
+foreach ($allCadTickets as $ticket) {
+    $tn = trim((string) ($ticket['ticket_number'] ?? ''));
+    if ($tn !== '') {
+        $ticketNumbersCad[] = $tn;
+    }
+}
+$ticketBadgeCountsCad = st_get_ticket_badge_counts($conn, $ticketNumbersCad, 'CAD');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -165,6 +177,7 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                     <input type="radio" name="cadMode" value="active" <?php echo $mode === 'active' ? 'checked' : ''; ?>>
                     <div class="mode-icon"><i class="fa-solid fa-bolt"></i></div>
                     <div class="mode-text"><p class="mode-label">ACTIVE</p><small>Assigned to you</small></div>
+                    <?php if ($cadActiveBadgeCount > 0): ?><span class="st-mode-count-badge"><?php echo (int) $cadActiveBadgeCount; ?></span><?php endif; ?>
                 </label>
 
                 <label class="mode-card <?php echo $mode === 'closed' ? 'selected' : ''; ?>" data-mode="closed">
@@ -187,8 +200,9 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($cadOpen as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>">
-                                <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="CAD">
+                                <?php $cadUnread = (int) ($ticketBadgeCountsCad[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
+                                <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($cadUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $cadUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
                                 <span class="st-ticket-col st-col-partner"><?php echo htmlspecialchars(st_partner_name_cad($ticket)); ?></span>
@@ -212,8 +226,9 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($cadActive as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>">
-                                <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="CAD">
+                                <?php $cadUnread = (int) ($ticketBadgeCountsCad[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
+                                <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($cadUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $cadUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
                                 <span class="st-ticket-col st-col-partner"><?php echo htmlspecialchars(st_partner_name_cad($ticket)); ?></span>
@@ -237,8 +252,9 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($cadClosed as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>">
-                                <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="CAD">
+                                <?php $cadUnread = (int) ($ticketBadgeCountsCad[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
+                                <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($cadUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $cadUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) ($ticket['closed_at'] ?: $ticket['created_at'])); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
                                 <span class="st-ticket-col st-col-partner"><?php echo htmlspecialchars(st_partner_name_cad($ticket)); ?></span>
@@ -256,9 +272,13 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                     $attachmentsByTrail = $ticketAttachmentsByTicketId[$ticketId] ?? [];
                     $ticketTypeText = (string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request']);
                     $statusLower = strtolower((string) ($ticket['status'] ?? ''));
+                    $isResolved = $statusLower === 'resolved';
                     $isClosed = $statusLower === 'closed';
                     $isOpen = in_array($statusLower, ['open', 'transferred'], true);
-                    $isActive = !$isClosed && !$isOpen;
+                    $isActive = !$isClosed && !$isResolved && !$isOpen;
+                    $currentHandlerRole = strtoupper((string) ($ticket['current_handler_role'] ?? ''));
+                    $assignedToId = (int) ($ticket['assigned_to'] ?? 0);
+                    $isCadActionable = ($userId !== null && $currentHandlerRole === 'CAD' && $assignedToId === (int) $userId);
                     $ticketNumber = (string) ($ticket['ticket_number'] ?? '');
                     $ticketSupplemental = $ticketSupplementalByTicketNumber[$ticketNumber] ?? [];
                     $vpoOwnerId = (int) ($ticket['vpo_owner'] ?? 0);
@@ -480,16 +500,19 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                 <div class="tm-footer-inner" style="justify-content:flex-end;">
                                     <form method="post" action="controllers/cad/accept-ticket.php">
                                         <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                        <input type="hidden" name="return_mode" value="active">
                                         <button class="tm-btn tm-btn--red" type="submit">Accept</button>
                                     </form>
                                 </div>
                             </div>
                         <?php elseif ($isActive): ?>
                             <div class="tm-footer tm-footer--open">
+                                <?php if ($isCadActionable): ?>
                                 <div class="tm-footer-inner" style="display:block;">
                                     <form method="post" action="controllers/cad/submit-ticket.php" style="display:flex;gap:8px;align-items:stretch;margin-bottom:8px;width:100%;">
                                         <input type="hidden" name="action" value="reply">
                                         <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                        <input type="hidden" name="return_mode" value="active">
                                         <div class="tm-textarea-container" style="flex:1;min-width:0;">
                                             <textarea name="message" class="tm-textarea" placeholder="Type your reply..." required></textarea>
                                         </div>
@@ -502,6 +525,7 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                     <form id="stTransferToVpoForm-<?php echo $ticketId; ?>" method="post" action="controllers/cad/submit-ticket.php" style="display:none;">
                                         <input type="hidden" name="action" value="transfer_to_vpo">
                                         <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                        <input type="hidden" name="return_mode" value="active">
                                         <input type="hidden" name="message" value="">
                                     </form>
 
@@ -530,11 +554,13 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                                 <form method="post" action="controllers/cad/close-ticket.php">
                                                     <input type="hidden" name="close_mode" value="auto">
                                                     <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                                    <input type="hidden" name="return_mode" value="active">
                                                     <button class="tm-btn tm-btn--transfer" type="submit">Auto Close</button>
                                                 </form>
                                                 <form method="post" action="controllers/cad/close-ticket.php">
                                                     <input type="hidden" name="close_mode" value="immediate">
                                                     <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                                    <input type="hidden" name="return_mode" value="active">
                                                     <button class="tm-btn tm-btn--danger" type="submit">Close Immediately</button>
                                                 </form>
                                             </div>
@@ -544,9 +570,14 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                         </div>
                                     </div>
                                 </div>
+                                <?php else: ?>
+                                <div class="tm-footer tm-footer--closed">Ticket is currently handled by VPO. You can still view the conversation timeline.</div>
+                                <?php endif; ?>
                             </div>
+                        <?php elseif ($isResolved): ?>
+                            <div class="tm-footer tm-footer--closed">This ticket has been resolved!</div>
                         <?php else: ?>
-                            <div class="tm-footer tm-footer--closed">Ticket is closed.</div>
+                            <div class="tm-footer tm-footer--closed">This ticket is already closed!</div>
                         <?php endif; ?>
                     </div>
                 </div>

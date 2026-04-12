@@ -22,7 +22,8 @@ if ($userId !== null) {
 }
 
 foreach ($branchTickets as $ticket) {
-    if (strtolower((string) ($ticket['status'] ?? '')) === 'closed') {
+    $statusLower = strtolower((string) ($ticket['status'] ?? ''));
+    if (in_array($statusLower, ['resolved', 'closed'], true)) {
         $closedTickets[] = $ticket;
     } else {
         $openTickets[] = $ticket;
@@ -134,6 +135,15 @@ foreach ($branchTickets as $ticket) {
 }
 
 $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
+
+$ticketNumbersBranch = [];
+foreach ($branchTickets as $ticket) {
+    $tn = trim((string) ($ticket['ticket_number'] ?? ''));
+    if ($tn !== '') {
+        $ticketNumbersBranch[] = $tn;
+    }
+}
+$ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranch, 'BRANCH');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -211,8 +221,9 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($openTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>">
-                                <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="BRANCH">
+                                <?php $branchUnread = (int) ($ticketBadgeCountsBranch[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
+                                <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($branchUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $branchUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
                                 <span class="st-ticket-col st-col-partner"><?php echo htmlspecialchars(st_card_partner_name($ticket)); ?></span>
@@ -236,8 +247,9 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($closedTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>">
-                                <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="BRANCH">
+                                <?php $branchUnread = (int) ($ticketBadgeCountsBranch[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
+                                <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($branchUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $branchUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
                                 <span class="st-ticket-col st-col-partner"><?php echo htmlspecialchars(st_card_partner_name($ticket)); ?></span>
@@ -475,6 +487,7 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                         <?php if (!$isClosed): ?>
                             <form method="post" action="controllers/branch/reply-ticket.php" enctype="multipart/form-data">
                                 <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                <input type="hidden" name="return_mode" value="<?php echo htmlspecialchars($mode); ?>">
                                 <div class="tm-footer tm-footer--open">
                                     <div class="tm-footer-inner">
                                         <label class="tm-btn-attach" for="reply_attachments_<?php echo $ticketId; ?>" title="Attach files">
@@ -490,7 +503,7 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                 </div>
                             </form>
                         <?php else: ?>
-                            <div class="tm-footer tm-footer--closed">Ticket is closed.</div>
+                            <div class="tm-footer tm-footer--closed">This ticket is already closed!</div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -507,6 +520,7 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
 
                 <div class="st-modal-body">
                     <form id="stCreateTicketForm" method="post" action="controllers/branch/create-ticket.php" enctype="multipart/form-data" class="entry-form auto-entry-form manual-entry-form" novalidate>
+                        <input type="hidden" name="return_mode" value="<?php echo htmlspecialchars($mode); ?>">
                         <input type="hidden" name="ticket_type_id" id="ticket_type_id" value="<?php echo isset($ticketTypes[0]) ? (int) $ticketTypes[0]['id'] : 1; ?>">
 
                         <div class="auto-content-grid">

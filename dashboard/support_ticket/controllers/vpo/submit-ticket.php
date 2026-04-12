@@ -4,7 +4,11 @@ include_once __DIR__ . '/../../includes/bootstrap.php';
 st_require_login('../../../../login_form.php');
 st_require_permission_page(['Support Ticket BPO'], '../../../home.php');
 
+$returnMode = strtolower(trim((string) ($_POST['return_mode'] ?? '')));
 $redirectBack = '../../bpo-ticket.php';
+if (in_array($returnMode, ['open', 'active', 'closed'], true)) {
+    $redirectBack .= '?mode=' . $returnMode;
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     st_redirect_with_flash('vpo_ticket', 'danger', 'Invalid request method.', $redirectBack);
@@ -32,7 +36,7 @@ $conn->autocommit(false);
 try {
     $schema = st_schema();
 
-    $lockSql = "SELECT id, status, current_handler_role, assigned_to, vpo_owner
+    $lockSql = "SELECT id, status, current_handler_role, assigned_to, vpo_owner, cad_owner
                 FROM {$schema}.tickets
                 WHERE id = ? FOR UPDATE";
     $lockStmt = $conn->prepare($lockSql);
@@ -57,6 +61,7 @@ try {
     $currentHandler = strtoupper((string) ($ticket['current_handler_role'] ?? ''));
     $assignedTo = (int) ($ticket['assigned_to'] ?? 0);
     $vpoOwner = (int) ($ticket['vpo_owner'] ?? 0);
+    $cadOwner = (int) ($ticket['cad_owner'] ?? 0);
     $isAssignedVpo = ($currentHandler === 'VPO' && $assignedTo === (int) $userId);
     $isVpoParticipant = ($vpoOwner > 0 && $vpoOwner === (int) $userId);
 
@@ -82,19 +87,34 @@ try {
 
     $transferMessage = $message !== '' ? $message : 'Ticket transferred to CAD.';
 
-    $updSql = "UPDATE {$schema}.tickets
-               SET current_handler_role = 'CAD',
-                   assigned_to = NULL,
-                   cad_owner = NULL,
-                   status = 'transferred',
-                   updated_at = NOW()
-               WHERE id = ? AND current_handler_role = 'VPO' AND assigned_to = ?";
-    $updStmt = $conn->prepare($updSql);
-    if (!$updStmt) {
-        throw new Exception('Unable to prepare transfer update.');
-    }
+    if ($cadOwner > 0) {
+        $updSql = "UPDATE {$schema}.tickets
+                   SET current_handler_role = 'CAD',
+                       assigned_to = ?,
+                       status = 'resolving',
+                       updated_at = NOW()
+                   WHERE id = ? AND current_handler_role = 'VPO' AND assigned_to = ?";
+        $updStmt = $conn->prepare($updSql);
+        if (!$updStmt) {
+            throw new Exception('Unable to prepare transfer update.');
+        }
 
-    $updStmt->bind_param('ii', $ticketId, $userId);
+        $updStmt->bind_param('iii', $cadOwner, $ticketId, $userId);
+    } else {
+        $updSql = "UPDATE {$schema}.tickets
+                   SET current_handler_role = 'CAD',
+                       assigned_to = NULL,
+                       cad_owner = NULL,
+                       status = 'transferred',
+                       updated_at = NOW()
+                   WHERE id = ? AND current_handler_role = 'VPO' AND assigned_to = ?";
+        $updStmt = $conn->prepare($updSql);
+        if (!$updStmt) {
+            throw new Exception('Unable to prepare transfer update.');
+        }
+
+        $updStmt->bind_param('ii', $ticketId, $userId);
+    }
     if (!$updStmt->execute()) {
         $updStmt->close();
         throw new Exception('Unable to transfer ticket to CAD.');

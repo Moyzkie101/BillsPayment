@@ -204,7 +204,7 @@ if (!function_exists('st_get_vpo_open_tickets')) {
     {
         return st_fetch_tickets(
             $conn,
-            "WHERE t.current_handler_role = 'VPO' AND t.assigned_to IS NULL AND t.status <> 'closed'"
+            "WHERE t.current_handler_role = 'VPO' AND t.assigned_to IS NULL AND t.status NOT IN ('closed', 'resolved')"
         );
     }
 }
@@ -214,7 +214,7 @@ if (!function_exists('st_get_vpo_active_tickets')) {
     {
         return st_fetch_tickets(
             $conn,
-            "WHERE t.status <> 'closed' AND ((t.assigned_to = ? AND t.current_handler_role = 'VPO') OR (t.vpo_owner = ? AND t.current_handler_role = 'CAD'))",
+            "WHERE t.status NOT IN ('closed', 'resolved') AND ((t.assigned_to = ? AND t.current_handler_role = 'VPO') OR (t.vpo_owner = ? AND t.current_handler_role = 'CAD'))",
             [(int) $userId, (int) $userId],
             'ii'
         );
@@ -226,7 +226,7 @@ if (!function_exists('st_get_vpo_closed_tickets')) {
     {
         return st_fetch_tickets(
             $conn,
-            "WHERE t.status = 'closed' AND t.vpo_owner = ?",
+            "WHERE t.status IN ('resolved', 'closed') AND t.vpo_owner = ?",
             [(int) $userId],
             'i'
         );
@@ -248,9 +248,9 @@ if (!function_exists('st_get_cad_active_tickets')) {
     {
         return st_fetch_tickets(
             $conn,
-            "WHERE t.assigned_to = ? AND t.current_handler_role = 'CAD' AND t.status <> 'closed'",
-            [(int) $userId],
-            'i'
+            "WHERE t.status NOT IN ('closed', 'resolved') AND ((t.assigned_to = ? AND t.current_handler_role = 'CAD') OR (t.cad_owner = ? AND t.current_handler_role = 'VPO'))",
+            [(int) $userId, (int) $userId],
+            'ii'
         );
     }
 }
@@ -260,7 +260,7 @@ if (!function_exists('st_get_cad_closed_tickets')) {
     {
         return st_fetch_tickets(
             $conn,
-            "WHERE t.status = 'closed' AND t.cad_owner = ?",
+            "WHERE t.status IN ('resolved', 'closed') AND t.cad_owner = ?",
             [(int) $userId],
             'i'
         );

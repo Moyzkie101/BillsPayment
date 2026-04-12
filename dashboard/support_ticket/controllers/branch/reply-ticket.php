@@ -4,7 +4,11 @@ include_once __DIR__ . '/../../includes/bootstrap.php';
 st_require_login('../../../../login_form.php');
 st_require_permission_page(['Support Ticket Create'], '../../../home.php');
 
+$returnMode = strtolower(trim((string) ($_POST['return_mode'] ?? '')));
 $redirectBack = '../../create-ticket.php';
+if (in_array($returnMode, ['open', 'closed'], true)) {
+    $redirectBack .= '?mode=' . $returnMode;
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     st_redirect_with_flash('create_ticket', 'danger', 'Invalid request method.', $redirectBack);
@@ -27,7 +31,7 @@ $conn->autocommit(false);
 try {
     $schema = st_schema();
 
-    $lockSql = "SELECT id, status, current_handler_role, created_by
+    $lockSql = "SELECT id, status, current_handler_role, created_by, vpo_owner
                 FROM {$schema}.tickets
                 WHERE id = ? FOR UPDATE";
     $lockStmt = $conn->prepare($lockSql);
@@ -57,8 +61,33 @@ try {
         throw new Exception('Cannot reply to a closed ticket.');
     }
 
+    $statusNow = strtolower((string) ($ticket['status'] ?? ''));
     $targetRole = (string) $ticket['current_handler_role'];
-    if ($targetRole !== 'VPO' && $targetRole !== 'CAD') {
+
+    // Branch reply on a resolved ticket should reopen it and hand back to VPO owner.
+    if ($statusNow === 'resolved') {
+        $vpoOwner = isset($ticket['vpo_owner']) && is_numeric($ticket['vpo_owner']) ? (int) $ticket['vpo_owner'] : 0;
+        $reopenSql = "UPDATE {$schema}.tickets
+                      SET status = 'resolving',
+                          current_handler_role = 'VPO',
+                          assigned_to = " . ($vpoOwner > 0 ? '?' : 'NULL') . "
+                      WHERE id = ?";
+        $reopenStmt = $conn->prepare($reopenSql);
+        if (!$reopenStmt) {
+            throw new Exception('Unable to prepare ticket reopen update.');
+        }
+        if ($vpoOwner > 0) {
+            $reopenStmt->bind_param('ii', $vpoOwner, $ticketId);
+        } else {
+            $reopenStmt->bind_param('i', $ticketId);
+        }
+        if (!$reopenStmt->execute()) {
+            $reopenStmt->close();
+            throw new Exception('Unable to reopen resolved ticket.');
+        }
+        $reopenStmt->close();
+        $targetRole = 'VPO';
+    } elseif ($targetRole !== 'VPO' && $targetRole !== 'CAD') {
         $targetRole = 'VPO';
     }
 

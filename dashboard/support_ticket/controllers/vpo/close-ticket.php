@@ -4,7 +4,11 @@ include_once __DIR__ . '/../../includes/bootstrap.php';
 st_require_login('../../../../login_form.php');
 st_require_permission_page(['Support Ticket BPO'], '../../../home.php');
 
+$returnMode = strtolower(trim((string) ($_POST['return_mode'] ?? '')));
 $redirectBack = '../../bpo-ticket.php';
+if (in_array($returnMode, ['open', 'active', 'closed'], true)) {
+    $redirectBack .= '?mode=' . $returnMode;
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     st_redirect_with_flash('vpo_ticket', 'danger', 'Invalid request method.', $redirectBack);

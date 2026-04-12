@@ -196,6 +196,55 @@
                 var targetModal = document.getElementById(targetId);
                 if (targetModal) {
                     targetModal.classList.add('open');
+
+                    // Mark ticket badge as seen for the current page role.
+                    var seenTicketId = btn.getAttribute('data-ticket-id');
+                    var seenRole = btn.getAttribute('data-seen-role');
+                    if (seenTicketId && seenRole) {
+                        var fd = new FormData();
+                        fd.append('ticket_id', seenTicketId);
+                        fd.append('role', seenRole);
+                        fetch('controllers/badges/mark-seen.php', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            body: fd
+                        }).then(function (res) {
+                            if (!res || !res.ok) return null;
+                            return res.json();
+                        }).then(function (json) {
+                            if (!json || !json.success) return;
+
+                            // Remove the per-ticket unread badge in the row we clicked
+                            try {
+                                var unread = btn.querySelector('.st-ticket-unread-badge');
+                                if (unread && unread.parentNode) unread.parentNode.removeChild(unread);
+                            } catch (e) {
+                                // ignore DOM update errors
+                            }
+
+                            // Decrement the mode-level active badge if present
+                            try {
+                                var modeCard = document.querySelector('.mode-card[data-mode="active"]');
+                                if (modeCard) {
+                                    var modeBadge = modeCard.querySelector('.st-mode-count-badge');
+                                    if (modeBadge) {
+                                        var n = parseInt(modeBadge.textContent.trim(), 10) || 0;
+                                        n = Math.max(0, n - 1);
+                                        if (n === 0) {
+                                            modeBadge.parentNode && modeBadge.parentNode.removeChild(modeBadge);
+                                        } else {
+                                            modeBadge.textContent = n;
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                // ignore DOM update errors
+                            }
+                        }).catch(function () {
+                            // no-op: badge sync failure should not block modal open
+                        });
+                    }
+
                     // Ensure trail card bodies have correct heights when modal becomes visible
                     requestAnimationFrame(function () {
                         adjustTrailCardHeights(targetModal);

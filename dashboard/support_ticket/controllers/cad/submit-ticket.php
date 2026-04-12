@@ -4,7 +4,11 @@ include_once __DIR__ . '/../../includes/bootstrap.php';
 st_require_login('../../../../login_form.php');
 st_require_permission_page(['Support Ticket CAD'], '../../../home.php');
 
+$returnMode = strtolower(trim((string) ($_POST['return_mode'] ?? '')));
 $redirectBack = '../../cad-ticket.php';
+if (in_array($returnMode, ['open', 'active', 'closed'], true)) {
+    $redirectBack .= '?mode=' . $returnMode;
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     st_redirect_with_flash('cad_ticket', 'danger', 'Invalid request method.', $redirectBack);
@@ -32,7 +36,7 @@ $conn->autocommit(false);
 try {
     $schema = st_schema();
 
-    $lockSql = "SELECT id, status, current_handler_role, assigned_to
+    $lockSql = "SELECT id, status, current_handler_role, assigned_to, vpo_owner, cad_owner
                 FROM {$schema}.tickets
                 WHERE id = ? FOR UPDATE";
     $lockStmt = $conn->prepare($lockSql);
@@ -58,6 +62,8 @@ try {
         throw new Exception('Ticket is not assigned to you as CAD.');
     }
 
+    $vpoOwner = (int) ($ticket['vpo_owner'] ?? 0);
+
     if ((string) $ticket['status'] === 'closed') {
         throw new Exception('Cannot update a closed ticket.');
     }
@@ -72,10 +78,14 @@ try {
 
     $transferMessage = $message !== '' ? $message : 'Ticket transferred to VPO.';
 
+    if ($vpoOwner <= 0) {
+        throw new Exception('Cannot transfer to VPO because no VPO owner is set.');
+    }
+
     $updSql = "UPDATE {$schema}.tickets
                SET current_handler_role = 'VPO',
-                   assigned_to = NULL,
-                   status = 'accepted',
+                   assigned_to = ?,
+                   status = 'resolving',
                    updated_at = NOW()
                WHERE id = ? AND current_handler_role = 'CAD' AND assigned_to = ?";
     $updStmt = $conn->prepare($updSql);
@@ -83,7 +93,7 @@ try {
         throw new Exception('Unable to prepare transfer update.');
     }
 
-    $updStmt->bind_param('ii', $ticketId, $userId);
+    $updStmt->bind_param('iii', $vpoOwner, $ticketId, $userId);
     if (!$updStmt->execute()) {
         $updStmt->close();
         throw new Exception('Unable to transfer ticket to VPO.');
