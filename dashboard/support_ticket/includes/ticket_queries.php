@@ -17,14 +17,21 @@ if (!function_exists('st_fetch_tickets')) {
                     t.vpo_owner,
                     t.cad_owner,
                     t.auto_close_at,
-                    t.closed_at,
-                    t.created_at,
+                        t.closed_at,
+                        t.created_at,
+                        t.created_by,
                     ti.ticket_type_id,
                     tt.label AS ticket_type_label,
                     ti.reason,
                     ti.type_of_request,
                     ti.wrong_biller_id,
                     ti.biller_name,
+                    ti.transfer_datetime,
+                    ti.ref_no,
+                    ti.account_no,
+                    ti.account_name,
+                    ti.payment_branch_id,
+                    ti.payment_branch_name,
                     ti.amount,
                     sb.partner_ext_id AS sb_partner_ext_id,
                     p.partner_name
@@ -65,6 +72,130 @@ if (!function_exists('st_fetch_tickets')) {
 
         $stmt->close();
         return $rows;
+    }
+}
+
+if (!function_exists('st_get_ticket_wrongbiller_by_ticket_number')) {
+    function st_get_ticket_wrongbiller_by_ticket_number($conn, $ticketNumber)
+    {
+        $schema = st_schema();
+        $sql = "SELECT correct_biller_id, correct_biller_name FROM {$schema}.ticket_info_wrongbiller WHERE ticket_number = ? ORDER BY id DESC LIMIT 1";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->bind_param('s', $ticketNumber);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return null;
+        }
+
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        return $row ?: null;
+    }
+}
+
+if (!function_exists('st_get_ticket_overstatedamount_by_ticket_number')) {
+    function st_get_ticket_overstatedamount_by_ticket_number($conn, $ticketNumber)
+    {
+        $schema = st_schema();
+        $sql = "SELECT wrong_amount, correct_amount, difference FROM {$schema}.ticket_info_overstatedamount WHERE ticket_number = ? ORDER BY id DESC LIMIT 1";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->bind_param('s', $ticketNumber);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return null;
+        }
+
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        return $row ?: null;
+    }
+}
+
+if (!function_exists('st_get_ticket_cancelledtransaction_by_ticket_number')) {
+    function st_get_ticket_cancelledtransaction_by_ticket_number($conn, $ticketNumber)
+    {
+        $schema = st_schema();
+        $sql = "SELECT wrong_amount, correct_amount FROM {$schema}.ticket_info_cancelledtransaction WHERE ticket_number = ? ORDER BY id DESC LIMIT 1";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->bind_param('s', $ticketNumber);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return null;
+        }
+
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        return $row ?: null;
+    }
+}
+
+if (!function_exists('st_get_user_names_by_id_numbers')) {
+    function st_get_user_names_by_id_numbers($conn, $idNumbers)
+    {
+        $ids = [];
+        foreach ((array) $idNumbers as $id) {
+            if ($id === null || $id === '') {
+                continue;
+            }
+            if (is_numeric($id)) {
+                $ids[] = (int) $id;
+            }
+        }
+
+        $ids = array_values(array_unique($ids));
+        if (empty($ids)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $types = str_repeat('i', count($ids));
+        $sql = "SELECT id_number, first_name, last_name
+                FROM mldb.user_form
+                WHERE id_number IN ({$placeholders})";
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param($types, ...$ids);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
+
+        $res = $stmt->get_result();
+        $map = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $id = (int) ($row['id_number'] ?? 0);
+                if ($id <= 0) {
+                    continue;
+                }
+                $first = trim((string) ($row['first_name'] ?? ''));
+                $last = trim((string) ($row['last_name'] ?? ''));
+                $fullName = trim($first . ' ' . $last);
+                $map[$id] = $fullName !== '' ? $fullName : ('ID ' . $id);
+            }
+        }
+
+        $stmt->close();
+        return $map;
     }
 }
 

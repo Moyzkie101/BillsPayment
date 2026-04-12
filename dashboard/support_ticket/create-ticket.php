@@ -103,6 +103,8 @@ function st_get_ticket_attachments_grouped_by_trail($conn, $ticketId)
 
 $ticketTrailsByTicketId = [];
 $ticketAttachmentsByTicketId = [];
+$ticketSupplementalByTicketNumber = [];
+$ownerIds = [];
 foreach ($branchTickets as $ticket) {
     $ticketId = (int) ($ticket['id'] ?? 0);
     if ($ticketId <= 0) {
@@ -110,7 +112,28 @@ foreach ($branchTickets as $ticket) {
     }
     $ticketTrailsByTicketId[$ticketId] = st_get_ticket_trails($conn, $ticketId);
     $ticketAttachmentsByTicketId[$ticketId] = st_get_ticket_attachments_grouped_by_trail($conn, $ticketId);
+
+    $ticketNumber = (string) ($ticket['ticket_number'] ?? '');
+    if ($ticketNumber !== '') {
+        $ticketSupplementalByTicketNumber[$ticketNumber] = [
+            'wrongbiller' => st_get_ticket_wrongbiller_by_ticket_number($conn, $ticketNumber),
+            'overstated' => st_get_ticket_overstatedamount_by_ticket_number($conn, $ticketNumber),
+            'cancelled' => st_get_ticket_cancelledtransaction_by_ticket_number($conn, $ticketNumber),
+        ];
+    }
+
+    if (isset($ticket['created_by']) && is_numeric($ticket['created_by'])) {
+        $ownerIds[] = (int) $ticket['created_by'];
+    }
+    if (isset($ticket['vpo_owner']) && is_numeric($ticket['vpo_owner'])) {
+        $ownerIds[] = (int) $ticket['vpo_owner'];
+    }
+    if (isset($ticket['cad_owner']) && is_numeric($ticket['cad_owner'])) {
+        $ownerIds[] = (int) $ticket['cad_owner'];
+    }
 }
+
+$ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -121,6 +144,8 @@ foreach ($branchTickets as $ticket) {
     <link rel="icon" href="../../images/MLW%20logo.png" type="image/png">
     <link rel="stylesheet" href="../../assets/css/templates/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="assets/css/support-ticket.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="assets/css/ticket-modal.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="assets/css/image-preview.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="../trl/trl-entry/trl-entry.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="../trl/trl-entry/components/trl-entry-auto.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="../trl/trl-entry/components/trl-entry-manual.css?v=<?php echo time(); ?>">
@@ -230,26 +255,80 @@ foreach ($branchTickets as $ticket) {
                     $attachmentsByTrail = $ticketAttachmentsByTicketId[$ticketId] ?? [];
                     $ticketTypeText = (string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request']);
                     $isClosed = strtolower((string) ($ticket['status'] ?? '')) === 'closed';
+                    $ticketNumber = (string) ($ticket['ticket_number'] ?? '');
+                    $ticketSupplemental = $ticketSupplementalByTicketNumber[$ticketNumber] ?? [];
+                    $createdById = (int) ($ticket['created_by'] ?? 0);
+                    $vpoOwnerId = (int) ($ticket['vpo_owner'] ?? 0);
+                    $cadOwnerId = (int) ($ticket['cad_owner'] ?? 0);
+                    $createdByName = $createdById > 0 ? ($ownerNamesById[$createdById] ?? ('ID ' . $createdById)) : '';
+                    $vpoOwnerName = $vpoOwnerId > 0 ? ($ownerNamesById[$vpoOwnerId] ?? ('ID ' . $vpoOwnerId)) : '';
+                    $cadOwnerName = $cadOwnerId > 0 ? ($ownerNamesById[$cadOwnerId] ?? ('ID ' . $cadOwnerId)) : '';
+
+                    // Header meta values
+                    $hdrReference = (string) ($ticket['reference_number'] ?? 'N/A');
+                    $hdrTransferRaw = (string) ($ticket['transfer_datetime'] ?? '');
+                    $hdrTransfer = $hdrTransferRaw;
+                    $tsHdr = strtotime($hdrTransferRaw);
+                    if ($tsHdr !== false) {
+                        $hdrTransfer = date('M d, Y h:i A', $tsHdr);
+                    }
+                    $hdrAccount = (string) ($ticket['account_no'] ?? ($ticket['account_number'] ?? 'N/A'));
+                    $hdrPaymentBranch = (string) ($ticket['payment_branch_name'] ?? ($ticket['payment_branch_id'] ?? 'N/A'));
+                    $hdrAmount = isset($ticket['amount']) && $ticket['amount'] !== null && $ticket['amount'] !== '' ? 'PHP ' . number_format((float) $ticket['amount'], 2) : 'N/A';
                 ?>
-                <div class="st-modal-backdrop st-ticket-trail-backdrop" id="stTicketTrailModal-<?php echo $ticketId; ?>" aria-hidden="true">
-                    <div class="st-modal st-ticket-trail-modal">
-                        <div class="st-modal-header">
-                            <div>
-                                <h5 class="mb-0">Ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></h5>
-                                <div class="st-ticket-meta-line">
-                                    <span>Reference: <?php echo htmlspecialchars((string) ($ticket['reference_number'] ?? 'N/A')); ?></span>
-                                    <span>Source: <?php echo htmlspecialchars((string) ($ticket['source'] ?? 'N/A')); ?></span>
-                                    <span>Partner: <?php echo htmlspecialchars(st_card_partner_name($ticket)); ?></span>
-                                    <span>Type: <?php echo htmlspecialchars($ticketTypeText); ?></span>
+                <div class="tm-overlay" id="stTicketTrailModal-<?php echo $ticketId; ?>" aria-hidden="true" role="dialog" aria-modal="true">
+                    <div class="tm-modal">
+                        <div class="tm-header">
+                            <div class="tm-header-top">
+                                <div class="tm-header-left">
+                                    <div class="tm-ticket-number"><span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>Ticket #: <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
+                                    <div class="tm-ticket-meta-grid">
+                                        <div class="tm-meta-item">
+                                            <div class="tm-meta-label">Reference No.</div>
+                                            <div class="tm-meta-value"><?php echo htmlspecialchars($hdrReference); ?></div>
+                                        </div>
+                                        <div class="tm-meta-item">
+                                            <div class="tm-meta-label">Transaction D/T</div>
+                                            <div class="tm-meta-value"><?php echo htmlspecialchars($hdrTransfer); ?></div>
+                                        </div>
+                                        <div class="tm-meta-item">
+                                            <div class="tm-meta-label">Account No.</div>
+                                            <div class="tm-meta-value"><?php echo htmlspecialchars($hdrAccount); ?></div>
+                                        </div>
+                                        <div class="tm-meta-item">
+                                            <div class="tm-meta-label">Payment Branch</div>
+                                            <div class="tm-meta-value"><?php echo htmlspecialchars($hdrPaymentBranch); ?></div>
+                                        </div>
+
+                                        <div class="tm-meta-item">
+                                            <div class="tm-meta-label">Partner</div>
+                                            <div class="tm-meta-value"><?php echo htmlspecialchars(st_card_partner_name($ticket)); ?></div>
+                                        </div>
+                                        <div class="tm-meta-item">
+                                            <div class="tm-meta-label">Type</div>
+                                            <div class="tm-meta-value"><?php echo htmlspecialchars($ticketTypeText); ?></div>
+                                        </div>
+                                        <div class="tm-meta-item">
+                                            <div class="tm-meta-label">Source</div>
+                                            <div class="tm-meta-value"><?php echo htmlspecialchars((string) ($ticket['source'] ?? 'N/A')); ?></div>
+                                        </div>
+                                        <div class="tm-meta-item">
+                                            <div class="tm-meta-label">Amount</div>
+                                            <div class="tm-meta-value"><?php echo htmlspecialchars($hdrAmount); ?></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="tm-header-right">
+                                    <div class="tm-status tm-status--<?php echo htmlspecialchars(strtolower((string) $ticket['status'])); ?>"><?php echo htmlspecialchars((string) $ticket['status']); ?></div>
+                                    <button type="button" class="tm-close-btn" data-st-close-modal="stTicketTrailModal-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
                                 </div>
                             </div>
-                            <button type="button" class="st-modal-close" data-st-close-modal="stTicketTrailModal-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
                         </div>
 
-                        <div class="st-modal-body">
-                            <div class="st-trail-timeline">
+                        <div class="tm-body">
+                            <div class="tm-trail">
                                 <?php if (empty($trails)): ?>
-                                    <div class="st-empty">No trail entries yet.</div>
+                                    <div class="tm-empty-trail">No trail entries yet.</div>
                                 <?php else: ?>
                                     <?php $lastTrailIndex = count($trails) - 1; ?>
                                     <?php foreach ($trails as $trailIndex => $trail): ?>
@@ -265,47 +344,154 @@ foreach ($branchTickets as $ticket) {
                                             }
                                             $trailAttachments = $attachmentsByTrail[$trailId] ?? [];
                                             $trailMessage = trim((string) ($trail['message'] ?? ''));
+                                            $avatarClass = 'tm-trail-avatar--system';
+                                            if ($trailRole === 'BRANCH') $avatarClass = 'tm-trail-avatar--branch';
+                                            else if ($trailRole === 'VPO') $avatarClass = 'tm-trail-avatar--vpo';
+                                            else if ($trailRole === 'CAD') $avatarClass = 'tm-trail-avatar--cad';
+
+                                            $trailOwnerTooltip = '';
+                                            if ($trailRole === 'BRANCH') {
+                                                $trailOwnerTooltip = $createdByName;
+                                            } else if ($trailRole === 'VPO') {
+                                                $trailOwnerTooltip = $vpoOwnerName;
+                                            } else if ($trailRole === 'CAD') {
+                                                $trailOwnerTooltip = $cadOwnerName;
+                                            }
                                         ?>
-                                        <details class="st-trail-card <?php echo $trailRole === 'SYSTEM' ? 'st-trail-card-system' : ''; ?>" <?php echo $trailIndex === $lastTrailIndex ? 'open' : ''; ?>>
-                                            <summary>
-                                                <div class="st-trail-summary-left">
-                                                    <span class="st-trail-role-icon"><?php echo htmlspecialchars(st_trail_role_icon($trailRole)); ?></span>
-                                                    <span class="st-trail-role"><?php echo htmlspecialchars($trailRole); ?></span>
-                                                    <span class="st-trail-type"><?php echo htmlspecialchars(st_trail_type_label($trailType)); ?></span>
-                                                </div>
-                                                <div class="st-trail-datetime"><?php echo htmlspecialchars($trailDatetime); ?></div>
-                                            </summary>
-                                            <div class="st-trail-content">
-                                                <?php if ($trailMessage !== ''): ?>
-                                                    <div class="st-trail-message"><?php echo nl2br(htmlspecialchars($trailMessage)); ?></div>
-                                                <?php endif; ?>
-                                                <?php if (!empty($trailAttachments)): ?>
-                                                    <div class="st-trail-attachments">
-                                                        <?php foreach ($trailAttachments as $att): ?>
-                                                            <a class="st-attachment-link" href="controllers/attachments/download.php?id=<?php echo (int) ($att['id'] ?? 0); ?>">
-                                                                <i class="fa-solid fa-paperclip" aria-hidden="true"></i>
-                                                                <?php echo htmlspecialchars((string) ($att['file_name'] ?? 'Attachment')); ?>
-                                                            </a>
-                                                        <?php endforeach; ?>
-                                                    </div>
-                                                <?php endif; ?>
+                                        <div class="tm-trail-item">
+                                            <div class="tm-trail-dot-wrap">
+                                                <div class="tm-trail-avatar <?php echo $avatarClass; ?>"><?php echo htmlspecialchars(st_trail_role_icon($trailRole)); ?></div>
                                             </div>
-                                        </details>
+
+                                            <div class="tm-trail-card <?php echo $trailRole === 'SYSTEM' ? 'tm-trail-card--system' : ''; ?> <?php echo $trailIndex === $lastTrailIndex ? 'tm-expanded' : ''; ?>" <?php echo $trailIndex === $lastTrailIndex ? 'data-tm-latest="1"' : ''; ?>>
+                                                <div class="tm-trail-card-header">
+                                                    <div class="tm-trail-avatar <?php echo $avatarClass; ?>"><?php echo htmlspecialchars(st_trail_role_icon($trailRole)); ?></div>
+                                                    <div class="tm-trail-meta">
+                                                        <div class="tm-trail-sender">
+                                                            <span><?php echo htmlspecialchars($trailRole); ?></span>
+                                                            <?php if ($trailOwnerTooltip !== ''): ?>
+                                                                <span class="tm-owner-help tm-owner-help--inline" title="<?php echo htmlspecialchars($trailOwnerTooltip); ?>">?</span>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        <div class="tm-trail-datetime"><?php echo htmlspecialchars($trailDatetime); ?></div>
+                                                    </div>
+                                                    <div class="tm-trail-type-label tm-trail-type-label--<?php echo htmlspecialchars(strtolower($trailType)); ?>"><?php echo htmlspecialchars(st_trail_type_label($trailType)); ?></div>
+                                                    <div class="tm-trail-chevron">›</div>
+                                                </div>
+
+                                                <div class="tm-trail-card-body">
+                                                    <?php
+                                                        $showTicketDetails = false;
+                                                        $ticketReason = trim((string) ($ticket['reason'] ?? ''));
+                                                        if ($trailIndex === 0 || ($ticketReason !== '' && $trailMessage === $ticketReason)) {
+                                                            $showTicketDetails = true;
+                                                        }
+                                                    ?>
+
+                                                    <?php if ($showTicketDetails): ?>
+                                                        <div class="tm-ticket-details">
+                                                            <?php if (!empty($ticketSupplemental['wrongbiller'])):
+                                                                $wb = $ticketSupplemental['wrongbiller'];
+                                                            ?>
+                                                                <?php if (!empty($wb['correct_biller_id'])): ?>
+                                                                    <div class="tm-ticket-detail">
+                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-id-badge" aria-hidden="true"></i></span>
+                                                                        <span class="tm-detail-label">Biller ID</span>
+                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars($wb['correct_biller_id']); ?></span>
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                                <?php if (!empty($wb['correct_biller_name'])): ?>
+                                                                    <div class="tm-ticket-detail">
+                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-building" aria-hidden="true"></i></span>
+                                                                        <span class="tm-detail-label">Biller</span>
+                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars($wb['correct_biller_name']); ?></span>
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                            <?php endif; ?>
+
+                                                            <?php if (!empty($ticketSupplemental['overstated'])):
+                                                                $oa = $ticketSupplemental['overstated'];
+                                                            ?>
+                                                                <?php if (isset($oa['wrong_amount'])): ?>
+                                                                    <div class="tm-ticket-detail">
+                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
+                                                                        <span class="tm-detail-label">Wrong</span>
+                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $oa['wrong_amount'], 2)); ?></span>
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                                <?php if (isset($oa['correct_amount'])): ?>
+                                                                    <div class="tm-ticket-detail">
+                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-check-circle" aria-hidden="true"></i></span>
+                                                                        <span class="tm-detail-label">Correct</span>
+                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $oa['correct_amount'], 2)); ?></span>
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                            <?php endif; ?>
+
+                                                            <?php if (!empty($ticketSupplemental['cancelled'])):
+                                                                $ct = $ticketSupplemental['cancelled'];
+                                                            ?>
+                                                                <?php if (isset($ct['wrong_amount'])): ?>
+                                                                    <div class="tm-ticket-detail">
+                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
+                                                                        <span class="tm-detail-label">Wrong</span>
+                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $ct['wrong_amount'], 2)); ?></span>
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                                <?php if (isset($ct['correct_amount'])): ?>
+                                                                    <div class="tm-ticket-detail">
+                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-check-circle" aria-hidden="true"></i></span>
+                                                                        <span class="tm-detail-label">Correct</span>
+                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $ct['correct_amount'], 2)); ?></span>
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    <?php endif; ?>
+
+                                                    <?php if ($trailMessage !== ''): ?>
+                                                        <div class="tm-trail-message"><?php echo nl2br(htmlspecialchars($trailMessage)); ?></div>
+                                                    <?php endif; ?>
+
+                                                    <?php if (!empty($trailAttachments)): ?>
+                                                        <div class="tm-attachments">
+                                                            <?php foreach ($trailAttachments as $att): ?>
+                                                                <a class="tm-attachment" href="controllers/attachments/download.php?id=<?php echo (int) ($att['id'] ?? 0); ?>">
+                                                                    <span class="tm-attachment-icon"><i class="fa-solid fa-paperclip" aria-hidden="true"></i></span>
+                                                                    <span class="tm-attachment-name"><?php echo htmlspecialchars((string) ($att['file_name'] ?? 'Attachment')); ?></span>
+                                                                    <span class="tm-attachment-size"><?php echo htmlspecialchars((string) ($att['file_size'] ?? '')); ?></span>
+                                                                </a>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        </div>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
                             </div>
-
-                            <?php if (!$isClosed): ?>
-                                <form method="post" action="controllers/branch/reply-ticket.php" enctype="multipart/form-data" class="st-trail-reply-form">
-                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
-                                    <textarea name="message" class="form-control" rows="3" placeholder="Type your reply..." required></textarea>
-                                    <div class="st-trail-reply-actions">
-                                        <input class="form-control form-control-sm" type="file" name="attachments[]" multiple>
-                                        <button class="btn btn-danger" type="submit">Submit</button>
-                                    </div>
-                                </form>
-                            <?php endif; ?>
                         </div>
+
+                        <?php if (!$isClosed): ?>
+                            <form method="post" action="controllers/branch/reply-ticket.php" enctype="multipart/form-data">
+                                <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                <div class="tm-footer tm-footer--open">
+                                    <div class="tm-footer-inner">
+                                        <label class="tm-btn-attach" for="reply_attachments_<?php echo $ticketId; ?>" title="Attach files">
+                                            <i class="fa-solid fa-paperclip"></i>
+                                        </label>
+                                        <input type="file" id="reply_attachments_<?php echo $ticketId; ?>" name="attachments[]" multiple style="display:none;">
+                                        <div class="tm-attach-preview" id="replyPreview_<?php echo $ticketId; ?>"></div>
+                                        <textarea name="message" class="tm-textarea" placeholder="Type your reply..." required></textarea>
+                                            <div>
+                                            <button type="submit" class="tm-btn tm-btn--red">Submit</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        <?php else: ?>
+                            <div class="tm-footer tm-footer--closed">Ticket is closed.</div>
+                        <?php endif; ?>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -363,7 +549,7 @@ foreach ($branchTickets as $ticket) {
                                         <div class="data-item">
                                             <div class="data-icon"><span class="material-icons">schedule</span></div>
                                             <div class="data-content">
-                                                <span class="data-label">Transaction Date/Time</span>
+                                                <span class="data-label">Transaction D/T</span>
                                                 <input id="transfer_datetime" name="transfer_datetime" class="data-value field-input required-field" type="datetime-local" required>
                                             </div>
                                         </div>

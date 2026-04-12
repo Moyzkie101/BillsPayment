@@ -12,8 +12,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $ticketId = (int) ($_POST['ticket_id'] ?? 0);
 $closeMode = strtolower(trim((string) ($_POST['close_mode'] ?? '')));
-$durationValue = (int) ($_POST['duration_value'] ?? 0);
-$durationUnit = strtolower(trim((string) ($_POST['duration_unit'] ?? 'day')));
 $userId = st_user_id_or_null();
 
 if ($ticketId <= 0 || $userId === null) {
@@ -22,21 +20,6 @@ if ($ticketId <= 0 || $userId === null) {
 
 if (!in_array($closeMode, ['auto', 'immediate'], true)) {
     st_redirect_with_flash('vpo_ticket', 'danger', 'Invalid close mode.', $redirectBack);
-}
-
-$unitMap = [
-    'minute' => 'minutes',
-    'hour' => 'hours',
-    'day' => 'days',
-    'week' => 'weeks',
-    'month' => 'months',
-    'year' => 'years',
-];
-
-if ($closeMode === 'auto') {
-    if ($durationValue <= 0 || !isset($unitMap[$durationUnit])) {
-        st_redirect_with_flash('vpo_ticket', 'danger', 'Invalid auto-close duration.', $redirectBack);
-    }
 }
 
 $conn->autocommit(false);
@@ -100,9 +83,9 @@ try {
     }
 
     $dt = new DateTime('now');
-    $dt->modify('+' . $durationValue . ' ' . $unitMap[$durationUnit]);
+    $dt->modify('+24 hours');
     $autoCloseAt = $dt->format('Y-m-d H:i:s');
-    $durationText = $durationValue . ' ' . $durationUnit . ($durationValue > 1 ? 's' : '');
+    $durationText = '24 hours';
 
     $updSql = "UPDATE {$schema}.tickets
                SET status = 'resolved',
