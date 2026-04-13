@@ -304,7 +304,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                         <div class="tm-header">
                             <div class="tm-header-top">
                                 <div class="tm-header-left">
-                                    <div class="tm-ticket-number"><span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>Ticket #: <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
+                                    <div class="tm-ticket-number"><span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>Ticket #: <span class="tm-ticket-id-value"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span> <button type="button" class="tm-copy-ticket" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" title="Copy ticket number" aria-label="Copy ticket number"><i class="fa-solid fa-clipboard" aria-hidden="true"></i></button></div>
                                     <div class="tm-ticket-meta-grid">
                                         <div class="tm-meta-item">
                                             <div class="tm-meta-label">Reference No.</div>

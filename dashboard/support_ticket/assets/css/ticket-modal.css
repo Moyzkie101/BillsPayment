@@ -275,6 +275,53 @@
   color: var(--tm-text-primary);
 }
 
+/* Copy ticket button (small clipboard) */
+.tm-copy-ticket {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 0.5px solid var(--tm-border);
+  background: transparent;
+  color: var(--tm-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  margin-left: 8px;
+  padding: 0;
+}
+
+.tm-copy-ticket:hover {
+  background: var(--tm-bg-secondary);
+  color: var(--tm-text-primary);
+}
+
+/* Toast shown after copying ticket number */
+.st-copy-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  background: rgba(17, 24, 39, 0.95);
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.3);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.22s ease;
+  z-index: 130000;
+}
+.st-copy-toast--show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.st-copy-toast--hide {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 /* Ticket details row (Type, Reason preview, Handler) */
 .tm-header-details {
   display: flex;

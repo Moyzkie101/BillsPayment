@@ -564,6 +564,86 @@
         });
     }
 
+    function initTicketCopyButtons() {
+        // Delegated click handler for copy buttons
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest ? e.target.closest('.tm-copy-ticket') : null;
+            if (!btn) return;
+            e.preventDefault();
+            var ticket = btn.getAttribute('data-ticket-number') || '';
+            if (!ticket) return;
+
+            function showTemp(iconHtml) {
+                var orig = btn.innerHTML;
+                btn.innerHTML = iconHtml;
+                setTimeout(function () { btn.innerHTML = orig; }, 1400);
+            }
+
+            function fallbackCopy(text) {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    var ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (ok) {
+                        showTemp('<i class="fa-solid fa-check" aria-hidden="true"></i>');
+                        showCopyToast('Ticket number copied to clipboard');
+                    } else {
+                        showTemp('<i class="fa-solid fa-ban" aria-hidden="true"></i>');
+                        showCopyToast('Unable to copy ticket number');
+                    }
+                } catch (err) {
+                    document.body.removeChild(ta);
+                    showTemp('<i class="fa-solid fa-ban" aria-hidden="true"></i>');
+                    showCopyToast('Unable to copy ticket number');
+                }
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(ticket).then(function () {
+                    showTemp('<i class="fa-solid fa-check" aria-hidden="true"></i>');
+                    showCopyToast('Ticket number copied to clipboard');
+                }).catch(function () {
+                    fallbackCopy(ticket);
+                });
+            } else {
+                fallbackCopy(ticket);
+            }
+        });
+    }
+
+    function showCopyToast(message) {
+        if (!message) message = 'Ticket number copied to clipboard';
+        var existing = document.getElementById('st-copy-toast');
+        if (existing) {
+            existing.textContent = message;
+            existing.classList.remove('st-copy-toast--hide');
+            existing.classList.add('st-copy-toast--show');
+            clearTimeout(existing._hideTimeout);
+            existing._hideTimeout = setTimeout(function () {
+                existing.classList.remove('st-copy-toast--show');
+                existing.classList.add('st-copy-toast--hide');
+                setTimeout(function () { try { existing.remove(); } catch (e) {} }, 260);
+            }, 1800);
+            return;
+        }
+
+        var toast = document.createElement('div');
+        toast.id = 'st-copy-toast';
+        toast.className = 'st-copy-toast st-copy-toast--show';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        toast._hideTimeout = setTimeout(function () {
+            toast.classList.remove('st-copy-toast--show');
+            toast.classList.add('st-copy-toast--hide');
+            setTimeout(function () { try { toast.remove(); } catch (e) {} }, 260);
+        }, 1800);
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initModeCards();
         initCreateModal();
@@ -573,5 +653,6 @@
         initClosePickerModals();
         initAttachmentPreviews();
         initReplyAttachmentPreviews();
+        initTicketCopyButtons();
     });
 })();
