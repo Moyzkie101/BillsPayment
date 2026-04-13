@@ -1,3 +1,25 @@
+<?php
+// Load branches and subbillers for dropdowns when available
+$branches = [];
+$subbillers = [];
+if (isset($conn)) {
+    $branchSql = "SELECT branch_id, branch_name FROM masterdata.branch_profile WHERE branch_name IS NOT NULL AND TRIM(branch_name) <> '' ORDER BY branch_name ASC";
+    $branchRes = $conn->query($branchSql);
+    if ($branchRes) {
+        while ($br = $branchRes->fetch_assoc()) {
+            $branches[] = $br;
+        }
+    }
+
+    $subSql = "SELECT subbiller_ext_id, subbiller_name, partner_ext_id FROM support_ticket.vw_mldb_subbillers ORDER BY subbiller_name ASC";
+    $subRes = $conn->query($subSql);
+    if ($subRes) {
+        while ($sb = $subRes->fetch_assoc()) {
+            $subbillers[] = $sb;
+        }
+    }
+}
+?>
 <section class="entry-block" id="manualModeBlock">
     <form id="manualEntryForm" method="post" action="controllers/trl-entry-insert.php" class="entry-form auto-entry-form manual-entry-form" novalidate>
         <input type="hidden" name="source_mode" value="manual">
@@ -51,35 +73,50 @@
                         </div>
                     </div>
 
-                    <div class="data-item">
-                        <div class="data-icon"><span class="material-icons">business</span></div>
-                        <div class="data-content">
-                            <span class="data-label">Branch ID</span>
-                            <input id="mBranchId" name="payment_branch_id" class="data-value field-input required-field" type="text" placeholder="Enter branch ID" required>
+                    <div class="data-group group-2">
+                        <div class="data-item">
+                            <div class="data-icon"><span class="material-icons">store</span></div>
+                            <div class="data-content">
+                                <span class="data-label">Payment Branch</span>
+                                <input id="mBranchInput" name="payment_branch_name" class="data-value field-input required-field" list="mBranchDatalist" placeholder="Search branch or select...">
+                                <datalist id="mBranchDatalist">
+                                    <?php foreach ($branches as $b): ?>
+                                        <option value="<?php echo htmlspecialchars((string) $b['branch_name']); ?>"></option>
+                                    <?php endforeach; ?>
+                                </datalist>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="data-item">
-                        <div class="data-icon"><span class="material-icons">store</span></div>
-                        <div class="data-content">
-                            <span class="data-label">Payment Branch</span>
-                            <input id="mBranchName" name="payment_branch_name" class="data-value field-input required-field" type="text" placeholder="Enter branch name" required>
+                        <div class="data-item">
+                            <div class="data-icon"><span class="material-icons">business</span></div>
+                            <div class="data-content">
+                                <span class="data-label">Branch ID</span>
+                                <input id="mBranchId" name="payment_branch_id" class="data-value field-input required-field" type="text" placeholder="Branch ID" readonly>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="data-item">
-                        <div class="data-icon"><span class="material-icons">warning</span></div>
-                        <div class="data-content">
-                            <span class="data-label">Biller ID</span>
-                            <input id="mBillerId" name="wrong_biller_id" class="data-value field-input required-field" type="text" placeholder="Enter biller id" required>
+                        <div class="data-item">
+                            <div class="data-icon"><span class="material-icons">warning</span></div>
+                            <div class="data-content">
+                                <span class="data-label">Biller Name</span>
+                                <input id="mBillerInput" name="biller_name_display" class="data-value field-input required-field" list="mBillerDatalist" placeholder="Search subbiller or select...">
+                                <datalist id="mBillerDatalist">
+                                    <?php foreach ($subbillers as $sb): ?>
+                                        <option value="<?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>"></option>
+                                    <?php endforeach; ?>
+                                </datalist>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="data-item">
-                        <div class="data-icon"><span class="material-icons">business</span></div>
-                        <div class="data-content">
-                            <span class="data-label">Biller Name</span>
-                            <input id="mBillerName" name="biller_name" class="data-value field-input required-field" type="text" placeholder="Enter biller name" required>
+                        <div class="data-item">
+                            <div class="data-icon"><span class="material-icons">business</span></div>
+                            <div class="data-content">
+                                <span class="data-label">Biller ID</span>
+                                <input id="mBillerId" class="data-value field-input" type="text" placeholder="Biller ID" readonly>
+                                <input type="hidden" id="mWrongBillerId" name="wrong_biller_id">
+                                <input type="hidden" name="partner_ext_id" id="mPartnerExtId">
+                                <input type="hidden" name="biller_name" id="mBillerName">
+                            </div>
                         </div>
                     </div>
 
@@ -153,3 +190,84 @@
         </div>
     </form>
 </section>
+    <script>
+    (function () {
+        function byId(id) { return document.getElementById(id); }
+
+    // Maps for fast lookup (lowercased keys)
+    var trlBranchMap = <?php
+        $bmap = [];
+        foreach ($branches as $b) {
+            $name = strtolower((string) ($b['branch_name'] ?? ''));
+            if ($name !== '') $bmap[$name] = (string) ($b['branch_id'] ?? '');
+        }
+        echo json_encode($bmap);
+    ?>;
+
+    var trlBillerMap = <?php
+        $bm = [];
+        foreach ($subbillers as $sb) {
+            $name = strtolower((string) ($sb['subbiller_name'] ?? ''));
+            if ($name === '') continue;
+            $bm[$name] = [
+                'id' => (string) ($sb['subbiller_ext_id'] ?? ''),
+                'partner_ext_id' => (string) ($sb['partner_ext_id'] ?? '')
+            ];
+        }
+        echo json_encode($bm);
+    ?>;
+
+    // Branch input -> populate branch id
+    var branchInput = byId('mBranchInput');
+    var branchId = byId('mBranchId');
+    if (branchInput && branchId) {
+        function syncBranch() {
+            var key = (branchInput.value || '').trim().toLowerCase();
+            if (!key) { branchId.value = ''; return; }
+            if (Object.prototype.hasOwnProperty.call(trlBranchMap, key)) {
+                branchId.value = trlBranchMap[key] || '';
+            } else {
+                branchId.value = '';
+            }
+        }
+        branchInput.addEventListener('input', syncBranch);
+        branchInput.addEventListener('change', syncBranch);
+        syncBranch();
+    }
+
+    // Biller input -> populate hidden wrong_biller_id, visible ID and partner_ext_id
+    var billerInput = byId('mBillerInput');
+    var billerIdHidden = byId('mWrongBillerId');
+    var billerIdDisplay = byId('mBillerId');
+    var partnerExt = byId('mPartnerExtId');
+    var billerNameField = byId('mBillerName');
+
+    if (billerInput) {
+        function syncBiller() {
+            var key = (billerInput.value || '').trim().toLowerCase();
+            if (!key) {
+                if (billerIdHidden) billerIdHidden.value = '';
+                if (billerIdDisplay) billerIdDisplay.value = '';
+                if (partnerExt) partnerExt.value = '';
+                if (billerNameField) billerNameField.value = '';
+                return;
+            }
+            var info = trlBillerMap[key] || null;
+            if (info) {
+                if (billerIdHidden) billerIdHidden.value = info.id || '';
+                if (billerIdDisplay) billerIdDisplay.value = info.id || '';
+                if (partnerExt) partnerExt.value = info.partner_ext_id || '';
+                if (billerNameField) billerNameField.value = billerInput.value || '';
+            } else {
+                if (billerIdHidden) billerIdHidden.value = '';
+                if (billerIdDisplay) billerIdDisplay.value = '';
+                if (partnerExt) partnerExt.value = '';
+                if (billerNameField) billerNameField.value = '';
+            }
+        }
+        billerInput.addEventListener('input', syncBiller);
+        billerInput.addEventListener('change', syncBiller);
+        syncBiller();
+    }
+})();
+</script>

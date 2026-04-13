@@ -697,12 +697,12 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                             <div class="data-icon"><span class="material-icons">store</span></div>
                                             <div class="data-content">
                                                 <span class="data-label">Payment Branch</span>
-                                                <select id="payment_branch_select" name="payment_branch_name" class="data-value field-input required-field" required>
-                                                    <option value="">Select Branch</option>
+                                                <input id="payment_branch_input" name="payment_branch_name" class="data-value field-input required-field" list="paymentBranchDatalist" placeholder="Search branch or select..." required>
+                                                <datalist id="paymentBranchDatalist">
                                                     <?php foreach ($branches as $b): ?>
-                                                        <option value="<?php echo htmlspecialchars((string) $b['branch_name']); ?>" data-branch-id="<?php echo htmlspecialchars((string) $b['branch_id']); ?>"><?php echo htmlspecialchars((string) $b['branch_name']); ?></option>
+                                                        <option value="<?php echo htmlspecialchars((string) $b['branch_name']); ?>"></option>
                                                     <?php endforeach; ?>
-                                                </select>
+                                                </datalist>
                                             </div>
                                         </div>
 
@@ -718,18 +718,12 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                             <div class="data-icon"><span class="material-icons">warning</span></div>
                                             <div class="data-content">
                                                 <span class="data-label">Biller Name</span>
-                                                <select id="subbiller_ext_id" name="subbiller_ext_id" class="data-value field-input required-field">
-                                                    <option value="">Select Subbiller</option>
+                                                <input id="subbiller_input" name="subbiller_name_display" class="data-value field-input required-field" list="subbillerDatalist" placeholder="Search subbiller or select...">
+                                                <datalist id="subbillerDatalist">
                                                     <?php foreach ($subbillers as $sb): ?>
-                                                        <option
-                                                            value="<?php echo htmlspecialchars((string) $sb['subbiller_ext_id']); ?>"
-                                                            data-subbiller-name="<?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>"
-                                                            data-partner-ext-id="<?php echo htmlspecialchars((string) $sb['partner_ext_id']); ?>"
-                                                        >
-                                                            <?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>
-                                                        </option>
+                                                        <option value="<?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>"></option>
                                                     <?php endforeach; ?>
-                                                </select>
+                                                </datalist>
                                             </div>
                                         </div>
 
@@ -738,6 +732,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                             <div class="data-content">
                                                 <span class="data-label">Biller ID</span>
                                                 <input id="biller_id" class="data-value field-input" type="text" placeholder="Biller ID" readonly>
+                                                <input type="hidden" id="subbiller_ext_id" name="subbiller_ext_id">
                                                 <input type="hidden" name="partner_ext_id" id="partner_ext_id">
                                             </div>
                                         </div>
@@ -860,6 +855,31 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
     </div>
 
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
+    <script>
+        // Create maps for client-side searchable datalists
+        window.createTicketBranchMap = <?php
+            $bmap = [];
+            foreach ($branches as $b) {
+                $name = strtolower(trim((string) ($b['branch_name'] ?? '')));
+                if ($name === '') continue;
+                $bmap[$name] = (string) ($b['branch_id'] ?? '');
+            }
+            echo json_encode($bmap);
+        ?>;
+
+        window.createTicketSubbillerMap = <?php
+            $smap = [];
+            foreach ($subbillers as $sb) {
+                $name = strtolower(trim((string) ($sb['subbiller_name'] ?? '')));
+                if ($name === '') continue;
+                $smap[$name] = [
+                    'id' => (string) ($sb['subbiller_ext_id'] ?? ''),
+                    'partner_ext_id' => (string) ($sb['partner_ext_id'] ?? '')
+                ];
+            }
+            echo json_encode($smap);
+        ?>;
+    </script>
     <script src="assets/js/create-ticket.js?v=<?php echo time(); ?>"></script>
     <script>
         (function () {

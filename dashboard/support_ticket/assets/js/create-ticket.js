@@ -49,24 +49,51 @@
     }
 
     function bindSubbillerSelect() {
-        var select = byId('subbiller_ext_id');
+        var select = byId('subbiller_ext_id'); // may be a hidden input now
+        var input = byId('subbiller_input'); // datalist input
+        var hiddenSelect = byId('subbiller_ext_id'); // hidden field for submission (if present)
         var billerId = byId('biller_id');
         var partnerExt = byId('partner_ext_id');
 
-        if (!select) return;
+        // If original <select> exists, keep previous behavior
+        if (select && select.tagName === 'SELECT') {
+            function updateFromOption() {
+                var opt = select.options[select.selectedIndex];
+                var sbId = opt ? (opt.value || '') : '';
+                var ptExt = opt ? (opt.getAttribute('data-partner-ext-id') || '') : '';
 
-        function updateFromOption() {
-            var opt = select.options[select.selectedIndex];
-            var sbId = opt ? (opt.value || '') : '';
-            var ptExt = opt ? (opt.getAttribute('data-partner-ext-id') || '') : '';
-
-            if (billerId) billerId.value = sbId;
-            if (partnerExt) partnerExt.value = ptExt;
+                if (billerId) billerId.value = sbId;
+                if (partnerExt) partnerExt.value = ptExt;
+            }
+            select.addEventListener('change', updateFromOption);
+            updateFromOption();
+            return;
         }
 
-        select.addEventListener('change', updateFromOption);
-        // initialize values if an option is pre-selected
-        updateFromOption();
+        // If using datalist input, use prebuilt map exposed on the page
+        if (input) {
+            var map = window.createTicketSubbillerMap || {};
+            function updateFromInput() {
+                var val = (input.value || '').trim();
+                var key = val.toLowerCase();
+                var info = map[key] || null;
+                if (info) {
+                    if (billerId) billerId.value = info.id || '';
+                    if (partnerExt) partnerExt.value = info.partner_ext_id || '';
+                    if (hiddenSelect) hiddenSelect.value = info.id || '';
+                } else {
+                    if (billerId) billerId.value = '';
+                    if (partnerExt) partnerExt.value = '';
+                    if (hiddenSelect) hiddenSelect.value = '';
+                }
+            }
+            input.addEventListener('input', updateFromInput);
+            input.addEventListener('change', updateFromInput);
+            updateFromInput();
+            return;
+        }
+
+        // otherwise nothing to bind
     }
 
     function bindRefToggle(form) {
@@ -310,13 +337,14 @@
 
     function bindPaymentBranchLookup() {
         var idInput = byId('payment_branch_id');
-        var nameInput = byId('payment_branch_name');
+        var displayInput = byId('payment_branch_input'); // datalist input
+        var select = byId('payment_branch_select'); // legacy select fallback
         if (!idInput) return;
 
-        function lookup() {
+        function lookupById() {
             var id = (idInput.value || '').trim();
             if (id === '') {
-                if (nameInput) nameInput.value = '';
+                if (displayInput) displayInput.value = '';
                 return;
             }
 
@@ -329,64 +357,53 @@
                     try {
                         var res = JSON.parse(xhr.responseText || '{}');
                         if (res && res.success && res.branch_name) {
-                            if (nameInput) nameInput.value = res.branch_name;
+                            if (displayInput) displayInput.value = res.branch_name;
                         } else {
-                            if (nameInput) nameInput.value = '';
+                            if (displayInput) displayInput.value = '';
                         }
                     } catch (e) {
-                        if (nameInput) nameInput.value = '';
+                        if (displayInput) displayInput.value = '';
                     }
                 } else {
-                    if (nameInput) nameInput.value = '';
+                    if (displayInput) displayInput.value = '';
                 }
             };
             xhr.send('branch_id=' + encodeURIComponent(id));
         }
 
-        idInput.addEventListener('blur', lookup);
-        idInput.addEventListener('change', lookup);
-        // initialize on load
-        lookup();
-            const paymentBranchIdInput = byId('payment_branch_id');
-            const paymentBranchNameInput = byId('payment_branch_name');
-            const paymentBranchSelect = byId('payment_branch_select');
-            if (!paymentBranchIdInput || !paymentBranchSelect) return;
+        idInput.addEventListener('blur', lookupById);
+        idInput.addEventListener('change', lookupById);
+        lookupById();
 
-            // When select changes, set the readonly id and the text name
-            paymentBranchSelect.addEventListener('change', function () {
-                const opt = paymentBranchSelect.options[paymentBranchSelect.selectedIndex];
-                const bname = opt ? opt.value : '';
-                const bid = opt ? opt.getAttribute('data-branch-id') || '' : '';
-                paymentBranchIdInput.value = bid;
-                if (paymentBranchNameInput) paymentBranchNameInput.value = bname;
-            });
-
-            // If someone manually enters an ID in future, support lookup
-            if (paymentBranchIdInput) {
-                function lookupBranchById() {
-                    const branchId = paymentBranchIdInput.value.trim();
-                    if (!branchId) return;
-                    fetch('/fetch/get_branch.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: 'branch_id=' + encodeURIComponent(branchId)
-                    }).then(r => r.json()).then(json => {
-                        if (json && json.success) {
-                            if (paymentBranchNameInput) paymentBranchNameInput.value = json.branch_name || '';
-                            // try to select option if present
-                            for (let i = 0; i < paymentBranchSelect.options.length; i++) {
-                                if (paymentBranchSelect.options[i].getAttribute('data-branch-id') === branchId) {
-                                    paymentBranchSelect.selectedIndex = i;
-                                    break;
-                                }
-                            }
-                        }
-                    }).catch(err => console.error(err));
+        // If using datalist input, use the map exposed on the page
+        if (displayInput) {
+            var map = window.createTicketBranchMap || {};
+            function syncFromDisplay() {
+                var val = (displayInput.value || '').trim();
+                var key = val.toLowerCase();
+                if (key && Object.prototype.hasOwnProperty.call(map, key)) {
+                    idInput.value = map[key] || '';
+                } else {
+                    // clear id if not matched
+                    // do not overwrite if user manually typed an id
+                    // idInput.value = '';
                 }
-
-                paymentBranchIdInput.addEventListener('blur', lookupBranchById);
-                paymentBranchIdInput.addEventListener('change', lookupBranchById);
             }
+            displayInput.addEventListener('input', syncFromDisplay);
+            displayInput.addEventListener('change', syncFromDisplay);
+            syncFromDisplay();
+        }
+
+        // legacy select handling (if present)
+        if (select) {
+            select.addEventListener('change', function () {
+                var opt = select.options[select.selectedIndex];
+                var bname = opt ? opt.value : '';
+                var bid = opt ? opt.getAttribute('data-branch-id') || '' : '';
+                idInput.value = bid;
+                if (displayInput) displayInput.value = bname;
+            });
+        }
     }
 
     // duplicate reference field removed; no sync needed
