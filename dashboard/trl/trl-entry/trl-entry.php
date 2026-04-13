@@ -9,7 +9,7 @@ if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 if (!function_exists('has_any_permission') || !has_any_permission(['TRL Entry','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 $mode = strtolower(trim((string) ($_GET['mode'] ?? 'auto')));
-if ($mode !== 'manual') {
+if (!in_array($mode, ['auto', 'manual', 'ticket'], true)) {
     $mode = 'auto';
 }
 
@@ -27,6 +27,7 @@ unset($_SESSION['trl_entry_flash']);
     <link rel="stylesheet" href="trl-entry.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="components/trl-entry-auto.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="components/trl-entry-manual.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="components/trl-entry-ticket.css?v=<?php echo time(); ?>">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
@@ -57,6 +58,14 @@ unset($_SESSION['trl_entry_flash']);
                             <small>Input all fields directly</small>
                         </div>
                     </label>
+                    <label class="mode-card <?php echo $mode === 'ticket' ? 'selected' : ''; ?>" data-mode="ticket">
+                        <input type="radio" name="entryMode" value="ticket" <?php echo $mode === 'ticket' ? 'checked' : ''; ?>>
+                        <div class="mode-icon"><i class="fa-solid fa-ticket"></i></div>
+                        <div class="mode-text">
+                            <p class="mode-label">TICKET</p>
+                            <small>Load from Support Ticket</small>
+                        </div>
+                    </label>
                 </div>
 
                 <button id="entrySubmitBtn" class="btn btn-danger" type="submit" style="display:none;">Submit</button>
@@ -75,6 +84,10 @@ unset($_SESSION['trl_entry_flash']);
             <div id="manualPanel" class="mode-panel <?php echo $mode === 'manual' ? '' : 'hidden'; ?>">
                 <?php require __DIR__ . '/components/trl-entry-manual.php'; ?>
             </div>
+
+            <div id="ticketPanel" class="mode-panel <?php echo $mode === 'ticket' ? '' : 'hidden'; ?>">
+                <?php require __DIR__ . '/components/trl-entry-ticket.php'; ?>
+            </div>
         </div>
 
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
@@ -84,6 +97,7 @@ unset($_SESSION['trl_entry_flash']);
             var modeCards = document.querySelectorAll('.mode-card');
             var autoPanel = document.getElementById('autoPanel');
             var manualPanel = document.getElementById('manualPanel');
+            var ticketPanel = document.getElementById('ticketPanel');
             var submitBtn = document.getElementById('entrySubmitBtn');
 
             function activeMode() {
@@ -95,6 +109,9 @@ unset($_SESSION['trl_entry_flash']);
                 var mode = activeMode();
                 if (mode === 'auto') {
                     return document.getElementById('autoEntryForm');
+                }
+                if (mode === 'ticket') {
+                    return document.getElementById('ticketEntryForm');
                 }
                 return document.getElementById('manualEntryForm');
             }
@@ -132,6 +149,7 @@ unset($_SESSION['trl_entry_flash']);
                 });
                 autoPanel.classList.toggle('hidden', mode !== 'auto');
                 manualPanel.classList.toggle('hidden', mode !== 'manual');
+                ticketPanel.classList.toggle('hidden', mode !== 'ticket');
                 updateSubmitVisibility();
             }
 
@@ -432,6 +450,9 @@ unset($_SESSION['trl_entry_flash']);
                     if (input.value !== 'auto') {
                         params.delete('search_ref');
                     }
+                    if (input.value !== 'ticket') {
+                        params.delete('search_ticket');
+                    }
                     history.replaceState(null, '', window.location.pathname + '?' + params.toString());
                 });
             });
@@ -643,6 +664,7 @@ unset($_SESSION['trl_entry_flash']);
             // Setup form submission handlers
             setupFormSubmission(document.getElementById('autoEntryForm'));
             setupFormSubmission(document.getElementById('manualEntryForm'));
+            setupFormSubmission(document.getElementById('ticketEntryForm'));
 
             setMode(activeMode());
         })();
