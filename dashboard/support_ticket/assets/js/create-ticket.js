@@ -50,19 +50,23 @@
 
     function bindSubbillerSelect() {
         var select = byId('subbiller_ext_id');
-        var billerName = byId('biller_name');
+        var billerId = byId('biller_id');
         var partnerExt = byId('partner_ext_id');
 
         if (!select) return;
 
-        select.addEventListener('change', function () {
+        function updateFromOption() {
             var opt = select.options[select.selectedIndex];
-            var sbName = opt ? (opt.getAttribute('data-subbiller-name') || '') : '';
+            var sbId = opt ? (opt.value || '') : '';
             var ptExt = opt ? (opt.getAttribute('data-partner-ext-id') || '') : '';
 
-            if (billerName) billerName.value = sbName;
+            if (billerId) billerId.value = sbId;
             if (partnerExt) partnerExt.value = ptExt;
-        });
+        }
+
+        select.addEventListener('change', updateFromOption);
+        // initialize values if an option is pre-selected
+        updateFromOption();
     }
 
     function bindRefToggle(form) {
@@ -304,6 +308,87 @@
         }
     }
 
+    function bindPaymentBranchLookup() {
+        var idInput = byId('payment_branch_id');
+        var nameInput = byId('payment_branch_name');
+        if (!idInput) return;
+
+        function lookup() {
+            var id = (idInput.value || '').trim();
+            if (id === '') {
+                if (nameInput) nameInput.value = '';
+                return;
+            }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/fetch/get_branch.php', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) return;
+                if (xhr.status === 200) {
+                    try {
+                        var res = JSON.parse(xhr.responseText || '{}');
+                        if (res && res.success && res.branch_name) {
+                            if (nameInput) nameInput.value = res.branch_name;
+                        } else {
+                            if (nameInput) nameInput.value = '';
+                        }
+                    } catch (e) {
+                        if (nameInput) nameInput.value = '';
+                    }
+                } else {
+                    if (nameInput) nameInput.value = '';
+                }
+            };
+            xhr.send('branch_id=' + encodeURIComponent(id));
+        }
+
+        idInput.addEventListener('blur', lookup);
+        idInput.addEventListener('change', lookup);
+        // initialize on load
+        lookup();
+            const paymentBranchIdInput = byId('payment_branch_id');
+            const paymentBranchNameInput = byId('payment_branch_name');
+            const paymentBranchSelect = byId('payment_branch_select');
+            if (!paymentBranchIdInput || !paymentBranchSelect) return;
+
+            // When select changes, set the readonly id and the text name
+            paymentBranchSelect.addEventListener('change', function () {
+                const opt = paymentBranchSelect.options[paymentBranchSelect.selectedIndex];
+                const bname = opt ? opt.value : '';
+                const bid = opt ? opt.getAttribute('data-branch-id') || '' : '';
+                paymentBranchIdInput.value = bid;
+                if (paymentBranchNameInput) paymentBranchNameInput.value = bname;
+            });
+
+            // If someone manually enters an ID in future, support lookup
+            if (paymentBranchIdInput) {
+                function lookupBranchById() {
+                    const branchId = paymentBranchIdInput.value.trim();
+                    if (!branchId) return;
+                    fetch('/fetch/get_branch.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'branch_id=' + encodeURIComponent(branchId)
+                    }).then(r => r.json()).then(json => {
+                        if (json && json.success) {
+                            if (paymentBranchNameInput) paymentBranchNameInput.value = json.branch_name || '';
+                            // try to select option if present
+                            for (let i = 0; i < paymentBranchSelect.options.length; i++) {
+                                if (paymentBranchSelect.options[i].getAttribute('data-branch-id') === branchId) {
+                                    paymentBranchSelect.selectedIndex = i;
+                                    break;
+                                }
+                            }
+                        }
+                    }).catch(err => console.error(err));
+                }
+
+                paymentBranchIdInput.addEventListener('blur', lookupBranchById);
+                paymentBranchIdInput.addEventListener('change', lookupBranchById);
+            }
+    }
+
     // duplicate reference field removed; no sync needed
 
     function initAttachments() {
@@ -402,6 +487,7 @@
 
         bindSubbillerSelect();
         bindRefToggle(form);
+        bindPaymentBranchLookup();
         bindTypeSelect(form);
         bindCustomTypeDropdown();
         bindAmountInputs(form);

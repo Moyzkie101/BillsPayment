@@ -8,6 +8,15 @@ st_require_permission_page(['Support Ticket Create'], '../home.php');
 $userId = st_user_id_or_null();
 $ticketTypes = st_get_ticket_types($conn);
 $subbillers = st_get_subbillers($conn, 2500);
+// Load branches for Payment Branch dropdown (masterdata.branch_profile)
+$branches = [];
+$branchSql = "SELECT branch_id, branch_name FROM masterdata.branch_profile WHERE branch_name IS NOT NULL AND TRIM(branch_name) <> '' ORDER BY branch_name ASC";
+$branchRes = $conn->query($branchSql);
+if ($branchRes) {
+    while ($br = $branchRes->fetch_assoc()) {
+        $branches[] = $br;
+    }
+}
 $flash = st_flash_get('create_ticket');
 $mode = strtolower(trim((string) ($_GET['mode'] ?? 'open')));
 if ($mode !== 'open' && $mode !== 'closed') {
@@ -629,7 +638,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                         <div class="toggle-wrapper" style="display:flex;align-items:center;gap:8px;font-weight:600;">
                                             <span style="font-size:13px;color:#334155">Include Reference No.</span>
                                             <label class="switch" aria-label="Include Reference No.">
-                                                <input id="mRefToggle" name="include_ref_no" type="checkbox" value="1">
+                                                <input id="mRefToggle" name="include_ref_no" type="checkbox" value="1" checked>
                                                 <span class="slider"></span>
                                             </label>
                                         </div>
@@ -685,25 +694,30 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
 
                                     <div class="data-group group-2">
                                         <div class="data-item">
-                                            <div class="data-icon"><span class="material-icons">business</span></div>
+                                            <div class="data-icon"><span class="material-icons">store</span></div>
                                             <div class="data-content">
-                                                <span class="data-label">Branch ID</span>
-                                                <input id="payment_branch_id" name="payment_branch_id" class="data-value field-input required-field" type="text" placeholder="Enter branch ID" required>
+                                                <span class="data-label">Payment Branch</span>
+                                                <select id="payment_branch_select" name="payment_branch_name" class="data-value field-input required-field" required>
+                                                    <option value="">Select Branch</option>
+                                                    <?php foreach ($branches as $b): ?>
+                                                        <option value="<?php echo htmlspecialchars((string) $b['branch_name']); ?>" data-branch-id="<?php echo htmlspecialchars((string) $b['branch_id']); ?>"><?php echo htmlspecialchars((string) $b['branch_name']); ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
                                             </div>
                                         </div>
 
                                         <div class="data-item">
-                                            <div class="data-icon"><span class="material-icons">store</span></div>
+                                            <div class="data-icon"><span class="material-icons">business</span></div>
                                             <div class="data-content">
-                                                <span class="data-label">Payment Branch</span>
-                                                <input id="payment_branch_name" name="payment_branch_name" class="data-value field-input required-field" type="text" placeholder="Enter branch name" required>
+                                                <span class="data-label">Branch ID</span>
+                                                <input id="payment_branch_id" name="payment_branch_id" class="data-value field-input required-field" type="text" placeholder="Branch ID" readonly required>
                                             </div>
                                         </div>
 
                                         <div class="data-item">
                                             <div class="data-icon"><span class="material-icons">warning</span></div>
                                             <div class="data-content">
-                                                <span class="data-label">Biller ID</span>
+                                                <span class="data-label">Biller Name</span>
                                                 <select id="subbiller_ext_id" name="subbiller_ext_id" class="data-value field-input required-field">
                                                     <option value="">Select Subbiller</option>
                                                     <?php foreach ($subbillers as $sb): ?>
@@ -712,7 +726,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                                             data-subbiller-name="<?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>"
                                                             data-partner-ext-id="<?php echo htmlspecialchars((string) $sb['partner_ext_id']); ?>"
                                                         >
-                                                            <?php echo htmlspecialchars((string) $sb['subbiller_name']); ?> (<?php echo htmlspecialchars((string) $sb['subbiller_ext_id']); ?>)
+                                                            <?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>
                                                         </option>
                                                     <?php endforeach; ?>
                                                 </select>
@@ -722,8 +736,8 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                         <div class="data-item">
                                             <div class="data-icon"><span class="material-icons">business</span></div>
                                             <div class="data-content">
-                                                <span class="data-label">Biller Name</span>
-                                                <input id="biller_name" name="biller_name" class="data-value field-input" type="text" placeholder="Biller name" readonly>
+                                                <span class="data-label">Biller ID</span>
+                                                <input id="biller_id" class="data-value field-input" type="text" placeholder="Biller ID" readonly>
                                                 <input type="hidden" name="partner_ext_id" id="partner_ext_id">
                                             </div>
                                         </div>
