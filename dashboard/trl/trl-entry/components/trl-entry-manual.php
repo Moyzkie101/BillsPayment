@@ -53,7 +53,7 @@ if (isset($conn)) {
                         <div class="data-icon"><span class="material-icons">schedule</span></div>
                         <div class="data-content">
                             <span class="data-label">Transaction Date/Time</span>
-                            <input id="mTransDate" name="transfer_datetime" class="data-value field-input required-field" type="text" placeholder="YYYY-MM-DD HH:MM:SS" required>
+                            <input id="mTransDate" name="transfer_datetime" class="data-value field-input required-field" type="datetime-local" required>
                         </div>
                     </div>
 
