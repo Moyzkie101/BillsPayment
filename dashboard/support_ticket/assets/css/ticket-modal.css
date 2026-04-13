@@ -551,10 +551,48 @@
 /* Compact inline ticket details (icons + label + value) */
 .tm-ticket-details {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
   margin-top: 8px;
+  width: 100%;
+}
+
+.tm-ticket-details-col {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.tm-ticket-billers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  width: 100%;
+  align-items: start;
+}
+
+.tm-ticket-amounts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 10px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.tm-ticket-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  width: 100%;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .tm-ticket-billers,
+  .tm-ticket-split {
+    grid-template-columns: 1fr;
+  }
 }
 
 .tm-ticket-detail {
@@ -575,6 +613,14 @@
   justify-content: center;
   font-size: 12px;
   color: var(--tm-text-tertiary);
+}
+
+/* Correct / Wrong icon color variants */
+.tm-ticket-detail .tm-detail-icon.tm-detail-icon--correct {
+  color: #16a34a; /* green */
+}
+.tm-ticket-detail .tm-detail-icon.tm-detail-icon--wrong {
+  color: #ef4444; /* red */
 }
 
 .tm-ticket-detail .tm-detail-label {

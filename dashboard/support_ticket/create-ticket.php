@@ -402,61 +402,129 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
 
                                                     <?php if ($showTicketDetails): ?>
                                                         <div class="tm-ticket-details">
-                                                            <?php if (!empty($ticketSupplemental['wrongbiller'])):
-                                                                $wb = $ticketSupplemental['wrongbiller'];
-                                                            ?>
-                                                                <?php if (!empty($wb['correct_biller_id'])): ?>
-                                                                    <div class="tm-ticket-detail">
-                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-id-badge" aria-hidden="true"></i></span>
-                                                                        <span class="tm-detail-label">Biller ID</span>
-                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars($wb['correct_biller_id']); ?></span>
-                                                                    </div>
-                                                                <?php endif; ?>
-                                                                <?php if (!empty($wb['correct_biller_name'])): ?>
-                                                                    <div class="tm-ticket-detail">
-                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-building" aria-hidden="true"></i></span>
-                                                                        <span class="tm-detail-label">Biller</span>
-                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars($wb['correct_biller_name']); ?></span>
-                                                                    </div>
-                                                                <?php endif; ?>
-                                                            <?php endif; ?>
+                                                            <?php
+                                                                $wb = !empty($ticketSupplemental['wrongbiller']) ? $ticketSupplemental['wrongbiller'] : null;
+                                                                $oa = !empty($ticketSupplemental['overstated']) ? $ticketSupplemental['overstated'] : null;
+                                                                $ct = !empty($ticketSupplemental['cancelled']) ? $ticketSupplemental['cancelled'] : null;
+                                                                $wrongBillerId = trim((string) ($ticket['wrong_biller_id'] ?? ''));
+                                                                $wrongBillerName = trim((string) ($ticket['biller_name'] ?? ''));
 
-                                                            <?php if (!empty($ticketSupplemental['overstated'])):
-                                                                $oa = $ticketSupplemental['overstated'];
+                                                                $typeOfRequest = strtoupper(trim((string) ($ticket['type_of_request'] ?? '')));
+                                                                $isWrongBillerType = ($typeOfRequest === 'WRONG BILLER');
+                                                                $isCancelledType = ($typeOfRequest === 'CANCELLED TRANSACTION');
+                                                                $isOverstatedType = ($typeOfRequest === 'OVERSTATED AMOUNT');
                                                             ?>
-                                                                <?php if (isset($oa['wrong_amount'])): ?>
-                                                                    <div class="tm-ticket-detail">
-                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
-                                                                        <span class="tm-detail-label">Wrong</span>
-                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $oa['wrong_amount'], 2)); ?></span>
-                                                                    </div>
-                                                                <?php endif; ?>
-                                                                <?php if (isset($oa['correct_amount'])): ?>
-                                                                    <div class="tm-ticket-detail">
-                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-check-circle" aria-hidden="true"></i></span>
-                                                                        <span class="tm-detail-label">Correct</span>
-                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $oa['correct_amount'], 2)); ?></span>
-                                                                    </div>
-                                                                <?php endif; ?>
-                                                            <?php endif; ?>
 
-                                                            <?php if (!empty($ticketSupplemental['cancelled'])):
-                                                                $ct = $ticketSupplemental['cancelled'];
-                                                            ?>
-                                                                <?php if (isset($ct['wrong_amount'])): ?>
-                                                                    <div class="tm-ticket-detail">
-                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
-                                                                        <span class="tm-detail-label">Wrong</span>
-                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $ct['wrong_amount'], 2)); ?></span>
+                                                            <?php if ($isWrongBillerType): ?>
+                                                                <div class="tm-ticket-billers">
+                                                                    <div class="tm-ticket-details-col tm-ticket-details-col--left">
+                                                                        <?php if (!empty($wb) && !empty($wb['correct_biller_id'])): ?>
+                                                                            <div class="tm-ticket-detail">
+                                                                                <span class="tm-detail-icon tm-detail-icon--correct"><i class="fa-solid fa-check-circle" aria-hidden="true"></i></span>
+                                                                                <span class="tm-detail-label">Biller ID</span>
+                                                                                <span class="tm-detail-value"><?php echo htmlspecialchars($wb['correct_biller_id']); ?></span>
+                                                                            </div>
+                                                                        <?php endif; ?>
+
+                                                                        <?php if (!empty($wb) && !empty($wb['correct_biller_name'])): ?>
+                                                                            <div class="tm-ticket-detail">
+                                                                                <span class="tm-detail-icon tm-detail-icon--correct"><i class="fa-solid fa-check-circle" aria-hidden="true"></i></span>
+                                                                                <span class="tm-detail-label">Biller Name</span>
+                                                                                <span class="tm-detail-value"><?php echo htmlspecialchars($wb['correct_biller_name']); ?></span>
+                                                                            </div>
+                                                                        <?php endif; ?>
                                                                     </div>
-                                                                <?php endif; ?>
-                                                                <?php if (isset($ct['correct_amount'])): ?>
-                                                                    <div class="tm-ticket-detail">
-                                                                        <span class="tm-detail-icon"><i class="fa-solid fa-check-circle" aria-hidden="true"></i></span>
-                                                                        <span class="tm-detail-label">Correct</span>
-                                                                        <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $ct['correct_amount'], 2)); ?></span>
+
+                                                                    <div class="tm-ticket-details-col tm-ticket-details-col--right">
+                                                                        <?php if ($wrongBillerId !== ''): ?>
+                                                                            <div class="tm-ticket-detail">
+                                                                                <span class="tm-detail-icon tm-detail-icon--wrong"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
+                                                                                <span class="tm-detail-label">Biller ID</span>
+                                                                                <span class="tm-detail-value"><?php echo htmlspecialchars($wrongBillerId); ?></span>
+                                                                            </div>
+                                                                        <?php endif; ?>
+
+                                                                        <?php if ($wrongBillerName !== ''): ?>
+                                                                            <div class="tm-ticket-detail">
+                                                                                <span class="tm-detail-icon tm-detail-icon--wrong"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
+                                                                                <span class="tm-detail-label">Biller Name</span>
+                                                                                <span class="tm-detail-value"><?php echo htmlspecialchars($wrongBillerName); ?></span>
+                                                                            </div>
+                                                                        <?php endif; ?>
                                                                     </div>
-                                                                <?php endif; ?>
+                                                                </div>
+
+                                                            <?php elseif ($isCancelledType || $isOverstatedType): ?>
+                                                                <?php
+                                                                    $amountSource = $isOverstatedType ? $oa : $ct;
+                                                                    $amountCorrect = isset($amountSource['correct_amount']) ? $amountSource['correct_amount'] : null;
+                                                                    $amountWrong = isset($amountSource['wrong_amount']) ? $amountSource['wrong_amount'] : null;
+                                                                    $amountDifference = ($isOverstatedType && isset($amountSource['difference'])) ? $amountSource['difference'] : null;
+                                                                ?>
+                                                                <div class="tm-ticket-split">
+                                                                    <div class="tm-ticket-details-col tm-ticket-details-col--left">
+                                                                        <?php if ($amountCorrect !== null): ?>
+                                                                            <div class="tm-ticket-detail">
+                                                                                <span class="tm-detail-icon tm-detail-icon--correct"><i class="fa-solid fa-check-circle" aria-hidden="true"></i></span>
+                                                                                <span class="tm-detail-label">Correct Amount</span>
+                                                                                <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $amountCorrect, 2)); ?></span>
+                                                                            </div>
+                                                                        <?php endif; ?>
+
+                                                                        <?php if ($amountWrong !== null): ?>
+                                                                            <div class="tm-ticket-detail">
+                                                                                <span class="tm-detail-icon tm-detail-icon--wrong"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
+                                                                                <span class="tm-detail-label">Wrong Amount</span>
+                                                                                <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $amountWrong, 2)); ?></span>
+                                                                            </div>
+                                                                        <?php endif; ?>
+
+                                                                        <?php if ($amountDifference !== null): ?>
+                                                                            <div class="tm-ticket-detail">
+                                                                                <span class="tm-detail-icon"><i class="fa-solid fa-equals" aria-hidden="true"></i></span>
+                                                                                <span class="tm-detail-label">Difference</span>
+                                                                                <span class="tm-detail-value"><?php echo htmlspecialchars(number_format((float) $amountDifference, 2)); ?></span>
+                                                                            </div>
+                                                                        <?php endif; ?>
+                                                                    </div>
+
+                                                                    <div class="tm-ticket-details-col tm-ticket-details-col--right">
+                                                                        <?php if ($wrongBillerId !== ''): ?>
+                                                                            <div class="tm-ticket-detail">
+                                                                                <span class="tm-detail-icon tm-detail-icon--wrong"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
+                                                                                <span class="tm-detail-label">Biller ID</span>
+                                                                                <span class="tm-detail-value"><?php echo htmlspecialchars($wrongBillerId); ?></span>
+                                                                            </div>
+                                                                        <?php endif; ?>
+
+                                                                        <?php if ($wrongBillerName !== ''): ?>
+                                                                            <div class="tm-ticket-detail">
+                                                                                <span class="tm-detail-icon tm-detail-icon--wrong"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
+                                                                                <span class="tm-detail-label">Biller Name</span>
+                                                                                <span class="tm-detail-value"><?php echo htmlspecialchars($wrongBillerName); ?></span>
+                                                                            </div>
+                                                                        <?php endif; ?>
+                                                                    </div>
+                                                                </div>
+
+                                                            <?php else: ?>
+                                                                <div class="tm-ticket-details-col tm-ticket-details-col--left">
+                                                                    <?php if ($wrongBillerId !== ''): ?>
+                                                                        <div class="tm-ticket-detail">
+                                                                            <span class="tm-detail-icon tm-detail-icon--wrong"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
+                                                                            <span class="tm-detail-label">Biller ID</span>
+                                                                            <span class="tm-detail-value"><?php echo htmlspecialchars($wrongBillerId); ?></span>
+                                                                        </div>
+                                                                    <?php endif; ?>
+
+                                                                    <?php if ($wrongBillerName !== ''): ?>
+                                                                        <div class="tm-ticket-detail">
+                                                                            <span class="tm-detail-icon tm-detail-icon--wrong"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
+                                                                            <span class="tm-detail-label">Biller Name</span>
+                                                                            <span class="tm-detail-value"><?php echo htmlspecialchars($wrongBillerName); ?></span>
+                                                                        </div>
+                                                                    <?php endif; ?>
+                                                                </div>
                                                             <?php endif; ?>
                                                         </div>
                                                     <?php endif; ?>
@@ -674,12 +742,12 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                     </div>
 
                                     <div class="field-group overstated-group" style="display:none;">
-                                        <label for="wrong_amount"><span class="material-icons">payments</span> Wrong Amount</label>
+                                        <label for="wrong_amount"><span class="material-icons">payments</span> Amount</label>
                                         <input id="wrong_amount" name="wrong_amount" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
                                     </div>
 
                                     <div class="field-group overstated-group" style="display:none;">
-                                        <label for="correct_amount"><span class="material-icons">payments</span> Correct Amount</label>
+                                        <label for="correct_amount"><span class="material-icons">payments</span> Amount</label>
                                         <input id="correct_amount" name="correct_amount" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
                                     </div>
 
