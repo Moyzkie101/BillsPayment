@@ -527,10 +527,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                         <option value="">Select Time Frame</option>
                                         <option value="daily">Per Day</option>
                                         <option value="date-range">Date Range</option>
-                                        <option value="monthly">Per Month</option>
+                                        <!-- <option value="monthly">Per Month</option>
                                         <option value="monthly-range">Monthly Range</option>
                                         <option value="yearly">Per Year</option>
-                                        <option value="yearly-range">Yearly Range</option>
+                                        <option value="yearly-range">Yearly Range</option> -->
                                     </select>
                                 </div>
 

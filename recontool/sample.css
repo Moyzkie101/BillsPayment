@@ -22,15 +22,28 @@ body {
   min-height: 100vh;
 }
 
-.page { max-width: 1000px; margin: 0 auto; padding: 28px; }
+.page { max-width: 1100px; margin: 0 auto; padding: 28px; }
 
 /* Header / branding */
-.app-header { display:flex; align-items:center; gap:18px; padding:12px 16px; background:var(--surface); border:1px solid var(--stroke); border-radius:10px; margin-bottom:18px; }
+.app-header { display:flex; align-items:center; gap:18px; padding:12px 16px; background:var(--surface); border:1px solid var(--stroke); border-radius:10px; margin-bottom:18px; flex-wrap: nowrap; }
 .app-logo { height:42px; width:auto; }
-.app-nav { margin-left:auto; display:flex; gap:12px; align-items:center }
-.app-nav a { color: var(--muted); font-weight:700; text-decoration:none; padding:8px 12px; border-radius:8px }
+.app-nav { margin-left:auto; display:flex; gap:10px; align-items:center; flex-wrap: nowrap; justify-content: flex-end; }
+.app-nav a { color: var(--muted); font-weight:700; text-decoration:none; padding:8px 10px; border-radius:8px; white-space: nowrap; }
 .app-nav a:hover { color: var(--accent); background: rgba(220,53,69,0.04); }
 .app-nav a.active { color:#fff; background: var(--accent); }
+
+@media (max-width: 900px) {
+  .app-header {
+    flex-wrap: wrap;
+  }
+
+  .app-nav {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
 
 /* Panels */
 .panel { background: var(--surface); border-radius: 14px; border: 1px solid var(--stroke); padding: 20px; box-shadow: var(--shadow); }

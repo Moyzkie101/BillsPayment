@@ -153,6 +153,7 @@
         .app-header {
             display: flex;
             align-items: center;
+            flex-wrap: nowrap;
             gap: 18px;
             padding: 12px 16px;
             background: var(--card);
@@ -167,15 +168,31 @@
         .app-nav {
             margin-left: auto;
             display: flex;
-            gap: 12px;
+            gap: 10px;
             align-items: center;
+            flex-wrap: nowrap;
+            justify-content: flex-end;
         }
         .app-nav a {
             color: var(--muted);
             font-weight: 700;
             text-decoration: none;
-            padding: 8px 12px;
+            padding: 8px 10px;
             border-radius: 8px;
+            white-space: nowrap;
         }
         .app-nav a:hover { color: var(--accent); background: rgba(220,53,69,0.04); }
         .app-nav a.active { color: #fff; background: var(--accent); }
+
+        @media (max-width: 900px) {
+            .app-header {
+                flex-wrap: wrap;
+            }
+
+            .app-nav {
+                margin-left: 0;
+                width: 100%;
+                flex-wrap: wrap;
+                justify-content: flex-start;
+            }
+        }

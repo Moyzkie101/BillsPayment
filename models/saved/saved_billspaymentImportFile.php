@@ -88,6 +88,7 @@
             $partner_not_found_data = [];
             $partner_GLCode_not_found_data = [];
             $branchID_notFoundData = [];
+            $consolidated_error_data = [];
             $rawData = [];
 
             if ($partner === 'All') {
@@ -180,60 +181,37 @@
                         return $overrideData;
                     }
 
-                    // function checkSpelledRegionName($conn, $fileType, $region_description) {
-                    //     $isValidRegion = false;
-                        
-                    //     if($fileType === 'KP7') {
-                    //         // For KP7, check if the region_description exists in the gl_region field
-                    //         // across multiple tables to ensure comprehensive validation
-                    //         $kp7Query1 = "SELECT COUNT(*) as count FROM masterdata.region_masterfile WHERE (gl_region = ? OR region_desc_kp7 = ?) LIMIT 1";
-            
-                    //         // Check each query until we find a match
-                    //         $queries = [$kp7Query1];
-            
-                    //         foreach ($queries as $query) {
-                    //             $stmt = $conn->prepare($query);
-                    //             if ($stmt) {
-                    //                 $stmt->bind_param("ss", $region_description, $region_description);
-                    //                 $stmt->execute();
-                    //                 $result = $stmt->get_result();
-                    //                 if ($result) {
-                    //                     $row = $result->fetch_assoc();
-                    //                     if ($row && $row['count'] > 0) {
-                    //                         $isValidRegion = true;
-                    //                         break; // Found a match, no need to check other queries
-                    //                     }
-                    //                 }
-                    //                 $stmt->close();
-                    //             }
-                    //         }
-            
-                    //     } elseif ($fileType === 'KPX') {
-                    //         // For KPX with region, check if the region exists for the specific branch
-                    //         $kpxQuery1 = "SELECT COUNT(*) as count FROM masterdata.region_masterfile WHERE (gl_region = ? OR region_desc_kpx = ?) LIMIT 1";
+                    function checkSpelledRegionName($conn, $fileType, $region_description, $region_code = null) {
+                        if (empty(trim((string)$region_description))) {
+                            return true;
+                        }
 
-                    //         $queries = [$kpxQuery1];
+                        if (!empty(trim((string)$region_code))) {
+                            return false;
+                        }
 
-                    //         foreach ($queries as $query) {
-                    //             $stmt = $conn->prepare($query);
-                    //             if ($stmt) {
-                    //                 $stmt->bind_param("ss", $region_description, $region_description);
-                    //                 $stmt->execute();
-                    //                 $result = $stmt->get_result();
-                    //                 if ($result) {
-                    //                     $row = $result->fetch_assoc();
-                    //                     if ($row && $row['count'] > 0) {
-                    //                         $isValidRegion = true;
-                    //                     }
-                    //                 }
-                    //                 $stmt->close();
-                    //             }
-                    //         }
-                    //     }
-                        
-                    //     // Return true if region is NOT found (indicating an error)
-                    //     return !$isValidRegion;
-                    // }
+                        $isValidRegion = false;
+
+                        if ($fileType === 'KP7') {
+                            $query = "SELECT COUNT(*) as count FROM masterdata.region_masterfile WHERE (gl_region = ? OR region_desc_kp7 = ?) LIMIT 1";
+                        } else {
+                            $query = "SELECT COUNT(*) as count FROM masterdata.region_masterfile WHERE (gl_region = ? OR region_desc_kpx = ?) LIMIT 1";
+                        }
+
+                        $stmt = $conn->prepare($query);
+                        if ($stmt) {
+                            $stmt->bind_param("ss", $region_description, $region_description);
+                            $stmt->execute();
+                            $result = $stmt->get_result();
+                            if ($result) {
+                                $row = $result->fetch_assoc();
+                                $isValidRegion = ($row && intval($row['count']) > 0);
+                            }
+                            $stmt->close();
+                        }
+
+                        return !$isValidRegion;
+                    }
 
                     function checkhadPartnerID($conn, $fileType, $partner, $partnerId) {
                         $partnerExists = false;
@@ -261,22 +239,8 @@
                         } 
                         elseif($fileType === 'KPX') {
                             if($partner === 'All') {
-                                // Check if the partner ID from the Excel file exists in the database
-                                // $sql = "SELECT COUNT(*) as count FROM masterdata.partner_masterfile WHERE partner_id = ? LIMIT 1";
-                                // $stmt = $conn->prepare($sql);
-                                // $stmt->bind_param("s", $partnerId);
-                                // $stmt->execute();
-                                // $result = $stmt->get_result();
-                                
-                                // if ($result) {
-                                //     $row = $result->fetch_assoc();
-                                //     if ($row && $row['count'] > 0) {
-                                //         $partnerExists = true;
-                                //     }
-                                // }
-                                // $stmt->close();
-
-
+                                // KPX "All" has no stable partner id in-row, so do not block valid rows on partner lookup.
+                                $partnerExists = true;
                             } else {
                                 // For specific partner selection, assume it exists since it was selected from dropdown
                                 $partnerExists = true;
@@ -346,22 +310,29 @@
                     //     return !$partnerGLCodeExists;
                     // }
 
-                    // function checkHadBranchID($conn, $branch_id) {
-                    //     $sql = "SELECT COUNT(*) as count FROM masterdata.branch_profile WHERE branch_id = ? LIMIT 1";
-                    //         $stmt = $conn->prepare($sql);
-                    //         $stmt->bind_param("i", $branch_id);
-                    //         $stmt->execute();
-                    //         $result = $stmt->get_result();
-                            
-                    //         if ($result) {
-                    //             $row = $result->fetch_assoc();
-                    //             if ($row && $row['count'] > 0) {
-                    //                 $branchID = true;
-                    //             }
-                    //         }
-                    //     $stmt->close();
-                    //     return !$branchID;
-                    // }
+                    function checkHadBranchID($conn, $branch_id) {
+                        if (empty($branch_id) || !is_numeric($branch_id)) {
+                            return true;
+                        }
+
+                        $branchFound = false;
+                        $sql = "SELECT COUNT(*) as count FROM masterdata.branch_profile WHERE branch_id = ? LIMIT 1";
+                        $stmt = $conn->prepare($sql);
+                        if ($stmt) {
+                            $branchIdInt = intval($branch_id);
+                            $stmt->bind_param("i", $branchIdInt);
+                            $stmt->execute();
+                            $result = $stmt->get_result();
+
+                            if ($result) {
+                                $row = $result->fetch_assoc();
+                                $branchFound = ($row && intval($row['count']) > 0);
+                            }
+                            $stmt->close();
+                        }
+
+                        return !$branchFound;
+                    }
 
                     // Initialize variables before loops
                     // $cancellStatus = '';
@@ -432,6 +403,9 @@
                         break;
                     }
 
+                    // Default report date for all row processing paths.
+                    $report_date = !empty($extracted_report_date) ? $extracted_report_date : $selectedDate;
+
                     
 
                     // Process each row starting from row 10
@@ -450,6 +424,8 @@
                         // Read row 9 column A 
                         if($getColumnLabels[0] === 'STATUS'){
                             if($fileType === 'KP7'){
+                                // KP7 report date comes from B3; keep a fallback to selected date.
+                                $report_date = !empty($extracted_report_date) ? $extracted_report_date : $selectedDate;
                                 // Reset variables for each row
                                 $cancellStatus = '';
                                 $is_cancellation = strpos($worksheet->getCell('A' . $row)->getValue(), '*') !== false;
@@ -466,11 +442,38 @@
                                 }
     
                                 $reference_number= $conn->real_escape_string(strval($worksheet->getCell('E' . $row)->getValue()));
-    
+                                $branch_outlet_raw = $conn->real_escape_string(strval($worksheet->getCell('O' . $row)->getValue()));
+                                $branch_ids = null;
+                                $branch_id = null;
+                                $branch_code = null;
+                                $branch_outlet_lookup = trim($branch_outlet_raw);
+                                if (!preg_match('/^ML\s+/i', $branch_outlet_lookup)) {
+                                    $branch_outlet_lookup = 'ML ' . $branch_outlet_lookup;
+                                }
+
                                 if (substr($reference_number, 0, 3) === 'BPP') {
                                     $branch_code = intval(substr($reference_number, 3, 3));
                                 } elseif (substr($reference_number, 0, 3) === 'BPX') {
                                     $branch_code = intval(substr($reference_number, 3, 3));
+                                } else {
+                                    $branch_query = "SELECT branch_id FROM masterdata.kpx_branch_masterfile WHERE branch_name = ? LIMIT 1";
+                                    $stmt = $conn->prepare($branch_query);
+                                    if ($stmt) {
+                                        $stmt->bind_param("s", $branch_outlet_lookup);
+                                        $stmt->execute();
+                                        $result = $stmt->get_result();
+                                        if ($result && $result->num_rows > 0) {
+                                            $branchData = $result->fetch_assoc();
+                                            if ($branchData && isset($branchData['branch_id'])) {
+                                                $branch_ids = $conn->real_escape_string(strval($branchData['branch_id']));
+                                            }else{
+                                                $branch_ids = null;
+                                            }
+                                        }else{
+                                            $branch_ids = null;
+                                        }
+                                        $stmt->close();
+                                    }
                                 }
     
                                 //GET Data for region_code and zone_code
@@ -498,27 +501,48 @@
                                 }
     
                                 // First, check in branch_profile directly
-                                $kp7Query1 = "SELECT mbp.branch_id FROM masterdata.branch_profile as mbp
-                                            JOIN masterdata.region_masterfile AS mrm
-                                            ON mrm.region_code = mbp.region_code
-                                            WHERE mbp.code = ? AND mrm.region_code = ? AND mrm.zone_code = ? LIMIT 1";
-    
-                                $stmt = $conn->prepare($kp7Query1);
-                                if ($stmt) {
-                                    $stmt->bind_param("iss", $branch_code, $region_code, $zone_code);
-                                    $stmt->execute();
-                                    $result = $stmt->get_result();
-                                    if ($result && $result->num_rows > 0) {
-                                        $branchIDData = $result->fetch_assoc();
-                                        if ($branchIDData && isset($branchIDData['branch_id'])) {
-                                            $branch_id = $conn->real_escape_string(intval($branchIDData['branch_id']));
+                                if(!empty($branch_ids)){
+                                    $branch_id = $branch_ids;
+                                } elseif (!empty($branch_code) && !empty($region_code) && !empty($zone_code)) {
+                                    $kp7Query1 = "SELECT mbp.branch_id FROM masterdata.branch_profile as mbp
+                                                JOIN masterdata.region_masterfile AS mrm
+                                                ON mrm.region_code = mbp.region_code
+                                                WHERE mbp.code = ? AND mrm.region_code = ? AND mrm.zone_code = ? LIMIT 1";
+        
+                                    $stmt = $conn->prepare($kp7Query1);
+                                    if ($stmt) {
+                                        $stmt->bind_param("iss", $branch_code, $region_code, $zone_code);
+                                        $stmt->execute();
+                                        $result = $stmt->get_result();
+                                        if ($result && $result->num_rows > 0) {
+                                            $branchIDData = $result->fetch_assoc();
+                                            if ($branchIDData && isset($branchIDData['branch_id'])) {
+                                                $branch_id = $conn->real_escape_string(intval($branchIDData['branch_id']));
+                                            }else{
+                                                $branch_id = null;
+                                            }
                                         }else{
                                             $branch_id = null;
                                         }
-                                    }else{
-                                        $branch_id = null;
+                                        $stmt->close();
                                     }
-                                    $stmt->close();
+                                }
+
+                                if (empty($branch_id)) {
+                                    $branch_query = "SELECT branch_id FROM masterdata.kpx_branch_masterfile WHERE branch_name = ? LIMIT 1";
+                                    $stmt = $conn->prepare($branch_query);
+                                    if ($stmt) {
+                                        $stmt->bind_param("s", $branch_outlet_lookup);
+                                        $stmt->execute();
+                                        $result = $stmt->get_result();
+                                        if ($result && $result->num_rows > 0) {
+                                            $branchData = $result->fetch_assoc();
+                                            if ($branchData && isset($branchData['branch_id'])) {
+                                                $branch_id = $conn->real_escape_string(strval($branchData['branch_id']));
+                                            }
+                                        }
+                                        $stmt->close();
+                                    }
                                 }
     
                                 $control_number= $conn->real_escape_string(strval($worksheet->getCell('D' . $row)->getValue()));
@@ -533,7 +557,7 @@
     
                                 $contact_number = $conn->real_escape_string(strval($worksheet->getCell('M' . $row)->getValue()));
                                 $other_details = $conn->real_escape_string(strval($worksheet->getCell('N' . $row)->getValue()));
-                                $branch_outlet = $conn->real_escape_string(strval($worksheet->getCell('O' . $row)->getValue()));
+                                $branch_outlet = $branch_outlet_raw;
                                 $region_description = $conn->real_escape_string($region_description_raw);
                                 $person_operator = $conn->real_escape_string(strval($worksheet->getCell('Q' . $row)->getValue()));
     
@@ -572,6 +596,7 @@
     
                                 $remote_branch = null;
                                 $remote_operator = null;
+                                $second_approver = null;
                             }
                             else{
                                 echo '<script>
@@ -621,150 +646,317 @@
                                     $amount_paid = $conn->real_escape_string(floatval(str_replace(',', '', $worksheet->getCell('I' . $row)->getValue())));
                                     $amount_charge_customer = $conn->real_escape_string(floatval(str_replace(',', '', $worksheet->getCell('J' . $row)->getValue())));
                                     $amount_charge_partner = $conn->real_escape_string(floatval(str_replace(',', '', $worksheet->getCell('K' . $row)->getValue())));
-        
-                                    $contact_number = $conn->real_escape_string(strval($worksheet->getCell('L' . $row)->getValue()));
-                                    $other_details = $conn->real_escape_string(strval($worksheet->getCell('M' . $row)->getValue()));
-        
-                                    $branch_id_raw = $worksheet->getCell('N' . $row)->getValue();
-                                    $branch_outlet_raw = $conn->real_escape_string(strval($worksheet->getCell('O' . $row)->getValue()));
-                                    if($getColumnLabels[13] === 'Branch ID'){
-                                        if (is_numeric($branch_id_raw)) {
-                                            $cntl_num_for_region = ($branch_id_raw == 581) ? intval(2607) : intval($branch_id_raw);
-                                        } elseif ($branch_id_raw === 'HEAD OFFICE') {
-                                            $cntl_num_for_region = intval(2607);
-                                        }
 
-                                        if($branch_outlet_raw === 'HEAD OFFICE'){
-                                            $cntl_num_for_region = intval(2607);
-                                            $branch_outlet = $branch_outlet_raw;
-                                        }elseif($branch_outlet_raw === 'ML CEBU HEAD OFFICE'){
-                                            $cntl_num_for_region = intval(2607);
-                                            $branch_outlet = $branch_outlet_raw;
-                                        }else{
-                                            $branch_outlet = $branch_outlet_raw;
-                                        }
+                                    if ($getColumnLabels[11] === 'Contact No.'){
+                                        $contact_number = $conn->real_escape_string(strval($worksheet->getCell('L' . $row)->getValue()));
+                                        $other_details = $conn->real_escape_string(strval($worksheet->getCell('M' . $row)->getValue()));
+            
+                                        $branch_id_raw = $worksheet->getCell('N' . $row)->getValue();
+                                        $branch_outlet_raw = $conn->real_escape_string(strval($worksheet->getCell('O' . $row)->getValue()));
 
-                                        $branch_id = $conn->real_escape_string($cntl_num_for_region);
-                                        $kpxbranchcodeQuery = "SELECT code FROM masterdata.branch_profile where branch_id = ? LIMIT 1";
-                                        $stmt = $conn->prepare($kpxbranchcodeQuery);
-                                        if ($stmt) {
-                                            $stmt->bind_param("i", $cntl_num_for_region);
-                                            $stmt->execute();
-                                            $result = $stmt->get_result();
-                                            if ($result && $result->num_rows > 0) {
-                                                $branchCodeData = $result->fetch_assoc();
-                                                if ($branchCodeData && isset($branchCodeData['code'])) {
-                                                    $branch_code = $conn->real_escape_string(strval($branchCodeData['code']));
+                                        if($getColumnLabels[13] === 'Branch ID'){
+                                            if (is_numeric($branch_id_raw)) {
+                                                $cntl_num_for_region = ($branch_id_raw == 581) ? intval(2607) : intval($branch_id_raw);
+                                            } elseif ($branch_id_raw === 'HEAD OFFICE' || $branch_id_raw === 'ML HEAD OFFICE') {
+                                                $cntl_num_for_region = intval(2607);
+                                            } elseif ($branch_id_raw === 'CEBU HEAD OFFICE' || $branch_id_raw === 'ML CEBU HEAD OFFICE') {
+                                                $cntl_num_for_region = intval(581);
+                                            }
+
+                                            if($branch_outlet_raw === 'HEAD OFFICE' || $branch_outlet_raw === 'ML HEAD OFFICE'){
+                                                $cntl_num_for_region = intval(2607);
+                                                $branch_outlet = $branch_outlet_raw;
+                                            }elseif($branch_outlet_raw === 'CEBU HEAD OFFICE' || $branch_outlet_raw === 'ML CEBU HEAD OFFICE'){
+                                                $cntl_num_for_region = intval(581);
+                                                $branch_outlet = $branch_outlet_raw;
+                                            }else{
+                                                $branch_outlet = $branch_outlet_raw;
+                                            }
+
+                                            $branch_id = $conn->real_escape_string($cntl_num_for_region);
+                                            $kpxbranchcodeQuery = "SELECT code FROM masterdata.branch_profile where branch_id = ? LIMIT 1";
+                                            $stmt = $conn->prepare($kpxbranchcodeQuery);
+                                            if ($stmt) {
+                                                $stmt->bind_param("i", $cntl_num_for_region);
+                                                $stmt->execute();
+                                                $result = $stmt->get_result();
+                                                if ($result && $result->num_rows > 0) {
+                                                    $branchCodeData = $result->fetch_assoc();
+                                                    if ($branchCodeData && isset($branchCodeData['code'])) {
+                                                        $branch_code = $conn->real_escape_string(strval($branchCodeData['code']));
+                                                    } else {
+                                                        $branch_code = null;
+                                                    }
                                                 } else {
                                                     $branch_code = null;
                                                 }
-                                            } else {
-                                                $branch_code = null;
+                                                $stmt->close();
                                             }
-                                            $stmt->close();
-                                        }
-        
-                                        
-                                        
-                                        $region_description = strval($worksheet->getCell('Q' . $row)->getValue());
-                                        $kpxregioncodeQuery1 = "SELECT region_code, zone_code FROM masterdata.region_masterfile
-                                                                WHERE (gl_region = ? OR region_desc_kpx = ?) LIMIT 1";
-                                        $stmt = $conn->prepare($kpxregioncodeQuery1);
-                                        if ($stmt) {
-                                            $stmt->bind_param("ss",$region_description, $region_description);
-                                            $stmt->execute();
-                                            $result = $stmt->get_result();
-                                            if ($result && $result->num_rows > 0) {
-                                                $regioncodeData = $result->fetch_assoc();
-                                                if ($regioncodeData && isset($regioncodeData['region_code'])) {
-                                                    $region_code = $conn->real_escape_string(strval($regioncodeData['region_code']));
-                                                    $zone_code = $conn->real_escape_string(strval($regioncodeData['zone_code']));
+            
+                                            
+                                            $tg_region_code_raw = $conn->real_escape_string(strval($worksheet->getCell('P' . $row)->getValue()));
+                                            $region_description = strval($worksheet->getCell('Q' . $row)->getValue());
+                                            $kpxregioncodeQuery1 = "SELECT region_code, zone_code FROM masterdata.region_masterfile
+                                                                    WHERE (gl_region = ? OR region_desc_kpx = ? OR tg_region_code = ?) LIMIT 1";
+                                            $stmt = $conn->prepare($kpxregioncodeQuery1);
+                                            if ($stmt) {
+                                                $stmt->bind_param("sss",$region_description, $region_description, $tg_region_code_raw);
+                                                $stmt->execute();
+                                                $result = $stmt->get_result();
+                                                if ($result && $result->num_rows > 0) {
+                                                    $regioncodeData = $result->fetch_assoc();
+                                                    if ($regioncodeData && isset($regioncodeData['region_code'])) {
+                                                        $region_code = $conn->real_escape_string(strval($regioncodeData['region_code']));
+                                                        $zone_code = $conn->real_escape_string(strval($regioncodeData['zone_code']));
+                                                    }else{
+                                                        $region_code = null;
+                                                        $zone_code = null;
+                                                    }
                                                 }else{
                                                     $region_code = null;
                                                     $zone_code = null;
                                                 }
-                                            }else{
-                                                $region_code = null;
-                                                $zone_code = null;
+                                                $stmt->close();
                                             }
-                                            $stmt->close();
-                                        }
-                                        
-                                        $person_operator = $conn->real_escape_string(strval($worksheet->getCell('R' . $row)->getValue()));
-                                        $remote_branch = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
-                                        $remote_operator = $conn->real_escape_string(strval($worksheet->getCell('T' . $row)->getValue()));
-                                    }else{
+                                            
+                                            $person_operator = $conn->real_escape_string(strval($worksheet->getCell('R' . $row)->getValue()));
+                                            $remote_branch = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
+                                            $remote_operator = $conn->real_escape_string(strval($worksheet->getCell('T' . $row)->getValue()));
+                                            $second_approver = $conn->real_escape_string(strval($worksheet->getCell('U' . $row)->getValue()));
 
-                                        if ($branch_id_raw === 'HEAD OFFICE') {
-                                            $cntl_num_for_region = intval(2607);
-                                        } elseif (empty($control_number)) {
-                                            if (substr($reference_number, 0, 3) === 'APB') {
+                                        }else{ // WITHOUT BRANCH ID COLUMN AND REGION CODE COLUMN
+
+                                            if ($branch_id_raw === 'HEAD OFFICE' || $branch_outlet_raw === 'ML HEAD OFFICE') {
                                                 $cntl_num_for_region = intval(2607);
-                                            }
-                                        } else {
-                                            if (substr($control_number, 0, 3) === 'BPX') {
-                                                $cntl_num_for_region = intval(2607);
+                                            } elseif ($branch_id_raw === 'CEBU HEAD OFFICE' || $branch_outlet_raw === 'ML CEBU HEAD OFFICE') {
+                                                $cntl_num_for_region = intval(581);
+                                            }elseif (empty($control_number)) {
+                                                if (substr($reference_number, 0, 3) === 'APB') {
+                                                    $cntl_num_for_region = intval(2607);
+                                                }
                                             } else {
-                                                $cntl_no_str = '';
-                                                for ($i = 0; $i < strlen($control_number); $i++) {
-                                                    if ($control_number[$i] === '-') break;
-                                                    if (is_numeric($control_number[$i])) {
-                                                        $cntl_no_str .= $control_number[$i];
+                                                if (substr($control_number, 0, 3) === 'BPX') {
+                                                    $cntl_num_for_region = intval(2607);
+                                                } else {
+                                                    $cntl_no_str = '';
+                                                    for ($i = 0; $i < strlen($control_number); $i++) {
+                                                        if ($control_number[$i] === '-') break;
+                                                        if (is_numeric($control_number[$i])) {
+                                                            $cntl_no_str .= $control_number[$i];
+                                                        }
+                                                    }
+                                                    $cntl_num_for_region = intval($cntl_no_str);
+                                                }
+                                            }
+                                            $branch_id = $conn->real_escape_string($cntl_num_for_region);
+                                            $kpxbranchcodeQuery = "SELECT code FROM masterdata.branch_profile where branch_id = ? LIMIT 1";
+                                            $stmt = $conn->prepare($kpxbranchcodeQuery);
+                                            if ($stmt) {
+                                                $stmt->bind_param("i", $cntl_num_for_region);
+                                                $stmt->execute();
+                                                $result = $stmt->get_result();
+                                                if ($result && $result->num_rows > 0) {
+                                                    $branchCodeData = $result->fetch_assoc();
+                                                    if ($branchCodeData && isset($branchCodeData['code'])) {
+                                                        $branch_code = $conn->real_escape_string(strval($branchCodeData['code']));
+                                                    } else {
+                                                        $branch_code = null;
+                                                    }
+                                                } else {
+                                                    $branch_code = null;
+                                                }
+                                                $stmt->close();
+                                            }
+            
+                                            $branch_outlet = $conn->real_escape_string(strval($worksheet->getCell('N' . $row)->getValue()));
+                                            $region_description = strval($worksheet->getCell('O' . $row)->getValue());
+                                            $kpxregioncodeQuery1 = "SELECT region_code, zone_code FROM masterdata.region_masterfile
+                                                                    WHERE (gl_region = ? OR region_desc_kpx = ?) LIMIT 1";
+                                            $stmt = $conn->prepare($kpxregioncodeQuery1);
+                                            if ($stmt) {
+                                                $stmt->bind_param("ss",$region_description, $region_description);
+                                                $stmt->execute();
+                                                $result = $stmt->get_result();
+                                                if ($result && $result->num_rows > 0) {
+                                                    $regioncodeData = $result->fetch_assoc();
+                                                    if ($regioncodeData && isset($regioncodeData['region_code'])) {
+                                                        $region_code = $conn->real_escape_string(strval($regioncodeData['region_code']));
+                                                        $zone_code = $conn->real_escape_string(strval($regioncodeData['zone_code']));
+                                                    }else{
+                                                        $region_code = null;
+                                                        $zone_code = null;
+                                                    }
+                                                }else{
+                                                    $region_code = null;
+                                                    $zone_code = null;
+                                                }
+                                                $stmt->close();
+                                            }
+                                            
+                                            $person_operator = $conn->real_escape_string(strval($worksheet->getCell('P' . $row)->getValue()));
+                                            $remote_branch = $conn->real_escape_string(strval($worksheet->getCell('Q' . $row)->getValue()));
+                                            $remote_operator = $conn->real_escape_string(strval($worksheet->getCell('R' . $row)->getValue()));
+                                            $second_approver = null;
+                                        }
+
+                                    }else { // OTHER DETAILS EXCEL COLUMN
+                                        if ($partner === 'All'){
+                                            $contact_number = null;
+                                            $other_details = $conn->real_escape_string(strval($worksheet->getCell('L' . $row)->getValue()));
+
+                                            $branch_id_raw = $worksheet->getCell('M' . $row)->getValue();
+                                            $branch_outlet_raw = $conn->real_escape_string(strval($worksheet->getCell('N' . $row)->getValue()));
+                                        
+                                            if($getColumnLabels[12] === 'Branch ID'){
+                                                if (is_numeric($branch_id_raw)) {
+                                                    $cntl_num_for_region = ($branch_id_raw == 581) ? intval(2607) : intval($branch_id_raw);
+                                                } elseif ($branch_id_raw === 'HEAD OFFICE' || $branch_id_raw === 'ML HEAD OFFICE') {
+                                                    $cntl_num_for_region = intval(2607);
+                                                } elseif ($branch_id_raw === 'CEBU HEAD OFFICE' || $branch_id_raw === 'ML CEBU HEAD OFFICE') {
+                                                    $cntl_num_for_region = intval(581);
+                                                }
+
+                                                if($branch_outlet_raw === 'HEAD OFFICE' || $branch_outlet_raw === 'ML HEAD OFFICE'){
+                                                    $cntl_num_for_region = intval(2607);
+                                                    $branch_outlet = $branch_outlet_raw;
+                                                }elseif($branch_outlet_raw === 'CEBU HEAD OFFICE' || $branch_outlet_raw === 'ML CEBU HEAD OFFICE'){
+                                                    $cntl_num_for_region = intval(581);
+                                                    $branch_outlet = $branch_outlet_raw;
+                                                }else{
+                                                    $branch_outlet = $branch_outlet_raw;
+                                                }
+
+                                                $branch_id = $conn->real_escape_string($cntl_num_for_region);
+                                                $kpxbranchcodeQuery = "SELECT code FROM masterdata.branch_profile where branch_id = ? LIMIT 1";
+                                                $stmt = $conn->prepare($kpxbranchcodeQuery);
+                                                if ($stmt) {
+                                                    $stmt->bind_param("i", $cntl_num_for_region);
+                                                    $stmt->execute();
+                                                    $result = $stmt->get_result();
+                                                    if ($result && $result->num_rows > 0) {
+                                                        $branchCodeData = $result->fetch_assoc();
+                                                        if ($branchCodeData && isset($branchCodeData['code'])) {
+                                                            $branch_code = $conn->real_escape_string(strval($branchCodeData['code']));
+                                                        } else {
+                                                            $branch_code = null;
+                                                        }
+                                                    } else {
+                                                        $branch_code = null;
+                                                    }
+                                                    $stmt->close();
+                                                }
+                
+                                                
+                                                $branch_outlet = $branch_outlet_raw;
+                                                $tg_region_code_raw = $conn->real_escape_string(strval($worksheet->getCell('O' . $row)->getValue()));
+                                                $region_description = strval($worksheet->getCell('P' . $row)->getValue());
+                                                $kpxregioncodeQuery1 = "SELECT region_code, zone_code FROM masterdata.region_masterfile
+                                                                        WHERE (gl_region = ? OR region_desc_kpx = ? OR tg_region_code = ?) LIMIT 1";
+                                                $stmt = $conn->prepare($kpxregioncodeQuery1);
+                                                if ($stmt) {
+                                                    $stmt->bind_param("sss",$region_description, $region_description, $tg_region_code_raw);
+                                                    $stmt->execute();
+                                                    $result = $stmt->get_result();
+                                                    if ($result && $result->num_rows > 0) {
+                                                        $regioncodeData = $result->fetch_assoc();
+                                                        if ($regioncodeData && isset($regioncodeData['region_code'])) {
+                                                            $region_code = $conn->real_escape_string(strval($regioncodeData['region_code']));
+                                                            $zone_code = $conn->real_escape_string(strval($regioncodeData['zone_code']));
+                                                        }else{
+                                                            $region_code = null;
+                                                            $zone_code = null;
+                                                        }
+                                                    }else{
+                                                        $region_code = null;
+                                                        $zone_code = null;
+                                                    }
+                                                    $stmt->close();
+                                                }
+                                                
+                                                $person_operator = $conn->real_escape_string(strval($worksheet->getCell('Q' . $row)->getValue()));
+                                                $remote_branch = $conn->real_escape_string(strval($worksheet->getCell('R' . $row)->getValue()));
+                                                $remote_operator = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
+                                                $second_approver = $conn->real_escape_string(strval($worksheet->getCell('T' . $row)->getValue()));
+
+                                            } else{ // WITHOUT BRANCH ID COLUMN AND REGION CODE COLUMN
+                                                if ($branch_id_raw === 'HEAD OFFICE' || $branch_outlet_raw === 'ML HEAD OFFICE') {
+                                                    $cntl_num_for_region = intval(2607);
+                                                } elseif ($branch_id_raw === 'CEBU HEAD OFFICE' || $branch_outlet_raw === 'ML CEBU HEAD OFFICE') {
+                                                    $cntl_num_for_region = intval(581);
+                                                } elseif (empty($control_number)) {
+                                                    if (substr($reference_number, 0, 3) === 'APB') {
+                                                        $cntl_num_for_region = intval(2607);
+                                                    }
+                                                } else {
+                                                    if (substr($control_number, 0, 3) === 'BPX') {
+                                                        $cntl_num_for_region = intval(2607);
+                                                    } else {
+                                                        $cntl_no_str = '';
+                                                        for ($i = 0; $i < strlen($control_number); $i++) {
+                                                            if ($control_number[$i] === '-') break;
+                                                            if (is_numeric($control_number[$i])) {
+                                                                $cntl_no_str .= $control_number[$i];
+                                                            }
+                                                        }
+                                                        $cntl_num_for_region = intval($cntl_no_str);
                                                     }
                                                 }
-                                                $cntl_num_for_region = intval($cntl_no_str);
-                                            }
-                                        }
-                                        $branch_id = $conn->real_escape_string($cntl_num_for_region);
-                                        $kpxbranchcodeQuery = "SELECT code FROM masterdata.branch_profile where branch_id = ? LIMIT 1";
-                                        $stmt = $conn->prepare($kpxbranchcodeQuery);
-                                        if ($stmt) {
-                                            $stmt->bind_param("i", $cntl_num_for_region);
-                                            $stmt->execute();
-                                            $result = $stmt->get_result();
-                                            if ($result && $result->num_rows > 0) {
-                                                $branchCodeData = $result->fetch_assoc();
-                                                if ($branchCodeData && isset($branchCodeData['code'])) {
-                                                    $branch_code = $conn->real_escape_string(strval($branchCodeData['code']));
-                                                } else {
-                                                    $branch_code = null;
+
+                                                $branch_id = $conn->real_escape_string($cntl_num_for_region);
+                                                $kpxbranchcodeQuery = "SELECT code FROM masterdata.branch_profile where branch_id = ? LIMIT 1";
+                                                $stmt = $conn->prepare($kpxbranchcodeQuery);
+                                                if ($stmt) {
+                                                    $stmt->bind_param("i", $cntl_num_for_region);
+                                                    $stmt->execute();
+                                                    $result = $stmt->get_result();
+                                                    if ($result && $result->num_rows > 0) {
+                                                        $branchCodeData = $result->fetch_assoc();
+                                                        if ($branchCodeData && isset($branchCodeData['code'])) {
+                                                            $branch_code = $conn->real_escape_string(strval($branchCodeData['code']));
+                                                        } else {
+                                                            $branch_code = null;
+                                                        }
+                                                    } else {
+                                                        $branch_code = null;
+                                                    }
+                                                    $stmt->close();
                                                 }
-                                            } else {
-                                                $branch_code = null;
-                                            }
-                                            $stmt->close();
-                                        }
-        
-                                        $branch_outlet = $conn->real_escape_string(strval($worksheet->getCell('N' . $row)->getValue()));
-                                        $region_description = strval($worksheet->getCell('O' . $row)->getValue());
-                                        $kpxregioncodeQuery1 = "SELECT region_code, zone_code FROM masterdata.region_masterfile
-                                                                WHERE (gl_region = ? OR region_desc_kpx = ?) LIMIT 1";
-                                        $stmt = $conn->prepare($kpxregioncodeQuery1);
-                                        if ($stmt) {
-                                            $stmt->bind_param("ss",$region_description, $region_description);
-                                            $stmt->execute();
-                                            $result = $stmt->get_result();
-                                            if ($result && $result->num_rows > 0) {
-                                                $regioncodeData = $result->fetch_assoc();
-                                                if ($regioncodeData && isset($regioncodeData['region_code'])) {
-                                                    $region_code = $conn->real_escape_string(strval($regioncodeData['region_code']));
-                                                    $zone_code = $conn->real_escape_string(strval($regioncodeData['zone_code']));
-                                                }else{
-                                                    $region_code = null;
-                                                    $zone_code = null;
+                
+                                                $branch_outlet = $conn->real_escape_string(strval($worksheet->getCell('M' . $row)->getValue()));
+                                                $region_description = strval($worksheet->getCell('N' . $row)->getValue());
+                                                $kpxregioncodeQuery1 = "SELECT region_code, zone_code FROM masterdata.region_masterfile
+                                                                        WHERE (gl_region = ? OR region_desc_kpx = ?) LIMIT 1";
+                                                $stmt = $conn->prepare($kpxregioncodeQuery1);
+                                                if ($stmt) {
+                                                    $stmt->bind_param("ss",$region_description, $region_description);
+                                                    $stmt->execute();
+                                                    $result = $stmt->get_result();
+                                                    if ($result && $result->num_rows > 0) {
+                                                        $regioncodeData = $result->fetch_assoc();
+                                                        if ($regioncodeData && isset($regioncodeData['region_code'])) {
+                                                            $region_code = $conn->real_escape_string(strval($regioncodeData['region_code']));
+                                                            $zone_code = $conn->real_escape_string(strval($regioncodeData['zone_code']));
+                                                        }else{
+                                                            $region_code = null;
+                                                            $zone_code = null;
+                                                        }
+                                                    }else{
+                                                        $region_code = null;
+                                                        $zone_code = null;
+                                                    }
+                                                    $stmt->close();
                                                 }
-                                            }else{
-                                                $region_code = null;
-                                                $zone_code = null;
+                                                
+                                                $person_operator = $conn->real_escape_string(strval($worksheet->getCell('O' . $row)->getValue()));
+                                                $remote_branch = $conn->real_escape_string(strval($worksheet->getCell('P' . $row)->getValue()));
+                                                $remote_operator = $conn->real_escape_string(strval($worksheet->getCell('Q' . $row)->getValue()));
+                                                $second_approver = $conn->real_escape_string(strval($worksheet->getCell('R' . $row)->getValue()));
                                             }
-                                            $stmt->close();
                                         }
-                                        
-                                        $person_operator = $conn->real_escape_string(strval($worksheet->getCell('P' . $row)->getValue()));
-                                        $remote_branch = $conn->real_escape_string(strval($worksheet->getCell('Q' . $row)->getValue()));
-                                        $remote_operator = $conn->real_escape_string(strval($worksheet->getCell('R' . $row)->getValue()));
                                     }
-                                } elseif ($getColumnLabels[2] === 'Date / Time'){
+
+                                } 
+                                elseif ($getColumnLabels[2] === 'Date / Time'){
                                     $datetime_raw = $worksheet->getCell('C' . $row)->getValue();
 
                                     if ($datetime_raw) {
@@ -790,8 +982,10 @@
                                     if($getColumnLabels[14] === 'Branch ID'){
                                         if (is_numeric($branch_id_raw)) {
                                             $cntl_num_for_region = ($branch_id_raw == 581) ? intval(2607) : intval($branch_id_raw);
-                                        } elseif ($branch_id_raw === 'HEAD OFFICE') {
+                                        } elseif ($branch_id_raw === 'HEAD OFFICE' || $branch_id_raw === 'ML HEAD OFFICE') {
                                             $cntl_num_for_region = intval(2607);
+                                        } elseif ($branch_id_raw === 'CEBU HEAD OFFICE' || $branch_id_raw === 'ML CEBU HEAD OFFICE') {
+                                            $cntl_num_for_region = intval(581);
                                         }
                                         $branch_id = $conn->real_escape_string($cntl_num_for_region);
                                         $kpxbranchcodeQuery = "SELECT code FROM masterdata.branch_profile where branch_id = ? LIMIT 1";
@@ -814,12 +1008,14 @@
                                         }
         
                                         $branch_outlet = $conn->real_escape_string(strval($worksheet->getCell('P' . $row)->getValue()));
+
+                                        $tg_region_code_raw = $conn->real_escape_string(strval($worksheet->getCell('Q' . $row)->getValue()));
                                         $region_description = strval($worksheet->getCell('R' . $row)->getValue());
                                         $kpxregioncodeQuery1 = "SELECT region_code, zone_code FROM masterdata.region_masterfile
-                                                                WHERE (gl_region = ? OR region_desc_kpx = ?) LIMIT 1";
+                                                                WHERE (gl_region = ? OR region_desc_kpx = ? OR tg_region_code = ?) LIMIT 1";
                                         $stmt = $conn->prepare($kpxregioncodeQuery1);
                                         if ($stmt) {
-                                            $stmt->bind_param("ss",$region_description, $region_description);
+                                            $stmt->bind_param("sss",$region_description, $region_description, $tg_region_code_raw);
                                             $stmt->execute();
                                             $result = $stmt->get_result();
                                             if ($result && $result->num_rows > 0) {
@@ -841,9 +1037,13 @@
                                         $person_operator = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
                                         $remote_branch = $conn->real_escape_string(strval($worksheet->getCell('T' . $row)->getValue()));
                                         $remote_operator = $conn->real_escape_string(strval($worksheet->getCell('U' . $row)->getValue()));
+                                        $second_approver = $conn->real_escape_string(strval($worksheet->getCell('V' . $row)->getValue()));
+
                                     }else{
-                                        if ($branch_id_raw === 'HEAD OFFICE') {
+                                        if ($branch_id_raw === 'HEAD OFFICE' || $branch_id_raw === 'ML HEAD OFFICE') {
                                             $cntl_num_for_region = intval(2607);
+                                        } elseif ($branch_id_raw === 'CEBU HEAD OFFICE' || $branch_id_raw === 'ML CEBU HEAD OFFICE') {
+                                            $cntl_num_for_region = intval(581);
                                         } elseif (empty($control_number)) {
                                             if (substr($reference_number, 0, 3) === 'APB') {
                                                 $cntl_num_for_region = intval(2607);
@@ -910,15 +1110,47 @@
                                         $person_operator = $conn->real_escape_string(strval($worksheet->getCell('Q' . $row)->getValue()));
                                         $remote_branch = $conn->real_escape_string(strval($worksheet->getCell('R' . $row)->getValue()));
                                         $remote_operator = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
+                                        $second_approver = $conn->real_escape_string(strval($worksheet->getCell('T' . $row)->getValue()));
                                     }
                                 }
                                 
                                 
-    
-                                $partnerName = $conn->real_escape_string(strval($PartnerName));
-                                $partnerId = $conn->real_escape_string(strval($PartnerID));
-                                $PartnerID_KPX = $conn->real_escape_string(strval($PartnerID_KPX));
-                                $GLCode = $conn->real_escape_string(strval($GLCode));
+                                if ($partner === 'All'){ // CONSOLIDATED
+                                    if($getColumnLabels[12] === 'Branch ID'){
+                                        $PartnerID_KPX = $conn->real_escape_string(strval($worksheet->getCell('U' . $row)->getValue()));
+                                        $partnerName = $conn->real_escape_string(strval($worksheet->getCell('V' . $row)->getValue()));
+                                    }else { // WITHOUT BRANCH ID COLUMN AND REGION CODE COLUMN
+                                        $PartnerID_KPX = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
+                                        $partnerName = $conn->real_escape_string(strval($worksheet->getCell('T' . $row)->getValue()));
+                                    }
+
+                                    $getGLCode_partner_ID = "SELECT partner_id, gl_code FROM masterdata.partner_masterfile where partner_id_kpx = ? LIMIT 1";
+                                    $stmt = $conn->prepare($getGLCode_partner_ID);
+                                    if ($stmt) {
+                                        $stmt->bind_param("s", $PartnerID_KPX);
+                                        $stmt->execute();
+                                        $result = $stmt->get_result();
+                                        if ($result && $result->num_rows > 0) {
+                                            $GLCodeData = $result->fetch_assoc();
+                                            if ($GLCodeData) {
+                                                $partnerId = $conn->real_escape_string(strval($GLCodeData['partner_id']));
+                                                $GLCode = $conn->real_escape_string(strval($GLCodeData['gl_code']));
+                                            }else{
+                                                $partnerId = null;
+                                                $GLCode = null;
+                                            }
+                                        }else{
+                                            $partnerId = null;
+                                            $GLCode = null;
+                                        }
+                                        $stmt->close();
+                                    }
+                                }else { // Per Partner
+                                    $partnerName = $conn->real_escape_string(strval($PartnerName));
+                                    $partnerId = $conn->real_escape_string(strval($PartnerID));
+                                    $PartnerID_KPX = $conn->real_escape_string(strval($PartnerID_KPX));
+                                    $GLCode = $conn->real_escape_string(strval($GLCode));
+                                }
                             }else {
                                 echo '<script>
                                     document.addEventListener("DOMContentLoaded", function() {
@@ -945,7 +1177,27 @@
                         $imported_by = $conn->real_escape_string(strval($_SESSION['admin_name'] ?? $_SESSION['user_name']));
                         $date_uploaded = date('Y-m-d');
 
-                        if(checkDuplicateData($conn, $reference_number, $datetime)){
+                        $is_duplicate = checkDuplicateData($conn, $reference_number, $datetime);
+                        $is_partner_not_found = checkhadPartnerID($conn, $fileType, $partner, $partnerId);
+                        $is_region_not_found = checkSpelledRegionName($conn, $fileType, $region_description, $region_code);
+                        $is_branch_not_found = checkHadBranchID($conn, $branch_id);
+
+                        $row_error_modules = [];
+
+                        if ($is_duplicate) {
+                            $row_error_modules[] = 'duplicate';
+                        }
+                        if ($is_partner_not_found) {
+                            $row_error_modules[] = 'partner_not_found';
+                        }
+                        if ($is_region_not_found) {
+                            $row_error_modules[] = 'region_not_found';
+                        }
+                        if ($is_branch_not_found) {
+                            $row_error_modules[] = 'branch_id_not_found';
+                        }
+
+                        if ($is_duplicate) {
                                 $duplicate_data[] = [
                                     'datetime' => $datetime,
                                     'reference_number' => $reference_number,
@@ -968,8 +1220,96 @@
                                     'contact_number' => $contact_number,
                                     'other_details' => $other_details
                                 ];
-                            } 
-                            elseif (checkHasAlreadyDataReadyToOverride($conn, $reference_number, $datetime)) {
+                        }
+
+                        if ($is_partner_not_found) {
+                            $partner_not_found_data[] = [
+                                'row' => $row,
+                                'partner_id' => $partnerId,
+                                'partner_name' => $partnerName
+                            ];
+                        }
+
+                        if ($is_region_not_found) {
+                            $region_not_found_data[] = [
+                                'row' => $row,
+                                'branch_outlet' => $branch_outlet,
+                                'region_description' => $region_description,
+                                'reference_number' => $reference_number,
+                                'payor_name' => $payor_name,
+                                'amount_paid' => $amount_paid,
+                                'amount_charge_customer' => $amount_charge_customer,
+                                'amount_charge_partner' => $amount_charge_partner,
+                                'datetime' => $datetime,
+                                'control_number' => $control_number,
+                                'branch_id' => $branch_id,
+                                'region_code' => $region_code,
+                                'person_operator' => $person_operator,
+                                'partner_name' => $partnerName,
+                                'partner_id' => $partnerId,
+                                'account_number' => $account_number,
+                                'account_name' => $account_name,
+                                'contact_number' => $contact_number,
+                                'other_details' => $other_details,
+                                'payor_address' => $payor_address,
+                                'remote_branch' => $remote_branch,
+                                'remote_operator' => $remote_operator
+                            ];
+                        }
+
+                        if ($is_branch_not_found) {
+                            $branchID_notFoundData[] = [
+                                'row' => $row,
+                                'branch_id' => $branch_id,
+                                'region_description' => $region_description,
+                                'reference_number' => $reference_number,
+                                'payor_name' => $payor_name,
+                                'amount_paid' => $amount_paid,
+                                'amount_charge_customer' => $amount_charge_customer,
+                                'amount_charge_partner' => $amount_charge_partner,
+                                'datetime' => $datetime,
+                                'control_number' => $control_number,
+                                'region_code' => $region_code,
+                                'person_operator' => $person_operator,
+                                'partner_name' => $partnerName,
+                                'partner_id' => $partnerId,
+                                'account_number' => $account_number,
+                                'account_name' => $account_name,
+                                'contact_number' => $contact_number,
+                                'other_details' => $other_details,
+                                'branch_outlet' => $branch_outlet
+                            ];
+                        }
+
+                        if (!empty($row_error_modules)) {
+                            $consolidated_error_data[] = [
+                                'original_file_name' => $file_name,
+                                'source_file_type' => $fileType,
+                                'source_partner' => $partner,
+                                'uploaded_date' => $date_uploaded,
+                                'uploaded_by' => $imported_by,
+                                'row_in_excel' => $row,
+                                'report_date' => $report_date,
+                                'transaction_date' => $datetime,
+                                'cancellation_date' => $is_cancellation ? $datetime : null,
+                                'reference_number' => $reference_number,
+                                'payor_name' => $payor_name,
+                                'amount_paid' => $amount_paid,
+                                'amount_charge_customer' => $amount_charge_customer,
+                                'amount_charge_partner' => $amount_charge_partner,
+                                'branch_id' => $branch_id,
+                                'ml_outlet' => $branch_outlet,
+                                'region_code' => $region_code,
+                                'region' => $region_description,
+                                'partner_id' => $partnerId,
+                                'partner_name' => $partnerName,
+                                'error_remarks' => implode('; ', $row_error_modules),
+                                'validation_modules' => $row_error_modules
+                            ];
+                            continue;
+                        }
+
+                        if (checkHasAlreadyDataReadyToOverride($conn, $reference_number, $datetime)) {
                                 $ready_to_override_data[] = [
                                     'numeric_number' => $cancellStatus,
                                     'datetime' => $datetime,
@@ -997,8 +1337,10 @@
                                     'GLCode' => $GLCode,
                                     'remote_branch' => $remote_branch,
                                     'remote_operator' => $remote_operator,
+                                    'second_approver' => $second_approver,
                                     'settle_unsettle' => $settle_unsettle,
                                     'claim_unclaim' => $claim_unclaim,
+                                    'report_date' => $report_date,
                                     'imported_by' => $imported_by,
                                     'date_uploaded' => $date_uploaded,
                                     'rfp_no' => $rfp_no,
@@ -1006,81 +1348,7 @@
                                     'hold_status' => $hold_status,
                                     'post_transaction' => $post_transaction
                                 ];
-
-                            }
-                            // elseif (checkSpelledRegionName($conn, $fileType, $region_description)) {
-                            //     // Region not found - add to region error array
-                            //     $region_not_found_data[] = [
-                            //         'row' => $row,
-                            //         'branch_outlet' => $branch_outlet,
-                            //         'region_description' => $region_description,
-                            //         'reference_number' => $reference_number,
-                            //         'payor_name' => $payor_name,
-                            //         'amount_paid' => $amount_paid,
-                            //         'amount_charge_customer' => $amount_charge_customer,
-                            //         'amount_charge_partner' => $amount_charge_partner,
-                            //         'datetime' => $datetime,
-                            //         'control_number' => $control_number,
-                            //         'branch_id' => $branch_id,
-                            //         'region_code' => $region_code,
-                            //         'person_operator' => $person_operator,
-                            //         'partner_name' => $partnerName,
-                            //         'partner_id' => $partnerId,
-                            //         'account_number' => $account_number,
-                            //         'account_name' => $account_name,
-                            //         'contact_number' => $contact_number,
-                            //         'other_details' => $other_details,
-                            //         'payor_address' => $payor_address,
-                            //         'remote_branch' => $remote_branch,
-                            //         'remote_operator' => $remote_operator
-                            //     ];
-                            // } 
-                            elseif (checkhadPartnerID($conn, $fileType, $partner, $partnerId)){
-                                // Partner not found - add to partner error array
-                                $partner_not_found_data[] = [
-                                    'row' => $row,
-                                    'partner_id' => $partnerId,
-                                    'partner_name' => $partnerName
-                                ];
-                            } 
-                            // elseif (checkhadpartnerGLCode($conn, $fileType, $partner, $GLCode)){
-                            //     // Partner not found - add to partner error array
-                            //     $partner_GLCode_not_found_data[] = [
-                            //         'row' => $row,
-                            //         'partner_id' => $partnerId,
-                            //         'partner_id_kpx' => $PartnerID_KPX,
-                            //         'partner_name' => $partnerName,
-                            //         'gl_code' => $GLCode,
-                            //         'reference_number' => $reference_number,
-                            //         'datetime' => $datetime,
-                            //         'amount_paid' => $amount_paid,
-                            //         'file_type' => $fileType
-                            //     ];
-                            // } 
-                            // elseif (checkHadBranchID($conn, $branch_id)) {
-                            //     // Branch ID not found - add to missing branch IDs array
-                            //     $branchID_notFoundData[] = [
-                            //         'row' => $row,
-                            //         'branch_id' => $branch_id,
-                            //         'region_description' => $region_description,
-                            //         'reference_number' => $reference_number,
-                            //         'payor_name' => $payor_name,
-                            //         'amount_paid' => $amount_paid,
-                            //         'amount_charge_customer' => $amount_charge_customer,
-                            //         'amount_charge_partner' => $amount_charge_partner,
-                            //         'datetime' => $datetime,
-                            //         'control_number' => $control_number,
-                            //         'region_code' => $region_code,
-                            //         'person_operator' => $person_operator,
-                            //         'partner_name' => $partnerName,
-                            //         'partner_id' => $partnerId,
-                            //         'account_number' => $account_number,
-                            //         'account_name' => $account_name,
-                            //         'contact_number' => $contact_number,
-                            //         'other_details' => $other_details
-                            //     ];
-                            // }
-                            else{
+                        } else {
                                 $rawData[] = [
                                     'numeric_number' => $cancellStatus,
                                     'datetime' => $datetime,
@@ -1108,6 +1376,7 @@
                                     'GLCode' => $GLCode,
                                     'remote_branch' => $remote_branch,
                                     'remote_operator' => $remote_operator,
+                                    'second_approver' => $second_approver,
                                     'settle_unsettle' => $settle_unsettle,
                                     'claim_unclaim' => $claim_unclaim,
                                     'report_date' => $report_date,
@@ -1118,7 +1387,7 @@
                                     'hold_status' => $hold_status,
                                     'post_transaction' => $post_transaction
                                 ];
-                            }
+                        }
 
                     }
 
@@ -1134,6 +1403,23 @@
                     $_SESSION['missing_branch_ids'] = $branchID_notFoundData;
                     $_SESSION['Matched_BranchID_data'] = $rawData; // Store non-duplicate data
                     $_SESSION['cancellation_BranchID_data'] = $cancellation_BranchID_data;
+                    $_SESSION['consolidated_data'] = $consolidated_error_data;
+                    $_SESSION['validation_error_json'] = json_encode([
+                        'summary' => [
+                            'total_errors' => count($consolidated_error_data),
+                            'duplicate' => count($duplicate_data),
+                            'partner_not_found' => count($partner_not_found_data),
+                            'branch_id_not_found' => count($branchID_notFoundData),
+                            'region_not_found' => count($region_not_found_data)
+                        ],
+                        'errors_by_module' => [
+                            'duplicate' => $duplicate_data,
+                            'partner_not_found' => $partner_not_found_data,
+                            'branch_id_not_found' => $branchID_notFoundData,
+                            'region_not_found' => $region_not_found_data
+                        ],
+                        'rows' => $consolidated_error_data
+                    ], JSON_UNESCAPED_UNICODE);
 
                 }else{
                     echo '<script>
@@ -1286,6 +1572,7 @@
                 $imported_date = $row['date_uploaded'];
                 $remote_branch = $row['remote_branch'];
                 $remote_operator = $row['remote_operator'];
+                $second_approver = $row['second_approver'] ?? null;
                 $report_date = $conn->real_escape_string($selected_report_date);
                 
                 // NEW LOGIC: Handle datetime based on whether it's a matched cancellation
@@ -1356,6 +1643,7 @@
                     hold_status, 
                     remote_branch, 
                     remote_operator,
+                    `2nd_approver`,
                     post_transaction
                 ) VALUES (
                     " . ($status ? "'$status'" : "NULL") . ",
@@ -1394,6 +1682,7 @@
                     " . ($hold_status ? "'$hold_status'" : "NULL") . ",
                     '$remote_branch',
                     '$remote_operator',
+                    " . ($second_approver ? "'$second_approver'" : "NULL") . ",
                     '$post_transaction'
                 )";
 
@@ -1568,66 +1857,37 @@
         // Calculate unmatched data from other session arrays  
         $unmatched_count = count($matched_data) + count($cancellation_data); // Records that don't match existing data
 
-        // Show first confirmation modal
+        // Show single override confirmation modal
         echo '<script>
             document.addEventListener("DOMContentLoaded", function() {
                 Swal.fire({
-                    title: "Feedback Not Found",
+                    title: "Do you want to Override it?",
                     html: `
                         <div class="text-center">
-                            <i class="fas fa-exclamation-triangle text-warning mb-3" style="font-size: 3rem;"></i>
-                            <h4 class="text-warning mb-3">Data Override Detected</h4>
-                            <div class="alert alert-info">
-                                <strong>' . $matched_count . '</strong> rows detected with matching reference number and datetime
+                            <h4 class="text-primary mb-3">Confirm Override Action</h4>
+                            <div class="alert alert-warning">
+                                <strong>Override Process:</strong><br>
+                                • ' . $matched_count . ' existing records will be replaced.<br>
+                                • ' . $unmatched_count . ' new records.<br>
+                                • This action cannot be undone
                             </div>
-                            <div class="alert alert-secondary">
-                                <strong>' . $unmatched_count . '</strong> rows do not match existing data
-                            </div>
-                            <p class="text-muted">Some records already exist in the database with pending status.</p>
-                            <p class="text-info"><strong>Note:</strong> Cancellation transactions (*) will be matched with their corresponding regular transactions.</p>
                         </div>
                     `,
-                    icon: "warning",
-                    confirmButtonText: "OK",
-                    confirmButtonColor: "#ffc107",
+                    icon: "question",
+                    showCancelButton: true,
+                    confirmButtonText: "Yes, Override it",
+                    cancelButtonText: "No, Cancel it",
+                    confirmButtonColor: "#28a745",
+                    cancelButtonColor: "#dc3545",
                     allowOutsideClick: false,
                     allowEscapeKey: false
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        // Show second confirmation modal
-                        Swal.fire({
-                            title: "Do you want to Override it?",
-                            html: `
-                                <div class="text-center">
-                                    <i class="fas fa-question-circle text-primary mb-3" style="font-size: 3rem;"></i>
-                                    <h4 class="text-primary mb-3">Confirm Override Action</h4>
-                                    <div class="alert alert-warning">
-                                        <strong>Override Process:</strong><br>
-                                        • ' . $matched_count . ' existing records will be deleted and replaced<br>
-                                        • ' . $unmatched_count . ' new records will be inserted directly<br>
-                                        • Cancellation (*) and regular transactions with same reference will be merged<br>
-                                        • This action cannot be undone
-                                    </div>
-                                    <p class="text-muted"><strong>Note:</strong> All data will be processed in a single transaction.</p>
-                                </div>
-                            `,
-                            icon: "question",
-                            showCancelButton: true,
-                            confirmButtonText: "Yes, Override it",
-                            cancelButtonText: "No, Cancel it",
-                            confirmButtonColor: "#28a745",
-                            cancelButtonColor: "#dc3545",
-                            allowOutsideClick: false,
-                            allowEscapeKey: false
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                // User confirmed override - process the data
-                                processOverrideData();
-                            } else {
-                                // User cancelled - redirect back
-                                window.location.href = "../../dashboard/billspayment/import/billspay-transaction.php";
-                            }
-                        });
+                        // User confirmed override - process the data
+                        processOverrideData();
+                    } else {
+                        // User cancelled - redirect back
+                        window.location.href = "../../dashboard/billspayment/import/billspay-transaction.php";
                     }
                 });
             });
@@ -1667,6 +1927,7 @@
         $processed_override_data = $_SESSION['processed_override_data'] ?? [];
         $matched_data = $_SESSION['Matched_BranchID_data'] ?? [];
         $cancellation_data = $_SESSION['cancellation_BranchID_data'] ?? [];
+        $override_source_type = strtoupper(trim((string)($_SESSION['source_file_type'] ?? '')));
         $selected_report_date = normalizeReportDate($_POST['report_date'] ?? ($_SESSION['manual_report_date'] ?? ($_SESSION['extracted_report_date'] ?? null)));
 
         if (empty($selected_report_date)) {
@@ -1738,6 +1999,7 @@
                 $row['branch_id'] = isset($row['branch_id']) && $row['branch_id'] !== '' ? $row['branch_id'] : null;
                 $row['partner_id'] = isset($row['partner_id']) && $row['partner_id'] !== '' ? $row['partner_id'] : null;
                 $row['PartnerID_KPX'] = isset($row['PartnerID_KPX']) && $row['PartnerID_KPX'] !== '' ? $row['PartnerID_KPX'] : null;
+                $row['second_approver'] = $row['second_approver'] ?? null;
                 $row['post_transaction'] = $row['post_transaction'] ?? 'unposted';
                 $row['datetime'] = $row['datetime'] ?? null;
 
@@ -1792,16 +2054,22 @@
                 if ($is_cancellation) {
                     // This is a cancellation - ALWAYS try to find matching regular transaction datetime
                     if (isset($reference_datetime_map[$row['reference_number']])) {
-                        // Found matching regular transaction - use its datetime for main datetime field
-                        $datetime_value = $reference_datetime_map[$row['reference_number']];
-                        $cancellation_date = $row['datetime']; // Cancellation's own datetime goes to cancellation_date
+                        // Found matching regular transaction.
+                        if ($override_source_type === 'KP7') {
+                            // KP7 override rule: do not write cancellation_date.
+                            $datetime_value = $reference_datetime_map[$row['reference_number']];
+                            $cancellation_date = null;
+                        } else {
+                            $datetime_value = $reference_datetime_map[$row['reference_number']];
+                            $cancellation_date = $row['datetime'];
+                        }
                     } else {
                         // No matching regular transaction found - handle based on file type
-                        if ($_SESSION['source_file_type'] === 'KP7') {
+                        if ($override_source_type === 'KP7') {
                             // For KP7, use cancellation datetime as main datetime
                             $datetime_value = $row['datetime'];
                             $cancellation_date = null;
-                        } elseif ($_SESSION['source_file_type'] === 'KPX') {
+                        } elseif ($override_source_type === 'KPX') {
                             // For KPX, put datetime in cancellation_date field, keep main datetime null
                             $datetime_value = null;
                             $cancellation_date = $row['datetime'];
@@ -1811,6 +2079,18 @@
                     // This is a regular transaction - always use its own datetime
                     $datetime_value = $row['datetime'];
                     $cancellation_date = null;
+                }
+
+                // Final safety: for KP7 cancellation rows, write cancellation_date from report_date.
+                if ($is_cancellation && $override_source_type === 'KP7') {
+                    if (empty($datetime_value)) {
+                        $datetime_value = $row['datetime'] ?? null;
+                    }
+                    $kp7CancellationDateRaw = $row['report_date'] ?? $selected_report_date;
+                    $kp7CancellationTs = strtotime((string)$kp7CancellationDateRaw);
+                    $cancellation_date = ($kp7CancellationTs !== false)
+                        ? date('Y-m-d H:i:s', $kp7CancellationTs)
+                        : ($row['datetime'] ?? null);
                 }
 
                 // Ensure branch_id remains NULL if not provided so INSERT accepts it
@@ -1854,9 +2134,10 @@
                             cad_no, 
                             hold_status, 
                             remote_branch, 
-                            remote_operator, 
+                            remote_operator,
+                            `2nd_approver`,
                             post_transaction
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?)";
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 $insertStmt = $conn->prepare($insertSQL);
                 if (!$insertStmt) {
@@ -1864,7 +2145,7 @@
                 }
 
                 // Bind params; nulls in $row will be sent as SQL NULL
-                $insertStmt->bind_param("sssssssssssdddssissssssssssssssssssss",
+                $insertStmt->bind_param("sssssssssssdddssisssssssssssssssssssss",
                     $status,
                     $datetime_value,
                     $cancellation_date,
@@ -1901,6 +2182,7 @@
                     $row['hold_status'],
                     $row['remote_branch'],
                     $row['remote_operator'],
+                    $row['second_approver'],
                     $row['post_transaction']
                 );
                 
@@ -1929,16 +2211,22 @@
                 if ($is_cancellation) {
                     // This is a cancellation - use the complete reference map
                     if (isset($reference_datetime_map[$row['reference_number']])) {
-                        // Found matching regular transaction - use its datetime for main datetime field
-                        $datetime_value = $reference_datetime_map[$row['reference_number']];
-                        $cancellation_date = $row['datetime']; // Cancellation's own datetime goes to cancellation_date
+                        // Found matching regular transaction.
+                        if ($override_source_type === 'KP7') {
+                            // KP7 override rule: do not write cancellation_date.
+                            $datetime_value = $reference_datetime_map[$row['reference_number']];
+                            $cancellation_date = null;
+                        } else {
+                            $datetime_value = $reference_datetime_map[$row['reference_number']];
+                            $cancellation_date = $row['datetime'];
+                        }
                     } else {
                         // No matching regular transaction found - handle based on file type
-                        if ($_SESSION['source_file_type'] === 'KP7') {
+                        if ($override_source_type === 'KP7') {
                             // For KP7, use cancellation datetime as main datetime
                             $datetime_value = $row['datetime'];
                             $cancellation_date = null;
-                        } elseif ($_SESSION['source_file_type'] === 'KPX') {
+                        } elseif ($override_source_type === 'KPX') {
                             // For KPX, put datetime in cancellation_date field, keep main datetime null
                             $datetime_value = null;
                             $cancellation_date = $row['datetime'];
@@ -1949,11 +2237,24 @@
                     $datetime_value = $row['datetime'];
                     $cancellation_date = null;
                 }
+
+                // Final safety: for KP7 cancellation rows, write cancellation_date from report_date.
+                if ($is_cancellation && $override_source_type === 'KP7') {
+                    if (empty($datetime_value)) {
+                        $datetime_value = $row['datetime'] ?? null;
+                    }
+                    $kp7CancellationDateRaw = $row['report_date'] ?? $selected_report_date;
+                    $kp7CancellationTs = strtotime((string)$kp7CancellationDateRaw);
+                    $cancellation_date = ($kp7CancellationTs !== false)
+                        ? date('Y-m-d H:i:s', $kp7CancellationTs)
+                        : ($row['datetime'] ?? null);
+                }
                 
                 // Ensure branch_id remains NULL if not provided so INSERT accepts it
                 if ($row['branch_id'] === null || $row['branch_id'] === '') {
                     $row['branch_id'] = '';
                 }
+                $row['second_approver'] = $row['second_approver'] ?? null;
                 
                 // Debug logging for unmatched data too
                 error_log("Processing unmatched for ref: " . $row['reference_number'] . 
@@ -1997,16 +2298,17 @@
                     cad_no, 
                     hold_status, 
                     remote_branch, 
-                    remote_operator, 
+                    remote_operator,
+                    `2nd_approver`,
                     post_transaction
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 $insertStmt = $conn->prepare($insertSQL);
                 
                 // Get source file from session or use default
                 $source_file = $_SESSION['source_file_type'] ?? 'Unknown';
 
-                $insertStmt->bind_param("sssssssssssdddssiisssssssssssssssssss", //37
+                $insertStmt->bind_param("sssssssssssdddssiissssssssssssssssssss", //38
                     $status,
                     $datetime_value,
                     $cancellation_date,
@@ -2043,6 +2345,7 @@
                     $row['hold_status'],
                     $row['remote_branch'],
                     $row['remote_operator'],
+                    $row['second_approver'],
                     $row['post_transaction']
                 );
                 
@@ -2077,16 +2380,12 @@
                         title: "Override Successful!",
                         html: `
                             <div class="text-center">
-                                <i class="fas fa-check-circle text-success mb-3" style="font-size: 3rem;"></i>
-                                <h4 class="text-success mb-3">Data Successfully Processed</h4>
                                 <div class="alert alert-success">
                                     <strong>Processing Summary:</strong><br>
-                                    • <strong>' . $deletedCount . '</strong> existing records deleted<br>
                                     • <strong>' . $processedCount . '</strong> records overridden<br>
                                     • <strong>' . $insertedCount . '</strong> new records inserted<br>
                                     • <strong>' . $totalProcessed . '</strong> total records processed
                                 </div>
-                                <p class="text-muted">Cancellation records (*) with matching reference numbers now inherit datetime from regular transactions.</p>
                             </div>
                         `,
                         showConfirmButton: true,
@@ -2360,9 +2659,9 @@
                     }
 
                     // Main logic flow
-                    if (!empty($partner_not_found_data)) {
-                        error_log("Redirecting to partner error page");
-                        echo '<script>window.location.href = "../error/partnerNotFoundErrorDisplay.php";</script>'; // DONE
+                    if (!empty($_SESSION['consolidated_data'])) {
+                        error_log("Redirecting to consolidated validation result page");
+                        echo '<script>window.location.href = "../error/ErrorResult.php";</script>';
                     } elseif (!empty($partner_GLCode_not_found_data)) {
                         error_log("Handling GL Code error");
                         
