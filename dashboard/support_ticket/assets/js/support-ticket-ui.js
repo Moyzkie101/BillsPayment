@@ -429,6 +429,141 @@
         });
     }
 
+    function initReplyAttachmentPreviews() {
+        function formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            var sizes = ['B', 'KB', 'MB', 'GB'];
+            var i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
+        }
+
+        function openLocalFilePreview(file) {
+            if (!file) return;
+
+            var existing = document.getElementById('stImagePreviewOverlay');
+            if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+
+            var overlay = document.createElement('div');
+            overlay.className = 'ip-overlay';
+            overlay.id = 'stImagePreviewOverlay';
+
+            var safeName = (file.name || 'attachment').replace(/[&<>\"]/g, function (ch) {
+                return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch] || ch;
+            });
+
+            var isImage = (file.type || '').indexOf('image/') === 0;
+            var bodyHtml = '';
+            if (isImage) {
+                var blobUrl = URL.createObjectURL(file);
+                bodyHtml = '<img class="ip-image" src="' + blobUrl + '" alt="' + safeName + '">';
+                overlay.dataset.blobUrl = blobUrl;
+            } else {
+                bodyHtml =
+                    '<div class="ip-file-placeholder">' +
+                        '<div class="ip-file-icon"><i class="fa-solid fa-file"></i></div>' +
+                        '<div class="ip-file-name">' + safeName + '</div>' +
+                        '<div class="ip-file-help">Preview unavailable for this file type.</div>' +
+                    '</div>';
+            }
+
+            overlay.innerHTML =
+                '<div class="ip-modal">' +
+                    '<button type="button" class="ip-close" data-ip-close aria-label="Close">&times;</button>' +
+                    '<div class="ip-body">' + bodyHtml + '</div>' +
+                '</div>';
+
+            document.body.appendChild(overlay);
+
+            function close() {
+                if (overlay.dataset.blobUrl) {
+                    URL.revokeObjectURL(overlay.dataset.blobUrl);
+                }
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                document.removeEventListener('keydown', onKey);
+            }
+
+            function onKey(evt) {
+                if (evt.key === 'Escape') close();
+            }
+
+            var cb = overlay.querySelector('[data-ip-close]');
+            if (cb) cb.addEventListener('click', function (ev) { ev.preventDefault(); close(); });
+            overlay.addEventListener('click', function (ev) {
+                if (ev.target === overlay) close();
+            });
+            document.addEventListener('keydown', onKey);
+        }
+
+        var replyInputs = document.querySelectorAll('input[type="file"][id^="reply_attachments_"]');
+        replyInputs.forEach(function (input) {
+            var suffix = input.id.replace('reply_attachments_', '');
+            var preview = document.getElementById('replyPreview_' + suffix);
+            if (!preview) return;
+
+            var selectedFiles = [];
+
+            function syncInputFiles() {
+                try {
+                    var dt = new DataTransfer();
+                    selectedFiles.forEach(function (f) { dt.items.add(f); });
+                    input.files = dt.files;
+                } catch (err) {
+                    // ignore browser without DataTransfer write support
+                }
+            }
+
+            function renderPreview() {
+                preview.innerHTML = '';
+                if (!selectedFiles.length) return;
+
+                selectedFiles.forEach(function (file, index) {
+                    var chip = document.createElement('div');
+                    var isImage = (file.type || '').indexOf('image/') === 0;
+                    chip.className = 'tm-attach-chip';
+                    if (isImage) chip.setAttribute('data-previewable', '1');
+
+                    var icon = isImage ? 'fa-image' : 'fa-file';
+                    chip.innerHTML =
+                        '<i class="fa-solid ' + icon + '" aria-hidden="true"></i>' +
+                        '<span title="' + (file.name || '') + '">' + (file.name || 'Attachment') + ' (' + formatBytes(file.size || 0) + ')</span>' +
+                        '<button type="button" class="tm-attach-chip-remove" data-remove-index="' + index + '" aria-label="Remove">&times;</button>';
+
+                    chip.addEventListener('click', function (ev) {
+                        if (ev.target && ev.target.closest('.tm-attach-chip-remove')) {
+                            return;
+                        }
+                        if (isImage) {
+                            openLocalFilePreview(file);
+                        }
+                    });
+
+                    preview.appendChild(chip);
+                });
+
+                preview.querySelectorAll('[data-remove-index]').forEach(function (btn) {
+                    btn.addEventListener('click', function (ev) {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        var idx = parseInt(btn.getAttribute('data-remove-index'), 10);
+                        if (isNaN(idx)) return;
+                        selectedFiles.splice(idx, 1);
+                        syncInputFiles();
+                        renderPreview();
+                    });
+                });
+            }
+
+            input.addEventListener('change', function () {
+                var incoming = Array.prototype.slice.call(input.files || []);
+                if (incoming.length) {
+                    incoming.forEach(function (file) { selectedFiles.push(file); });
+                }
+                syncInputFiles();
+                renderPreview();
+            });
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initModeCards();
         initCreateModal();
@@ -437,5 +572,6 @@
         initTransferConfirmModals();
         initClosePickerModals();
         initAttachmentPreviews();
+        initReplyAttachmentPreviews();
     });
 })();

@@ -266,7 +266,9 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                     $trails = $ticketTrailsByTicketId[$ticketId] ?? [];
                     $attachmentsByTrail = $ticketAttachmentsByTicketId[$ticketId] ?? [];
                     $ticketTypeText = (string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request']);
-                    $isClosed = strtolower((string) ($ticket['status'] ?? '')) === 'closed';
+                    $ticketStatusLower = strtolower((string) ($ticket['status'] ?? ''));
+                    $isClosed = $ticketStatusLower === 'closed';
+                    $isOpen = $ticketStatusLower === 'open';
                     $ticketNumber = (string) ($ticket['ticket_number'] ?? '');
                     $ticketSupplemental = $ticketSupplementalByTicketNumber[$ticketNumber] ?? [];
                     $createdById = (int) ($ticket['created_by'] ?? 0);
@@ -331,8 +333,32 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                     </div>
                                 </div>
                                 <div class="tm-header-right">
-                                    <div class="tm-status tm-status--<?php echo htmlspecialchars(strtolower((string) $ticket['status'])); ?>"><?php echo htmlspecialchars((string) $ticket['status']); ?></div>
-                                    <button type="button" class="tm-close-btn" data-st-close-modal="stTicketTrailModal-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
+                                        <div class="tm-header-actions">
+                                            <div class="tm-header-actions-top">
+                                                <div class="tm-status tm-status--<?php echo htmlspecialchars($ticketStatusLower); ?>"><?php echo htmlspecialchars((string) $ticket['status']); ?></div>
+                                                <button type="button" class="tm-close-btn" data-st-close-modal="stTicketTrailModal-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
+                                            </div>
+
+                                            <?php if ($isOpen): ?>
+                                                <form id="stCloseForm-<?php echo $ticketId; ?>" method="post" action="controllers/branch/close-ticket.php" class="tm-inline-form tm-header-actions-bottom">
+                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                                    <input type="hidden" name="return_mode" value="<?php echo htmlspecialchars($mode); ?>">
+                                                    <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-confirm-transfer-open="stCloseConfirm-<?php echo $ticketId; ?>">Close Ticket</button>
+                                                </form>
+
+                                                <div class="tm-submodal-overlay" id="stCloseConfirm-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
+                                                    <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Close ticket confirmation">
+                                                        <div class="tm-submodal-title">Close Ticket Immediately?</div>
+                                                        <div class="tm-submodal-ticket-info">Are you sure you want to close ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?> now?</div>
+                                                        <hr class="tm-submodal-divider">
+                                                        <div class="tm-submodal-footer">
+                                                            <button type="button" class="tm-btn tm-btn--outline" data-confirm-transfer-cancel="stCloseConfirm-<?php echo $ticketId; ?>">Cancel</button>
+                                                            <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-submit="stCloseConfirm-<?php echo $ticketId; ?>" data-transfer-form="stCloseForm-<?php echo $ticketId; ?>">Close Ticket</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
                                 </div>
                             </div>
                         </div>
@@ -562,8 +588,10 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                             <i class="fa-solid fa-paperclip"></i>
                                         </label>
                                         <input type="file" id="reply_attachments_<?php echo $ticketId; ?>" name="attachments[]" multiple style="display:none;">
-                                        <div class="tm-attach-preview" id="replyPreview_<?php echo $ticketId; ?>"></div>
-                                        <textarea name="message" class="tm-textarea" placeholder="Type your reply..." required></textarea>
+                                        <div class="tm-reply-main">
+                                            <textarea name="message" class="tm-textarea" placeholder="Type your reply..." required></textarea>
+                                            <div class="tm-attach-preview" id="replyPreview_<?php echo $ticketId; ?>"></div>
+                                        </div>
                                             <div>
                                             <button type="submit" class="tm-btn tm-btn--red">Submit</button>
                                         </div>
