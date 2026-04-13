@@ -72,6 +72,13 @@ foreach ($allTickets as $ticket) {
         $partnerName = $partnerId;
     }
 
+    // For Support Ticket report, exclude only tickets with status == 'closed'.
+    // Tickets with any other status should be counted in the receivable summary.
+    $status = isset($ticket['status']) ? strtolower(trim((string) $ticket['status'])) : '';
+    if ($status === 'closed') {
+        continue;
+    }
+
     if ($partnerId === '' || $partnerName === '') {
         continue;
     }
@@ -428,6 +435,10 @@ if ($searchTicketNumber !== '') {
             background: #fff;
         }
 
+        .st-summary-table col.col-name { width: 280px; }
+        .st-summary-table col.col-year { width: 130px; }
+        .st-summary-table col.col-total { width: 170px; }
+
         .st-summary-table th,
         .st-summary-table td {
             border-bottom: 1px solid #f1f5f9;
@@ -443,10 +454,58 @@ if ($searchTicketNumber !== '') {
             color: #334155;
         }
 
+        .st-summary-table thead th.partner-col-head {
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        .st-summary-table thead th.partner-col-head span {
+            font-weight: 700;
+        }
+
+        .st-summary-table thead th:not(.partner-col-head),
+        .st-summary-table td:not(:first-child) {
+            text-align: right;
+        }
+
         .st-summary-table td.amt,
         .st-summary-table th.amt {
             text-align: right;
             font-variant-numeric: tabular-nums;
+        }
+
+        .st-summary-table td.total,
+        .st-summary-table tfoot th {
+            font-weight: 800;
+        }
+
+        .st-summary-table td.total {
+            color: #d9534f;
+        }
+
+        .st-summary-table tfoot th {
+            background: #fff7ed;
+            border-top: 2px solid #fed7aa;
+        }
+
+        .st-summary-table tfoot th.overall-total,
+        .st-summary-table tfoot th.grand-total {
+            background: #fff59d;
+            color: #000;
+        }
+
+        .st-summary-table tfoot th.grand-label {
+            text-align: right;
+            font-weight: 800;
+            background: #fff59d;
+            color: #000;
+        }
+
+        .st-summary-table tfoot tr.spacer-row th {
+            border: 0;
+            background: transparent;
+            height: 10px;
+            padding: 0;
         }
     </style>
 </head>
@@ -1128,12 +1187,13 @@ if ($searchTicketNumber !== '') {
                 }
 
                 var headCols = years.map(function (y) { return '<th>' + y + '</th>'; }).join('');
+                var colGroup = '<colgroup><col class="col-name" />' + years.map(function () { return '<col class="col-year" />'; }).join('') + '<col class="col-total" /></colgroup>';
                 var bodyRows = rows.map(function (row) {
                     var yearCells = years.map(function (y) {
                         var v = row.years && row.years[y] ? row.years[y] : null;
                         return '<td class="amt">' + (v !== null ? formatAmount(v) : '-') + '</td>';
                     }).join('');
-                    return '<tr><td>' + escapeHtml(row.name || 'UNKNOWN BILLER') + '</td>' + yearCells + '<td class="amt"><strong>' + formatAmount(row.total || 0) + '</strong></td></tr>';
+                    return '<tr><td>' + escapeHtml(row.name || 'UNKNOWN BILLER') + '</td>' + yearCells + '<td class="amt total">' + formatAmount(row.total || 0) + '</td></tr>';
                 }).join('');
 
                 var footYearCells = years.map(function (y) {
@@ -1141,13 +1201,21 @@ if ($searchTicketNumber !== '') {
                     return '<th class="amt">' + formatAmount(tv) + '</th>';
                 }).join('');
 
+                var blankCells = years.map(function () { return '<th></th>'; }).join('');
+                var spanCols = 1 + years.length;
+
                 container.innerHTML =
                     '<div style="margin-bottom:8px;font-weight:800;color:#111827;">' + escapeHtml(String((summary.partner_name || partnerId)).toUpperCase()) + ' SUB BILLERS</div>' +
                     '<div class="st-summary-table-wrap">' +
                         '<table class="st-summary-table">' +
-                            '<thead><tr><th>Sub Biller</th>' + headCols + '<th>Total Receivable</th></tr></thead>' +
+                            colGroup +
+                            '<thead><tr><th class="partner-col-head">' + escapeHtml(String((summary.partner_name || partnerId)).toUpperCase()) + '<br><span>SUB BILLERS</span></th>' + headCols + '<th>Total Receivable</th></tr></thead>' +
                             '<tbody>' + bodyRows + '</tbody>' +
-                            '<tfoot><tr><th>Total</th>' + footYearCells + '<th class="amt">' + formatAmount(summary.grand_total || 0) + '</th></tr></tfoot>' +
+                            '<tfoot>' +
+                                '<tr><th></th>' + footYearCells + '<th class="amt overall-total">' + formatAmount(summary.grand_total || 0) + '</th></tr>' +
+                                '<tr class="spacer-row"><th colspan="' + spanCols + '"></th><th></th></tr>' +
+                                '<tr>' + blankCells + '<th class="grand-label">Grand Total</th><th class="amt grand-total">' + formatAmount(summary.grand_total || 0) + '</th></tr>' +
+                            '</tfoot>' +
                         '</table>' +
                     '</div>';
             }
