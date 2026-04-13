@@ -595,21 +595,18 @@ if ($searchTicketNumber !== '') {
                     <input type="radio" name="reportMode" value="open" <?php echo $mode === 'open' ? 'checked' : ''; ?>>
                     <div class="mode-icon"><i class="fa-solid fa-inbox"></i></div>
                     <div class="mode-text"><p class="mode-label">OPEN</p><small>Unresolved queue</small></div>
-                    <span class="st-mode-count-badge"><?php echo count($openTickets); ?></span>
                 </label>
 
                 <label class="mode-card <?php echo $mode === 'active' ? 'selected' : ''; ?>" data-mode="active">
                     <input type="radio" name="reportMode" value="active" <?php echo $mode === 'active' ? 'checked' : ''; ?>>
                     <div class="mode-icon"><i class="fa-solid fa-bolt"></i></div>
                     <div class="mode-text"><p class="mode-label">ACTIVE</p><small>In-progress tickets</small></div>
-                    <span class="st-mode-count-badge"><?php echo count($activeTickets); ?></span>
                 </label>
 
                 <label class="mode-card <?php echo $mode === 'closed' ? 'selected' : ''; ?>" data-mode="closed">
                     <input type="radio" name="reportMode" value="closed" <?php echo $mode === 'closed' ? 'checked' : ''; ?>>
                     <div class="mode-icon"><i class="fa-solid fa-box-archive"></i></div>
                     <div class="mode-text"><p class="mode-label">CLOSED</p><small>Resolved and closed</small></div>
-                    <span class="st-mode-count-badge"><?php echo count($closedTickets); ?></span>
                 </label>
             </div>
 
