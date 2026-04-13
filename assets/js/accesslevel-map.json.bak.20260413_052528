@@ -180,11 +180,6 @@
                     "key": "Support Ticket Create",
                     "label": "Support Ticket Create",
                     "icon": "check_circle"
-                },
-                {
-                    "key": "Support Ticket Report",
-                    "label": "Support Ticket Report",
-                    "icon": "check_circle"
                 }
             ]
         },
@@ -809,8 +804,7 @@
             "permissions": [
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -820,8 +814,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -841,8 +834,7 @@
                 "Bills Payment",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -864,8 +856,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -874,7 +865,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -889,7 +879,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -914,7 +903,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -941,7 +929,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -958,8 +945,7 @@
                 "Invoice Review",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -974,8 +960,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1000,8 +985,7 @@
                 "Invoice Review",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1028,8 +1012,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1043,7 +1026,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1063,7 +1045,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1093,7 +1074,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1125,7 +1105,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1139,8 +1118,7 @@
                 "Masterfiles View Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1152,8 +1130,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1175,8 +1152,7 @@
                 "Masterfiles View Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1200,8 +1176,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1212,7 +1187,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1229,7 +1203,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1256,7 +1229,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1285,7 +1257,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1304,8 +1275,7 @@
                 "Masterfiles View Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1322,8 +1292,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1350,8 +1319,7 @@
                 "Masterfiles View Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1380,8 +1348,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -1397,7 +1364,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1419,7 +1385,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1451,7 +1416,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -1485,7 +1449,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2255,8 +2218,7 @@
                 "Maintenance Masterfiles Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2272,8 +2234,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2299,8 +2260,7 @@
                 "Maintenance Masterfiles Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2328,8 +2288,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2344,7 +2303,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2365,7 +2323,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2396,7 +2353,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2429,7 +2385,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2452,8 +2407,7 @@
                 "Maintenance Masterfiles Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2474,8 +2428,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2506,8 +2459,7 @@
                 "Maintenance Masterfiles Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2540,8 +2492,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2561,7 +2512,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2587,7 +2537,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2623,7 +2572,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2661,7 +2609,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2681,8 +2628,7 @@
                 "Masterfiles View Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2700,8 +2646,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2729,8 +2674,7 @@
                 "Masterfiles View Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2760,8 +2704,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2778,7 +2721,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2801,7 +2743,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2834,7 +2775,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2869,7 +2809,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -2894,8 +2833,7 @@
                 "Masterfiles View Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2918,8 +2856,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2952,8 +2889,7 @@
                 "Masterfiles View Partner List",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -2988,8 +2924,7 @@
                 "Profile View",
                 "Support Ticket BPO",
                 "Support Ticket CAD",
-                "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Create"
             ]
         },
         {
@@ -3011,7 +2946,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -3039,7 +2973,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -3077,7 +3010,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -3117,7 +3049,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -3786,7 +3717,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -3800,7 +3730,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -3824,7 +3753,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -3850,7 +3778,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -3862,7 +3789,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -3880,7 +3806,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -3908,7 +3833,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -3938,7 +3862,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -3959,7 +3882,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -3978,7 +3900,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4007,7 +3928,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4038,7 +3958,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4055,7 +3974,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4078,7 +3996,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4111,7 +4028,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4146,7 +4062,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4164,7 +4079,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4180,7 +4094,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4206,7 +4119,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4234,7 +4146,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4248,7 +4159,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4268,7 +4178,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4298,7 +4207,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4330,7 +4238,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4353,7 +4260,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4374,7 +4280,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4405,7 +4310,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4438,7 +4342,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -4457,7 +4360,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4482,7 +4384,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4517,7 +4418,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -4554,7 +4454,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -5424,7 +5323,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5444,7 +5342,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5474,7 +5371,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5506,7 +5402,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5524,7 +5419,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -5548,7 +5442,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -5582,7 +5475,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -5618,7 +5510,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -5645,7 +5536,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5670,7 +5560,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5705,7 +5594,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5742,7 +5630,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5765,7 +5652,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -5794,7 +5680,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -5833,7 +5718,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -5874,7 +5758,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -5898,7 +5781,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5920,7 +5802,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5952,7 +5833,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -5986,7 +5866,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -6006,7 +5885,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -6032,7 +5910,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -6068,7 +5945,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -6106,7 +5982,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -6135,7 +6010,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -6162,7 +6036,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -6199,7 +6072,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -6238,7 +6110,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "Tools Branch Maker",
                 "Tools File Fetch",
                 "Tools KPX Generator"
@@ -6263,7 +6134,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -6294,7 +6164,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -6335,7 +6204,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -6378,7 +6246,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
@@ -6421,7 +6288,6 @@
                 "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",

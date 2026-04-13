@@ -14,6 +14,7 @@ Behavior rules (short):
 - Always insert the new `<li>` at the root menu level. If there are unclosed `if` blocks nearby, close them first or insert after the nearest confirmed top-level sibling.
 - Wrap the new block with a single permission guard that references only the new permission keys (use `has_any_permission([...])`).
 - Do not nest the new block inside any existing permission `if` block.
+- Never use RBAC checks such as `$_SESSION['user_type']`, `role`, or `=== 'admin'` for visibility. Use access level and permission helpers only (`has_permission`, `has_any_permission`, access-map driven permissions).
 
 Minimal ready-to-paste prompt (use exactly when requesting a top-level menu):
 
@@ -29,6 +30,7 @@ Insertion rules to follow exactly:
 - Ensure the added code is at top-level in `templates/menu.php` (not enclosed by any other `if`/`endif`).
 - If the nearest code is inside an `if` block, close that block (insert `<?php endif; ?>`) before inserting the new top-level block, or insert after a known top-level sibling.
 - Wrap the new block in `<?php if ( has_any_permission([<PERMS>]) ): ?>` ... `<?php endif; ?>`.
+- Do not add role-based conditions (RBAC) anywhere in the menu logic.
 
 Example prompt (exact text to send to the assistant):
 

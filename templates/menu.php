@@ -420,7 +420,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <?php endif; ?>
         </div>
         <?php endif; ?>
-        <?php if (has_any_permission(['Support Ticket Create','Support Ticket BPO','Support Ticket CAD'])): ?>
+        <?php if (has_any_permission(['Support Ticket Create','Support Ticket BPO','Support Ticket CAD','Support Ticket Report'])): ?>
             <div class="onetab" id="support-ticket-btn">
                 <h6><i class="fa-solid fa-ticket-simple"></i> Support Ticket</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-support-ticket" style="display: block"></i>
@@ -441,6 +441,12 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <?php if (has_permission('Support Ticket CAD')): ?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/cad-ticket.php'">
                     <a href="<?php echo $base_url; ?>support_ticket/cad-ticket.php"><i class="fa-solid fa-tools"></i> CAD Ticket</a>
+                </div>
+                <?php endif; ?>
+
+                <?php if (has_permission('Support Ticket Report')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/ticket-report.php'">
+                    <a href="<?php echo $base_url; ?>support_ticket/ticket-report.php"><i class="fa-solid fa-chart-line"></i> Ticket Report</a>
                 </div>
                 <?php endif; ?>
             </div>
