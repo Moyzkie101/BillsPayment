@@ -169,7 +169,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
         <?php include '../../templates/sidebar.php'; ?>
 
         <?php if (function_exists('bp_section_header_html')): ?>
-            <?php bp_section_header_html('fa-solid fa-ticket', 'Support Ticket', 'Branch - Open / Closed'); ?>
+            <?php bp_section_header_html('fa-solid fa-ticket', 'Support Ticket', 'Create and Manage Ticket'); ?>
         <?php else: ?>
             <div class="container-fluid mt-3"><h3>Support Ticket - Branch</h3></div>
         <?php endif; ?>
