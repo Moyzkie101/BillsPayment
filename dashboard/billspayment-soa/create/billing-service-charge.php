@@ -9,6 +9,9 @@ session_start();
 // Resolve current user id and fetch signature blob (if any)
 include '../../../templates/middleware.php';
 $current_user_id = resolve_user_identifier();
+$current_user_id = resolve_user_identifier();
+if (empty($current_user_id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Billing Service Charge','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 $prepared_sig_blob = null;
 if (!empty($current_user_id)) {
     $stmtSig = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");
@@ -31,22 +34,12 @@ if (!isset($_SESSION['partnerName_soa'])) {
     $_SESSION['partnerName_soa'] = '';
 }
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-        if($_SESSION['user_email'] === 'balb01013333' || $_SESSION['user_email'] === 'pera94005055' || $_SESSION['user_email'] === 'cill17098209' ){
-            header("Location:../../../index.php");
-            session_destroy();
-            exit();
-        }
-    }else{
-        header("Location:../../../index.php");
-        session_destroy();
-        exit();
-    }
+// prefer explicit session values for current user email and do not gate on role
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
+if (!empty($current_user_email) && in_array($current_user_email, ['balb01013333','pera94005055','cill17098209'], true)) {
+    header("Location:../../../index.php");
+    session_destroy();
+    exit();
 }
 
 ?>

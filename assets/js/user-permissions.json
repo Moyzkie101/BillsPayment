@@ -4,7 +4,7 @@
         "BP Report EDI"
     ],
     "2020": [
-        "BP Import Transaction"
+        "TRL Entry"
     ],
     "20235678": [
         "Accounts",
@@ -38,6 +38,14 @@
         "Masterfiles View Partner List",
         "Profile Signature",
         "Profile View",
+        "Support Ticket BPO",
+        "Support Ticket CAD",
+        "Support Ticket Create",
+        "Support Ticket Report",
+        "TRL Entry",
+        "TRL Import",
+        "TRL Report",
+        "TRL Review",
         "Tools Branch Maker",
         "Tools File Fetch",
         "Tools KPX Generator"

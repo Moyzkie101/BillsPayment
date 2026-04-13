@@ -5,28 +5,16 @@ require '../../../vendor/autoload.php';
 
 // Start the session
 session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }else{
-        // Redirect to login page if user_type is not set
-        header("Location: ../../../index.php");
-        session_abort();
-        session_destroy();
-        exit();
-    }
-}else {
-    // Redirect to login page if user_type is not set
-    header("Location: ../../../index.php");
-    session_abort();
-    session_destroy();
-    exit();
-}
+// prefer explicit session values for current user email; do not gate on role
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
+
+// page-level permission enforcement: require Balance Sheet Report or Bills Payment
+if (!function_exists('has_any_permission') || !has_any_permission(['Balance Sheet Report','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 // get display dropdown menu for partners
 if (isset($_POST['action']) && $_POST['action'] === 'get_partner_list') {

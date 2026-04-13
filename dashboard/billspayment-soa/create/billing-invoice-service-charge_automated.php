@@ -5,18 +5,14 @@ require '../../../vendor/autoload.php';
 
 // Start the session
 session_start();
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }
-}
+// prefer explicit session values for current user email
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 // Resolve current user id and fetch signature blob (if any)
 include '../../../templates/middleware.php';
 $current_user_id = resolve_user_identifier();
+if (empty($current_user_id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Billing Invoice Service Charge','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 $prepared_sig_blob = null;
 if (!empty($current_user_id)) {
     $stmtSig = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");

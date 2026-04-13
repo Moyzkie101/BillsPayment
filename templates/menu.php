@@ -262,6 +262,43 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="<?php //echo $base_url; ?>date/date-duplicate-report.php">BP Transaction (Duplicate/Split Transaction)</a>
             </div> -->
         </div>
+
+        <?php endif; ?>
+        <?php endif; ?>
+
+        <?php if (has_any_permission(['TRL Import','TRL Entry','TRL Review','TRL Report'])): ?>
+        <!-- Billspayment - TRL (Transaction Request Log) - top-level menu -->
+        <div class="onetab" id="bp-trl-btn">
+            <h6><i class="fa-solid fa-list"></i> Billspayment - TRL</h6>
+            <i class="fa-solid fa-chevron-right" id="closed-bp-trl" style="display: block"></i>
+            <i class="fa-solid fa-chevron-down" id="open-bp-trl" style="display: none"></i>
+        </div>
+
+        <div class="onetab-sub" id="bp-trl-nav" style="display: none;">
+            <?php if (has_permission('TRL Import')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-import/trl-import.php'">
+                <a href="<?php echo $auth_url; ?>dashboard/trl/trl-import/trl-import.php"><i class="fa-solid fa-file-import"></i> TRL - Import</a>
+            </div>
+            <?php endif; ?>
+
+            <?php if (has_permission('TRL Entry')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-entry/trl-entry.php'">
+                <a href="<?php echo $auth_url; ?>dashboard/trl/trl-entry/trl-entry.php"><i class="fa-solid fa-pen-to-square"></i> TRL - Entry</a>
+            </div>
+            <?php endif; ?>
+
+            <?php if (has_permission('TRL Review')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-review/trl-review.php'">
+                <a href="<?php echo $auth_url; ?>dashboard/trl/trl-review/trl-review.php"><i class="fa-solid fa-clipboard-check"></i> TRL - Review</a>
+            </div>
+            <?php endif; ?>
+
+            <?php if (has_permission('TRL Report')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-report/trl-report.php'">
+                <a href="<?php echo $auth_url; ?>dashboard/trl/trl-report/trl-report.php"><i class="fa-solid fa-chart-column"></i> TRL - Report</a>
+            </div>
+            <?php endif; ?>
+        </div>
         <?php endif; ?>
 
         <!-- <div class="tabcat" id="action-report-btn" style="display: none;">
@@ -270,15 +307,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <h6>Action Taken / Log Files</h6>
         </div> -->
 
-        <div class="onetab-sub" id="action-report-nav" style="display: none;">
-        <div class="sub" onclick="parent.location='<?php echo $base_url; ?>ActionLog.php'">
-            <a href="<?php echo $base_url; ?>ActionLog.php">Add Logs</a>
-        </div>
-        <div class="sub" onclick="parent.location='<?php echo $base_url; ?>actionLogReport.php'">
-            <a href="<?php echo $base_url; ?>actionLogReport.php">Action Log Reports</a>
-        </div>
-        </div>
-        <?php endif; ?>
+        <!-- Action Log submenu removed as requested -->
 
     
 
@@ -405,6 +434,37 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div>
             <?php endif; ?>
         </div>
+        <?php endif; ?>
+        <?php if (has_any_permission(['Support Ticket Create','Support Ticket BPO','Support Ticket CAD','Support Ticket Report'])): ?>
+            <div class="onetab" id="support-ticket-btn">
+                <h6><i class="fa-solid fa-ticket-simple"></i> Support Ticket</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-support-ticket" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-support-ticket" style="display: none"></i>
+            </div>
+
+            <div class="onetab-sub" id="support-ticket-nav" style="display: none;">
+                <?php if (has_permission('Support Ticket Create')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/create-ticket.php'">
+                    <a href="<?php echo $base_url; ?>support_ticket/create-ticket.php"><i class="fa-solid fa-plus"></i> Create Ticket</a>
+                </div>
+                <?php endif; ?>
+                <?php if (has_permission('Support Ticket BPO')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/bpo-ticket.php'">
+                    <a href="<?php echo $base_url; ?>support_ticket/bpo-ticket.php"><i class="fa-solid fa-headset"></i> VPO Ticket</a>
+                </div>
+                <?php endif; ?>
+                <?php if (has_permission('Support Ticket CAD')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/cad-ticket.php'">
+                    <a href="<?php echo $base_url; ?>support_ticket/cad-ticket.php"><i class="fa-solid fa-tools"></i> CAD Ticket</a>
+                </div>
+                <?php endif; ?>
+
+                <?php if (has_permission('Support Ticket Report')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/ticket-report.php'">
+                    <a href="<?php echo $base_url; ?>support_ticket/ticket-report.php"><i class="fa-solid fa-chart-line"></i> Ticket Report</a>
+                </div>
+                <?php endif; ?>
+            </div>
         <?php endif; ?>
 
         <?php if (has_any_permission(['Accounts','Maintenance Accounts User Management','Maintenance Accounts Access Levels','Maintenance Duplicate Transaction','Maintenance Masterfiles Partner List','Maintenance Masterfiles Bank List'])): ?>
@@ -713,59 +773,5 @@ const underConstructionIds = [
             }
         }
     }, 0);
-});
-</script>
-<script>
-// Tools menu toggle: simple show/hide for the Tools submenu
-(function onReady(handler){
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', handler);
-    } else {
-        handler();
-    }
-})(function() {
-    var toolsBtn = document.getElementById('tools-btn');
-    var toolsNav = document.getElementById('tools-nav');
-    var closedTools = document.getElementById('closed-tools');
-    var openTools = document.getElementById('open-tools');
-    if (toolsBtn && toolsNav) {
-        toolsBtn.addEventListener('click', function() {
-            var isHidden = window.getComputedStyle(toolsNav).display === 'none';
-            if (isHidden) {
-                toolsNav.style.display = 'block';
-                if (closedTools && openTools) { closedTools.style.display = 'none'; openTools.style.display = 'block'; }
-            } else {
-                toolsNav.style.display = 'none';
-                if (closedTools && openTools) { closedTools.style.display = 'block'; openTools.style.display = 'none'; }
-            }
-        });
-    }
-});
-</script>
-<script>
-// Profile menu toggle
-(function onReady(handler){
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', handler);
-    } else {
-        handler();
-    }
-})(function() {
-    var profileBtn = document.getElementById('profile-btn');
-    var profileNav = document.getElementById('profile-nav');
-    var closedProfile = document.getElementById('closed-profile');
-    var openProfile = document.getElementById('open-profile');
-    if (profileBtn && profileNav) {
-        profileBtn.addEventListener('click', function() {
-            var isHidden = window.getComputedStyle(profileNav).display === 'none';
-            if (isHidden) {
-                profileNav.style.display = 'block';
-                if (closedProfile && openProfile) { closedProfile.style.display = 'none'; openProfile.style.display = 'block'; }
-            } else {
-                profileNav.style.display = 'none';
-                if (closedProfile && openProfile) { closedProfile.style.display = 'block'; openProfile.style.display = 'none'; }
-            }
-        });
-    }
 });
 </script>

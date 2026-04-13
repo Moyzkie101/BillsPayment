@@ -3,19 +3,16 @@
 ob_start();
 include '../../../config/config.php';
 require '../../../vendor/autoload.php';
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Duplicate Transaction','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 // simple user email for permission checks
 $current_user_email = '';
-if (isset($_SESSION['user_type'])) {
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }
-}
+// prefer explicit session values for current user email
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 // AJAX: find duplicate groups in billspayment_transaction
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['check_duplicates_db'])) {

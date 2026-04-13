@@ -130,6 +130,50 @@ function scan_permission_keys_from_sources($paths) {
 $projectPaths = [__DIR__ . '/../templates/menu.php', __DIR__ . '/../templates', __DIR__ . '/../dashboard'];
 $detectedKeys = scan_permission_keys_from_sources($projectPaths);
 
+// Normalize known legacy permission labels to canonical keys used by menu/middleware.
+// This prevents accidental creation of fake root menus like "Access" or "User"
+// when older pages still reference shortened labels.
+function normalize_detected_permission_key($key) {
+    if (!is_string($key)) return '';
+    $trimmed = trim($key);
+    if ($trimmed === '') return '';
+
+    $legacy = [
+        'Access Levels' => 'Maintenance Accounts Access Levels',
+        'User Management' => 'Maintenance Accounts User Management',
+        'Adjustment Entry' => 'BP Settlement Adjustment Entry',
+        'Adjustment Entry Per Branch' => 'BP Settlement Adjustment Entry',
+        'Settlement Per Bank' => 'BP Settlement Per Bank',
+        'Import Transaction' => 'BP Import Transaction',
+        'Import Cancellation' => 'BP Import Cancellation',
+        'Post Transaction' => 'BP Post Transaction',
+        'Volume Report' => 'BP Report Volume',
+        'EDI Report' => 'BP Report EDI',
+        'Transaction Report' => 'BP Report Transaction Details',
+        'Transaction Summary' => 'BP Report Transaction Summary',
+        'Cancellation Report' => 'BP Report Cancellation',
+        'Balance Sheet Report' => 'BP Report Balance Sheet',
+        'Billing Service Charge' => 'BI Create Manual',
+        'Billing Invoice Service Charge' => 'BI Create Automated',
+        'For Checking Review' => 'Invoice Review',
+        'SOA Report' => 'BI Report Billing Invoice',
+        'Duplicate Transaction' => 'Maintenance Duplicate Transaction',
+        'Masterfile Partner List' => 'Masterfiles View Partner List',
+        'View Partner List' => 'Masterfiles View Partner List',
+        'View Bank List' => 'Masterfiles View Bank List',
+    ];
+
+    foreach ($legacy as $old => $canonical) {
+        if (strcasecmp($trimmed, $old) === 0) {
+            return $canonical;
+        }
+    }
+
+    return $trimmed;
+}
+
+$detectedKeys = array_values(array_filter(array_map('normalize_detected_permission_key', $detectedKeys), function($v){ return is_string($v) && trim($v) !== ''; }));
+
 // Remove exempt/default keys discovered from sources (e.g., Home, Logout)
 $detectedKeys = array_values(array_filter($detectedKeys, function($k){ return !is_exempt_permission($k); }));
 
@@ -441,11 +485,71 @@ if (!empty($missing)) {
                 $permissionCatalog[$bestRootIdx]['children'][] = [ 'key' => $perm, 'label' => $perm, 'icon' => 'check_circle' ];
             }
         } else {
-            // no suitable root found — create a new root using the first token as fallback
-            $parts = preg_split('/\s+/', $perm, 2);
-            $groupKey = $parts[0] ?: 'Misc';
-            $icon = (strtolower($groupKey) === 'profile') ? 'person' : 'check_circle';
-            $permissionCatalog[] = [ 'key' => $groupKey, 'label' => $groupKey, 'icon' => $icon, 'children' => [ [ 'key' => $perm, 'label' => $perm, 'icon' => 'check_circle' ] ] ];
+            // Final fallback: attach unmatched permissions to an existing root instead
+            // of creating a new root menu. Access levels are based on menus only.
+            $permLower = strtolower($perm);
+            $fallbackRootCandidates = [];
+
+            if (strpos($permLower, 'maintenance') !== false || strpos($permLower, 'access') !== false || strpos($permLower, 'user') !== false || strpos($permLower, 'duplicate') !== false) {
+                $fallbackRootCandidates[] = 'maintenance';
+            }
+            if (strpos($permLower, 'trl') !== false) {
+                $fallbackRootCandidates[] = 'billspayment - trl';
+            }
+            if (strpos($permLower, 'bp ') !== false || strpos($permLower, 'billspayment') !== false || strpos($permLower, 'settlement') !== false || strpos($permLower, 'adjustment') !== false || strpos($permLower, 'cancellation') !== false || strpos($permLower, 'edi') !== false || strpos($permLower, 'balance sheet') !== false || strpos($permLower, 'volume') !== false || strpos($permLower, 'transaction') !== false) {
+                $fallbackRootCandidates[] = 'bills payment transaction';
+            }
+            if (strpos($permLower, 'invoice') !== false || strpos($permLower, 'bi ') !== false) {
+                $fallbackRootCandidates[] = 'billing invoice';
+            }
+            if (strpos($permLower, 'support') !== false || strpos($permLower, 'ticket') !== false) {
+                $fallbackRootCandidates[] = 'support ticket';
+            }
+            if (strpos($permLower, 'masterfiles') !== false || strpos($permLower, 'bank') !== false || strpos($permLower, 'partner') !== false) {
+                $fallbackRootCandidates[] = 'masterfiles';
+            }
+            if (strpos($permLower, 'tools') !== false || strpos($permLower, 'kpx') !== false || strpos($permLower, 'branch maker') !== false || strpos($permLower, 'file fetch') !== false) {
+                $fallbackRootCandidates[] = 'tools';
+            }
+            if (strpos($permLower, 'profile') !== false) {
+                $fallbackRootCandidates[] = 'profile';
+            }
+
+            $attached = false;
+            foreach ($fallbackRootCandidates as $candidateLower) {
+                foreach ($permissionCatalog as $idx => $root) {
+                    $rootKeyLower = isset($root['key']) ? strtolower(trim((string)$root['key'])) : '';
+                    if ($rootKeyLower !== $candidateLower) continue;
+
+                    if (!isset($permissionCatalog[$idx]['children']) || !is_array($permissionCatalog[$idx]['children'])) {
+                        $permissionCatalog[$idx]['children'] = [];
+                    }
+
+                    $exists = false;
+                    foreach ($permissionCatalog[$idx]['children'] as $rc) {
+                        if (isset($rc['key']) && strcasecmp((string)$rc['key'], $perm) === 0) { $exists = true; break; }
+                    }
+                    if (!$exists) {
+                        $permissionCatalog[$idx]['children'][] = [ 'key' => $perm, 'label' => $perm, 'icon' => 'check_circle' ];
+                    }
+                    $attached = true;
+                    break 2;
+                }
+            }
+
+            // Last resort: attach to first existing root to preserve menu-only access-level model.
+            if (!$attached && !empty($permissionCatalog)) {
+                if (!isset($permissionCatalog[0]['children']) || !is_array($permissionCatalog[0]['children'])) {
+                    $permissionCatalog[0]['children'] = [];
+                }
+                $exists = false;
+                foreach ($permissionCatalog[0]['children'] as $rc) {
+                    if (isset($rc['key']) && strcasecmp((string)$rc['key'], $perm) === 0) { $exists = true; break; }
+                }
+                if (!$exists) {
+                    $permissionCatalog[0]['children'][] = [ 'key' => $perm, 'label' => $perm, 'icon' => 'check_circle' ];
+                }
+            }
         }
     }
     echo "Detected and merged " . count($missing) . " permission keys from source files.\n";

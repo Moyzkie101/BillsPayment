@@ -7,22 +7,18 @@ require '../../../vendor/autoload.php';
 session_start();
 // include shared permission helpers and resolve current user
 @include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 
-if (!isset($_SESSION['user_type']) || !in_array($_SESSION['user_type'], ['admin', 'user'], true)) {
-    header("Location:../../../index.php");
-    session_destroy();
-    exit();
-}
-
-// ensure a user display name exists
-if ($_SESSION['user_type'] === 'admin' && !empty($_SESSION['admin_name'])) {
+// ensure a user display name exists (do not base on role)
+if (!empty($_SESSION['admin_name'])) {
     $_SESSION['user_name'] = $_SESSION['admin_name'];
 } elseif (empty($_SESSION['user_name'])) {
     $_SESSION['user_name'] = $_SESSION['user_email'] ?? $_SESSION['admin_email'] ?? '';
 }
 
 // require the Invoice Approval permission
-if (!function_exists('has_permission') || !has_permission('Invoice Approval')) {
+if (!function_exists('has_any_permission') || !has_any_permission(['Invoice Approval','Bills Payment'])) {
     header('Location:../../home.php');
     exit();
 }
