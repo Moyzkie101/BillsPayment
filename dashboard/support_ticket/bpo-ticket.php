@@ -88,7 +88,65 @@ function st_get_ticket_attachments_grouped_by_trail_vpo($conn, $ticketId)
     $stmt->close();
     return $grouped;
 }
+
+$allVpoTicketsById = [];
+foreach ([$vpoOpen, $vpoActive, $vpoClosed] as $ticketGroup) {
+    foreach ($ticketGroup as $ticket) {
+        $ticketId = (int) ($ticket['id'] ?? 0);
+        if ($ticketId <= 0) {
+            continue;
+        }
+        $allVpoTicketsById[$ticketId] = $ticket;
+    }
+}
+$allVpoTickets = array_values($allVpoTicketsById);
+
+$ticketTrailsByTicketId = [];
+$ticketAttachmentsByTicketId = [];
+$ticketSupplementalByTicketNumber = [];
+$ownerIds = [];
+$ticketNumbersVpo = [];
+
+foreach ($allVpoTickets as $ticket) {
+    $ticketId = (int) ($ticket['id'] ?? 0);
+    if ($ticketId <= 0) {
+        continue;
+    }
+
+    $ticketTrailsByTicketId[$ticketId] = st_get_ticket_trails($conn, $ticketId);
+    $ticketAttachmentsByTicketId[$ticketId] = st_get_ticket_attachments_grouped_by_trail_vpo($conn, $ticketId);
+
+    $ticketNumber = trim((string) ($ticket['ticket_number'] ?? ''));
+    if ($ticketNumber !== '') {
+        $ticketSupplementalByTicketNumber[$ticketNumber] = [
+            'wrongbiller' => st_get_ticket_wrongbiller_by_ticket_number($conn, $ticketNumber),
+            'overstated' => st_get_ticket_overstatedamount_by_ticket_number($conn, $ticketNumber),
+            'cancelled' => st_get_ticket_cancelledtransaction_by_ticket_number($conn, $ticketNumber),
+        ];
+        $ticketNumbersVpo[] = $ticketNumber;
+    }
+
+    if (isset($ticket['created_by']) && is_numeric($ticket['created_by'])) {
+        $ownerIds[] = (int) $ticket['created_by'];
+    }
+    if (isset($ticket['vpo_owner']) && is_numeric($ticket['vpo_owner'])) {
+        $ownerIds[] = (int) $ticket['vpo_owner'];
+    }
+    if (isset($ticket['cad_owner']) && is_numeric($ticket['cad_owner'])) {
+        $ownerIds[] = (int) $ticket['cad_owner'];
+    }
+}
+
+$ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
 $ticketBadgeCountsVpo = st_get_ticket_badge_counts($conn, $ticketNumbersVpo, 'VPO');
+$vpoActiveBadgeCount = 0;
+foreach ($vpoActive as $ticket) {
+    $ticketNumber = trim((string) ($ticket['ticket_number'] ?? ''));
+    if ($ticketNumber === '') {
+        continue;
+    }
+    $vpoActiveBadgeCount += (int) ($ticketBadgeCountsVpo[$ticketNumber] ?? 0);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -300,8 +358,12 @@ $ticketBadgeCountsVpo = st_get_ticket_badge_counts($conn, $ticketNumbersVpo, 'VP
                                     </div>
                                 </div>
                                 <div class="tm-header-right">
-                                    <div class="tm-status tm-status--<?php echo htmlspecialchars($statusLower); ?>"><?php echo htmlspecialchars((string) $ticket['status']); ?></div>
-                                    <button type="button" class="tm-close-btn" data-st-close-modal="stTicketTrailModalVpo-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
+                                    <div class="tm-header-actions">
+                                        <div class="tm-header-actions-top">
+                                            <div class="tm-status tm-status--<?php echo htmlspecialchars($statusLower); ?>"><?php echo htmlspecialchars((string) $ticket['status']); ?></div>
+                                            <button type="button" class="tm-close-btn" data-st-close-modal="stTicketTrailModalVpo-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
