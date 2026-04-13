@@ -120,10 +120,12 @@ if (!function_exists('st_build_report_stats')) {
         $closedCount = count($closedTickets);
 
         $closeRate = $total > 0 ? round(($closedCount / $total) * 100, 1) : 0.0;
+        $openRate = $total > 0 ? round(($openCount / $total) * 100, 1) : 0.0;
+        $activeRate = $total > 0 ? round(($activeCount / $total) * 100, 1) : 0.0;
 
-        $totalAmount = 0.0;
-        $amountCount = 0;
-        $agingOver48h = 0;
+        $totalReceivable = 0.0;
+        $agingOver24h = 0;
+        $agingTickets = [];
         $typeCounts = [];
         $handlerCounts = [
             'BRANCH' => 0,
@@ -133,18 +135,25 @@ if (!function_exists('st_build_report_stats')) {
         ];
 
         foreach ($allTickets as $ticket) {
-            if (isset($ticket['amount']) && $ticket['amount'] !== null && $ticket['amount'] !== '') {
-                $totalAmount += (float) $ticket['amount'];
-                $amountCount++;
+            $status = strtolower(trim((string) ($ticket['status'] ?? '')));
+            $isClosed = in_array($status, ['closed', 'resolved'], true);
+
+            if (!$isClosed && isset($ticket['amount']) && $ticket['amount'] !== null && $ticket['amount'] !== '') {
+                $totalReceivable += (float) $ticket['amount'];
             }
 
-            $status = strtolower(trim((string) ($ticket['status'] ?? '')));
             $createdAt = strtotime((string) ($ticket['created_at'] ?? ''));
-            if (!in_array($status, ['closed', 'resolved'], true) && $createdAt !== false) {
+            if (!$isClosed && $createdAt !== false) {
                 $hours = (time() - $createdAt) / 3600;
-                if ($hours >= 48) {
-                    $agingOver48h++;
+                if ($hours >= 24) {
+                    $agingOver24h++;
                 }
+
+                $agingTickets[] = [
+                    'ticket_number' => (string) ($ticket['ticket_number'] ?? ''),
+                    'hours' => round(max(0, $hours), 1),
+                    'status' => (string) ($ticket['status'] ?? ''),
+                ];
             }
 
             $typeLabel = trim((string) ($ticket['ticket_type_label'] ?? $ticket['type_of_request'] ?? 'Unspecified'));
@@ -164,6 +173,10 @@ if (!function_exists('st_build_report_stats')) {
             }
         }
 
+        usort($agingTickets, function ($a, $b) {
+            return ($b['hours'] <=> $a['hours']);
+        });
+
         arsort($typeCounts);
         $topType = 'N/A';
         $topTypeCount = 0;
@@ -178,10 +191,14 @@ if (!function_exists('st_build_report_stats')) {
             'active_count' => $activeCount,
             'closed_count' => $closedCount,
             'close_rate' => $closeRate,
-            'avg_amount' => $amountCount > 0 ? round($totalAmount / $amountCount, 2) : 0.0,
-            'aging_over_48h' => $agingOver48h,
+            'open_rate' => $openRate,
+            'active_rate' => $activeRate,
+            'total_receivable' => round($totalReceivable, 2),
+            'aging_over_24h' => $agingOver24h,
+            'aging_tickets' => $agingTickets,
             'top_type' => $topType,
             'top_type_count' => $topTypeCount,
+            'type_counts' => $typeCounts,
             'handler_counts' => $handlerCounts,
         ];
     }
