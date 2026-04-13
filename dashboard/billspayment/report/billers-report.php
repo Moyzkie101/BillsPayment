@@ -5,399 +5,217 @@ require '../../../vendor/autoload.php';
 
 // Start the session
 session_start();
-@include_once __DIR__ . '/../../../templates/middleware.php';
-$id = resolve_user_identifier();
-if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
-if (!function_exists('has_any_permission') || !has_any_permission(['Volume Report','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 
-// prefer explicit session values for current user email; avoid role-based gating
-$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
-
-// $partnersQuery = "SELECT partner_name FROM masterdata.partner_masterfile order by partner_name";
-// $partnersResult = $conn->query($partnersQuery);
-
-if (isset($_POST['action']) && $_POST['action'] === 'get_partner_list') {
-    try {
-        $partnersQuery = "SELECT partner_name FROM masterdata.partner_masterfile WHERE status = 'ACTIVE' ORDER BY partner_name";
-        $partnersResult = $conn->query($partnersQuery);
-        
-        $partners = array();
-        if ($partnersResult && $partnersResult->num_rows > 0) {
-            while ($row = $partnersResult->fetch_assoc()) {
-                $partners[] = $row;
-            }
-        }
-        
-        echo json_encode([
-            'status' => 'success',
-            'data' => $partners
-        ]);
-        exit();
-    } catch (Exception $e) {
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Database error: ' . $e->getMessage()
-        ]);
+if (isset($_SESSION['user_type'])) {
+    $current_user_email = '';
+    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
+        $current_user_email = $_SESSION['admin_email'];
+    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
+        $current_user_email = $_SESSION['user_email'];
+    }else{
+        // Redirect to login page if user_type is not set
+        header("Location: ../../../index.php");
+        session_abort();
+        session_destroy();
         exit();
     }
-}
-
-if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
-    $partner = $_POST['partner'];
-    $filterType = $_POST['filterType'];
-    $startDate = $_POST['startDate'];
-    $endDate = isset($_POST['endDate']) ? $_POST['endDate'] : '';
-
-    // Initialize arrays and variables
-    $whereConditions = [];
-    $params = [];
-    $types = '';
-    
-    // Build WHERE conditions based on filter type - prepare date parameters first
-    $dateParams = [];
-    $dateTypes = '';
-    
-    if(!empty($filterType)){
-        if($filterType === 'daily'){
-            $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ?)";
-            $dateParams = [$startDate, $endDate, $startDate, $endDate]; // 4 params for 2 CTEs
-            $dateTypes = 'ssss';
-        }elseif($filterType === 'weekly'){
-            $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-            $dateParams = [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate, $startDate, $endDate];
-            $dateTypes = 'ssssssss';
-        }elseif($filterType === 'monthly'){
-            $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-            $startMonth = $startDate . '-01';
-            $endMonth = date('Y-m-t', strtotime($endDate . '-01'));
-            $dateParams = [$startMonth, $endMonth, $startMonth, $endMonth, $startMonth, $endMonth, $startMonth, $endMonth];
-            $dateTypes = 'ssssssss';
-        }elseif($filterType === 'yearly'){
-            $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-            $startYear = $startDate . '-01-01';
-            $endYear = $endDate . '-12-31';
-            $dateParams = [$startYear, $endYear, $startYear, $endYear];
-            $dateTypes = 'ssss';
-        }
-    }
-    
-    // Combine date parameters with other parameters
-    $params = array_merge($dateParams, $params);
-    $types = $dateTypes . $types;
-    
-    // Partner filter
-    if (!empty($partner)) {
-        if($partner !== 'All'){
-            if($partner === 'SECURITY BANK') {
-                $whereConditions[] = "ap.partner_name = ?";
-            }elseif($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING'){
-                $whereConditions[] = "ap.partner_name = ?";
-            }else{
-                $whereConditions[] = "ap.partner_name = ?";
-            }
-            $params[] = $partner;
-            $types .= 's';
-        }
-    }
-
-    // Build WHERE clause for main query
-    $mainWhereClause = '';
-    if (!empty($whereConditions)) {
-        $mainWhereClause = 'AND ' . implode(' AND ', $whereConditions);
-    }
-
-    // Modified query to handle partners without partner_id/partner_id_kpx
-    $DataQuery = "WITH summary_vol AS (
-                        SELECT
-                            CASE 
-                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                                ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                            END COLLATE utf8mb4_general_ci AS partner_key,
-                            CASE 
-                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                                ELSE bt.partner_name
-                            END AS partner_name,
-                            MAX(bt.sub_billers_name) AS sub_billers_name,
-                            COUNT(*) AS vol1,
-                            SUM(bt.amount_paid) AS principal1,
-                            SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
-                        FROM
-                            mldb.billspayment_transaction AS bt 
-                        WHERE
-                            $dateCondition
-                            AND bt.status IS NULL 
-                            AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                        GROUP BY
-                            CASE 
-                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                                ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                            END COLLATE utf8mb4_general_ci,
-                            CASE 
-                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                                ELSE bt.partner_name
-                            END
-                ),
-                adjustment_vol AS (
-                    SELECT
-                        CASE 
-                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                        END COLLATE utf8mb4_general_ci AS partner_key,
-                        CASE 
-                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                            ELSE bt.partner_name
-                        END AS partner_name,
-                        MAX(bt.sub_billers_name) AS sub_billers_name,
-                        COUNT(*) AS vol2,
-                        SUM(bt.amount_paid) AS principal2,
-                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
-                    FROM
-                        mldb.billspayment_transaction AS bt 
-                    WHERE
-                        $dateCondition
-                        AND bt.status = '*' 
-                        AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                    GROUP BY
-                        CASE 
-                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                        END COLLATE utf8mb4_general_ci,
-                        CASE 
-                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                            ELSE bt.partner_name
-                        END
-                ),
-                all_partners AS (
-                    -- Partners from master file
-                    SELECT 
-                        COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
-                        mpm.partner_name
-                    FROM masterdata.partner_masterfile AS mpm
-                    WHERE mpm.status = 'ACTIVE'
-                    
-                    UNION
-                    
-                    -- Partners from summary transactions
-                    SELECT partner_key, partner_name FROM summary_vol
-                    
-                    UNION
-                    
-                    -- Partners from adjustment transactions
-                    SELECT partner_key, partner_name FROM adjustment_vol
-                )
-
-                SELECT
-                    ap.partner_name,
-                    COALESCE(MAX(sv.sub_billers_name), MAX(av.sub_billers_name)) AS sub_billers_name,
-                    SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
-                    SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
-                    SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
-
-                    SUM(COALESCE(av.vol2, 0)) AS adjustment_vol,
-                    SUM(COALESCE(ABS(av.principal2), 0)) AS adjustment_principal,
-                    SUM(COALESCE(ABS(av.charge2), 0)) AS adjustment_charges,
-
-                    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
-                    (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
-                    (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
-                FROM
-                    all_partners AS ap
-                LEFT JOIN
-                    summary_vol AS sv ON ap.partner_name = sv.partner_name
-                LEFT JOIN
-                    adjustment_vol AS av ON ap.partner_name = av.partner_name
-                LEFT JOIN
-                    masterdata.partner_masterfile AS mpm ON (
-                        ap.partner_name = mpm.partner_name
-                    )
-                WHERE
-                    (mpm.status = 'ACTIVE' OR mpm.status IS NULL)
-                    $mainWhereClause
-                GROUP BY ap.partner_name
-                HAVING ap.partner_name IS NOT NULL
-                ORDER BY ap.partner_name";
-
-    try {
-        // Use prepared statement to execute the query
-        $stmt = $conn->prepare($DataQuery);
-        
-        if ($stmt) {
-            // Bind parameters if any exist
-            if (!empty($params)) {
-                $stmt->bind_param($types, ...$params);
-            }
-            
-            $stmt->execute();
-            $DataResult = $stmt->get_result();
-            
-            if ($DataResult) {
-                $data = $DataResult->fetch_all(MYSQLI_ASSOC);
-                echo json_encode([
-                    'status' => 'success',
-                    'data' => $data,
-                    'debug' => [
-                        'filterType' => $filterType,
-                        'startDate' => $startDate,
-                        'endDate' => $endDate,
-                        'partner' => $partner,
-                        'dateCondition' => $dateCondition,
-                        'params' => $params,
-                        'types' => $types,
-                        'paramCount' => count($params),
-                        'placeholderCount' => substr_count($DataQuery, '?')
-                    ]
-                ]);
-            } else {
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => 'No result from query',
-                    'data' => []
-                ]);
-            }
-            
-            $stmt->close();
-        } else {
-            throw new Exception("Prepare failed: " . $conn->error);
-        }
-    } catch (Exception $e) {
-        error_log("Database error: " . $e->getMessage());
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Database error: ' . $e->getMessage(),
-            'data' => [],
-            'debug' => [
-                'query' => $DataQuery,
-                'params' => $params,
-                'types' => $types,
-                'paramCount' => count($params),
-                'placeholderCount' => substr_count($DataQuery, '?')
-            ]
-        ]);
-    }
+}else {
+    // Redirect to login page if user_type is not set
+    header("Location: ../../../index.php");
+    session_abort();
+    session_destroy();
     exit();
 }
 
-// Debug partner details: return transaction rows and group breakdowns for a selected partner
-if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
-    $partner = $_POST['partner'] ?? '';
-    $filterType = $_POST['filterType'] ?? '';
-    $startDate = $_POST['startDate'] ?? '';
-    $endDate = $_POST['endDate'] ?? '';
 
-    if (empty($partner) || $partner === 'All') {
-        echo json_encode(['status' => 'error', 'message' => 'Please select a specific partner for debugging.']);
+if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
+    header('Content-Type: application/json');
+
+    $billerlist = isset($_POST['billerlist']) ? trim($_POST['billerlist']) : '';
+    $filterType = isset($_POST['filterType']) ? trim($_POST['filterType']) : '';
+    $startDate = isset($_POST['startDate']) ? trim($_POST['startDate']) : '';
+    $endDate = isset($_POST['endDate']) ? trim($_POST['endDate']) : '';
+
+    if ($filterType === 'daily') {
+        $endDate = $startDate;
+    }
+
+    if ($filterType !== 'daily' && $endDate === '') {
+        echo json_encode(['status' => 'error', 'message' => 'End date is required.']);
         exit();
     }
 
-    // Resolve partner masterfile row
-    $mpm = null;
-    $mpmStmt = $conn->prepare("SELECT * FROM masterdata.partner_masterfile WHERE partner_name = ? LIMIT 1");
-    if ($mpmStmt) {
-        $mpmStmt->bind_param('s', $partner);
-        $mpmStmt->execute();
-        $res = $mpmStmt->get_result();
-        if ($res && $row = $res->fetch_assoc()) {
-            $mpm = $row;
-        }
-        $mpmStmt->close();
+    if ($startDate === '' || $filterType === '') {
+        echo json_encode(['status' => 'error', 'message' => 'Missing required filters.']);
+        exit();
     }
 
-    // Build date condition same as report
-    $dateCondition = '(1=1)';
-    $dateParams = [];
-    if ($filterType === 'daily') {
-        $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ?)";
-        $dateParams = [$startDate, $startDate];
-    } elseif ($filterType === 'weekly' || $filterType === 'monthly' || $filterType === 'yearly') {
-        $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-        $dateParams = [$startDate, $endDate, $startDate, $endDate];
+    if ($filterType === 'monthly') {
+        $startDate = $startDate . '-01';
+        $endDate = date('Y-m-t', strtotime($endDate . '-01'));
+    } elseif ($filterType === 'yearly') {
+        $startDate = $startDate . '-01-01';
+        $endDate = $endDate . '-12-31';
     }
 
-    // Modified to handle partners without IDs
-    $pid = $mpm['partner_id'] ?? '';
-    $pid_kpx = $mpm['partner_id_kpx'] ?? '';
+    $billerWhere = " AND mpm.biller_type IN ('main-biller', 'child-biller')";
+    $billerParams = [];
+    $billerTypes = '';
 
-    // Fetch transaction rows that match either partner id OR partner name if no IDs
-    $txQuery = "SELECT bt.* FROM mldb.billspayment_transaction bt WHERE $dateCondition AND 
-                (bt.partner_id = ? OR bt.partner_id_kpx = ? OR 
-                 (bt.partner_name = ? AND (bt.partner_id IS NULL OR bt.partner_id_kpx IS NULL))) 
-                ORDER BY bt.datetime LIMIT 1000";
-    $txStmt = $conn->prepare($txQuery);
-    $txRows = [];
-    if ($txStmt) {
-        $bindTypes = '';
-        $bindValues = [];
-        if (!empty($dateParams)) {
-            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
-        }
-        $bindValues[] = $pid; $bindTypes .= 's';
-        $bindValues[] = $pid_kpx; $bindTypes .= 's';
-        $bindValues[] = $partner; $bindTypes .= 's'; // Add partner name
-        $txStmt->bind_param($bindTypes, ...$bindValues);
-        $txStmt->execute();
-        $txRes = $txStmt->get_result();
-        if ($txRes) {
-            while ($r = $txRes->fetch_assoc()) $txRows[] = $r;
-        }
-        $txStmt->close();
+    if ($billerlist === 'main-biller' || $billerlist === 'child-biller') {
+        $billerWhere = ' AND mpm.biller_type = ?';
+        $billerParams[] = $billerlist;
+        $billerTypes .= 's';
     }
 
-    // Fetch aggregated groups (by partner_id / partner_id_kpx) for selected partner ids
-    $groupQuery = "SELECT bt.partner_id, bt.partner_id_kpx, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY bt.partner_id, bt.partner_id_kpx";
-    $groupStmt = $conn->prepare($groupQuery);
-    $groups = [];
-    if ($groupStmt) {
-        $bindTypes = '';
-        $bindValues = [];
-        if (!empty($dateParams)) {
-            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
-        }
-        $bindValues[] = $pid; $bindTypes .= 's';
-        $bindValues[] = $pid_kpx; $bindTypes .= 's';
-        $groupStmt->bind_param($bindTypes, ...$bindValues);
-        $groupStmt->execute();
-        $gRes = $groupStmt->get_result();
-        if ($gRes) {
-            while ($g = $gRes->fetch_assoc()) $groups[] = $g;
-        }
-        $groupStmt->close();
+    $query = "
+        WITH partner_name_list AS (
+            SELECT
+                COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
+                mpm.partner_name,
+                mpm.biller_name,
+                mpm.biller_type
+            FROM masterdata.partner_masterfile mpm
+            WHERE mpm.status = 'ACTIVE' {$billerWhere}
+        ),
+        summary_vol AS (
+            SELECT
+                partner_key,
+                partner_name,
+                COUNT(*) AS vol1,
+                SUM(amount_paid) AS principal1,
+                SUM(charge_to_partner + charge_to_customer) AS charge1
+            FROM (
+                SELECT
+                    CASE
+                        WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                        WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                        ELSE CONCAT(
+                            'temp_',
+                            CASE
+                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                                    THEN bt.sub_billers_name
+                                ELSE bt.partner_name
+                            END
+                        )
+                    END COLLATE utf8mb4_general_ci AS partner_key,
+                    CASE
+                        WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                            THEN bt.sub_billers_name
+                        ELSE bt.partner_name
+                    END AS partner_name,
+                    bt.amount_paid,
+                    bt.charge_to_partner,
+                    bt.charge_to_customer
+                FROM mldb.billspayment_transaction bt
+                WHERE
+                    (DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)
+                    AND bt.status IS NULL
+                    AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+            ) x
+            GROUP BY partner_key, partner_name
+        ),
+        adjustment_vol AS (
+            SELECT
+                partner_key,
+                partner_name,
+                COUNT(*) AS vol2,
+                SUM(amount_paid) AS principal2,
+                SUM(charge_to_partner + charge_to_customer) AS charge2
+            FROM (
+                SELECT
+                    CASE
+                        WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                        WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                        ELSE CONCAT(
+                            'temp_',
+                            CASE
+                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                                    THEN bt.sub_billers_name
+                                ELSE bt.partner_name
+                            END
+                        )
+                    END COLLATE utf8mb4_general_ci AS partner_key,
+                    CASE
+                        WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                            THEN bt.sub_billers_name
+                        ELSE bt.partner_name
+                    END AS partner_name,
+                    bt.amount_paid,
+                    bt.charge_to_partner,
+                    bt.charge_to_customer
+                FROM mldb.billspayment_transaction bt
+                WHERE
+                    (DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)
+                    AND bt.status = '*'
+                    AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+            ) x
+            GROUP BY partner_key, partner_name
+        )
+        SELECT
+            pml.partner_name,
+            CASE WHEN pml.biller_type = 'child-biller' THEN pml.biller_name ELSE '' END AS sub_billers_name,
+            pml.biller_name,
+            pml.biller_type,
+            COALESCE(sv.vol1, 0) AS summary_vol,
+            COALESCE(sv.principal1, 0) AS summary_principal,
+            COALESCE(sv.charge1, 0) AS summary_charges,
+            COALESCE(av.vol2, 0) AS adjustment_vol,
+            COALESCE(ABS(av.principal2), 0) AS adjustment_principal,
+            COALESCE(ABS(av.charge2), 0) AS adjustment_charges,
+            (COALESCE(sv.vol1, 0) - COALESCE(av.vol2, 0)) AS net_vol,
+            (COALESCE(sv.principal1, 0) - COALESCE(ABS(av.principal2), 0)) AS net_principal,
+            (COALESCE(sv.charge1, 0) - COALESCE(ABS(av.charge2), 0)) AS net_charges
+        FROM partner_name_list pml
+        LEFT JOIN summary_vol sv
+            ON pml.partner_key = sv.partner_key
+        LEFT JOIN adjustment_vol av
+            ON pml.partner_key = av.partner_key
+        ORDER BY pml.partner_name
+    ";
+
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        echo json_encode(['status' => 'error', 'message' => 'Failed to prepare query: ' . $conn->error]);
+        exit();
     }
 
-    // Also show what normalized partner_key grouping would produce
-    $normQuery = "SELECT COALESCE(bt.partner_id, bt.partner_id_kpx) AS partner_key, COUNT(*) AS vol, SUM(bt.amount_paid) AS principal, SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge FROM mldb.billspayment_transaction bt WHERE $dateCondition AND (bt.partner_id = ? OR bt.partner_id_kpx = ?) GROUP BY COALESCE(bt.partner_id, bt.partner_id_kpx)";
-    $normStmt = $conn->prepare($normQuery);
-    $norm = [];
-    if ($normStmt) {
-        $bindTypes = '';
-        $bindValues = [];
-        if (!empty($dateParams)) {
-            foreach ($dateParams as $p) { $bindValues[] = $p; $bindTypes .= 's'; }
-        }
-        $bindValues[] = $pid; $bindTypes .= 's';
-        $bindValues[] = $pid_kpx; $bindTypes .= 's';
-        $normStmt->bind_param($bindTypes, ...$bindValues);
-        $normStmt->execute();
-        $nRes = $normStmt->get_result();
-        if ($nRes) {
-            while ($n = $nRes->fetch_assoc()) $norm[] = $n;
-        }
-        $normStmt->close();
+    $params = [];
+    $types = '';
+
+    if (!empty($billerParams)) {
+        $params = array_merge($params, $billerParams);
+        $types .= $billerTypes;
     }
+
+    $dateParams = [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate, $startDate, $endDate];
+    $params = array_merge($params, $dateParams);
+    $types .= 'ssssssss';
+
+    $stmt->bind_param($types, ...$params);
+
+    if (!$stmt->execute()) {
+        echo json_encode(['status' => 'error', 'message' => 'Failed to execute query: ' . $stmt->error]);
+        $stmt->close();
+        exit();
+    }
+
+    $result = $stmt->get_result();
+    $rows = [];
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+
+    $stmt->close();
 
     echo json_encode([
         'status' => 'success',
-        'partner_master' => $mpm,
-        'transactions' => $txRows,
-        'groups' => $groups,
-        'normalized' => $norm
+        'data' => $rows
     ]);
     exit();
 }
+
 
 ?>
 
@@ -407,7 +225,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Volume Report | <?php if($_SESSION['user_type'] === 'admin' || $_SESSION['user_type'] === 'user') echo ucfirst($_SESSION['user_type']); else echo "Guest";?></title>
+    <title>Billers Report | <?php if($_SESSION['user_type'] === 'admin' || $_SESSION['user_type'] === 'user') echo ucfirst($_SESSION['user_type']); else echo "Guest";?></title>
     <!-- custom CSS file link  -->
     <link rel="stylesheet" href="../../../assets/css/templates/style.css?v=<?php echo time(); ?>">
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
@@ -667,8 +485,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
             <div class="bp-section-title">
                 <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
                 <div>
-                    <h2>Volume Report</h2>
-                    <p class="bp-section-sub">Summary of transaction volumes by partner and period</p>
+                    <h2>Billers Report</h2>
+                    <!-- <p class="bp-section-sub">Summary of transaction volumes by partner and period</p> -->
                 </div>
             </div>
         </div>
@@ -678,13 +496,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                     <div class="card">
                         <div class="card-header">
                             <div class="row g-2 align-items-end">
-                                <!-- Partner List -->
+                                <!-- Biller List -->
                                 <div class="col-md-2 col-sm-6">
-                                    <label class="form-label">Partners Name:</label>
-                                    <select id="partnerlistDropdown" class="form-select select2" aria-label="Select Partner" name="partnerlist" data-placeholder="Search or select a Partner..." required>
-                                        <option value="">Select Partner</option>
-                                        <option value="All">All</option>
-                                        <!-- options will be populated by JS -->
+                                    <label class="form-label">Biller Type:</label>
+                                    <select class="form-select" name="billerlist" required>
+                                        <option value="">Select Biller Type</option>
+                                        <option value="ALL">ALL</option>
+                                        <option value="main-biller">Biller</option>
+                                        <option value="child-biller">Child Biller</option>
                                     </select>
                                 </div>
 
@@ -748,8 +567,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                         <tr>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>No.</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Partner Name</th>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>Bank</th>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>Biller's Name</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>Sub Biller Name</th>
                                             <th colspan="3" class='text-truncate text-center align-middle'>KP7 / KPX</th>
                                             <th colspan="3" class='text-truncate text-center align-middle'>Adjustment</th>
                                             <th colspan="3" class='text-truncate text-center align-middle'>Net</th>
@@ -786,12 +604,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                             <td></td>
                                             <td></td>
                                             <td></td>
-                                            <td></td>
                                         </tr>
                                     </tbody>
                                     <tfoot class="sticky-bottom table-dark">
                                         <tr>
-                                            <th colspan="4" class="text-end">Total : </th>
+                                            <th colspan="3" class="text-end">Total : </th>
                                             <th class="text-center" id="totalsummaryvolume">0</th>
                                             <th class="text-end" id="totalsummaryprincipal">0.00</th>
                                             <th class="text-end" id="totalsummarycharge">0.00</th>
@@ -811,7 +628,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
             </div>
         </div>
         <!--<div class="container-fluid">
-             <div class="row g-3 align-items-end">
+            <div class="row g-3 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label">Partners Name:</label>
                     <select id="partnerlistDropdown" class="form-select select2" aria-label="Select Partner" name="partnerlist" data-placeholder="Search or select a Partner..." required>
@@ -952,8 +769,150 @@ $(document).ready(function() {
     $('#exportButton').hide();
     // Client-side cache for debug responses
     var debugCache = {};
-    // Keep latest generated report rows for recon comparison
-    var latestGeneratedReportData = [];
+    var currentReportData = [];
+
+    const mockPartners = [
+        'SECURITY BANK',
+        'MYLORA CORPORATION',
+        'JUNANS MARKETING',
+        'MERCHANTS BANK',
+        'EASTWEST FINANCE',
+        'RURALNET PAYMENTS'
+    ];
+
+    const mockBaseData = [
+        { partner_name: 'SECURITY BANK', sub_billers_name: '', summary_vol: 320, summary_principal: 1850000, summary_charges: 46500, adjustment_vol: 12, adjustment_principal: 55200, adjustment_charges: 1260 },
+        { partner_name: 'MYLORA CORPORATION', sub_billers_name: 'MYLORA CORPORATION', summary_vol: 145, summary_principal: 734500, summary_charges: 22110, adjustment_vol: 5, adjustment_principal: 21300, adjustment_charges: 590 },
+        { partner_name: 'JUNANS MARKETING', sub_billers_name: 'JUNANS MARKETING', summary_vol: 98, summary_principal: 402100, summary_charges: 11870, adjustment_vol: 4, adjustment_principal: 18150, adjustment_charges: 410 },
+        { partner_name: 'MERCHANTS BANK', sub_billers_name: '', summary_vol: 210, summary_principal: 990300, summary_charges: 28640, adjustment_vol: 7, adjustment_principal: 28600, adjustment_charges: 700 },
+        { partner_name: 'EASTWEST FINANCE', sub_billers_name: '', summary_vol: 188, summary_principal: 811200, summary_charges: 24360, adjustment_vol: 6, adjustment_principal: 24000, adjustment_charges: 620 },
+        { partner_name: 'RURALNET PAYMENTS', sub_billers_name: '', summary_vol: 120, summary_principal: 521000, summary_charges: 16220, adjustment_vol: 3, adjustment_principal: 9800, adjustment_charges: 290 }
+    ];
+
+    function seededNumber(seed, min, max) {
+        const x = Math.sin(seed) * 10000;
+        const normalized = x - Math.floor(x);
+        return min + (max - min) * normalized;
+    }
+
+    function buildMockReportData(partner, filterType, startDate, endDate) {
+        const dateSeed = (`${filterType}|${startDate}|${endDate}`).split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+        let factor = 1;
+
+        if (filterType === 'daily') {
+            factor = 0.12;
+        } else if (filterType === 'weekly') {
+            factor = 0.6;
+        } else if (filterType === 'monthly') {
+            factor = 1;
+        } else if (filterType === 'yearly') {
+            factor = 4.2;
+        }
+
+        let rows = mockBaseData.map((row, idx) => {
+            const variance = seededNumber(dateSeed + idx, 0.88, 1.18);
+            const scaledSummaryVol = Math.max(0, Math.round(row.summary_vol * factor * variance));
+            const scaledSummaryPrincipal = Math.max(0, row.summary_principal * factor * variance);
+            const scaledSummaryCharges = Math.max(0, row.summary_charges * factor * variance);
+            const scaledAdjustmentVol = Math.max(0, Math.round(row.adjustment_vol * factor * seededNumber(dateSeed + idx + 99, 0.75, 1.25)));
+            const scaledAdjustmentPrincipal = Math.max(0, row.adjustment_principal * factor * seededNumber(dateSeed + idx + 199, 0.75, 1.25));
+            const scaledAdjustmentCharges = Math.max(0, row.adjustment_charges * factor * seededNumber(dateSeed + idx + 299, 0.75, 1.25));
+
+            return {
+                partner_name: row.partner_name,
+                sub_billers_name: row.sub_billers_name,
+                summary_vol: scaledSummaryVol,
+                summary_principal: scaledSummaryPrincipal,
+                summary_charges: scaledSummaryCharges,
+                adjustment_vol: scaledAdjustmentVol,
+                adjustment_principal: scaledAdjustmentPrincipal,
+                adjustment_charges: scaledAdjustmentCharges,
+                net_vol: scaledSummaryVol - scaledAdjustmentVol,
+                net_principal: scaledSummaryPrincipal - scaledAdjustmentPrincipal,
+                net_charges: scaledSummaryCharges - scaledAdjustmentCharges
+            };
+        });
+
+        if (partner && partner !== 'All') {
+            rows = rows.filter((row) => row.partner_name === partner);
+        }
+
+        return rows;
+    }
+
+    function fetchReportData(billerlist, filterType, startDate, endDate) {
+        return $.ajax({
+            url: window.location.pathname,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'generate_report',
+                billerlist: billerlist,
+                filterType: filterType,
+                startDate: startDate,
+                endDate: endDate
+            }
+        });
+    }
+
+    function buildMockDebugResponse(partner, filterType, startDate, endDate) {
+        const reportRows = buildMockReportData(partner, filterType, startDate, endDate);
+        const row = reportRows.length ? reportRows[0] : null;
+
+        if (!row) {
+            return { status: 'error', message: 'No debug data found for selected criteria.' };
+        }
+
+        return {
+            status: 'success',
+            partner_master: {
+                partner_name: row.partner_name,
+                partner_id: `MOCK-${row.partner_name.replace(/\s+/g, '-').toUpperCase()}`,
+                partner_id_kpx: `KPX-${row.partner_name.replace(/\s+/g, '-').toUpperCase()}`,
+                status: 'ACTIVE',
+                source: 'FRONTEND-MOCK'
+            },
+            groups: [
+                {
+                    partner_id: `MOCK-${row.partner_name.replace(/\s+/g, '-').toUpperCase()}`,
+                    partner_id_kpx: `KPX-${row.partner_name.replace(/\s+/g, '-').toUpperCase()}`,
+                    vol: row.summary_vol,
+                    principal: row.summary_principal,
+                    charge: row.summary_charges
+                }
+            ],
+            normalized: [
+                {
+                    partner_key: `MOCK-${row.partner_name.replace(/\s+/g, '-').toUpperCase()}`,
+                    vol: row.net_vol,
+                    principal: row.net_principal,
+                    charge: row.net_charges
+                }
+            ],
+            transactions: [
+                {
+                    id: 1,
+                    datetime: `${startDate} 08:15:00`,
+                    partner_id: `MOCK-${row.partner_name.replace(/\s+/g, '-').toUpperCase()}`,
+                    partner_id_kpx: `KPX-${row.partner_name.replace(/\s+/g, '-').toUpperCase()}`,
+                    amount_paid: Math.max(100, row.summary_principal / Math.max(1, row.summary_vol)),
+                    charge_to_partner: Math.max(10, row.summary_charges / Math.max(1, row.summary_vol)),
+                    charge_to_customer: 5,
+                    status: null
+                },
+                {
+                    id: 2,
+                    datetime: `${endDate} 15:40:00`,
+                    partner_id: `MOCK-${row.partner_name.replace(/\s+/g, '-').toUpperCase()}`,
+                    partner_id_kpx: `KPX-${row.partner_name.replace(/\s+/g, '-').toUpperCase()}`,
+                    amount_paid: Math.max(50, row.adjustment_principal / Math.max(1, row.adjustment_vol || 1)),
+                    charge_to_partner: Math.max(5, row.adjustment_charges / Math.max(1, row.adjustment_vol || 1)),
+                    charge_to_customer: 2,
+                    status: '*'
+                }
+            ]
+        };
+    }
     
     // Handle date input changes
     $('input[name="startDate"], input[name="endDate"]').on('change', function() {
@@ -978,6 +937,7 @@ $(document).ready(function() {
         
         // Hide export button when filter type changes
         $('#exportButton').hide();
+        
         // Clear the report table
         clearReportTable();
         
@@ -1078,15 +1038,15 @@ $(document).ready(function() {
     // Generate button click handler
     $('#generateReport').on('click', function() {
         const filterType = $('select[name="filterType"]').val();
-        const partner = $('#partnerlistDropdown').val();
+        const billerType = $('select[name="billerlist"]').val();
         let startDate = $('input[name="startDate"]').val();
         let endDate = $('input[name="endDate"]').val();
         
-        if (!filterType || !partner) {
+        if (!filterType || !billerType) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Missing Information',
-                text: 'Please select both Filter Type and Partner before generating the report.'
+                text: 'Please select both Time Frame and Biller Type before generating the report.'
             });
             return;
         }
@@ -1117,7 +1077,7 @@ $(document).ready(function() {
         
         console.log('Generating report with:', {
             filterType: filterType,
-            partner: partner,
+            billerType: billerType,
             startDate: startDate,
             endDate: endDate
         });
@@ -1127,63 +1087,28 @@ $(document).ready(function() {
         
         // Show loading
         $('#loading-overlay').css('display', 'flex');
-        
-        // Make AJAX request to generate report
-        $.ajax({
-            url: '',
-            type: 'POST',
-            data: {
-                action: 'generate_report',
-                partner: partner,
-                filterType: filterType,
-                startDate: startDate,
-                endDate: endDate
-            },
-            success: function(response) {
-                console.log('Response received:', response);
-                        // Clear debug cache when a new report is generated
-                        debugCache = {};
-                try {
-                    const result = JSON.parse(response);
-                    
-                    // Check if the response has the new structure with status
-                    if (result.status) {
-                        if (result.status === 'success') {
-                            populateReportTable(result.data);
-                        } else {
-                            console.error('Server error:', result.message);
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Server Error',
-                                text: result.message || 'Error processing report data.'
-                            });
-                        }
-                    } else {
-                        // Handle legacy response format (array of data)
-                        populateReportTable(result);
-                    }
-                } catch (e) {
-                    console.error('Error parsing response:', e);
-                    console.log('Raw response:', response);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Error processing report data. Please check console for details.'
-                    });
+
+        fetchReportData(billerType, filterType, startDate, endDate)
+            .then(function(result) {
+                if (!result || result.status !== 'success') {
+                    throw new Error(result && result.message ? result.message : 'Failed to load report data.');
                 }
-            },
-            error: function(xhr, status, error) {
-                console.error('AJAX error:', {xhr: xhr, status: status, error: error});
+                $('#loading-overlay').hide();
+                debugCache = {};
+                currentReportData = Array.isArray(result.data) ? result.data : [];
+                requestAnimationFrame(function() {
+                    populateReportTable(currentReportData);
+                });
+            })
+            .catch(function(error) {
+                $('#loading-overlay').hide();
+                console.error('Report error:', error);
                 Swal.fire({
                     icon: 'error',
-                    title: 'Connection Error',
-                    text: 'Failed to generate report. Please check your connection and try again.'
+                    title: 'Error',
+                    text: error && error.message ? error.message : 'Failed to generate report.'
                 });
-            },
-            complete: function() {
-                $('#loading-overlay').hide();
-            }
-        });
+            });
     });
 
     function adjustTableHeight() {
@@ -1511,7 +1436,7 @@ $(document).ready(function() {
     
     function toggleGenerateButton() {
         const filterType = $('select[name="filterType"]').val();
-        const partner = $('#partnerlistDropdown').val();
+        const billerType = $('select[name="billerlist"]').val();
         const startDate = $('input[name="startDate"]').val();
         const endDate = $('input[name="endDate"]').val();
         
@@ -1523,7 +1448,7 @@ $(document).ready(function() {
             datesValid = startDate !== '' && endDate !== '';
         }
         
-        const enable = (filterType && partner && datesValid);
+        const enable = (filterType && billerType && datesValid);
         if (enable) {
             $('#generateReport').prop('disabled', false).removeClass('btn-secondary').addClass('btn-danger');
         } else {
@@ -1576,8 +1501,6 @@ $(document).ready(function() {
     function populateReportTable(data) {
         const tbody = $('#transactionReportTable tbody');
         tbody.empty();
-
-        latestGeneratedReportData = Array.isArray(data) ? data : [];
         
         let totals = {
             summaryVol: 0,
@@ -1598,12 +1521,24 @@ $(document).ready(function() {
         }
         
         if (data.length === 0) {
-            tbody.append('<tr><td colspan="13" class="text-center">No data found for the selected criteria</td></tr>');
+            tbody.append('<tr><td colspan="12" class="text-center">No data found for the selected criteria</td></tr>');
         } else {
-            // Limit to first 15 rows for display, but calculate totals from all data
+            // Limit rendered rows to keep UI snappy on large results.
             const displayData = data.slice(0, 15);
 
-            data.forEach((row, index) => {
+            data.forEach((row) => {
+                totals.summaryVol += parseInt(row.summary_vol || 0);
+                totals.summaryPrincipal += parseFloat(row.summary_principal || 0);
+                totals.summaryCharge += parseFloat(row.summary_charges || 0);
+                totals.adjustmentVol += parseInt(row.adjustment_vol || 0);
+                totals.adjustmentPrincipal += parseFloat(row.adjustment_principal || 0);
+                totals.adjustmentCharge += parseFloat(row.adjustment_charges || 0);
+                totals.netVol += parseInt(row.net_vol || 0);
+                totals.netPrincipal += parseFloat(row.net_principal || 0);
+                totals.netCharge += parseFloat(row.net_charges || 0);
+            });
+
+            displayData.forEach((row, index) => {
                 const sub_billers_name_raw = (row.sub_billers_name || '').toString().trim();
                 const partner_name_value = (row.partner_name || '').toString().trim();
                 let partner_name_raw = partner_name_value;
@@ -1618,8 +1553,7 @@ $(document).ready(function() {
                 <tr>
                     <td>${index + 1}</td>
                     <td>${partner_name_raw}</td>
-                    <td></td>
-                    <td></td>
+                    <td>${sub_billers_name_raw}</td>
                     <td class="text-end">${parseInt(row.summary_vol || 0).toLocaleString()}</td>
                     <td class="text-end">${parseFloat(row.summary_principal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                     <td class="text-end">${parseFloat(row.summary_charges || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
@@ -1632,17 +1566,6 @@ $(document).ready(function() {
                 </tr>
             `);
                 tbody.append(tr);
-                
-                // Add to totals
-                totals.summaryVol += parseInt(row.summary_vol || 0);
-                totals.summaryPrincipal += parseFloat(row.summary_principal || 0);
-                totals.summaryCharge += parseFloat(row.summary_charges || 0);
-                totals.adjustmentVol += parseInt(row.adjustment_vol || 0);
-                totals.adjustmentPrincipal += parseFloat(row.adjustment_principal || 0);
-                totals.adjustmentCharge += parseFloat(row.adjustment_charges || 0);
-                totals.netVol += parseInt(row.net_vol || 0);
-                totals.netPrincipal += parseFloat(row.net_principal || 0);
-                totals.netCharge += parseFloat(row.net_charges || 0);
             });
         }
         
@@ -1692,23 +1615,9 @@ $(document).ready(function() {
     loadPartners();
     
     function loadPartners() {
-        $.ajax({
-            url: '',
-            type: 'POST',
-            data: { action: 'get_partner_list' },
-            success: function(response) {
-                try {
-                    const result = JSON.parse(response);
-                    if (result.status === 'success') {
-                        const select = $('#partnerlistDropdown');
-                        result.data.forEach(partner => {
-                            select.append(new Option(partner.partner_name, partner.partner_name));
-                        });
-                    }
-                } catch (e) {
-                    console.error('Error loading partners:', e);
-                }
-            }
+        const select = $('#partnerlistDropdown');
+        mockPartners.forEach(function(partnerName) {
+            select.append(new Option(partnerName, partnerName));
         });
     }
     
@@ -1720,9 +1629,20 @@ $(document).ready(function() {
         
         // Hide export button when partner changes
         $('#exportButton').hide();
+        
         // Clear the report table
         clearReportTable();
         
+        toggleGenerateButton();
+    });
+
+    // Biller type selection change handler (active filter in current UI)
+    $('select[name="billerlist"]').on('change', function() {
+        $('.day-shortcut-container').hide();
+        resetFilterContainers();
+        $('#exportButton').hide();
+        $('#debugButton').hide();
+        clearReportTable();
         toggleGenerateButton();
     });
 
@@ -1795,29 +1715,6 @@ $(document).ready(function() {
             }
         });
     });
-
-    function toNumber(value) {
-        if (typeof value === 'number') return value;
-        if (value === null || value === undefined) return 0;
-
-        const text = value.toString().trim();
-        if (!text) return 0;
-
-        const negativeParen = /^\(.*\)$/.test(text);
-        const cleaned = text.replace(/[(),\s]/g, '').replace(/,/g, '');
-        const numeric = parseFloat(cleaned);
-        if (Number.isNaN(numeric)) return 0;
-
-        return negativeParen ? -Math.abs(numeric) : numeric;
-    }
-
-    function formatInt(value) {
-        return Math.round(value || 0).toLocaleString('en-US');
-    }
-
-    function formatMoney(value) {
-        return (value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
 
     // Build and render debug modal from response
     function renderDebugModal(resp) {
@@ -1896,110 +1793,85 @@ $(document).ready(function() {
             return;
         }
 
-        // Not cached: fetch and cache
+        // Not cached: build from mock data and cache
         $('#loading-overlay').css('display', 'flex');
 
-        $.ajax({
-            url: '',
-            type: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'debug_partner',
-                partner: partner,
-                filterType: filterType,
-                startDate: startDate,
-                endDate: endDate
-            },
-            success: function(resp) {
-                $('#loading-overlay').hide();
-                if (!resp) {
-                    renderDebugModal(null);
-                    return;
-                }
-                if (resp.status !== 'success') {
-                    renderDebugModal(resp);
-                    return;
-                }
+        setTimeout(function() {
+            const resp = buildMockDebugResponse(partner, filterType, startDate, endDate);
+            $('#loading-overlay').hide();
 
-                // Cache and render
-                debugCache[cacheKey] = resp;
-                renderDebugModal(resp);
-            },
-            error: function(xhr, status, err) {
-                $('#loading-overlay').hide();
-                console.error('Debug AJAX error', err, xhr.responseText);
-                Swal.fire({ icon: 'error', title: 'Debug Error', text: 'Failed to fetch debug data.' });
+            if (!resp || resp.status !== 'success') {
+                renderDebugModal(resp || null);
+                return;
             }
-        });
+
+            debugCache[cacheKey] = resp;
+            renderDebugModal(resp);
+        }, 200);
     });
 
     // Export functions
     function exportToPDF() {
-        // Use effective dates (respect active Filter-by-Day/Month/Year)
-        const params = getEffectiveExportParams();
+        if (!currentReportData.length) {
+            Swal.fire({ icon: 'warning', title: 'No Data', text: 'No data available to export.' });
+            return;
+        }
 
-        // Create a form to request PDF generation from server (opens in new tab)
-        const form = $('<form>', {
-            'method': 'POST',
-            'action': '../../../models/generate/pdf/generate-pdf-volume-report.php',
-            'target': '_blank'
-        });
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            Swal.fire({ icon: 'error', title: 'Popup Blocked', text: 'Please allow popups to export the report.' });
+            return;
+        }
 
-        form.append($('<input>', {'type': 'hidden', 'name': 'action', 'value': 'export_pdf'}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'partner', 'value': params.partner}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'filterType', 'value': params.filterType}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'startDate', 'value': params.startDate}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'endDate', 'value': params.endDate}));
-
-        $('body').append(form);
-        form.submit();
-        form.remove();
-
-        // Provide a brief success toast after submission
-        setTimeout(() => {
-            Swal.fire({
-                title: 'Export started',
-                text: 'PDF generation has started. The file will open in a new tab when ready.',
-                icon: 'info',
-                confirmButtonText: 'OK',
-                confirmButtonColor: '#dc3545'
-            });
-        }, 700);
+        const tableHtml = document.getElementById('transactionReportTable').outerHTML;
+        printWindow.document.write('<html><head><title>Billers Report</title>');
+        printWindow.document.write('<style>body{font-family:Arial,sans-serif;padding:16px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #ddd;padding:6px;font-size:12px;} th{text-align:center;background:#f6f6f6;} td{text-align:right;} td:nth-child(1),td:nth-child(2),td:nth-child(3),td:nth-child(4){text-align:left;}</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write('<h2>Billers Report (Front-End Mock)</h2>');
+        printWindow.document.write(tableHtml);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
     }
 
     function exportToXLS() {
-        // Use effective dates (respect active Filter-by-Day/Month/Year)
-        const params = getEffectiveExportParams();
+        if (!currentReportData.length) {
+            Swal.fire({ icon: 'warning', title: 'No Data', text: 'No data available to export.' });
+            return;
+        }
 
-        // Create a form to submit the export request
-        const form = $('<form>', {
-            'method': 'POST',
-            'action': '../../../models/generate/excel/generate-excel-volume-report.php',
-            'target': '_blank'
+        const headers = [
+            'Partner Name', 'Summary Vol', 'Summary Principal', 'Summary Charges',
+            'Adjustment Vol', 'Adjustment Principal', 'Adjustment Charges',
+            'Net Vol', 'Net Principal', 'Net Charges'
+        ];
+
+        const rows = currentReportData.map(function(row) {
+            return [
+                row.partner_name || '',
+                row.summary_vol || 0,
+                Number(row.summary_principal || 0).toFixed(2),
+                Number(row.summary_charges || 0).toFixed(2),
+                row.adjustment_vol || 0,
+                Number(row.adjustment_principal || 0).toFixed(2),
+                Number(row.adjustment_charges || 0).toFixed(2),
+                row.net_vol || 0,
+                Number(row.net_principal || 0).toFixed(2),
+                Number(row.net_charges || 0).toFixed(2)
+            ].join(',');
         });
 
-        // Add hidden fields
-        form.append($('<input>', {'type': 'hidden', 'name': 'action', 'value': 'export_excel'}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'partner', 'value': params.partner}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'filterType', 'value': params.filterType}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'startDate', 'value': params.startDate}));
-        form.append($('<input>', {'type': 'hidden', 'name': 'endDate', 'value': params.endDate}));
-
-        // Append to body and submit
-        $('body').append(form);
-        form.submit();
-        form.remove();
-
-        // Inform user
-        setTimeout(() => {
-            Swal.fire({
-                title: 'Export started',
-                text: 'Excel generation has started. The file will download shortly.',
-                icon: 'info',
-                confirmButtonText: 'OK',
-                confirmButtonColor: '#dc3545'
-            });
-        }, 700);
+        const csvContent = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'billers-report-mock.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
 
     // Helper to determine the effective dates to send for export
@@ -2100,7 +1972,6 @@ $(document).ready(function() {
                 <td></td>
                 <td></td>
                 <td></td>
-                <td></td>
             </tr>
         `);
         
@@ -2124,6 +1995,7 @@ $(document).ready(function() {
         
         // Hide export button when dates change
         $('#exportButton').hide();
+        
         // Clear the report table
         clearReportTable();
         
@@ -2133,66 +2005,36 @@ $(document).ready(function() {
     // Add the missing generateFilteredReport function after the existing functions
 
     function generateFilteredReport(startDate, endDate) {
-        const partner = $('#partnerlistDropdown').val();
+        const billerType = $('select[name="billerlist"]').val();
         const filterType = $('select[name="filterType"]').val();
+
+        if (!billerType || !filterType) {
+            return;
+        }
         
         // Show loading
         $('#loading-overlay').show();
-        
-        // Make AJAX request to generate filtered report
-        $.ajax({
-            url: '',
-            type: 'POST',
-            data: {
-                action: 'generate_report',
-                partner: partner,
-                filterType: filterType,
-                startDate: startDate,
-                endDate: endDate
-            },
-            success: function(response) {
-                console.log('Response received:', response);
-                try {
-                    const result = JSON.parse(response);
-                    
-                    // Check if the response has the new structure with status
-                    if (result.status) {
-                        if (result.status === 'success') {
-                            populateReportTable(result.data);
-                        } else {
-                            console.error('Server error:', result.message);
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Server Error',
-                                text: result.message || 'Error processing report data.'
-                            });
-                        }
-                    } else {
-                        // Handle legacy response format (array of data)
-                        populateReportTable(result);
-                    }
-                } catch (e) {
-                    console.error('Error parsing response:', e);
-                    console.log('Raw response:', response);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Error processing report data. Please check console for details.'
-                    });
+
+        fetchReportData(billerType, filterType, startDate, endDate)
+            .then(function(result) {
+                if (!result || result.status !== 'success') {
+                    throw new Error(result && result.message ? result.message : 'Failed to load filtered report data.');
                 }
-            },
-            error: function(xhr, status, error) {
-                console.error('AJAX error:', {xhr: xhr, status: status, error: error});
+                $('#loading-overlay').hide();
+                currentReportData = Array.isArray(result.data) ? result.data : [];
+                requestAnimationFrame(function() {
+                    populateReportTable(currentReportData);
+                });
+            })
+            .catch(function(error) {
+                $('#loading-overlay').hide();
+                console.error('Filtered report error:', error);
                 Swal.fire({
                     icon: 'error',
-                    title: 'Connection Error',
-                    text: 'Failed to generate filtered report. Please try again.'
+                    title: 'Error',
+                    text: error && error.message ? error.message : 'Failed to generate filtered report.'
                 });
-            },
-            complete: function() {
-                $('#loading-overlay').hide();
-            }
-        });
+            });
     }
 }); // Final closing brace for $(document).ready
 </script>

@@ -1,5 +1,5 @@
 <?php
-    $query = "SELECT * FROM partner_masterfile";
+    $query = "SELECT * FROM masterdata.partner_masterfile";
     $result = $conn->query($query);
 
     if ($result->num_rows > 0) {

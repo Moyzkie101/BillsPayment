@@ -46,6 +46,17 @@ function displayModal($message, $isError = false)
     ';
 }
 
+// Normalize DB numeric values that may already contain commas (e.g., "67,147.20").
+function formatMoneyForDisplay($value)
+{
+    if ($value === null || $value === '') {
+        return number_format(0, 2);
+    }
+
+    $normalized = is_string($value) ? str_replace(',', '', trim($value)) : $value;
+    return number_format((float)$normalized, 2);
+}
+
 $query = "SELECT * FROM soa_transaction";
 $result = mysqli_query($conn, $query);
 
@@ -53,29 +64,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['confirmBtn'])) {
         $referenceNumber = $_POST['reference'] ?? '';
         $approvedby = $_SESSION['user_name'];
-        $approvedSignature = 'electronically signed';
+        // try to fetch the approver id/signature to avoid saving large base64 strings
+        $approverId = function_exists('resolve_user_identifier') ? resolve_user_identifier() : null;
+        $approverSigBlob = null;
+        if (!empty($approverId)) {
+            $sigStmt = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");
+            if ($sigStmt) {
+                $sigStmt->bind_param('s', $approverId);
+                $sigStmt->execute();
+                $sigStmt->bind_result($sig_blob);
+                if ($sigStmt->fetch()) {
+                    $approverSigBlob = $sig_blob;
+                }
+                $sigStmt->close();
+            }
+        }
         $currentDate = date("m-d-Y");
         $notedFix_signature = 'LUELLA PERALTA';
+        $approvedSignature = $approverId ? $approverId : ($approverSigBlob ? 'data:image/png;base64,' . base64_encode($approverSigBlob) : 'electronically signed');
 
-        $updateQuery = "UPDATE soa_transaction SET status = 'Approved', noted_signature = '$approvedSignature', noted_by = '$approvedby', notedDate_signature = '$currentDate', notedFix_signature = '$notedFix_signature' WHERE reference_number = '$referenceNumber'";
-        if (mysqli_query($conn, $updateQuery)) {
-            displayModal("Selected row(s) updated to 'Approved'.");
+        $stmt = $conn->prepare("UPDATE soa_transaction SET status = 'Approved', noted_signature = ?, noted_by = ?, notedDate_signature = ?, notedFix_signature = ? WHERE reference_number = ?");
+        if ($stmt) {
+            $stmt->bind_param('sssss', $approvedSignature, $approvedby, $currentDate, $notedFix_signature, $referenceNumber);
+            if ($stmt->execute()) {
+                displayModal("Selected row(s) updated to 'Approved'.");
+            } else {
+                displayModal("Error updating transaction: " . $stmt->error, true);
+            }
+            $stmt->close();
         } else {
-            displayModal("Error updating transaction: " . mysqli_error($conn), true);
+            displayModal("Failed to prepare update statement: " . mysqli_error($conn), true);
         }
     } elseif (isset($_POST['approved'])) {
         if (isset($_POST['selectedRows'])) {
             $selectedRows = $_POST['selectedRows'];
             $approvedby = $_SESSION['user_name'];
-            $approvedSignature = 'electronically signed';
+            // attempt to resolve approver id for bulk
+            $approverId = function_exists('resolve_user_identifier') ? resolve_user_identifier() : null;
+            $approverSigBlob = null;
+            if (!empty($approverId)) {
+                $sigStmt = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");
+                if ($sigStmt) {
+                    $sigStmt->bind_param('s', $approverId);
+                    $sigStmt->execute();
+                    $sigStmt->bind_result($sig_blob);
+                    if ($sigStmt->fetch()) {
+                        $approverSigBlob = $sig_blob;
+                    }
+                    $sigStmt->close();
+                }
+            }
             $currentDate = date("m-d-Y");
             $notedFix_signature = 'LUELLA PERALTA';
+            $approvedSignature = $approverId ? $approverId : ($approverSigBlob ? 'data:image/png;base64,' . base64_encode($approverSigBlob) : 'electronically signed');
 
-            $updateQuery = "UPDATE soa_transaction SET status = 'Approved', noted_signature = '$approvedSignature', noted_by = '$approvedby', notedDate_signature = '$currentDate', notedFix_signature = '$notedFix_signature' WHERE reference_number IN ('" . implode("','", $selectedRows) . "')";
-            if (mysqli_query($conn, $updateQuery)) {
-                displayModal("Selected row(s) updated to 'Approved'.");
+            $stmt = $conn->prepare("UPDATE soa_transaction SET status = 'Approved', noted_signature = ?, noted_by = ?, notedDate_signature = ?, notedFix_signature = ? WHERE reference_number = ?");
+            if ($stmt) {
+                $failed = false;
+                foreach ($selectedRows as $ref) {
+                    $stmt->bind_param('sssss', $approvedSignature, $approvedby, $currentDate, $notedFix_signature, $ref);
+                    if (!$stmt->execute()) { $failed = true; break; }
+                }
+                $stmt->close();
+                if (!$failed) {
+                    displayModal("Selected row(s) updated to 'Approved'.");
+                } else {
+                    displayModal("Error updating selected row(s).", true);
+                }
             } else {
-                displayModal("Error updating selected row(s): " . mysqli_error($conn), true);
+                displayModal("Failed to prepare update statement: " . mysqli_error($conn), true);
             }
         }
     } elseif (isset($_POST['multipleCancelConfirmBtn']) && !empty($_POST['cancelledBy'])) {
@@ -404,11 +461,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         <td class="soa-ta-center"><?php echo date('M j, Y', strtotime($row['to_date'])); ?></td>
                                         <td class="soa-ta-left"><?php echo htmlspecialchars($row['po_number'] ?? ''); ?></td>
                                         <td class="soa-ta-num"><?php echo number_format($row['number_of_transactions']); ?></td>
-                                        <td class="soa-ta-num"><?php echo number_format($row['amount'], 2); ?></td>
-                                        <td class="soa-ta-num"><?php echo number_format((float)$row['vat_amount'], 2); ?></td>
-                                        <td class="soa-ta-num"><?php echo number_format((float)$row['net_of_vat'], 2); ?></td>
-                                        <td class="soa-ta-num"><?php echo number_format((float)$row['withholding_tax'], 2); ?></td>
-                                        <td class="soa-ta-num"><?php echo number_format((float)$row['net_amount_due'], 2); ?></td>
+                                        <td class="soa-ta-num"><?php echo formatMoneyForDisplay($row['amount'] ?? 0); ?></td>
+                                        <td class="soa-ta-num"><?php echo formatMoneyForDisplay($row['vat_amount'] ?? 0); ?></td>
+                                        <td class="soa-ta-num"><?php echo formatMoneyForDisplay($row['net_of_vat'] ?? 0); ?></td>
+                                        <td class="soa-ta-num"><?php echo formatMoneyForDisplay($row['withholding_tax'] ?? 0); ?></td>
+                                        <td class="soa-ta-num"><?php echo formatMoneyForDisplay($row['net_amount_due'] ?? 0); ?></td>
                                         <td class="soa-ta-left"><?php echo htmlspecialchars($row['prepared_by'] ?? ''); ?></td>
                                         <td class="soa-ta-left"><?php echo htmlspecialchars($row['reviewed_by'] ?? ''); ?></td>
                                         <td class="soa-ta-left"><?php echo htmlspecialchars($row['noted_by'] ?? ''); ?></td>
@@ -787,10 +844,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         document.getElementById('msgCloseBtn').addEventListener('click', function () {
             document.getElementById('messageModal').classList.remove('active');
+            // navigate to the same page (replace history) to avoid re-submitting POST
+            try { location.replace(window.location.pathname); } catch (err) { console.warn('Navigation failed', err); }
         });
 
         document.getElementById('messageModal').addEventListener('click', function (e) {
-            if (e.target === this) this.classList.remove('active');
+            if (e.target === this) {
+                this.classList.remove('active');
+                try { location.replace(window.location.pathname); } catch (err) { console.warn('Navigation failed', err); }
+            }
         });
 
         document.addEventListener('DOMContentLoaded', function () {

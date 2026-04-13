@@ -111,8 +111,8 @@ function formatCurrency($amount) {
             <div class="d-flex align-items-center mb-3">
                 <i class="fas fa-exclamation-triangle fa-2x text-warning me-3"></i>
                 <div>
-                    <h4 class="alert-heading mb-1">Partner Validation Error</h4>
-                    <p class="mb-0">The following partner IDs from the Excel file were not found in the database.</p>
+                    <h4 class="alert-heading mb-1">Missing Partners Found</h4>
+                    <p class="mb-0">The following partner IDs from Excel file and were not recorded in the Masterlist System.</p>
                 </div>
             </div>
             
@@ -164,7 +164,7 @@ function formatCurrency($amount) {
                 </table>
             </div>
 
-            <div class="d-flex justify-content-between mt-4">
+            <div class="d-flex justify-content-center align-items-center flex-wrap gap-3 mt-4">
                 <form method="post" class="d-inline" action="../generate/pdf/generatePartnerErrorPDF.php" target="_blank">
                     <input type="hidden" name="action" value="export_to_pdf">
                     <input type="hidden" name="partner_data" value="<?php echo htmlspecialchars(json_encode($uniquePartners)); ?>">

@@ -120,7 +120,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div>
             <?php endif; ?>
 
-        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Post Transaction','BP Settlement Adjustment Entry','BP Settlement Per Bank','BP Report Volume','BP Report EDI','BP Report Transaction Details','BP Report Transaction Summary','BP Report Cancellation','BP Report Balance Sheet'])): ?>
+        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Import Partner Data','BP Post Transaction','BP Settlement Adjustment Entry','BP Settlement Per Bank','BP Report Volume','BP Report EDI','BP Report Transaction Details','BP Report Transaction Summary','BP Report Cancellation','BP Report Balance Sheet'])): ?>
         <!-- Show/Hide Paramount -->
         <div class="onetab" id="para-btn">
             <h6><i class="fa-solid fa-money-bill-wave"></i> Bills Payment Transaction</h6>
@@ -128,7 +128,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <i class="fa-solid fa-chevron-down" id="open-para" style="display: none"></i>
         </div>
 
-        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation'])): ?>
+        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Import Partner Data'])): ?>
         <div class="tabcat" id="para-import-btn" style="display: none;">
             <h6><i class="fa-solid fa-file-import"></i> Import</h6>
             <i class="fa-solid fa-chevron-right" id="closed-para-import" style="display: block"></i>
@@ -137,7 +137,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <?php endif; ?>
 
         <!-- Paramount Import Buttons -->
-        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation'])): ?>
+        <?php if (has_any_permission(['BP Import Transaction','BP Import Cancellation','BP Import Partner Data'])): ?>
         <div class="onetab-sub" id="para-import-nav" style="display: none;">
             <?php if (has_permission('BP Import Transaction')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-transaction.php'">
@@ -147,6 +147,11 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <?php if (has_permission('BP Import Cancellation')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php'">
                 <a href="<?php echo $base_url; ?>billspayment/import/billspay-cancellation.php">Cancellation</a>
+            </div>
+            <?php endif; ?>
+            <?php if (has_permission('BP Import Partner Data')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/import/billspay-partner-data.php'">
+                <a href="<?php echo $base_url; ?>billspayment/import/billspay-partner-data.php">Partner Data</a>
             </div>
             <?php endif; ?>
         </div>
@@ -207,6 +212,11 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="<?php echo $base_url; ?>billspayment/report/edi-report.php"><i class="fa-solid fa-file-lines"></i> EDI Report</a>
             </div>
             <?php endif; ?>
+            <?php if (has_permission('BP Report Billers')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/billers-report.php'">
+                <a href="<?php echo $base_url; ?>billspayment/report/billers-report.php"><i class="fa-solid fa-file-invoice"></i> Billers Report</a>
+            </div>
+            <?php endif; ?>
             <?php if (has_permission('BP Report Transaction Details')): ?>
             <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/transaction-report.php'">
                 <a href="<?php echo $base_url; ?>billspayment/report/transaction-report.php"><i class="fa-solid fa-list-check"></i> Transaction Report (Details)</a>
@@ -231,6 +241,11 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     <a href="<?php echo $base_url; ?>billspayment/report/balance-sheet-report.php" id="balance-sheet-report-link"><i class="fa-solid fa-chart-bar"></i> Balance Sheet Report</a>
                 </div>
             <?php endif;?>
+            <?php if (has_permission('BP Report Recon')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>billspayment/report/recon-report.php'">
+                    <a href="<?php echo $base_url; ?>billspayment/report/recon-report.php" id="recon-report-link"><i class="fa-solid fa-file-chart-line"></i> Recon Report</a>
+                </div>
+            <?php endif; ?>
             <!-- <div class="sub" onclick="parent.location='<?php //echo $base_url; ?>billspayment/report/monthly-volume.php'">
                 <a href="<?php //echo $base_url; ?>billspayment/report/monthly-volume.php">Monthly Volume Report</a>
             </div> -->
@@ -474,6 +489,11 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <?php if (has_permission('Maintenance Accounts User Management')): ?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/accounts/user-management.php'">
                     <a href="<?php echo $base_url; ?>maintenance/accounts/user-management.php"><i class="fa-solid fa-user-cog"></i> User Management</a>
+                </div>
+                <?php endif; ?>
+                <?php if (has_permission('Maintenance Accounts User Signature')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/accounts/user-signature.php'">
+                    <a href="<?php echo $base_url; ?>maintenance/accounts/user-signature.php"><i class="fa-solid fa-signature"></i> User Signature</a>
                 </div>
                 <?php endif; ?>
                 <?php if (has_permission('Maintenance Accounts Access Levels')): ?>

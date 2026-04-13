@@ -29,6 +29,43 @@ if (mysqli_num_rows($result) == 0) {
 }
 
 $row = mysqli_fetch_assoc($result);
+
+// try to render signature image for prepared_by
+function render_signature_img($conn, $id_number = null, $full_name = '') {
+    // prefer lookup by id_number
+    if ($id_number) {
+        $sql = "SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1";
+        if ($s = mysqli_prepare($conn, $sql)) {
+            mysqli_stmt_bind_param($s, 's', $id_number);
+            mysqli_stmt_execute($s);
+            $res = mysqli_stmt_get_result($s);
+            $r = mysqli_fetch_assoc($res);
+            mysqli_stmt_close($s);
+            if ($r && !empty($r['signature'])) {
+                $b64 = base64_encode($r['signature']);
+                return '<img src="data:image/png;base64,' . $b64 . '" class="print-signature-img" alt="signature" />';
+            }
+        }
+    }
+    // fallback: try by name
+    if ($full_name) {
+        $nameParam = preg_replace('/\s+/', ' ', trim($full_name));
+        $sql = "SELECT mus.signature FROM mldb.user_form muf LEFT JOIN mldb.user_sig mus ON muf.id_number = mus.id_number WHERE TRIM(CONCAT_WS(' ', muf.first_name, muf.middle_name, muf.last_name)) = ? LIMIT 1";
+        if ($s = mysqli_prepare($conn, $sql)) {
+            mysqli_stmt_bind_param($s, 's', $nameParam);
+            mysqli_stmt_execute($s);
+            $res = mysqli_stmt_get_result($s);
+            $r = mysqli_fetch_assoc($res);
+            mysqli_stmt_close($s);
+            if ($r && !empty($r['signature'])) {
+                $b64 = base64_encode($r['signature']);
+                return '<img src="data:image/png;base64,' . $b64 . '" class="print-signature-img" alt="signature" />';
+            }
+        }
+    }
+    // nothing found -> friendly text
+    return 'electronically signed';
+}
 ?>
 
 <!DOCTYPE html>
@@ -355,6 +392,34 @@ $row = mysqli_fetch_assoc($result);
         .bond-paper-card {
             animation: cardAppear 0.8s ease-out;
         }
+
+        /* Signature image for print: positioned relative inside cell */
+        .print-signature-wrap {
+            width: 100%;
+            height: 48px; /* slightly larger to preserve detail */
+            max-height: 48px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+        }
+
+        /*
+         * Use a responsive approach so signatures keep aspect ratio.
+         * - `object-fit: cover` will crop and fill the box (good for tall/wide signatures).
+         * - `object-fit: contain` will fit whole signature inside box without cropping.
+         * We set sensible fallbacks and ensure the image cannot overflow.
+         */
+        .print-signature-img {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: 100%;
+            object-fit: cover;
+            object-position: center center;
+        }
         
         /* Subtle grid background for paper effect */
         .paper-content::after {
@@ -561,15 +626,39 @@ $row = mysqli_fetch_assoc($result);
                 <table class="signature-table">
                     <tr>
                         <td style="width: 33%;">
-                            <div style="margin-bottom: 15px; font-weight: bold; visibility:hidden;">Prepared by:</div>
+                            <div style="font-weight: bold; visibility:hidden;">Prepared by:</div>
                             <div style="font-size: 10px; margin-bottom: 5px; padding-bottom: 2px; min-height: 20px;">
+                                <!-- put signature here for prepared -->
+                                <?php
+                                    // attempt using reviewedFix_signature or prepared_by as id/fullname
+                                    // If soa stores id in reviewedFix_signature or similar, pass it; otherwise pass name
+                                    $sig = render_signature_img($conn, $row['prepared_signature'] ?? null, $row['prepared_by'] ?? '');
+                                    if (is_string($sig) && strpos($sig, 'data:image') !== false) {
+                                        // wrap the returned <img ...> HTML to preserve classes and attributes
+                                        echo '<div class="print-signature-wrap">' . $sig . '</div>';
+                                    }
+                                ?>
+
                                 <?php echo strtoupper($row['prepared_by']); ?>
                             </div>
                             <div style="font-size: 6px; font-style: italic; visibility:hidden;">Accounting Staff</div>
                         </td>
                         <td style="width: 33%;">
-                            <div style="margin-bottom: 15px; font-weight: bold; visibility:hidden;">Reviewed by:</div>
+                            <!-- <div style="font-weight: bold; visibility:hidden;">Reviewed by:</div> -->
                             <div style="font-size: 10px; margin-bottom: 5px; padding-bottom: 2px; min-height: 20px;">
+                                <!-- put signature here for reviewed -->
+                                <?php
+                                    // show 'for: NAME' when reviewedFix_signature differs
+                                    if (strtolower(str_replace(' ', '', $row['reviewed_by'])) !== strtolower(str_replace(' ', '', $row['reviewedFix_signature']))) {
+                                        echo 'for: ' . strtoupper($row['reviewed_by']) . '<br>';
+                                    }
+                                    // attempt to render signature image; use reviewed_signature id if present
+                                    $sig = render_signature_img($conn, $row['reviewed_signature'] ?? null, $row['reviewed_by'] ?? $row['reviewedFix_signature']);
+                                    if (is_string($sig) && strpos($sig, 'data:image') !== false) {
+                                        echo '<div class="print-signature-wrap">' . $sig . '</div>';
+                                    }
+                                ?>
+                                
                                 <?php 
                                 if (strtolower(str_replace(' ', '', $row['reviewed_by'])) !== strtolower(str_replace(' ', '', $row['reviewedFix_signature']))) {
                                     echo "for: " . strtoupper($row['reviewed_by']) . "<br>";
@@ -580,8 +669,16 @@ $row = mysqli_fetch_assoc($result);
                             <div style="font-size: 6px; font-style: italic; visibility:hidden;">Department Manager</div>
                         </td>
                         <td style="width: 33%;">
-                            <div style="margin-bottom: 15px; font-weight: bold; visibility:hidden;">Noted by:</div>
+                            <div style="font-weight: bold; visibility:hidden;">Noted by:</div>
                             <div style="font-size: 10px; margin-bottom: 5px; padding-bottom: 2px; min-height: 20px;">
+                                <!-- put signature here for noted/approved -->
+                                <?php
+                                    $sig = render_signature_img($conn, $row['noted_signature'] ?? null, $row['noted_by'] ?? $row['notedFix_signature']);
+                                    if (is_string($sig) && strpos($sig, 'data:image') !== false) {
+                                        echo '<div class="print-signature-wrap">' . $sig . '</div>';
+                                    }
+                                ?>
+
                                 <?php 
                                 if (strtolower(str_replace(' ', '', $row['noted_by'])) !== strtolower(str_replace(' ', '', $row['notedFix_signature']))) {
                                     echo "for: " . strtoupper($row['noted_by']) . "<br>";

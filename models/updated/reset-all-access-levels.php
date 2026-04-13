@@ -45,6 +45,7 @@ function _default_permission_catalog()
             'children' => [
                 ['key' => 'BP Import Transaction', 'label' => 'Import > Transaction', 'icon' => 'receipt'],
                 ['key' => 'BP Import Cancellation', 'label' => 'Import > Cancellation', 'icon' => 'block'],
+                ['key' => 'BP Import Partner Data', 'label' => 'Import > Partner Data', 'icon' => 'groups'],
                 ['key' => 'BP Post Transaction', 'label' => 'Post > Transaction', 'icon' => 'send'],
                 ['key' => 'BP Settlement Adjustment Entry', 'label' => 'Settlement > Adjustment Entry', 'icon' => 'account_tree'],
                 ['key' => 'BP Settlement Per Bank', 'label' => 'Settlement > Per Bank', 'icon' => 'account_balance'],
