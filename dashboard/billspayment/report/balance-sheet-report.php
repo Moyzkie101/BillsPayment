@@ -5,28 +5,16 @@ require '../../../vendor/autoload.php';
 
 // Start the session
 session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }else{
-        // Redirect to login page if user_type is not set
-        header("Location: ../../../index.php");
-        session_abort();
-        session_destroy();
-        exit();
-    }
-}else {
-    // Redirect to login page if user_type is not set
-    header("Location: ../../../index.php");
-    session_abort();
-    session_destroy();
-    exit();
-}
+// prefer explicit session values for current user email; do not gate on role
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
+
+// page-level permission enforcement: require Balance Sheet Report or Bills Payment
+if (!function_exists('has_any_permission') || !has_any_permission(['Balance Sheet Report','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 // get display dropdown menu for partners
 if (isset($_POST['action']) && $_POST['action'] === 'get_partner_list') {
@@ -122,25 +110,31 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
     $params = array_merge($params, $dateParams);
 
+    // Build transaction-level owner filter based on sub_billers_name rules
+    $ownerFilterCondition = '';
+    $selectedOwnerCondition = '';
     if (!empty($partner) && $partner !== 'All') {
-        $whereConditions[] = "ap.partner_name = ?";
-        $params[] = $partner;
-        $types .= 's';
-    }
+        $partnerEsc = mysqli_real_escape_string($conn, $partner);
+        if ($partner === 'SECURITY BANK') {
+            $ownerFilterCondition = " AND bt.partner_name = '{$partnerEsc}' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '')";
+        } elseif ($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING') {
+            $ownerFilterCondition = " AND bt.sub_billers_name = '{$partnerEsc}'";
+        } else {
+            $ownerFilterCondition = " AND bt.partner_name = '{$partnerEsc}'";
+        }
 
-    $mainWhereClause = '';
-    if (!empty($whereConditions)) {
-        $mainWhereClause = 'AND ' . implode(' AND ', $whereConditions);
+        // Keep final output to the selected owner only
+        $selectedOwnerCondition = " AND ap.owner_name = '{$partnerEsc}'";
     }
 
     $DataQuery = "WITH summary_vol AS (
                         SELECT
-                            CASE 
-                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                                ELSE CONCAT('temp_', bt.partner_name)
-                            END COLLATE utf8mb4_general_ci AS partner_key,
-                            bt.partner_name,
+                            CASE
+                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                                WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                                ELSE bt.partner_name
+                            END AS owner_name,
+                            MAX(bt.sub_billers_name) AS sub_billers_name,
                             COUNT(*) AS vol1,
                             SUM(bt.amount_paid) AS principal1,
                             SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
@@ -148,22 +142,22 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         WHERE $dateCondition
                           AND bt.status IS NULL
                           AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                          $ownerFilterCondition
                         GROUP BY
-                            CASE 
-                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                                ELSE CONCAT('temp_', bt.partner_name)
-                            END COLLATE utf8mb4_general_ci,
-                            bt.partner_name
+                            CASE
+                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                                WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                                ELSE bt.partner_name
+                            END
                 ),
                 adjustment_vol AS (
                     SELECT
-                        CASE 
-                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                            ELSE CONCAT('temp_', bt.partner_name)
-                        END COLLATE utf8mb4_general_ci AS partner_key,
-                        bt.partner_name,
+                        CASE
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                            ELSE bt.partner_name
+                        END AS owner_name,
+                        MAX(bt.sub_billers_name) AS sub_billers_name,
                         COUNT(*) AS vol2,
                         SUM(bt.amount_paid) AS principal2,
                         SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
@@ -171,49 +165,42 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     WHERE $dateCondition
                       AND bt.status = '*'
                       AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                      $ownerFilterCondition
                     GROUP BY
-                        CASE 
-                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                            ELSE CONCAT('temp_', bt.partner_name)
-                        END COLLATE utf8mb4_general_ci,
-                        bt.partner_name
+                        CASE
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                            ELSE bt.partner_name
+                        END
                 ),
                 all_partners AS (
-                    SELECT 
-                        COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
-                        mpm.partner_name
+                    SELECT mpm.partner_name AS owner_name
                     FROM masterdata.partner_masterfile AS mpm
                     WHERE mpm.status = 'ACTIVE'
 
                     UNION
 
-                    SELECT partner_key, partner_name FROM summary_vol
+                    SELECT owner_name FROM summary_vol
 
                     UNION
 
-                    SELECT partner_key, partner_name FROM adjustment_vol
+                    SELECT owner_name FROM adjustment_vol
                 )
                 SELECT
-                    ap.partner_name,
+                    ap.owner_name AS partner_name,
+                    COALESCE(MAX(sv.sub_billers_name), MAX(av.sub_billers_name)) AS sub_billers_name,
                     (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
                     (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
                     (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
                 FROM all_partners AS ap
-                LEFT JOIN summary_vol AS sv ON (
-                    ap.partner_key = sv.partner_key OR ap.partner_name = sv.partner_name
-                )
-                LEFT JOIN adjustment_vol AS av ON (
-                    ap.partner_key = av.partner_key OR ap.partner_name = av.partner_name
-                )
-                LEFT JOIN masterdata.partner_masterfile AS mpm ON (
-                    ap.partner_name = mpm.partner_name
-                )
+                LEFT JOIN summary_vol AS sv ON ap.owner_name = sv.owner_name
+                LEFT JOIN adjustment_vol AS av ON ap.owner_name = av.owner_name
+                LEFT JOIN masterdata.partner_masterfile AS mpm ON ap.owner_name = mpm.partner_name
                 WHERE (mpm.status = 'ACTIVE' OR mpm.status IS NULL)
-                  $mainWhereClause
-                GROUP BY ap.partner_name
-                HAVING ap.partner_name IS NOT NULL
-                ORDER BY ap.partner_name";
+                  $selectedOwnerCondition
+                GROUP BY ap.owner_name
+                HAVING ap.owner_name IS NOT NULL
+                ORDER BY ap.owner_name";
 
     try {
         $stmt = $conn->prepare($DataQuery);
@@ -540,10 +527,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                         <option value="">Select Time Frame</option>
                                         <option value="daily">Per Day</option>
                                         <option value="date-range">Date Range</option>
-                                        <option value="monthly">Per Month</option>
+                                        <!-- <option value="monthly">Per Month</option>
                                         <option value="monthly-range">Monthly Range</option>
                                         <option value="yearly">Per Year</option>
-                                        <option value="yearly-range">Yearly Range</option>
+                                        <option value="yearly-range">Yearly Range</option> -->
                                     </select>
                                 </div>
 
@@ -841,6 +828,16 @@ $(document).ready(function() {
             tbody.append('<tr><td colspan="17" class="text-center">No data found for the selected criteria</td></tr>');
         } else {
             data.forEach((row, index) => {
+                const subBillersName = (row.sub_billers_name || '').toString().trim();
+                const partnerName = (row.partner_name || '').toString().trim();
+                let partner_name_raw = partnerName;
+
+                if (subBillersName === 'MYLORA CORPORATION' || subBillersName === 'JUNANS MARKETING') {
+                    partner_name_raw = subBillersName;
+                } else if (subBillersName === '' && partnerName === 'SECURITY BANK') {
+                    partner_name_raw = partnerName;
+                }
+
                 const netVol = parseInt(row.net_vol || 0);
                 const netPrincipal = parseFloat(row.net_principal || 0);
                 const netCharges = parseFloat(row.net_charges || 0);
@@ -852,7 +849,7 @@ $(document).ready(function() {
                 const tr = $(`
                     <tr>
                         <td>${index + 1}</td>
-                        <td>${row.partner_name || ''}</td>
+                        <td>${partner_name_raw}</td>
                         <td></td>
                         <td></td>
                         <td class="text-end">${netVol.toLocaleString()}</td>

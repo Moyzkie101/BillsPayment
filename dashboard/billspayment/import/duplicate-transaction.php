@@ -1,21 +1,24 @@
 <?php
 // Duplicate Transaction Checker
+ob_start();
 include '../../../config/config.php';
 require '../../../vendor/autoload.php';
 session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Duplicate Transaction','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 // simple user email for permission checks
 $current_user_email = '';
-if (isset($_SESSION['user_type'])) {
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }
-}
+// prefer explicit session values for current user email
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 // AJAX: find duplicate groups in billspayment_transaction
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['check_duplicates_db'])) {
+    if (ob_get_length()) {
+        ob_clean();
+    }
     header('Content-Type: application/json');
     $mode = isset($_POST['mode']) ? trim($_POST['mode']) : 'normal';
 
@@ -165,6 +168,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['check_duplicates_db']
 
 // AJAX: delete single duplicate row
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_duplicate']) && !empty($_POST['id'])) {
+    if (ob_get_length()) {
+        ob_clean();
+    }
     header('Content-Type: application/json');
     $id = intval($_POST['id']);
     $del = $conn->query("DELETE FROM billspayment_transaction WHERE id = " . $id);
@@ -173,14 +179,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_duplicate']) &
 }
 
 // AJAX: delete multiple duplicate ids
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) && !empty($_POST['ids'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple'])) {
+    if (ob_get_length()) {
+        ob_clean();
+    }
     header('Content-Type: application/json');
-    $ids = $_POST['ids'];
-    $clean = array_map('intval', $ids);
+
+    $idsInput = isset($_POST['ids']) ? $_POST['ids'] : [];
+    if (!is_array($idsInput)) {
+        $idsInput = explode(',', (string)$idsInput);
+    }
+
+    $clean = [];
+    foreach ($idsInput as $raw) {
+        $id = intval($raw);
+        if ($id > 0) {
+            $clean[$id] = $id;
+        }
+    }
+
+    if (empty($clean)) {
+        echo json_encode(['success' => false, 'error' => 'No ids']);
+        exit;
+    }
+
     $in = implode(',', $clean);
-    if ($in === '') { echo json_encode(['success' => false, 'error' => 'No ids']); exit; }
     $del = $conn->query("DELETE FROM billspayment_transaction WHERE id IN (" . $in . ")");
-    if ($del) echo json_encode(['success' => true]); else echo json_encode(['success' => false, 'error' => $conn->error]);
+    if ($del) {
+        echo json_encode(['success' => true, 'deleted_count' => intval($conn->affected_rows)]);
+    } else {
+        echo json_encode(['success' => false, 'error' => $conn->error]);
+    }
     exit;
 }
 
@@ -408,6 +437,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
         function renderLegacy(groups){
             console.debug('[dup-check] renderLegacy called, groups count:', groups ? groups.length : 0);
             removeSummaryIcon();
+            window.lastNormalDuplicateIds = [];
             if(!groups || groups.length === 0){
                 $('#normal-card').html('<div style="padding:10px;color:#6c757d">No duplicates found.</div>');
                 $('#btn-delete-all').hide();
@@ -416,13 +446,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             }
             let html = '';
             let totalDuplicates = 0;
+            const duplicateIds = [];
             groups.forEach(function(g){
                 const rows = g.rows || [];
                 if(rows.length === 0) return;
                 html += '<div style="margin-bottom:8px;font-weight:700;">Reference No.: '+ (rows[0].reference_no || '') +'</div>';
                 rows.forEach(function(r, idx){
                     const cls = idx === 0 ? 'green' : 'red';
-                    if(idx > 0) totalDuplicates++;
+                    if(idx > 0){
+                        totalDuplicates++;
+                        const rowId = parseInt(r.id, 10);
+                        if(!isNaN(rowId) && rowId > 0) duplicateIds.push(rowId);
+                    }
                     const partnerName = r.partner_name || '';
                     const partnerKpx = r.partner_id_kpx || '';
                     const partnerId = r.partner_id || '';
@@ -450,9 +485,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                 });
                 html += '<hr>';
             });
+            window.lastNormalDuplicateIds = Array.from(new Set(duplicateIds));
             $('#normal-card').html(html);
             $('#result-count').text('Found '+ totalDuplicates +' duplicate row(s).');
-            if(totalDuplicates>0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
+            if(window.lastNormalDuplicateIds.length>0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
             // hide export when showing legacy view
             $('#btn-export').hide();
             setTimeout(function(){ var el = document.getElementById('normal-card'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
@@ -700,7 +736,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                     // hide include filter control in normal mode
                     $('#dev-include-container').hide();
                     // show bulk delete only if there are red duplicate rows in normal view
-                    if($('#normal-card .dup-row.red').length > 0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
+                    if((window.lastNormalDuplicateIds && window.lastNormalDuplicateIds.length > 0) || $('#normal-card .dup-row.red').length > 0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
                 }
             });
 
@@ -811,9 +847,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
 
             // delete all duplicates (delete all red rows currently shown in Normal mode)
             $('#btn-delete-all').on('click', function(){
-                // collect red rows ids from normal container only
-                const ids = [];
-                $('#normal-card .dup-row.red').each(function(){ ids.push($(this).data('id')); });
+                // Prefer stable duplicate IDs captured during render; fallback to visible red rows.
+                let ids = Array.isArray(window.lastNormalDuplicateIds) ? window.lastNormalDuplicateIds.slice() : [];
+                if(ids.length === 0){
+                    $('#normal-card .dup-row.red').each(function(){
+                        const rowId = parseInt($(this).data('id'), 10);
+                        if(!isNaN(rowId) && rowId > 0) ids.push(rowId);
+                    });
+                    ids = Array.from(new Set(ids));
+                }
                 if(ids.length === 0) { Swal.fire('Nothing to delete','No duplicate rows selected','info'); return; }
                 Swal.fire({
                     title: 'Delete ALL duplicates?',
@@ -826,18 +868,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
                     cancelButtonText: 'Cancel'
                 }).then((result) => {
                     if (result.isConfirmed) {
+                        const handleBulkDeleteSuccess = function(deletedCount){
+                            $('#normal-card .dup-row.red').remove();
+                            window.lastNormalDuplicateIds = [];
+                            $('#btn-delete-all').hide();
+                            $('#result-count').text('');
+                            const msg = 'Selected rows removed' + (deletedCount > 0 ? ' (' + deletedCount + ' row(s)).' : '.');
+                            Swal.fire('Deleted', msg, 'success').then(function(){
+                                // Refresh only after modal closes so overlay does not appear behind the success modal.
+                                $('#btn-check').trigger('click');
+                            });
+                        };
+
                         showOverlay();
-                        $.post(window.location.href, { delete_multiple: 1, ids: ids }, function(resp){
+                        const idsPayload = ids.join(',');
+                        $.ajax({
+                            type: 'POST',
+                            url: window.location.href,
+                            data: { delete_multiple: 1, ids: idsPayload }
+                        }).done(function(rawResp){
+                            let resp = rawResp;
+                            if(typeof rawResp === 'string'){
+                                try {
+                                    resp = JSON.parse(rawResp);
+                                } catch(parseErr){
+                                    hideOverlay();
+                                    Swal.fire('Error','Unexpected server response while deleting duplicates.','error');
+                                    return;
+                                }
+                            }
                             hideOverlay();
                             if(resp && resp.success){
-                                    $('#normal-card .dup-row.red').remove();
-                                $('#btn-delete-all').hide();
-                                $('#result-count').text('');
-                                Swal.fire('Deleted','Selected rows removed','success');
+                                const deletedCount = parseInt(resp.deleted_count || 0, 10);
+                                handleBulkDeleteSuccess(deletedCount);
                             } else {
-                                Swal.fire('Error','Delete failed','error');
+                                Swal.fire('Error',(resp && resp.error) ? resp.error : 'Delete failed','error');
                             }
-                        }, 'json').fail(function(){ hideOverlay(); Swal.fire('Error','Request failed','error'); });
+                        }).fail(function(jqxhr, status, err){
+                            // Sometimes response is returned but jQuery enters fail (e.g., parser issues/proxy quirks).
+                            const body = jqxhr && typeof jqxhr.responseText === 'string' ? jqxhr.responseText.trim() : '';
+                            if(body){
+                                try {
+                                    const parsed = JSON.parse(body);
+                                    hideOverlay();
+                                    if(parsed && parsed.success){
+                                        const deletedCount = parseInt(parsed.deleted_count || 0, 10);
+                                        handleBulkDeleteSuccess(deletedCount);
+                                        return;
+                                    }
+                                    Swal.fire('Error',(parsed && parsed.error) ? parsed.error : 'Delete failed','error');
+                                    return;
+                                } catch(e) {
+                                    // continue to generic error below
+                                }
+                            }
+                            hideOverlay();
+                            Swal.fire('Error','Request failed (' + (status || 'unknown') + '). ' + (err || ''),'error');
+                        });
                     }
                 });
             });
@@ -980,6 +1067,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             // initialize both containers with default messages so mode switching preserves content
             $('#normal-card').html('<div style="padding:10px;color:#6c757d">Check Duplicate in Normal Mode</div>');
             $('#dev-card').html('<div style="padding:10px;color:#6c757d">Check Duplicate in Root Mode</div>');
+            window.lastNormalDuplicateIds = [];
             // ensure only active mode's container is visible
             if($('#mode-toggle .mode-btn.active').data('mode') === 'dev'){
                 $('#dev-card').show(); $('#normal-card').hide();
@@ -989,7 +1077,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_multiple']) &&
             } else {
                 $('#normal-card').show(); $('#dev-card').hide();
                 // show delete-all only when normal view already has red duplicate rows
-                if($('#normal-card .dup-row.red').length > 0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
+                if((window.lastNormalDuplicateIds && window.lastNormalDuplicateIds.length > 0) || $('#normal-card .dup-row.red').length > 0) $('#btn-delete-all').show(); else $('#btn-delete-all').hide();
                 $('#btn-export').hide();
                 $('#dev-include-container').hide();
             }

@@ -4,7 +4,22 @@ include '../../config/config.php';
 session_start();
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'admin') {
+// include permission helper so non-admin users with the sentinel (-1)
+// or explicit permission can also perform updates
+include_once __DIR__ . '/../../templates/middleware.php';
+
+$allowed = false;
+if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'admin') {
+    $allowed = true;
+}
+if (isset($_SESSION['access_level']) && intval($_SESSION['access_level']) === -1) {
+    $allowed = true;
+}
+if (function_exists('has_permission') && has_permission('Maintenance Accounts Access Levels')) {
+    $allowed = true;
+}
+
+if (!$allowed) {
     echo json_encode(['success' => false, 'message' => 'Unauthorized access']);
     exit;
 }
@@ -24,6 +39,7 @@ function default_permission_catalog()
             'children' => [
                 ['key' => 'BP Import Transaction', 'label' => 'Import > Transaction', 'icon' => 'receipt'],
                 ['key' => 'BP Import Cancellation', 'label' => 'Import > Cancellation', 'icon' => 'block'],
+                ['key' => 'BP Import Partner Data', 'label' => 'Import > Partner Data', 'icon' => 'groups'],
                 ['key' => 'BP Post Transaction', 'label' => 'Post > Transaction', 'icon' => 'send'],
                 ['key' => 'BP Settlement Adjustment Entry', 'label' => 'Settlement > Adjustment Entry', 'icon' => 'account_tree'],
                 ['key' => 'BP Settlement Per Bank', 'label' => 'Settlement > Per Bank', 'icon' => 'account_balance'],
@@ -120,7 +136,7 @@ function read_access_map_file($path)
         $levels = [];
         foreach ($decoded as $item) {
             $level = isset($item['access_level']) ? (int)$item['access_level'] : 0;
-            if ($level <= 0) continue;
+            if ($level === 0) continue;
             $levels[] = [
                 'access_level' => $level,
                 'permissions' => normalize_permissions(isset($item['permissions']) ? $item['permissions'] : [])
@@ -152,7 +168,7 @@ function read_access_map_file($path)
     if (isset($decoded['access_levels']) && is_array($decoded['access_levels'])) {
         foreach ($decoded['access_levels'] as $item) {
             $level = isset($item['access_level']) ? (int)$item['access_level'] : 0;
-            if ($level <= 0) continue;
+            if ($level === 0) continue;
             $levels[] = [
                 'access_level' => $level,
                 'permissions' => normalize_permissions(isset($item['permissions']) ? $item['permissions'] : [])
@@ -214,6 +230,34 @@ function flatten_catalog_keys($nodes)
     return $keys;
 }
 
+function flatten_catalog_leaf_keys($nodes)
+{
+    $keys = [];
+    if (!is_array($nodes)) {
+        return $keys;
+    }
+
+    foreach ($nodes as $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+
+        $children = isset($node['children']) && is_array($node['children']) ? $node['children'] : [];
+        if (empty($children)) {
+            if (isset($node['key']) && is_string($node['key']) && trim($node['key']) !== '') {
+                $keys[] = trim($node['key']);
+            }
+            continue;
+        }
+
+        $keys = array_merge($keys, flatten_catalog_leaf_keys($children));
+    }
+
+    $keys = array_values(array_unique($keys));
+    sort($keys, SORT_STRING);
+    return $keys;
+}
+
 try {
     $input = json_decode(file_get_contents('php://input'), true);
 
@@ -248,9 +292,18 @@ try {
         return in_array($permission, $allowedPermissions, true);
     }));
 
+    // Keep admin sentinel as-is when explicitly provided.
     $resolvedAccessLevel = $inputAccessLevel;
 
-    if (!empty($inputPermissions)) {
+    // Determine if all available leaf permissions are selected; this should map to sentinel -1.
+    $allowedLeafPermissions = flatten_catalog_leaf_keys(isset($accessMap['permission_catalog']) ? $accessMap['permission_catalog'] : []);
+    $allPermissionsSelected = !empty($allowedLeafPermissions)
+        && count($inputPermissions) === count($allowedLeafPermissions)
+        && count(array_diff($allowedLeafPermissions, $inputPermissions)) === 0;
+
+    if ($inputAccessLevel === -1 || $allPermissionsSelected) {
+        $resolvedAccessLevel = -1;
+    } elseif (!empty($inputPermissions)) {
         // Resolve using explicit map combinations first (leaf-permissions based).
         $targetKey = permissions_key($inputPermissions);
         $existingLevel = 0;
@@ -268,7 +321,7 @@ try {
         }
     }
 
-    if ($resolvedAccessLevel <= 0) {
+    if ($resolvedAccessLevel === 0) {
         echo json_encode(['success' => false, 'message' => 'Unable to resolve access level from permissions']);
         exit;
     }
@@ -336,12 +389,89 @@ try {
 
     if ($shouldUpdateSession) {
         $_SESSION['user_access_level'] = (int)$updatedRow['access_level'];
-        $_SESSION['user_permissions'] = $inputPermissions;
+
+        // Normalize and expand permissions for server-side checks so that
+        // ancestor/catalog keys (e.g., 'Bills Payment') are present when a
+        // leaf permission (e.g., 'BP Import Transaction') is granted.
+        $normalized = normalize_permissions($inputPermissions);
+
+        // build ancestor map from permission_catalog
+        $ancestorMap = [];
+        $catalog = isset($accessMap['permission_catalog']) && is_array($accessMap['permission_catalog']) ? $accessMap['permission_catalog'] : default_permission_catalog();
+        $stack = [];
+        $walk = function($nodes, $parents = []) use (&$walk, &$ancestorMap) {
+            foreach ($nodes as $n) {
+                if (!is_array($n) || empty($n['key'])) continue;
+                $key = trim($n['key']);
+                foreach ($parents as $p) {
+                    $ancestorMap[$key][] = $p;
+                }
+                $nextParents = $parents;
+                $nextParents[] = $key;
+                if (isset($n['children']) && is_array($n['children'])) {
+                    $walk($n['children'], $nextParents);
+                }
+            }
+        };
+        $walk($catalog, []);
+
+        $expanded = [];
+        foreach ($normalized as $p) {
+            $expanded[$p] = true;
+            if (isset($ancestorMap[$p]) && is_array($ancestorMap[$p])) {
+                foreach ($ancestorMap[$p] as $anc) $expanded[$anc] = true;
+            }
+        }
+
+        // store sorted normalized expanded permissions
+        $sessionPerms = array_values(array_unique(array_map('strval', array_keys($expanded))));
+        sort($sessionPerms, SORT_STRING);
+        $_SESSION['user_permissions'] = $sessionPerms;
+
+        // Keep session in sync with current access map file mtime so middleware knows it's fresh
+        $mapMtime = 0;
+        if (file_exists($mapPath)) $mapMtime = @filemtime($mapPath);
+        $_SESSION['access_map_mtime'] = $mapMtime;
     }
     // Persist explicit per-user permissions into DB column `permissions` (JSON),
-    // and keep the legacy file-backed storage for backward compatibility.
+    // but store an expanded set that includes ancestor/catalog keys so
+    // server-side middleware and templates see the same effective permissions
+    // as the client UI.
     try {
-        $jsonPerms = json_encode($inputPermissions, JSON_UNESCAPED_SLASHES);
+        // Normalize input perms
+        $normalized_input_perms = normalize_permissions($inputPermissions);
+
+        // Build ancestor map from permission catalog so we can expand leaves
+        $ancestorMap = [];
+        $catalog = isset($accessMap['permission_catalog']) && is_array($accessMap['permission_catalog']) ? $accessMap['permission_catalog'] : default_permission_catalog();
+        $walk = function($nodes, $parents = []) use (&$walk, &$ancestorMap) {
+            foreach ($nodes as $n) {
+                if (!is_array($n) || empty($n['key'])) continue;
+                $key = trim($n['key']);
+                foreach ($parents as $p) {
+                    $ancestorMap[$key][] = $p;
+                }
+                $nextParents = $parents;
+                $nextParents[] = $key;
+                if (isset($n['children']) && is_array($n['children'])) {
+                    $walk($n['children'], $nextParents);
+                }
+            }
+        };
+        $walk($catalog, []);
+
+        $expanded_for_persist = [];
+        foreach ($normalized_input_perms as $p) {
+            $expanded_for_persist[$p] = true;
+            if (isset($ancestorMap[$p]) && is_array($ancestorMap[$p])) {
+                foreach ($ancestorMap[$p] as $anc) $expanded_for_persist[$anc] = true;
+            }
+        }
+
+        $persistPerms = array_values(array_unique(array_map('strval', array_keys($expanded_for_persist))));
+        sort($persistPerms, SORT_STRING);
+
+        $jsonPerms = json_encode($persistPerms, JSON_UNESCAPED_SLASHES);
         if ($jsonPerms === false) $jsonPerms = json_encode([]);
 
         // update DB permissions column if present

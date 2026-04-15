@@ -16,6 +16,12 @@ if (isset($_SESSION['user_type'])) {
     }
 }
 
+// Prevent headers already sent: ensure unauthenticated users are redirected before any output
+if (empty($_SESSION['user_type'])) {
+    header('Location: ../../../logout.php');
+    exit();
+}
+
 if(isset($_POST['proceed'])) {
     $startingDate = $_POST['startingDate'];
 

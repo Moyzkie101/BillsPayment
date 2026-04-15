@@ -5,14 +5,23 @@ require '../../../vendor/autoload.php';
 
 // Start the session
 session_start();
+// prefer explicit session values for current user email
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
-
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
+// Resolve current user id and fetch signature blob (if any)
+include '../../../templates/middleware.php';
+$current_user_id = resolve_user_identifier();
+if (empty($current_user_id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Billing Invoice Service Charge','Bills Payment'])) { header('Location: ../../home.php'); exit; }
+$prepared_sig_blob = null;
+if (!empty($current_user_id)) {
+    $stmtSig = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");
+    if ($stmtSig) {
+        $stmtSig->bind_param('s', $current_user_id);
+        $stmtSig->execute();
+        $stmtSig->bind_result($sig_blob);
+        if ($stmtSig->fetch()) $prepared_sig_blob = $sig_blob;
+        $stmtSig->close();
     }
 }
 
@@ -741,7 +750,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_billing_invoice') {
                                     </tr>
                                     <tr>
                                         <td></td>
-                                        <td class="fw-medium text-truncate" id="prepared-by">-</td>
+                                        <td class="fw-medium text-truncate" style="text-align:center;">
+                                            <?php if (!empty($prepared_sig_blob)): ?>
+                                                <img src="data:image/png;base64,<?php echo base64_encode($prepared_sig_blob); ?>" alt="signature" style="max-height:60px; display:block; margin:0 auto 6px;">
+                                            <?php endif; ?>
+                                            <div id="prepared-by">-</div>
+                                        </td>
                                         <td></td>
                                         <td class="fw-medium text-truncate" style="visibility:hidden;">-</td>
                                         <td></td>
@@ -749,7 +763,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_billing_invoice') {
                                     </tr>
                                     <tr>
                                         <td></td>
-                                        <td>Accounting Staff</td>
+                                        <td style="text-align:center;">Accounting Staff</td>
                                         <td></td>
                                         <td style="visibility:hidden;">Department Manager</td>
                                         <td></td>
@@ -771,6 +785,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_billing_invoice') {
     </div>
 </body>
 <?php include '../../../templates/footer.php'; ?>
+<?php include '../no-signature-modal.php'; ?>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         if (typeof $ !== "undefined" && $.fn.select2) {

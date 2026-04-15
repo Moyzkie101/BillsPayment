@@ -31,6 +31,9 @@ $whereConditions = [];
 $params = [];
 $types = '';
 
+// Always exclude these branch/status rows from report results
+$whereConditions[] = "NOT (branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944') AND status IS NULL)";
+
 if (!empty($search)) {
     $whereConditions[] = "(reference_no LIKE ?)";
     $searchParam = "%$search%";
@@ -39,7 +42,13 @@ if (!empty($search)) {
 }
 
 if (!empty($partner) && $partner !== 'All') {
-    $whereConditions[] = "partner_name = ?";
+    if($partner === 'SECURITY BANK') {
+        $whereConditions[] = "(partner_name = ? AND sub_billers_name IS NULL)";
+    }elseif($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING'){
+        $whereConditions[] = "sub_billers_name = ?";
+    }else{
+        $whereConditions[] = "partner_name = ?";
+    }
     $params[] = $partner;
     $types .= 's';
 }
@@ -270,6 +279,10 @@ foreach ($offsets as $offset) {
     
     // Write data rows
     foreach ($data as $row) {
+        $partner_name_raw = !empty(trim((string)($row['sub_billers_name'] ?? '')))
+            ? $row['sub_billers_name']
+            : ($row['partner_name'] ?? '');
+
         $csvRow = [
             $row['post_transaction'] ?? '',
             $row['billing_invoice'] ?? '',
@@ -280,7 +293,7 @@ foreach ($offsets as $offset) {
             $row['branch_id'] ?? '',
             $row['outlet'] ?? '',
             $row['source_file'] ?? '',
-            $row['partner_name'] ?? '',
+            $partner_name_raw,
             $row['partner_id'] ?? '',
             $row['partner_id_kpx'] ?? '',
             $row['mpm_gl_code'] ?? '',

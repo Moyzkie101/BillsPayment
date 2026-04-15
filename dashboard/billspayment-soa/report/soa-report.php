@@ -5,16 +5,14 @@ require '../../../vendor/autoload.php';
 
 // Start the session
 session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['SOA Report','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }
-}
+// prefer explicit session values for current user email
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
     $status_options = 'SELECT status FROM mldb.soa_transaction group by status';
     $status_result = mysqli_query($conn, $status_options);
@@ -280,9 +278,9 @@ if (isset($_SESSION['user_type'])) {
                             </div>
                         </div>
                         <div class="card-body">
-                            <div class="mb-3">
+                            <!-- <div class="mb-3">
                                 <label class="h6 text-muted">Total Amount: ₱<span id="total-amount"> 0.00</span></label>
-                            </div>
+                            </div> -->
                             <div class="table-responsive" style="max-height: 600px; overflow-y: auto; overflow-x: auto;">
                                 <table class="table table-hover table-striped" id="users-table" style="min-width: 1800px;">
                                     <thead class="table-light sticky-top">
@@ -351,6 +349,65 @@ if (isset($_SESSION['user_type'])) {
                                                             $status_class = 'badge bg-warning';
                                                     }
                                                     
+                                                    // Prepare prepared signature attribute: try to resolve stored id to actual signature image
+                                                    $prepared_sig_attr = '';
+                                                    if (!empty($row['prepared_signature'])) {
+                                                        $possible_id = $conn->real_escape_string($row['prepared_signature']);
+                                                        $sigRes = $conn->query("SELECT signature FROM mldb.user_sig WHERE id_number='" . $possible_id . "' LIMIT 1");
+                                                        if ($sigRes && $sigRes->num_rows) {
+                                                            $sigRow = $sigRes->fetch_assoc();
+                                                            if (!empty($sigRow['signature'])) {
+                                                                $prepared_sig_attr = 'data:image/png;base64,' . base64_encode($sigRow['signature']);
+                                                            }
+                                                        }
+                                                        if ($prepared_sig_attr === '') {
+                                                            // fallback to literal stored value
+                                                            $prepared_sig_attr = $row['prepared_signature'];
+                                                        }
+                                                    }
+
+                                                    // Prepare reviewed signature attribute similarly: if the DB stores an id, resolve to image blob
+                                                    $reviewed_sig_attr = '';
+                                                    if (!empty($row['reviewed_signature'])) {
+                                                        $possible_rev = $conn->real_escape_string($row['reviewed_signature']);
+                                                        $revRes = $conn->query("SELECT signature FROM mldb.user_sig WHERE id_number='" . $possible_rev . "' LIMIT 1");
+                                                        if ($revRes && $revRes->num_rows) {
+                                                            $revRow = $revRes->fetch_assoc();
+                                                            if (!empty($revRow['signature'])) {
+                                                                $reviewed_sig_attr = 'data:image/png;base64,' . base64_encode($revRow['signature']);
+                                                            }
+                                                        }
+                                                        if ($reviewed_sig_attr === '') {
+                                                            // if DB contains an id but there's no stored blob, display a friendly placeholder
+                                                            if (!empty($possible_rev)) {
+                                                                $reviewed_sig_attr = 'electronically signed';
+                                                            } else {
+                                                                // fallback to literal stored value if it was not an id
+                                                                $reviewed_sig_attr = $row['reviewed_signature'];
+                                                            }
+                                                        }
+                                                    }
+
+                                                    // Prepare noted/approved signature attribute: resolve id to image blob when possible
+                                                    $noted_sig_attr = '';
+                                                    if (!empty($row['noted_signature'])) {
+                                                        $possible_noted = $conn->real_escape_string($row['noted_signature']);
+                                                        $notedRes = $conn->query("SELECT signature FROM mldb.user_sig WHERE id_number='" . $possible_noted . "' LIMIT 1");
+                                                        if ($notedRes && $notedRes->num_rows) {
+                                                            $notedRow = $notedRes->fetch_assoc();
+                                                            if (!empty($notedRow['signature'])) {
+                                                                $noted_sig_attr = 'data:image/png;base64,' . base64_encode($notedRow['signature']);
+                                                            }
+                                                        }
+                                                        if ($noted_sig_attr === '') {
+                                                            if (!empty($possible_noted)) {
+                                                                $noted_sig_attr = 'electronically signed';
+                                                            } else {
+                                                                $noted_sig_attr = $row['noted_signature'];
+                                                            }
+                                                        }
+                                                    }
+
                                                     echo "<tr class='table-row-clickable' ondblclick='showSOADetails(this)' style='cursor: pointer;' 
                                                         data-status='" . htmlspecialchars($row['status']) . "'
                                                         data-date='{$formatted_date}'
@@ -375,15 +432,15 @@ if (isset($_SESSION['user_type'])) {
                                                         data-number-of-days='" . htmlspecialchars($row['numberOf_days'] ?? '0') . "'
                                                         data-add-amount='" . htmlspecialchars($row['add_amount'] ?? '0') . "'
 
-                                                        data-prepared-signature='" . htmlspecialchars($row['prepared_signature'] ?? '') . "'
+                                                        data-prepared-signature='" . htmlspecialchars($prepared_sig_attr ?? '') . "'
                                                         data-prepared-date-signature='" . htmlspecialchars($row['preparedDate_signature'] ?? '') . "'
                                                         data-created-by='" . htmlspecialchars($row['prepared_by'] ?? 'N/A') . "'
 
-                                                        data-reviewed-signature='" . htmlspecialchars($row['reviewed_signature'] ?? '') . "'
+                                                        data-reviewed-signature='" . htmlspecialchars($reviewed_sig_attr ?? $row['reviewed_signature'] ?? '') . "'
                                                         data-reviewed-date-signature='" . htmlspecialchars($row['reviewedDate_signature'] ?? '') . "'
                                                         data-reviewed-by='" . htmlspecialchars($row['reviewed_by'] ?? 'N/A') . "'
 
-                                                        data-noted-signature='" . htmlspecialchars($row['noted_signature'] ?? '') . "'
+                                                        data-noted-signature='" . htmlspecialchars($noted_sig_attr ?? $row['noted_signature'] ?? '') . "'
                                                         data-noted-date-signature='" . htmlspecialchars($row['notedDate_signature'] ?? '') . "'
                                                         data-noted-for='" . htmlspecialchars($row['noted_by'] ?? '') . "'
                                                         data-approved-by='" . htmlspecialchars($row['notedFix_signature'] ?? 'N/A') . "'
@@ -783,6 +840,58 @@ function showSOADetails(row) {
     const notedDateSignature = row.getAttribute('data-noted-date-signature');
     const notedFor = row.getAttribute('data-noted-for');
     const approvedBy = row.getAttribute('data-approved-by');
+
+    // Normalize signature values: if the value is a numeric id (no blob),
+    // replace it with friendly fallback text to avoid showing raw IDs.
+    const isNumericId = (val) => val && /^\d+$/.test(val.trim());
+    if (isNumericId(preparedSignature)) {
+        // prepared signature has id but no blob
+        row.setAttribute('data-prepared-signature', 'electronically signed');
+    }
+    if (isNumericId(reviewedSignature)) {
+        row.setAttribute('data-reviewed-signature', 'electronically signed');
+    }
+    if (isNumericId(notedSignature)) {
+        row.setAttribute('data-noted-signature', 'electronically signed');
+    }
+
+    // Function to replace name or signature placeholder with actual signature
+    // Accepts either `id_number` (digits) or `full_name` text. If element
+    // currently shows 'electronically signed' or an id, we prefer to query
+    // by id when available.
+    const fetchAndReplaceSignature = async (elementId, { id, name }) => {
+        // if no id and no valid name, nothing to lookup
+        if (!id && (!name || name === 'N/A')) return;
+        try {
+            const payload = id ? { id_number: id } : { full_name: name };
+            const resp = await fetch('get-user-signature.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            console.log('get-user-signature response', payload, data);
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            // If we started with an id, we already set friendly text; only
+            // replace when a blob is returned. If no blob, keep 'electronically signed'.
+            if (data && data.signature) {
+                el.innerHTML = '<img src="' + data.signature + '" alt="signature" style="max-height:72px;object-fit:contain;display:block;margin:0;" />';
+            } else if (data && data.id) {
+                // keep friendly text when id exists but no blob
+                el.textContent = 'electronically signed';
+                console.log('signature blob not found, id present:', data.id);
+            } else {
+                console.log('no user found for', payload, data);
+            }
+        } catch (e) {
+            // ignore errors silently
+            console.error('Signature lookup failed', e);
+        }
+    };
+
+    // NOTE: signature lookups will be called later, after modal text assignments,
+    // to avoid being overwritten by subsequent assignments in this function.
     
     // Format currency function
     function formatModalCurrency(value) {
@@ -896,11 +1005,31 @@ function showSOADetails(row) {
     const approvedElectronicDate = document.getElementById('modal-approved-electronic-date');
     const approvedForElement = document.getElementById('modal-approved-for');
     
-    if (preparedElectronicSig) preparedElectronicSig.textContent = preparedSignature || '';
+    if (preparedElectronicSig) {
+        if (preparedSignature && preparedSignature.indexOf('data:image/') === 0) {
+            preparedElectronicSig.innerHTML = '<img src="' + preparedSignature + '" alt="Prepared signature" style="max-height:72px;object-fit:contain;display:block;margin:0;" />';
+        } else {
+            preparedElectronicSig.textContent = preparedSignature || '';
+        }
+    }
     if (preparedElectronicDate) preparedElectronicDate.textContent = formatSignatureDate(preparedDateSignature);
-    if (reviewedElectronicSig) reviewedElectronicSig.textContent = reviewedSignature || '';
+    if (reviewedElectronicSig) {
+        if (reviewedSignature && reviewedSignature.indexOf('data:image/') === 0) {
+            reviewedElectronicSig.innerHTML = '<img src="' + reviewedSignature + '" alt="Reviewed signature" style="max-height:72px;object-fit:contain;display:block;margin:0;" />';
+        } else {
+            reviewedElectronicSig.textContent = reviewedSignature || '';
+        }
+    }
     if (reviewedElectronicDate) reviewedElectronicDate.textContent = formatSignatureDate(reviewedDateSignature);
-    if (approvedElectronicSig) approvedElectronicSig.textContent = notedSignature || '';
+    if (approvedElectronicSig) {
+        if (notedSignature && notedSignature.indexOf('data:image/') === 0) {
+            approvedElectronicSig.innerHTML = '<img src="' + notedSignature + '" alt="Approved signature" style="max-height:72px;object-fit:contain;display:block;margin:0;" />';
+        } else if (notedSignature === 'electronically signed') {
+            approvedElectronicSig.textContent = 'electronically signed';
+        } else {
+            approvedElectronicSig.textContent = notedSignature || '';
+        }
+    }
     if (approvedElectronicDate) approvedElectronicDate.textContent = formatSignatureDate(notedDateSignature);
     if (approvedForElement) approvedForElement.textContent = notedFor || '';
     
@@ -979,6 +1108,42 @@ function showSOADetails(row) {
         if (modalCreatedBy) modalCreatedBy.textContent = createdBy || 'N/A';
         if (modalReviewedBy) modalReviewedBy.textContent = reviewedBy || 'N/A';
         if (modalApprovedBy) modalApprovedBy.textContent = approvedBy || 'N/A';
+
+        // After assigning name text, replace signature placeholders with images.
+        // Prefer querying by id if the signature placeholder value is numeric.
+        const preparedSigEl = document.getElementById('modal-prepared-electronic-signature');
+        const reviewedSigEl = document.getElementById('modal-reviewed-electronic-signature');
+        const approvedSigEl = document.getElementById('modal-approved-electronic-signature');
+
+        const getTextOrChildText = (el) => el ? (el.textContent || el.innerText || '').trim() : '';
+
+        // If placeholder shows digits or 'electronically signed', try lookup.
+        const preparedPlaceholder = getTextOrChildText(preparedSigEl);
+        const reviewedPlaceholder = getTextOrChildText(reviewedSigEl);
+        const approvedPlaceholder = getTextOrChildText(approvedSigEl);
+
+        const digitsOnly = (v) => v && /^\d+$/.test(v);
+
+        // prepared
+        if (digitsOnly(preparedPlaceholder)) {
+            fetchAndReplaceSignature('modal-prepared-electronic-signature', { id: preparedPlaceholder, name: createdBy });
+        } else if (preparedPlaceholder === 'electronically signed') {
+            fetchAndReplaceSignature('modal-prepared-electronic-signature', { id: null, name: createdBy });
+        }
+
+        // reviewed
+        if (digitsOnly(reviewedPlaceholder)) {
+            fetchAndReplaceSignature('modal-reviewed-electronic-signature', { id: reviewedPlaceholder, name: reviewedBy });
+        } else if (reviewedPlaceholder === 'electronically signed') {
+            fetchAndReplaceSignature('modal-reviewed-electronic-signature', { id: null, name: reviewedBy });
+        }
+
+        // approved
+        if (digitsOnly(approvedPlaceholder)) {
+            fetchAndReplaceSignature('modal-approved-electronic-signature', { id: approvedPlaceholder, name: notedFor || approvedBy });
+        } else if (approvedPlaceholder === 'electronically signed') {
+            fetchAndReplaceSignature('modal-approved-electronic-signature', { id: null, name: notedFor || approvedBy });
+        }
 
         if (status && status.toLowerCase() === 'prepared') {
             reviewedBySection.style.display = 'none';

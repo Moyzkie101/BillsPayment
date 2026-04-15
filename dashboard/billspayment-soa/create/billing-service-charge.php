@@ -6,6 +6,24 @@ require '../../../vendor/autoload.php';
 // Start the session
 session_start();
 
+// Resolve current user id and fetch signature blob (if any)
+include '../../../templates/middleware.php';
+$current_user_id = resolve_user_identifier();
+$current_user_id = resolve_user_identifier();
+if (empty($current_user_id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Billing Service Charge','Bills Payment'])) { header('Location: ../../home.php'); exit; }
+$prepared_sig_blob = null;
+if (!empty($current_user_id)) {
+    $stmtSig = $conn->prepare("SELECT signature FROM mldb.user_sig WHERE id_number = ? LIMIT 1");
+    if ($stmtSig) {
+        $stmtSig->bind_param('s', $current_user_id);
+        $stmtSig->execute();
+        $stmtSig->bind_result($sig_blob);
+        if ($stmtSig->fetch()) $prepared_sig_blob = $sig_blob;
+        $stmtSig->close();
+    }
+}
+
 @include '../../../fetch/fetch-partner-data.php';
 @include '../../../fetch/fetch-service-type.php';
 
@@ -16,22 +34,12 @@ if (!isset($_SESSION['partnerName_soa'])) {
     $_SESSION['partnerName_soa'] = '';
 }
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-        if($_SESSION['user_email'] === 'balb01013333' || $_SESSION['user_email'] === 'pera94005055' || $_SESSION['user_email'] === 'cill17098209' ){
-            header("Location:../../../index.php");
-            session_destroy();
-            exit();
-        }
-    }else{
-        header("Location:../../../index.php");
-        session_destroy();
-        exit();
-    }
+// prefer explicit session values for current user email and do not gate on role
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
+if (!empty($current_user_email) && in_array($current_user_email, ['balb01013333','pera94005055','cill17098209'], true)) {
+    header("Location:../../../index.php");
+    session_destroy();
+    exit();
 }
 
 ?>
@@ -351,7 +359,17 @@ if (isset($_SESSION['user_type'])) {
                                         <input type="text" id="preparedFix_signature" class="preparedFix_signature" name="preparedFix_signature" value="" readonly>
                                     </div>
                                     <div class="prepared-inp">
+                                        <div id="prepared-signature-block" style="display:none;">
+                                            <?php if (!empty($prepared_sig_blob)): ?>
+                                                <div style="text-align:center;margin-bottom:6px;">
+                                                    <img id="prepared-signature-preview" src="data:image/png;base64,<?php echo base64_encode($prepared_sig_blob); ?>" alt="Signature" style="max-height:56px;display:block;margin:0 auto;object-fit:contain;" />
+                                                </div>
+                                            <?php else: ?>
+                                                <div id="prepared-signature-missing" style="text-align:center;margin-bottom:6px;color:#6c757d;font-size:12px;">No signature</div>
+                                            <?php endif; ?>
+                                        </div>
                                         <input type="text" id="preparedInput" class="preparedInput" name="preparedInput" value="" readonly>
+                                        <input type="hidden" id="prepared_signature_ref" name="prepared_signature" value="<?php echo htmlspecialchars($current_user_id ?? ''); ?>">
                                     </div>
                                     <div class="position-lbl">
                                         <label for="">Accounting Staff</label>
@@ -597,6 +615,8 @@ if (isset($_SESSION['user_type'])) {
             }
             document.addEventListener('DOMContentLoaded', function() {
                 var processButton = document.getElementById('process');
+                var preparedInput = document.getElementById('preparedInput');
+                var preparedSignatureBlock = document.getElementById('prepared-signature-block');
                 var amountInput = document.getElementById('amount');
                 var addAmountInput = document.getElementById('addAmount');
                 var numberOfDaysInput = document.getElementById('multiplyAmount');
@@ -688,7 +708,7 @@ if (isset($_SESSION['user_type'])) {
                         amountMinusWTax += addAmount * numOfDays;
                     }
 
-                    var userName = "<?php echo $_SESSION['user_name'] ?? $_SESSION['admin_name']; ?>"; // Retrieve the username from PHP session
+                    var userName = <?php echo json_encode($_SESSION['user_name'] ?? $_SESSION['admin_name'] ?? ''); ?>; // Retrieve the current user's full name from session
                     var fromDateInput = document.getElementById('from-date');
                     var fromDateDisplay = document.getElementById('from-date-range')
                     var toDateInput = document.getElementById('to-date');
@@ -699,7 +719,12 @@ if (isset($_SESSION['user_type'])) {
                     var serviceChargeValue = serviceChargeInput.value;
                     var transactionNumberValue = transactionNumberInput.value;
 
-                    preparedInput.value = userName;
+                    if (preparedInput) {
+                        preparedInput.value = userName;
+                    }
+                    if (preparedSignatureBlock) {
+                        preparedSignatureBlock.style.display = 'block';
+                    }
                     if (formula.value === 'NON-VAT' && formula_withheld.value === 'Yes') {
                         amountDisplay.value = amount.toFixed(2);
                         totalAmountDisplay.value = formatNumber(amount);
@@ -919,5 +944,6 @@ if (isset($_SESSION['user_type'])) {
         </script>
     
     <?php include '../../../templates/footer.php'; ?>
+    <?php include '../no-signature-modal.php'; ?>
 </body>
 </html>

@@ -2,18 +2,14 @@
 include '../../../config/config.php';
 require '../../../vendor/autoload.php';
 session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 
-if (!isset($_SESSION['user_type'])) {
-    header('Location: ../../../index.php');
-    exit();
-}
+if (!function_exists('has_any_permission') || !has_any_permission(['Cancellation Report','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
-$current_user_email = '';
-if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-    $current_user_email = $_SESSION['admin_email'];
-} elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-    $current_user_email = $_SESSION['user_email'];
-}
+// prefer explicit session values for current user email; avoid role-based gating
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 // AJAX handler for fetching cancellation data
 if (isset($_POST['action']) && $_POST['action'] === 'get_cancellation_data') {
@@ -173,6 +169,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_cancellation_data') {
             color: #6c757d;
             border-color: #dee2e6;
         }
+        /* Export preview: keep header labels on a single line (no wrapping) */
+        #exportPreviewTable th { white-space: nowrap; }
+        #exportPreviewTable td { white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -271,6 +270,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_cancellation_data') {
                     <label class="form-label small text-muted mb-1">Rows</label>
                     <select id="rowsPerPage" class="form-select form-select-sm" style="width:auto;"><option value="5" selected>5</option><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select>
                 </div>
+                <div class="col-md-10 d-flex justify-content-end align-items-center">
+                    <button id="openExportModalBtn" class="btn btn-outline-secondary btn-sm me-2">Export</button>
+                </div>
             </div>
         </div>
     </div>
@@ -313,6 +315,432 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_cancellation_data') {
 </div>
 <?php include '../../../templates/footer.php'; ?>
 <script>
+// --- Export modal & preview logic ---
+// Build a 5-row sample dataset for preview (UI-only sample)
+function getSampleRows() {
+    return [
+        { report_date: '2026-03-09', cancellation_datetime: '2026-03-08 10:12:00', sendout_datetime: '2026-03-07 08:00:00', partner_name: 'JT Enterprises', reference_no: 'REF001', control_no: 'CTL001', account_no: 'ACC001', account_name: 'Juan Dela Cruz', payor: 'John', ir_no: 'IR001', principal_amount: 1250.50, cancellation_charge: 50.00, charge_to_customer: 50.00, charge_to_partner: 0.00, resource: 'KPX', branch_name: 'Main Branch', remote_operator: 'OP01', remote_branch: 'RB01' },
+        { report_date: '2026-03-09', cancellation_datetime: '2026-03-08 11:20:00', sendout_datetime: '2026-03-07 09:00:00', partner_name: 'ABC Trading', reference_no: 'REF002', control_no: 'CTL002', account_no: 'ACC002', account_name: 'Maria Santos', payor: 'Maria', ir_no: 'IR002', principal_amount: 2300.00, cancellation_charge: 75.00, charge_to_customer: 75.00, charge_to_partner: 0.00, resource: 'KP7', branch_name: 'North Branch', remote_operator: 'OP02', remote_branch: 'RB02' },
+        { report_date: '2026-03-09', cancellation_datetime: '2026-03-08 12:05:00', sendout_datetime: '2026-03-07 10:00:00', partner_name: 'Global Supply', reference_no: 'REF003', control_no: 'CTL003', account_no: 'ACC003', account_name: 'Pedro Reyes', payor: 'Pedro', ir_no: 'IR003', principal_amount: 500.75, cancellation_charge: 25.00, charge_to_customer: 25.00, charge_to_partner: 0.00, resource: 'KPX', branch_name: 'South Branch', remote_operator: 'OP03', remote_branch: 'RB03' },
+        { report_date: '2026-03-09', cancellation_datetime: '2026-03-08 13:33:00', sendout_datetime: '2026-03-07 11:00:00', partner_name: 'JT Enterprises', reference_no: 'REF004', control_no: 'CTL004', account_no: 'ACC004', account_name: 'Ana Lopez', payor: 'Ana', ir_no: 'IR004', principal_amount: 150.00, cancellation_charge: 10.00, charge_to_customer: 10.00, charge_to_partner: 0.00, resource: 'KP7', branch_name: 'East Branch', remote_operator: 'OP04', remote_branch: 'RB04' },
+        { report_date: '2026-03-09', cancellation_datetime: '2026-03-08 14:40:00', sendout_datetime: '2026-03-07 12:00:00', partner_name: 'Alpha Co', reference_no: 'REF005', control_no: 'CTL005', account_no: 'ACC005', account_name: 'Lito Cruz', payor: 'Lito', ir_no: 'IR005', principal_amount: 980.00, cancellation_charge: 40.00, charge_to_customer: 40.00, charge_to_partner: 0.00, resource: 'KPX', branch_name: 'West Branch', remote_operator: 'OP05', remote_branch: 'RB05' }
+    ];
+}
+
+function buildExportColumns(includePartnerColumn, partnerColumnLast) {
+    // Base columns in the order desired; partner column will be inserted/removed per rules
+    var cols = [
+        { key: 'no', label: 'No.' },
+        { key: 'report_date', label: 'Report Date' },
+        { key: 'cancellation_datetime', label: 'Cancellation Date/Time' },
+        { key: 'sendout_datetime', label: 'Sendout Date/Time' },
+        { key: 'reference_no', label: 'Reference No.' },
+        { key: 'control_no', label: 'Control No' },
+        { key: 'account_no', label: 'Account No' },
+        { key: 'account_name', label: 'Account Name' },
+        { key: 'payor', label: 'Payor' },
+        { key: 'ir_no', label: 'IR No.' },
+        { key: 'principal_amount', label: 'Amount' },
+        { key: 'cancellation_charge', label: 'Cancellation Charge' },
+        { key: 'charge_to_customer', label: 'Charge To Customer' },
+        { key: 'charge_to_partner', label: 'Charge to Partner' },
+        { key: 'resource', label: 'Resource' },
+        { key: 'branch_name', label: 'Branch Name' },
+        { key: 'remote_operator', label: 'Remote Operator' },
+        { key: 'remote_branch', label: 'Remote Branch' }
+    ];
+
+    if (includePartnerColumn) {
+        var partnerCol = { key: 'partner_name', label: 'Partner Name' };
+        if (partnerColumnLast) cols.push(partnerCol); else cols.unshift(partnerCol);
+    }
+
+    return cols;
+}
+
+function renderExportPreview() {
+    var partner = $('#partnerlistDropdown').val();
+    var start = $('#start_date').val();
+    var end = $('#end_date').val();
+
+    var includePartner = !partner || partner === '' || partner === 'All' ? true : false;
+    // In Case1 (no specific partner) partner column should be LAST (after Remote Branch)
+    var cols = buildExportColumns(includePartner, includePartner);
+
+    var sample = getSampleRows().slice(0,5);
+
+    // Build table head
+    var thead = $('#exportPreviewTable thead'); thead.empty();
+    var headRow = $('<tr></tr>');
+    cols.forEach(function(c){ headRow.append('<th>'+c.label+'</th>'); });
+    thead.append(headRow);
+
+    // Build table body with 5 sample rows
+    var tbody = $('#exportPreviewTable tbody'); tbody.empty();
+    sample.forEach(function(r, idx){
+        var tr = $('<tr></tr>');
+        cols.forEach(function(c){
+            var v;
+            if (c.key === 'no') {
+                v = idx + 1;
+            } else {
+                v = r[c.key];
+                if (c.key === 'principal_amount' || c.key === 'cancellation_charge' || c.key === 'charge_to_customer' || c.key === 'charge_to_partner') {
+                    v = formatPHP(v);
+                }
+            }
+            tr.append('<td>' + (v === undefined ? '' : v) + '</td>');
+        });
+        tbody.append(tr);
+    });
+
+    // Update partner header area (for Case 2)
+    if (!includePartner) {
+        $('#exportPartnerHeader').show().text('Partner Name: ' + partner);
+    } else {
+        $('#exportPartnerHeader').hide().text('');
+    }
+}
+
+// Build pages select and modal pagination based on total rows and main rows_per_page
+function buildExportPagesUI(totalRows, rowsPerPageMain, currentPage) {
+    var total = parseInt(totalRows) || 0;
+    var rpp = parseInt(rowsPerPageMain) || parseInt($('#rowsPerPage').val()||5);
+    var pages = rpp > 0 ? Math.max(1, Math.ceil(total / rpp)) : 1;
+
+    var select = $('#exportPagesSelect');
+    // preserve user-configured selection/input
+    var prevSelectVal = select.val();
+    var prevInputVal = $('#exportPagesInput').val();
+    select.empty();
+    select.append('<option value="All">All</option>');
+    for (var i=1;i<=pages;i++) select.append('<option value="'+i+'">'+i+'</option>');
+    // restore previous export configuration selection/input if still valid
+    if (prevSelectVal !== undefined && select.find('option[value="'+prevSelectVal+'"]').length) {
+        select.val(prevSelectVal);
+    }
+    if (prevInputVal !== undefined) $('#exportPagesInput').val(prevInputVal);
+    // Do NOT overwrite user's export configuration otherwise
+    var curSel = parseInt(currentPage) || 1;
+
+    // build compact pagination controls (place them in the right-side container)
+    var container = $('#exportModalPaginationContainer');
+    container.empty();
+
+    // create pagination nav with limited numeric buttons and ellipses for large page counts
+    var pagNav = $('<nav aria-label="Export pages"><ul id="exportModalPagination" class="pagination pagination-sm mb-0"></ul></nav>');
+    var pag = pagNav.find('#exportModalPagination');
+
+    // helper to push a page button
+    function pushPageButton(p, active) {
+        var li = $('<li class="page-item" data-page="'+p+'"></li>');
+        if (active) li.addClass('active');
+        var a = $('<a href="#" class="page-link export-page-link" data-page="'+p+'">'+p+'</a>');
+        li.append(a); pag.append(li);
+    }
+
+    // previous button
+    pag.append('<li class="page-item"><a href="#" class="page-link export-page-prev" aria-label="Previous">&laquo;</a></li>');
+
+    var current = parseInt(currentPage) || curSel || 1;
+
+    var maxButtons = 5; // show at most 5 numeric buttons (first, last, and up to 3 middle)
+    if (pages <= maxButtons) {
+        for (var p=1;p<=pages;p++) pushPageButton(p, p===current);
+    } else {
+        // always show first
+        pushPageButton(1, current===1);
+        var middleCount = maxButtons - 2; // slots for middle buttons
+        var half = Math.floor(middleCount/2);
+        var left = current - half;
+        var right = left + middleCount - 1;
+        if (left < 2) { left = 2; right = left + middleCount - 1; }
+        if (right > pages-1) { right = pages-1; left = right - middleCount + 1; }
+        if (left > 2) pag.append('<li class="page-item disabled"><span class="page-link">&hellip;</span></li>');
+        for (var p=left;p<=right;p++) pushPageButton(p, p===current);
+        if (right < pages-1) pag.append('<li class="page-item disabled"><span class="page-link">&hellip;</span></li>');
+        // always show last
+        pushPageButton(pages, current===pages);
+    }
+
+    // next button
+    pag.append('<li class="page-item"><a href="#" class="page-link export-page-next" aria-label="Next">&raquo;</a></li>');
+
+    container.append(pagNav);
+    // mark active page in pagination (highlight) without touching export inputs
+    if (curSel) {
+        pag.find('.page-item').removeClass('active');
+        pag.find('.page-link[data-page="'+curSel+'"]').closest('.page-item').addClass('active');
+    }
+}
+
+// Fetch actual data for the selected page (uses main UI rowsPerPage to compute which records are on that page)
+function fetchExportPreviewPage(page) {
+    page = parseInt(page) || 1;
+    var post = {
+        action: 'get_cancellation_data',
+        page: page,
+        rows_per_page: parseInt($('#rowsPerPage').val()||5),
+        start_date: $('#start_date').val(),
+        end_date: $('#end_date').val(),
+        partner: $('#partnerlistDropdown').val(),
+        source_file: $('#source_file_filter').val(),
+        region: $('#region_filter').val(),
+        branch: $('#branchDropdown').val(),
+        search: $('#search_input').val()
+    };
+
+    $.post(location.href, post, function(resp){
+        if (!resp || !resp.success) {
+            // fallback to sample
+            renderExportPreview();
+            return;
+        }
+
+        // update last query info
+        window.cancellation_last_query = { total: resp.pagination.total || 0, rows_per_page: resp.pagination.rows_per_page || post.rows_per_page, current_page: resp.pagination.page || page };
+
+        var partner = post.partner;
+        var includePartner = !partner || partner === '' || partner === 'All' ? true : false;
+        var cols = buildExportColumns(includePartner, includePartner);
+
+        // build head
+        var thead = $('#exportPreviewTable thead'); thead.empty();
+        var headRow = $('<tr></tr>'); cols.forEach(function(c){ headRow.append('<th>'+c.label+'</th>'); }); thead.append(headRow);
+
+        // build body showing only first 5 rows from resp.data
+        var tbody = $('#exportPreviewTable tbody'); tbody.empty();
+        var rows = resp.data || [];
+        var previewRows = rows.slice(0,5);
+        if (previewRows.length === 0) {
+            tbody.append('<tr><td colspan="'+cols.length+'" class="text-center">No data for this page</td></tr>');
+        } else {
+                previewRows.forEach(function(r, idx){
+                    var tr = $('<tr></tr>');
+                    cols.forEach(function(c){
+                        var v;
+                        if (c.key === 'no') {
+                            var offset = ((page-1) * post.rows_per_page) || 0;
+                            v = offset + idx + 1;
+                        } else {
+                            v = r[c.key];
+                            if (c.key === 'principal_amount' || c.key === 'cancellation_charge' || c.key === 'charge_to_customer' || c.key === 'charge_to_partner') v = formatPHP(v);
+                        }
+                        tr.append('<td>' + (v === undefined ? '' : v) + '</td>');
+                    });
+                    tbody.append(tr);
+                });
+        }
+
+        // update partner header area
+        if (!includePartner) { $('#exportPartnerHeader').show().text('Partner Name: ' + partner); } else { $('#exportPartnerHeader').hide().text(''); }
+
+        // rebuild pages UI so dropdown/pagination reflect latest totals and current page
+        buildExportPagesUI(window.cancellation_last_query.total, window.cancellation_last_query.rows_per_page, window.cancellation_last_query.current_page);
+
+        // highlight current page in modal pagination
+        $('#exportModalPagination .page-item').removeClass('active');
+        $('#exportModalPagination .page-link[data-page="'+page+'"]').closest('.page-item').addClass('active');
+
+    }, 'json');
+}
+
+// helper to convert preview to CSV and trigger download (UI placeholder)
+function downloadPreviewCSV() {
+    var partner = $('#partnerlistDropdown').val();
+    var includePartner = !partner || partner === '' || partner === 'All' ? true : false;
+    var cols = buildExportColumns(includePartner, includePartner);
+
+    // parse pages input (supports All, single number, ranges like 1-3, and lists like 1,3,5)
+    var raw = ($('#exportPagesInput').val() || '').trim();
+
+    // determine total pages from last query (fallback to 1)
+    var last = window.cancellation_last_query || { total: 0, rows_per_page: parseInt($('#rowsPerPage').val()||5) };
+    var totalPages = Math.max(1, Math.ceil((last.total || 0) / (last.rows_per_page || parseInt($('#rowsPerPage').val()||5))));
+
+    function parsePages(rawStr) {
+        if (!rawStr) return [1];
+        if (/^\s*All\s*$/i.test(rawStr)) {
+            var a = []; for (var i=1;i<=totalPages;i++) a.push(i); return a;
+        }
+        var set = {};
+        rawStr.split(',').forEach(function(tok){
+            tok = tok.trim();
+            if (!tok) return;
+            var m = tok.match(/^(\d+)\s*-\s*(\d+)$/);
+            if (m) {
+                var s = parseInt(m[1]), e = parseInt(m[2]);
+                if (s>e) { var t=s; s=e; e=t; }
+                for (var p=s;p<=e;p++) if (p>=1 && p<=totalPages) set[p]=true;
+            } else {
+                var n = parseInt(tok);
+                if (!isNaN(n) && n>=1 && n<=totalPages) set[n]=true;
+            }
+        });
+        var out = Object.keys(set).map(function(x){ return parseInt(x); }).sort(function(a,b){return a-b;});
+        if (out.length === 0) out = [1];
+        return out;
+    }
+
+    var pagesToFetch = parsePages(raw);
+
+    // Build CSV by fetching each page's actual data from server (without touching main table)
+    var rowsPerPage = parseInt($('#rowsPerPage').val()||5);
+    var ajaxes = pagesToFetch.map(function(p){
+        return $.post(location.href, { action: 'get_cancellation_data', page: p, rows_per_page: rowsPerPage, start_date: $('#start_date').val(), end_date: $('#end_date').val(), partner: $('#partnerlistDropdown').val(), source_file: $('#source_file_filter').val(), region: $('#region_filter').val(), branch: $('#branchDropdown').val(), search: $('#search_input').val() }, null, 'json');
+    });
+
+    // wait for all AJAX calls
+    $.when.apply($, ajaxes).done(function() {
+        // arguments handling: when multiple deferreds, arguments is array of arrays; when one, it's single response
+        var responses = [];
+        if (ajaxes.length === 1) {
+            responses.push(arguments[0]);
+        } else {
+            for (var i=0;i<arguments.length;i++) responses.push(arguments[i][0]);
+        }
+
+        var lines = [];
+        // If specific partner selected, add a single top row: A1=label, B1=value
+        if (!includePartner) {
+            lines.push('"' + 'Partner Name'.replace(/"/g,'""') + '","' + partner.replace(/"/g,'""') + '"');
+        }
+
+        // header
+        lines.push(cols.map(function(c){ return '"' + c.label.replace(/"/g,'""') + '"'; }).join(','));
+
+        responses.forEach(function(resp){
+            if (!resp || !resp.success) return;
+            var dataRows = resp.data || [];
+            var pageNum = resp.pagination && resp.pagination.page ? parseInt(resp.pagination.page) : null;
+            var offset = pageNum ? ((pageNum - 1) * rowsPerPage) : 0;
+            dataRows.forEach(function(r, idx){
+                var line = cols.map(function(c){
+                    var v;
+                    if (c.key === 'no') {
+                        v = offset + idx + 1;
+                    } else {
+                        v = r[c.key] === undefined ? '' : r[c.key];
+                        if (typeof v === 'number') v = v.toFixed(2);
+                    }
+                    return '"' + String(v).replace(/"/g,'""') + '"';
+                }).join(',');
+                lines.push(line);
+            });
+        });
+
+        var csv = lines.join('\n');
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'cancellation_export.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+    }).fail(function(){
+        alert('Failed to fetch data for export. Please try again.');
+    });
+}
+
+// create modal markup and append to body once
+$(function(){
+    var modalHtml = `
+    <div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Export Preview - Cancellation Report</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div id="exportPartnerHeader" style="font-weight:700;margin-bottom:8px;display:none;"></div>
+            <div class="table-responsive" style="max-height:60vh;overflow:auto;">
+                <table class="table table-sm table-bordered" id="exportPreviewTable">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="mt-3 d-flex justify-content-between align-items-center">
+                <div class="d-flex gap-2 align-items-center">
+                    <label class="mb-0">Pages:</label>
+                    <select id="exportPagesSelect" class="form-select form-select-sm" style="width:auto;">
+                        <option value="All">All</option>
+                        <option value="1" selected>1</option>
+                    </select>
+                    <div style="width:8px"></div>
+                    <label class="mb-0">Or enter pages:</label>
+                    <input id="exportPagesInput" class="form-control form-control-sm" style="width:220px;" placeholder="e.g. 1,3,4 or 1-4 or All" value="1">
+                </div>
+                <div id="exportModalPaginationContainer"></div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" id="downloadExportBtn" class="btn btn-danger">Download (CSV preview)</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+    $('body').append(modalHtml);
+
+    // Wire modal events
+    $('#openExportModalBtn').on('click', function(){
+        var last = window.cancellation_last_query || { total:0, rows_per_page: parseInt($('#rowsPerPage').val()||5), current_page:1 };
+        buildExportPagesUI(last.total, last.rows_per_page, last.current_page);
+        // load preview for current page by default
+        fetchExportPreviewPage(last.current_page || 1);
+        var modal = new bootstrap.Modal(document.getElementById('exportModal'));
+        modal.show();
+    });
+
+    // when filters change on main UI, update modal pages UI and preview if modal open
+    $('#partnerlistDropdown, #start_date, #end_date, #rowsPerPage, #source_file_filter, #region_filter, #branchDropdown, #search_input').on('change', function(){
+        var last = window.cancellation_last_query || { total:0, rows_per_page: parseInt($('#rowsPerPage').val()||5), current_page:1 };
+        buildExportPagesUI(last.total, last.rows_per_page, last.current_page);
+        // if modal is visible, refresh preview
+        if ($('#exportModal').hasClass('show')) fetchExportPreviewPage(last.current_page || 1);
+    });
+
+    // pages select change -> only update the export input (do NOT change main table pagination)
+    $(document).on('change', '#exportPagesSelect', function(e){ e.stopPropagation(); var v = $(this).val(); if (v === 'All') { $('#exportPagesInput').val('All'); } else { $('#exportPagesInput').val(v); } /* no table navigation triggered here */ });
+
+    // modal pagination numeric button click -> update export input and refresh modal preview only
+    $(document).on('click', '#exportModalPaginationContainer .export-page-link', function(e){
+        e.preventDefault(); e.stopPropagation();
+        var p = parseInt($(this).data('page'));
+        if (!isNaN(p)) {
+            // Only update modal preview and pagination highlight; do NOT change export configuration inputs
+            fetchExportPreviewPage(p);
+        }
+    });
+
+    // prev/next buttons
+    $(document).on('click', '#exportModalPaginationContainer .export-page-prev', function(e){
+        e.preventDefault(); e.stopPropagation();
+        // determine current from active page button or exportPagesSelect
+        var active = parseInt($('#exportModalPagination .page-item.active').data('page')) || parseInt($('#exportPagesSelect').val()) || 1;
+        var target = Math.max(1, active - 1);
+        fetchExportPreviewPage(target);
+    });
+    $(document).on('click', '#exportModalPaginationContainer .export-page-next', function(e){
+        e.preventDefault(); e.stopPropagation();
+        var last = window.cancellation_last_query || { total:0, rows_per_page: parseInt($('#rowsPerPage').val()||5) };
+        var totalPages = Math.max(1, Math.ceil((last.total||0)/(last.rows_per_page||parseInt($('#rowsPerPage').val()||5))));
+        var active = parseInt($('#exportModalPagination .page-item.active').data('page')) || parseInt($('#exportPagesSelect').val()) || 1;
+        var target = Math.min(totalPages, active + 1);
+        fetchExportPreviewPage(target);
+    });
+
+    // removed jump input handlers (jump input removed)
+
+    $(document).on('click', '#downloadExportBtn', function(){ downloadPreviewCSV(); });
+});
+
+// --- end export modal & preview logic ---
 function formatPHP(n){ return '₱ ' + (parseFloat(n||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})); }
 function formatLongDate(d) {
     if (!d) return '';
@@ -323,10 +751,57 @@ function formatLongDate(d) {
         return dt.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' });
     } catch (e) { return d; }
 }
+// Build a compact, scalable main pagination UI inside #pagination
+function buildMainPagination(totalRows, currentPage, rowsPerPage) {
+    var total = parseInt(totalRows) || 0;
+    var rpp = parseInt(rowsPerPage) || parseInt($('#rowsPerPage').val()||5);
+    var pages = rpp > 0 ? Math.max(1, Math.ceil(total / rpp)) : 1;
+
+    var pg = $('#pagination'); pg.empty();
+
+    // helper to create page item
+    function liFor(p, active) {
+        return `<li class="page-item ${active? 'active':''}"><a class="page-link" href="#" data-page="${p}">${p}</a></li>`;
+    }
+
+    // prev
+    var prevPage = Math.max(1, (currentPage||1) - 1);
+    pg.append(`<li class="page-item"><a class="page-link" href="#" data-page="${prevPage}">&laquo;</a></li>`);
+
+    var maxButtons = 5;
+    var cur = parseInt(currentPage) || 1;
+    if (pages <= maxButtons) {
+        for (var i=1;i<=pages;i++) pg.append(liFor(i, i===cur));
+    } else {
+        pg.append(liFor(1, cur===1));
+        var middleCount = maxButtons - 2;
+        var half = Math.floor(middleCount/2);
+        var left = cur - half;
+        var right = left + middleCount - 1;
+        if (left < 2) { left = 2; right = left + middleCount - 1; }
+        if (right > pages-1) { right = pages-1; left = right - middleCount + 1; }
+        if (left > 2) pg.append('<li class="page-item disabled"><span class="page-link">&hellip;</span></li>');
+        for (var p=left;p<=right;p++) pg.append(liFor(p, p===cur));
+        if (right < pages-1) pg.append('<li class="page-item disabled"><span class="page-link">&hellip;</span></li>');
+        pg.append(liFor(pages, cur===pages));
+    }
+
+    var nextPage = Math.min(pages, cur + 1);
+    pg.append(`<li class="page-item"><a class="page-link" href="#" data-page="${nextPage}">&raquo;</a></li>`);
+
+    // Append a jump input as a list item
+    // (No jump input for main pagination by design)
+}
 function loadCancellations(page=1){
     const post = { action: 'get_cancellation_data', page: page, rows_per_page: parseInt($('#rowsPerPage').val()||5), start_date: $('#start_date').val(), end_date: $('#end_date').val(), partner: $('#partnerlistDropdown').val(), search: $('#search_input').val() };
     $.post(location.href, post, function(resp){
         if(!resp || !resp.success) return;
+        // store last query info for export modal (total rows and rows per page used in main UI)
+        window.cancellation_last_query = {
+            total: resp.pagination.total || 0,
+            rows_per_page: resp.pagination.rows_per_page || parseInt($('#rowsPerPage').val()||5),
+            current_page: resp.pagination.page || page
+        };
         const tbody = $('#resultsTable tbody'); tbody.empty();
         resp.data.forEach(function(r, idx){
             const no = ((resp.pagination.page-1) * resp.pagination.rows_per_page) + idx + 1;
@@ -352,14 +827,14 @@ function loadCancellations(page=1){
                 <td>${r.remote_branch||''}</td>
             </tr>`);
         });
-        // pagination
-        const total = resp.pagination.total; const rpp = resp.pagination.rows_per_page; const pages = Math.ceil(total / rpp);
-        const pg = $('#pagination'); pg.empty();
-        for(let i=1;i<=pages;i++){ pg.append(`<li class="page-item ${i===resp.pagination.page?'active':''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`); }
+        // pagination (use scalable pager)
+        const total = resp.pagination.total; const rpp = resp.pagination.rows_per_page;
+        buildMainPagination(total, resp.pagination.page, rpp);
         // totals display removed per UI request
     }, 'json');
 }
 $(document).on('click', '#pagination .page-link', function(e){ e.preventDefault(); loadCancellations(parseInt($(this).data('page'))); });
+// main pagination has no jump 'Go' control
 $('#searchButton').on('click', function(){ loadCancellations(1); });
 $('#rowsPerPage').on('change', function(){ loadCancellations(1); });
 $(document).ready(function(){

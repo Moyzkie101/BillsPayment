@@ -5,28 +5,14 @@ require '../../../vendor/autoload.php';
 
 // Start the session
 session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Settlement Per Bank','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    } else {
-        // Redirect to login page if user_type is invalid
-        header("Location: ../../../index.php");
-        session_abort();
-        session_destroy();
-        exit();
-    }
-} else {
-    // Redirect to login page if user_type is not set
-    header("Location: ../../../index.php");
-    session_abort();
-    session_destroy();
-    exit();
-}
+// prefer explicit session values for current user email; don't gate on role
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 // get display dropdown menu for partners
 if (isset($_POST['action']) && $_POST['action'] === 'get_partner_list') {
@@ -212,6 +198,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_settle_status') {
         $partnerIdKpx = $_POST['partner_id_kpx'] ?? '';
         $partnerIds = $_POST['partner_ids'] ?? ($_POST['partner_ids[]'] ?? []);
         $partnerIdKpxs = $_POST['partner_id_kpxs'] ?? ($_POST['partner_id_kpxs[]'] ?? []);
+        $filterType = strtolower(trim($_POST['filterType'] ?? ''));
         $startDate = $_POST['startDate'] ?? '';
         $endDate = $_POST['endDate'] ?? '';
 
@@ -291,11 +278,33 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_settle_status') {
 
         $params = array_merge($params, $whereParams);
 
-        if ($startDate !== '' && $endDate !== '') {
-            $sql .= " AND DATE(datetime) BETWEEN ? AND ?";
+        // Apply date filter scope based on selected time frame to avoid updating all historical rows.
+        // Fall back to cancellation_date when datetime is empty so cancelled rows can still be settled/unsettled.
+        if ($filterType === 'daily') {
+            if ($startDate !== '') {
+                $sql .= " AND DATE(CASE WHEN datetime IS NULL THEN cancellation_date ELSE datetime END) = ?";
+                $types .= 's';
+                $params[] = $startDate;
+            }
+        } elseif ($filterType === 'monthly') {
+            if ($startDate !== '') {
+                $monthStart = $startDate . '-01';
+                $monthEnd = date('Y-m-t', strtotime($monthStart));
+                $sql .= " AND DATE(CASE WHEN datetime IS NULL THEN cancellation_date ELSE datetime END) BETWEEN ? AND ?";
+                $types .= 'ss';
+                $params[] = $monthStart;
+                $params[] = $monthEnd;
+            }
+        } elseif ($startDate !== '' && $endDate !== '') {
+            $sql .= " AND DATE(CASE WHEN datetime IS NULL THEN cancellation_date ELSE datetime END) BETWEEN ? AND ?";
             $types .= 'ss';
             $params[] = $startDate;
             $params[] = $endDate;
+        } elseif ($startDate !== '') {
+            // Safe fallback for single-date inputs.
+            $sql .= " AND DATE(CASE WHEN datetime IS NULL THEN cancellation_date ELSE datetime END) = ?";
+            $types .= 's';
+            $params[] = $startDate;
         }
 
         $stmt = $conn->prepare($sql);
@@ -444,11 +453,29 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         $partnerListWhereClause = ' AND ' . implode(' AND ', $partnerListConditions);
     }
 
-    $types = $partnerListTypes . $dateTypesPerCte . $dateTypesPerCte;
-    $params = array_merge($partnerListParams, $dateParamsPerCte, $dateParamsPerCte);
+    // The query uses date placeholders in seven places:
+    // summary_vol(datetime + cancellation), adjustment_vol(datetime + cancellation),
+    // transaction_data(datetime + cancellation), and principal_adjustment_data(posting_date)
+    $types = $partnerListTypes . str_repeat($dateTypesPerCte, 7);
+    $params = array_merge(
+        $partnerListParams,
+        $dateParamsPerCte,
+        $dateParamsPerCte,
+        $dateParamsPerCte,
+        $dateParamsPerCte,
+        $dateParamsPerCte,
+        $dateParamsPerCte,
+        $dateParamsPerCte
+    );
+
+    // Ensure date conditions use the correct table alias inside CTEs.
+    $dateConditionForBT = str_replace('mbt.', 'bt.', $transactionDateCondition);
+    $cancellationDateConditionForBT = str_replace('bt.datetime', 'bt.cancellation_date', $dateConditionForBT);
+    $cancellationDateConditionForMBT = str_replace('mbt.datetime', 'mbt.cancellation_date', $transactionDateCondition);
 
     $dataQuery = "WITH partner_name_list AS (
                     SELECT
+                        COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
                         mpm.partner_id,
                         mpm.partner_id_kpx,
                         mpm.partner_name,
@@ -463,12 +490,78 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     WHERE mpm.status = 'ACTIVE'
                     $partnerListWhereClause
                 ),
+                summary_vol AS (
+                    SELECT
+                        CASE
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
+                        END COLLATE utf8mb4_general_ci AS partner_key,
+                        CASE
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            ELSE bt.partner_name
+                        END AS partner_name,
+                        MAX(bt.sub_billers_name) AS sub_billers_name,
+                        COUNT(*) AS vol1,
+                        SUM(bt.amount_paid) AS principal1,
+                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
+                    FROM mldb.billspayment_transaction AS bt
+                    WHERE ($dateConditionForBT OR $cancellationDateConditionForBT)
+                        AND bt.status IS NULL
+                        AND NOT bt.branch_id IN ('1','2','4937','4938','4962','4987','4993','4944')
+                    GROUP BY
+                        CASE
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
+                        END COLLATE utf8mb4_general_ci,
+                        CASE
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            ELSE bt.partner_name
+                        END
+                ),
+                adjustment_vol AS (
+                    SELECT
+                        CASE
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
+                        END COLLATE utf8mb4_general_ci AS partner_key,
+                        CASE
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            ELSE bt.partner_name
+                        END AS partner_name,
+                        MAX(bt.sub_billers_name) AS sub_billers_name,
+                        COUNT(*) AS vol2,
+                        SUM(bt.amount_paid) AS principal2,
+                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
+                    FROM mldb.billspayment_transaction AS bt
+                    WHERE ($dateConditionForBT OR $cancellationDateConditionForBT)
+                        AND bt.status = '*'
+                        AND NOT bt.branch_id IN ('1','2','4937','4938','4962','4987','4993','4944')
+                    GROUP BY
+                        CASE
+                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
+                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
+                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
+                        END COLLATE utf8mb4_general_ci,
+                        CASE
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            ELSE bt.partner_name
+                        END
+                ),
                 transaction_data AS (
                     SELECT
-                        mbt.partner_id,
-                            mbt.partner_id_kpx,
-                            SUM(CASE WHEN mbt.settle_unsettle IS NULL OR TRIM(mbt.settle_unsettle) = '' OR UPPER(TRIM(mbt.settle_unsettle)) = 'UNSETTLE' THEN 1 ELSE 0 END) AS unsettled_count,
-                            COUNT(*) AS volume_count,
+                        CASE
+                            WHEN UPPER(TRIM(COALESCE(mbt.sub_billers_name, ''))) IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                                THEN mbt.sub_billers_name
+                            WHEN UPPER(TRIM(COALESCE(mbt.partner_name, ''))) = 'SECURITY BANK'
+                                AND (mbt.sub_billers_name IS NULL OR TRIM(mbt.sub_billers_name) = '')
+                                THEN mbt.partner_name
+                            ELSE mbt.partner_name
+                        END AS owner_name,
+                        SUM(CASE WHEN mbt.settle_unsettle IS NULL OR TRIM(mbt.settle_unsettle) = '' OR UPPER(TRIM(mbt.settle_unsettle)) = 'UNSETTLE' THEN 1 ELSE 0 END) AS unsettled_count,
+                        COUNT(*) AS volume_count,
                         SUM(mbt.amount_paid) AS principal_amount_paid,
                         SUM(mbt.charge_to_customer + mbt.charge_to_partner) AS charges
                     FROM mldb.billspayment_transaction mbt
@@ -482,13 +575,18 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         AND NULLIF(TRIM(mbt.reference_no), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(msabt.reference_no), '') COLLATE utf8mb4_0900_ai_ci
                     WHERE mbt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
                         AND msabt.reason_note IS NULL
-                        AND $transactionDateCondition 
-                    GROUP BY mbt.partner_id, mbt.partner_id_kpx
+                        AND ($transactionDateCondition OR $cancellationDateConditionForMBT)
+                    GROUP BY owner_name
                 ),
                 principal_adjustment_data AS (
                     SELECT
-                        msabt.partner_id,
-                        msabt.partner_id_kpx,
+                        CASE
+                            WHEN UPPER(TRIM(COALESCE(msabt.partner_name, ''))) IN ('MYLORA CORPORATION', 'JUNANS MARKETING')
+                                THEN msabt.partner_name
+                            WHEN UPPER(TRIM(COALESCE(msabt.partner_name, ''))) = 'SECURITY BANK'
+                                THEN msabt.partner_name
+                            ELSE msabt.partner_name
+                        END AS owner_name,
                         SUM(
                             CASE
                                 WHEN LOWER(TRIM(msabt.reason_note)) = 'late-posting'
@@ -509,42 +607,144 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         ) AS charges
                     FROM mldb.settle_adjustment_branch_transaction msabt
                     WHERE $settlementDateCondition
-                    GROUP BY msabt.partner_id, msabt.partner_id_kpx
+                    GROUP BY owner_name
+                ),
+                all_partners AS (
+                    SELECT DISTINCT partner_name
+                    FROM partner_name_list
+                    WHERE partner_name IS NOT NULL AND TRIM(partner_name) <> ''
+                    UNION
+                    SELECT DISTINCT partner_name
+                    FROM summary_vol
+                    WHERE partner_name IS NOT NULL AND TRIM(partner_name) <> ''
+                    UNION
+                    SELECT DISTINCT partner_name
+                    FROM adjustment_vol
+                    WHERE partner_name IS NOT NULL AND TRIM(partner_name) <> ''
+                    UNION
+                    SELECT DISTINCT owner_name AS partner_name
+                    FROM transaction_data
+                    WHERE owner_name IS NOT NULL AND TRIM(owner_name) <> ''
+                ),
+                partner_meta AS (
+                    SELECT
+                        partner_name,
+                        MAX(NULLIF(TRIM(partner_id), '')) AS partner_id,
+                        MAX(NULLIF(TRIM(partner_id_kpx), '')) AS partner_id_kpx,
+                        MAX(partner_accName) AS partner_accName,
+                        MAX(bank_accNumber) AS bank_accNumber,
+                        MAX(bank_name) AS bank_name,
+                        MAX(settled_online_check) AS settled_online_check,
+                        MAX(charge_to) AS charge_to,
+                        MAX(charge_sched) AS charge_sched
+                    FROM partner_name_list
+                    GROUP BY partner_name
+                ),
+                summary_totals AS (
+                    SELECT
+                        partner_name,
+                        SUM(COALESCE(vol1, 0)) AS summary_vol,
+                        SUM(COALESCE(principal1, 0)) AS summary_principal,
+                        SUM(COALESCE(charge1, 0)) AS summary_charges
+                    FROM summary_vol
+                    GROUP BY partner_name
+                ),
+                adjustment_totals AS (
+                    SELECT
+                        partner_name,
+                        SUM(COALESCE(vol2, 0)) AS adjustment_vol,
+                        SUM(COALESCE(ABS(principal2), 0)) AS adjustment_principal,
+                        SUM(COALESCE(ABS(charge2), 0)) AS adjustment_charges
+                    FROM adjustment_vol
+                    GROUP BY partner_name
+                ),
+                transaction_totals AS (
+                    SELECT
+                        owner_name AS partner_name,
+                        SUM(COALESCE(unsettled_count, 0)) AS has_unsettled,
+                        SUM(COALESCE(volume_count, 0)) AS volume_count,
+                        SUM(COALESCE(principal_amount_paid, 0)) AS principal_amount_paid,
+                        SUM(COALESCE(charges, 0)) AS charges
+                    FROM transaction_data
+                    GROUP BY owner_name
+                ),
+                principal_adjustment_totals AS (
+                    SELECT
+                        owner_name AS partner_name,
+                        SUM(COALESCE(principal_adjustment, 0)) AS principal_adjustment_raw,
+                        SUM(COALESCE(charges, 0)) AS settle_adjustment_charges
+                    FROM principal_adjustment_data
+                    GROUP BY owner_name
+                ),
+                base_totals AS (
+                    SELECT
+                        ap.partner_name,
+                        pm.partner_id,
+                        pm.partner_id_kpx,
+                        pm.partner_accName,
+                        pm.bank_accNumber,
+                        pm.bank_name,
+                        pm.settled_online_check,
+                        pm.charge_to,
+                        pm.charge_sched,
+                        COALESCE(tt.has_unsettled, 0) AS has_unsettled,
+                        COALESCE(tt.volume_count, 0) AS volume_count,
+                        COALESCE(tt.principal_amount_paid, 0) AS principal_amount_paid,
+                        COALESCE(tt.charges, 0) AS charges,
+                        COALESCE(st.summary_vol, 0) AS summary_vol,
+                        COALESCE(st.summary_principal, 0) AS summary_principal,
+                        COALESCE(st.summary_charges, 0) AS summary_charges,
+                        COALESCE(at.adjustment_vol, 0) AS adjustment_vol,
+                        COALESCE(at.adjustment_principal, 0) AS adjustment_principal,
+                        COALESCE(at.adjustment_charges, 0) AS adjustment_charges,
+                        COALESCE(pat.principal_adjustment_raw, 0) AS principal_adjustment_raw,
+                        COALESCE(pat.settle_adjustment_charges, 0) AS settle_adjustment_charges
+                    FROM all_partners ap
+                    LEFT JOIN partner_meta pm
+                        ON NULLIF(TRIM(pm.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(ap.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                    LEFT JOIN summary_totals st
+                        ON NULLIF(TRIM(st.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(ap.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                    LEFT JOIN adjustment_totals at
+                        ON NULLIF(TRIM(at.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(ap.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                    LEFT JOIN transaction_totals tt
+                        ON NULLIF(TRIM(tt.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(ap.partner_name), '') COLLATE utf8mb4_0900_ai_ci
+                    LEFT JOIN principal_adjustment_totals pat
+                        ON NULLIF(TRIM(pat.partner_name), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(ap.partner_name), '') COLLATE utf8mb4_0900_ai_ci
                 )
                 SELECT
-                    pml.partner_id,
-                    pml.partner_id_kpx,
-                    pml.partner_name,
-                    pml.partner_accName,
-                    pml.bank_accNumber,
-                    pml.bank_name,
-                    pml.settled_online_check,
-                    pml.charge_to,
-                    pml.charge_sched,
-                    COALESCE(td.unsettled_count, 0) AS has_unsettled,
-                    COALESCE(td.volume_count, 0) AS volume_count,
-                    COALESCE(td.principal_amount_paid, 0) AS principal_amount_paid,
-                    COALESCE(td.charges, 0) AS charges,
-                    COALESCE(pad.principal_adjustment - pad.charges, 0) AS principal_adjustment,
-                    CASE
-                        WHEN COALESCE(pad.principal_adjustment - pad.charges, 0) = 0
-                            THEN COALESCE(td.principal_amount_paid, 0)
-                        ELSE COALESCE((COALESCE(td.principal_amount_paid, 0) - COALESCE(td.charges, 0)) + (COALESCE(pad.principal_adjustment, 0) - COALESCE(pad.charges, 0)), 0)
-                    END AS amount_for_settlement
-                FROM partner_name_list pml
-                LEFT JOIN transaction_data td
-                    ON (
-                        NULLIF(TRIM(td.partner_id), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id), '') COLLATE utf8mb4_0900_ai_ci
-                        OR
-                        NULLIF(TRIM(td.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci
-                    )
-                LEFT JOIN principal_adjustment_data pad
-                    ON (
-                        NULLIF(TRIM(pad.partner_id), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id), '') COLLATE utf8mb4_0900_ai_ci
-                        OR
-                        NULLIF(TRIM(pad.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci = NULLIF(TRIM(pml.partner_id_kpx), '') COLLATE utf8mb4_0900_ai_ci
-                    )
-                ORDER BY pml.partner_name";
+                    bt.partner_id,
+                    bt.partner_id_kpx,
+                    bt.partner_name,
+                    bt.partner_name AS partner_name_raw,
+                    bt.partner_accName,
+                    bt.bank_accNumber,
+                    bt.bank_name,
+                    bt.settled_online_check,
+                    bt.charge_to,
+                    bt.charge_sched,
+                    bt.has_unsettled,
+                    bt.volume_count,
+                    bt.principal_amount_paid,
+                    bt.charges,
+                    -- Principal adjustment should reflect adjustment principal minus adjustment charges
+                    (bt.adjustment_principal - bt.adjustment_charges) AS principal_adjustment,
+                    -- Gross Total Transaction: show summary volume (not net)
+                    bt.summary_vol,
+                    bt.summary_principal,
+                    bt.summary_charges,
+                    bt.adjustment_vol,
+                    bt.adjustment_principal,
+                    bt.adjustment_charges,
+                    (bt.summary_vol - bt.adjustment_vol) AS net_vol,
+                    -- Gross total transaction column should be summary_vol per requirement
+                    bt.summary_vol AS net_total_transaction,
+                    (bt.summary_principal - bt.adjustment_principal) AS net_principal,
+                    (bt.summary_charges - bt.adjustment_charges) AS net_charges,
+                    -- Amount for settlement = (summary_principal - summary_charges) - (adjustment_principal - adjustment_charges)
+                    ((bt.summary_principal - bt.summary_charges) - (bt.adjustment_principal - bt.adjustment_charges)) AS amount_for_settlement
+                FROM base_totals bt
+                WHERE bt.partner_name IS NOT NULL
+                ORDER BY bt.partner_name";
 
     try {
         $stmt = $conn->prepare($dataQuery);
@@ -643,7 +843,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             <div class="bp-section-title">
                 <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
                 <div>
-                    <h2>Settlement Per Bank</h2>
+                    <h2>Settlement Per Bank - (UNDER CONSTRUCTION)</h2>
                     <!-- <p class="bp-section-sub">Sample Description</p> -->
                 </div>
             </div>
@@ -769,7 +969,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         
                         <div class="card-body">
                             <div class="table-responsive" id="tableContainer" style="overflow-y: auto;">
-                                <table id="transactionReportTable" class="table table-bordered table-hover table-striped">
+                                 <table id="transactionReportTable" class="table table-bordered table-hover table-striped">
                                     <thead class="table-light sticky-top">
                                         <tr>
                                             <th rowspan="2" class='text-truncate text-center align-middle'><input id="selectAllRows" type="checkbox" aria-label="Select all" /></th>
@@ -777,13 +977,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Partner Name</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Account Name</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Account Number</th>
-                                            <th colspan="3" class='text-truncate text-center align-middle'>Net Total Transaction</th>
+                                            <th colspan="3" class='text-truncate text-center align-middle'>Gross Total Transaction</th>
                                             <th class='text-truncate text-center align-middle'>Principal Adjustment</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Amount for Settlement</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Status</th>
                                         </tr>
                                         <tr>
-                                            <!-- Column header for Net -->
+                                            <!-- Column header for Gross -->
                                             <th class='text-center'>Vol.</th>
                                             <th class='text-center'>Principal</th>
                                             <th class='text-center'>Charge</th>
@@ -1297,11 +1497,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         }
 
         function performSettleAction(partnerIds, partnerIdKpxs, action, $rowOrRows, settlePayload = null) {
+            const filterType = $('select[name="filterType"]').val() || '';
             const startDate = $('input[name="startDate"]').val() || '';
             const endDate = $('input[name="endDate"]').val() || '';
             const data = {
                 action: 'update_settle_status',
                 status: action,
+                filterType: filterType,
                 startDate: startDate,
                 endDate: endDate
             };
@@ -1869,6 +2071,18 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 target.charges = toNumber(target.charges) + toNumber(source.charges);
                 target.principal_adjustment = toNumber(target.principal_adjustment) + toNumber(source.principal_adjustment);
                 target.amount_for_settlement = toNumber(target.amount_for_settlement) + toNumber(source.amount_for_settlement);
+                // aggregate summary/adjustment fields if present
+                target.summary_vol = toNumber(target.summary_vol) + toNumber(source.summary_vol);
+                target.summary_principal = toNumber(target.summary_principal) + toNumber(source.summary_principal);
+                target.summary_charges = toNumber(target.summary_charges) + toNumber(source.summary_charges);
+                target.adjustment_vol = toNumber(target.adjustment_vol) + toNumber(source.adjustment_vol);
+                target.adjustment_principal = toNumber(target.adjustment_principal) + toNumber(source.adjustment_principal);
+                target.adjustment_charges = toNumber(target.adjustment_charges) + toNumber(source.adjustment_charges);
+                // keep server-provided net if present, otherwise will compute later
+                target.net_vol = toNumber(target.net_vol) || 0;
+                target.net_principal = toNumber(target.net_principal) || 0;
+                target.net_charges = toNumber(target.net_charges) || 0;
+                target.partner_name_raw = target.partner_name_raw || source.partner_name_raw || '';
                 target.partner_name = target.partner_name || source.partner_name || '';
                 target.partner_id = target.partner_id || source.partner_id || '';
                 target.partner_id_kpx = target.partner_id_kpx || source.partner_id_kpx || '';
@@ -1882,8 +2096,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
 
             const mergedRowsMap = new Map();
             rows.forEach(function(row) {
+                const displayPartnerName = (row.partner_name_raw || row.partner_name || '');
                 const partnerKey = [
-                    normalizeValue(row.partner_name),
+                    normalizeValue(displayPartnerName),
                     normalizeValue(row.partner_id),
                     normalizeValue(row.partner_id_kpx)
                 ].join('|');
@@ -1891,6 +2106,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                 if (!mergedRowsMap.has(partnerKey)) {
                     mergedRowsMap.set(partnerKey, {
                         ...row,
+                        partner_name_raw: displayPartnerName,
                         volume_count: toNumber(row.volume_count),
                         principal_amount_paid: toNumber(row.principal_amount_paid),
                         charges: toNumber(row.charges),
@@ -1966,12 +2182,28 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     const charges = toNumber(row.charges);
                     const principalAdjustment = toNumber(row.principal_adjustment);
                     const amountForSettlement = toNumber(row.amount_for_settlement);
+                    // compute net values: prefer server-provided net fields, else compute from summary - adjustment
+                    const summaryVol = toNumber(row.summary_vol);
+                    const adjustmentVol = toNumber(row.adjustment_vol);
+                    const summaryPrincipal = toNumber(row.summary_principal);
+                    const adjustmentPrincipal = toNumber(row.adjustment_principal);
+                    const summaryCharge = toNumber(row.summary_charges);
+                    const adjustmentCharge = toNumber(row.adjustment_charges);
+
+                    const netVol = toNumber(row.net_vol) || (summaryVol - adjustmentVol);
+                    const netPrincipal = toNumber(row.net_principal) || (summaryPrincipal - adjustmentPrincipal);
+                    const netCharge = toNumber(row.net_charges) || (summaryCharge - adjustmentCharge);
 
                     displayedRows.add(row);
 
-                    totalNetVolume += volumeCount;
-                    totalNetPrincipal += principalAmountPaid;
-                    totalNetCharge += charges;
+                    // Totals: Gross columns should show summary values (user requested)
+                    const grossVol = summaryVol;
+                    const grossPrincipal = summaryPrincipal;
+                    const grossCharge = summaryCharge;
+
+                    totalNetVolume += grossVol;
+                    totalNetPrincipal += grossPrincipal;
+                    totalNetCharge += grossCharge;
                     totalPrincipalAdjustment += principalAdjustment;
                     totalAmountForSettlement += amountForSettlement;
                     runningIndex += 1;
@@ -1979,18 +2211,19 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     const isUnsettled = toNumber(row.has_unsettled) > 0;
                     const trClass = isUnsettled ? 'table-danger' : 'table-success';
                     const statusIcon = isUnsettled ? '<i class="fa-solid fa-xmark text-danger" title="Unsettled"></i>' : '<i class="fa-solid fa-check text-success" title="Settled"></i>';
+                    const partnerNameRaw = row.partner_name_raw || row.partner_name || '';
                     const tr = `
-                        <tr class="${trClass}" data-partner-id="${row.partner_id || ''}" data-partner-id-kpx="${row.partner_id_kpx || ''}" data-partner-name="${(row.partner_name||'').replace(/"/g,'&quot;')}" data-bank-name="${(row.bank_name||'').replace(/"/g,'&quot;')}" data-has-unsettled="${row.has_unsettled || 0}">
+                        <tr class="${trClass}" data-partner-id="${row.partner_id || ''}" data-partner-id-kpx="${row.partner_id_kpx || ''}" data-partner-name="${(partnerNameRaw||'').replace(/"/g,'&quot;')}" data-bank-name="${(row.bank_name||'').replace(/"/g,'&quot;')}" data-has-unsettled="${row.has_unsettled || 0}">
                             <td class="text-center"><input class="form-check-input row-select" type="checkbox" aria-label="Select row"></td>
                             <td class="text-center">${runningIndex}</td>
                             <td>
-                                ${row.partner_name || ''}
+                                ${partnerNameRaw}
                             </td>
                             <td>${row.partner_accName || ''}</td>
                             <td class="text-truncate">${row.bank_accNumber || ''}</td>
-                            <td class="text-end">${volumeCount.toLocaleString()}</td>
-                            <td class="text-end">${principalAmountPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                            <td class="text-end">${charges.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td class="text-end">${parseInt(grossVol || 0).toLocaleString()}</td>
+                            <td class="text-end">${parseFloat(grossPrincipal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            <td class="text-end">${parseFloat(grossCharge || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                             <td class="text-end">${principalAdjustment.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                             <td class="text-end">${amountForSettlement.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                             <td class="text-center">${statusIcon}</td>

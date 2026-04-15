@@ -7,12 +7,15 @@
 include '../../config/config.php';
 
 session_start();
+ 
+// Ensure we can resolve current user id
+include '../../templates/middleware.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirmBtn'])) {
     $partnerID = $_POST['partnerID'];
 
     // Update the database by incrementing the series_number for the selected partner_id
-    $sql = "UPDATE partner_masterfile SET series_number = series_number + 1 WHERE partner_id = '$partnerID'";
+    $sql = "UPDATE masterdata.partner_masterfile SET series_number = series_number + 1 WHERE partner_id = '$partnerID'";
     $result = $conn->query($sql);
 
     if (!$result) {
@@ -63,8 +66,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirmBtn'])) {
     $notedDate_signature = $_POST['notedDateSignature'];
     $status = 'Prepared';
 
-    // Generate prepared signature
-    $prepared_signature = 'electronically signed';
+    // Use the current user's id as a reference to their stored signature
+    $current_user_id = resolve_user_identifier();
+    // Store the id_number in prepared_signature so reports can resolve the actual signature image
+    $prepared_signature = $current_user_id ?: 'electronically signed';
     $reviewed_signature = '';
     $noted_signature = '';
     $reviewedFix_signature = '';
@@ -72,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirmBtn'])) {
 
     // Prepare the insert statement
     $stmt = $conn->prepare("
-        INSERT INTO soa_transaction (date, reference_number, partner_Name, partner_Tin, address, business_style,
+        INSERT INTO mldb.soa_transaction (date, reference_number, partner_Name, partner_Tin, address, business_style,
         service_charge, from_date, to_date, po_number, number_of_transactions, amount, amount_add ,add_amount, numberOf_days,
         formula,formula_withheld, formulaInc_Exc, vat_amount, net_of_vat, withholding_tax, totalAmountDue, net_amount_due, prepared_by,
         cancelled_by, reviewed_by, noted_by, preparedDate_signature, prepared_signature, reviewed_signature,

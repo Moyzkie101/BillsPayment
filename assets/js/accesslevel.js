@@ -397,13 +397,54 @@
     }
 
     function findAccessLevelByPermissions(permissions) {
-        const target = createPermissionsKey(normalizePermissions(permissions));
+        const normalizedTargetPermissions = normalizePermissions(permissions);
+        const target = createPermissionsKey(normalizedTargetPermissions);
         for (let index = 0; index < ACCESS_LEVELS_ARRAY.length; index++) {
             const row = ACCESS_LEVELS_ARRAY[index];
             if (createPermissionsKey(row.permissions || []) === target) {
                 return parseInt(row.access_level, 10) || 0;
             }
         }
+
+        // If there is no exact match, prefer the closest explicit mapping
+        // that is a superset of the selected permissions. This keeps
+        // root-level mappings stable (e.g., selecting only "TRL Entry"
+        // should still resolve to the explicit TRL level instead of
+        // a computed root index).
+        if (normalizedTargetPermissions.length) {
+            let bestLevel = 0;
+            let bestPermissionCount = Number.POSITIVE_INFINITY;
+
+            for (let index = 0; index < ACCESS_LEVELS_ARRAY.length; index++) {
+                const row = ACCESS_LEVELS_ARRAY[index];
+                const rowLevel = parseInt(row.access_level, 10) || 0;
+                const rowPermissions = normalizePermissions(row.permissions || []);
+                if (!rowLevel || rowLevel < 0 || rowPermissions.length === 0) {
+                    continue;
+                }
+
+                const rowSet = new Set(rowPermissions);
+                const isSuperset = normalizedTargetPermissions.every(function (permissionKey) {
+                    return rowSet.has(permissionKey);
+                });
+                if (!isSuperset) {
+                    continue;
+                }
+
+                // Prefer the smallest superset; on ties use lower level number.
+                if (rowPermissions.length < bestPermissionCount || (
+                    rowPermissions.length === bestPermissionCount && (bestLevel === 0 || rowLevel < bestLevel)
+                )) {
+                    bestLevel = rowLevel;
+                    bestPermissionCount = rowPermissions.length;
+                }
+            }
+
+            if (bestLevel > 0) {
+                return bestLevel;
+            }
+        }
+
         // No exact match found in explicit map. Compute a deterministic
         // combination index based on root catalogs (singles 1..N, then
         // pairs starting at N+1, then triples, etc.) so combinations

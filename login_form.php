@@ -7,6 +7,9 @@ include 'config/config.php';
 
 session_start();
 
+// Start output buffering so we can safely send HTTP headers later
+if (!ob_get_level()) ob_start();
+
 // Handle password change success/error messages FIRST before redirect check
 if(isset($_SESSION['success_message']) || isset($_SESSION['error_message'])){
    // Don't redirect to dashboard if we have messages to show
@@ -18,6 +21,10 @@ if(isset($_SESSION['success_message']) || isset($_SESSION['error_message'])){
       exit();
    }
 }
+
+// Include shared header (scripts/styles used across the app)
+// Keep this after redirect checks to avoid "headers already sent" warnings.
+@include_once __DIR__ . '/templates/header.php';
 
 echo '<script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>';
 echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>';
@@ -357,65 +364,255 @@ if(isset($_SESSION['error_message'])){
    <meta charset="UTF-8">
    <meta http-equiv="X-UA-Compatible" content="IE=edge">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>Login Page - ML Billpayment</title>
+   <title>Login - ML Billspayment</title>
    <link rel="icon" href="images/MLW logo.png" type="image/png">
-   <!-- custom css file link  -->
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap">
    <link rel="stylesheet" href="./assets/css/style.css?v=<?php echo time(); ?>">
-   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.1.4/dist/sweetalert2.min.css">
+   <link rel="stylesheet" href="./assets/css/login.css?v=<?php echo time(); ?>">
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.1.4/dist/sweetalert2.min.css">
    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.1.4/dist/sweetalert2.all.min.js"></script>
+   <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
 </head>
-<body> 
-   <!-- Modal for changing password -->
-<div id="changePasswordModal" class="change-password-modal">
-   <div class="change-password-modal-content">
-      <center>
-      <h3>Create a New Password</h3>
-      <h6 style="font-style:italic; color:red;">(Press ESC to CLOSE)</h6>
-      </center>
-      <br>
-      <form action="change_password.php" method="post">
-         <div class="input-container">
-            <input type="password" name="new_password" required>
-            <label>New Password</label>
+<body>
+
+<!-- Change Password Modal -->
+<div id="changePasswordModal" class="change-password-modal" aria-hidden="true">
+   <div class="change-password-modal-card">
+      <header class="cpm-header">
+         <h3>Create a New Password</h3>
+         <button type="button" class="cpm-close" id="cpmClose" aria-label="Close">&times;</button>
+      </header>
+      <div class="cpm-sub">Please choose a strong password. (Press ESC to close)</div>
+      <form action="change_password.php" method="post" id="changePasswordForm" class="cpm-form">
+         <div class="field-group">
+            <label for="new_password">New Password</label>
+            <div class="field-input">
+               <i class="fa-solid fa-lock fi-icon"></i>
+               <input id="new_password" name="new_password" type="password" required autocomplete="new-password" placeholder="Enter new password">
+               <button type="button" class="eye-btn small" data-target="new_password" aria-label="Toggle new password visibility"><i class="fa-solid fa-eye"></i></button>
+            </div>
          </div>
-         <div class="input-container">
-            <input type="password" name="confirm_password" required>
-            <label>Confirm Password</label>
+
+         <div class="field-group">
+            <label for="confirm_password">Confirm Password</label>
+            <div class="field-input">
+               <i class="fa-solid fa-lock fi-icon"></i>
+               <input id="confirm_password" name="confirm_password" type="password" required autocomplete="new-password" placeholder="Repeat new password">
+               <button type="button" class="eye-btn small" data-target="confirm_password" aria-label="Toggle confirm password visibility"><i class="fa-solid fa-eye"></i></button>
+            </div>
          </div>
-         <center>
-         <button type="submit" name="newPass">Change Password</button>
-         </center>
+
+         <div class="cpm-actions">
+            <button type="submit" name="newPass" class="login-submit-btn">Change Password</button>
+         </div>
       </form>
    </div>
 </div>
 
-   <div class="form-container">
-      <form action="" method="post">
-         <div class="logo">
-            <img src="./images/MLW Logo.png" alt="logo">
-         </div>
-         <h3>ML Billspayment</h3>
-         <input type="text" name="email" required placeholder="Enter your username" autocomplete="off" value="<?php echo isset($_POST['email']) ? $_POST['email'] : '';?>" oninput="this.value = this.value.toUpperCase()" required>
-         <input type="password" name="password" required placeholder="Enter your password" autocomplete="off" required>
-         <input type="submit" name="submit" value="LOGIN" class="form-btn"><br>
-         <a href="index.php" style="text-decoration:underline; color:#000;">Back to home</a>
-      </form>
+<!-- Split-panel Login Layout -->
+<div class="login-page">
+
+   <!-- Right: Form Panel (single-column layout) -->
+   <div class="login-panel">
+      <div class="login-card">
+         <button type="button" class="card-close" id="cardClose" aria-label="Close login">&times;</button>
+         <div class="login-panel-brand">
+            <img src="./images/MLW Logo.png" alt="ML Logo" class="brand-logo">
+           
+         <p class="card-title">Welcome Back</p>
+         <p class="card-sub">Sign in to your account to continue</p>
+         <div class="accent-bar"></div>
+
+         <form action="" method="post" id="loginForm">
+
+            <!-- Username -->
+            <div class="field-group">
+               <label for="email">Username</label>
+               <div class="field-input">
+                  <i class="fa-solid fa-user fi-icon"></i>
+                  <input
+                     id="email"
+                     type="text"
+                     name="email"
+                     required
+                     placeholder="e.g. JUANDELACRUZ"
+                     autocomplete="off"
+                     oninput="this.value = this.value.toUpperCase()"
+                     value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : (isset($_COOKIE['saved_username']) ? htmlspecialchars($_COOKIE['saved_username']) : ''); ?>"
+                  >
+               </div>
+            </div>
+
+            <!-- Password -->
+            <div class="field-group">
+               <label for="password">Password</label>
+               <div class="field-input">
+                  <i class="fa-solid fa-lock fi-icon"></i>
+                  <input
+                     id="password"
+                     type="password"
+                     name="password"
+                     required
+                     placeholder="Enter your password"
+                     autocomplete="off"
+                     value="<?php echo isset($_COOKIE['saved_password']) ? htmlspecialchars($_COOKIE['saved_password']) : ''; ?>"
+                  >
+                  <button type="button" class="eye-btn" id="togglePassword" aria-label="Toggle password visibility">
+                     <i class="fa-solid fa-eye"></i>
+                  </button>
+               </div>
+            </div>
+
+            <!-- Remember username -->
+            <div class="save-row">
+               <input type="checkbox" id="save_as" name="save_as" <?php echo (isset($_COOKIE['saved_username']) || isset($_COOKIE['saved_password'])) ? 'checked' : ''; ?>>
+               <label for="save_as">Remember me</label>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" name="submit" class="login-submit-btn">
+               <i class="fa-solid fa-right-to-bracket" style="margin-right:8px;"></i>LOGIN
+            </button>
+
+            <!-- Back link removed per UI update -->
+
+         </form>
+      </div>
    </div>
-   <script>
-  // Get the modal element
-  var modal = document.getElementById("changePasswordModal");
 
-  // Function to close the modal
-  function closeModal() {
-    modal.style.display = "none";
-  }
+</div>
+<script>
+// Eye toggle
+document.addEventListener('DOMContentLoaded', function () {
+   var toggle = document.getElementById('togglePassword');
+   var pwd    = document.getElementById('password');
+   if (toggle && pwd) {
+      toggle.addEventListener('click', function () {
+         var isText = pwd.getAttribute('type') === 'text';
+         pwd.setAttribute('type', isText ? 'password' : 'text');
+         var icon = toggle.querySelector('i');
+         if (icon) {
+            icon.classList.toggle('fa-eye', isText);
+            icon.classList.toggle('fa-eye-slash', !isText);
+         }
+      });
+   }
 
-  // Listen for the ESC key press event
-  document.addEventListener("keydown", function(event) {
-    if (event.keyCode === 27) {
-      closeModal();
-    }
-  });
+   // Load remembered username/password from localStorage
+   var emailInput   = document.getElementById('email');
+   var saveCheckbox = document.getElementById('save_as');
+   try {
+      var savedU = localStorage.getItem('bp_saved_username');
+      var savedP = localStorage.getItem('bp_saved_password');
+      if (savedU && emailInput && !emailInput.value) {
+         emailInput.value = savedU;
+      }
+      if (savedP && pwd && !pwd.value) {
+         pwd.value = savedP;
+      }
+   } catch (e) {}
+
+      // Update left icon color when inputs are populated
+      function updateFilledState(input) {
+         if (!input) return;
+         var wrapper = input.closest('.field-input');
+         if (!wrapper) return;
+         if (input.value && input.value.trim() !== '') {
+            wrapper.classList.add('input-filled');
+         } else {
+            wrapper.classList.remove('input-filled');
+         }
+      }
+
+      // Initialize filled state (covers pre-filled cookies/localStorage)
+      updateFilledState(emailInput);
+      updateFilledState(pwd);
+
+         // Also initialize and bind for change-password modal inputs
+         var newPwdInput = document.getElementById('new_password');
+         var confirmPwdInput = document.getElementById('confirm_password');
+         updateFilledState(newPwdInput);
+         updateFilledState(confirmPwdInput);
+         if (newPwdInput) newPwdInput.addEventListener('input', function () { updateFilledState(newPwdInput); });
+         if (confirmPwdInput) confirmPwdInput.addEventListener('input', function () { updateFilledState(confirmPwdInput); });
+
+      // Update on user input
+      if (emailInput) {
+         emailInput.addEventListener('input', function () { updateFilledState(emailInput); });
+      }
+      if (pwd) {
+         pwd.addEventListener('input', function () { updateFilledState(pwd); });
+      }
+
+   // Save / clear on submit (remember username + password when checked)
+   var form = document.getElementById('loginForm');
+   if (form) {
+      form.addEventListener('submit', function () {
+         try {
+            if (saveCheckbox && saveCheckbox.checked && emailInput && emailInput.value && pwd && pwd.value) {
+               localStorage.setItem('bp_saved_username', emailInput.value);
+               localStorage.setItem('bp_saved_password', pwd.value);
+               document.cookie = 'saved_username=' + encodeURIComponent(emailInput.value) + '; path=/; max-age=' + (60 * 60 * 24 * 30);
+               document.cookie = 'saved_password=' + encodeURIComponent(pwd.value) + '; path=/; max-age=' + (60 * 60 * 24 * 30);
+            } else {
+               localStorage.removeItem('bp_saved_username');
+               localStorage.removeItem('bp_saved_password');
+               document.cookie = 'saved_username=; path=/; max-age=0';
+               document.cookie = 'saved_password=; path=/; max-age=0';
+            }
+         } catch (e) {}
+      });
+   }
+
+      // Close button redirects back to index.php
+      var cardClose = document.getElementById('cardClose');
+      if (cardClose) {
+         cardClose.addEventListener('click', function () {
+            window.location.href = 'index.php';
+         });
+      }
+
+   // ESC closes change-password modal
+   var modal = document.getElementById('changePasswordModal');
+   document.addEventListener('keydown', function (e) {
+      if ((e.key === 'Escape' || e.keyCode === 27) && modal) {
+         modal.style.display = 'none';
+      }
+   });
+   
+   // Modal close button
+   var cpmClose = document.getElementById('cpmClose');
+   if (cpmClose && modal) {
+      cpmClose.addEventListener('click', function () {
+         modal.style.display = 'none';
+      });
+   }
+
+   // Eye toggles for change-password fields
+   var eyeBtns = document.querySelectorAll('.change-password-modal .eye-btn');
+   eyeBtns.forEach(function(btn){
+      btn.addEventListener('click', function(){
+         var targetId = btn.getAttribute('data-target');
+         var input = document.getElementById(targetId);
+         if (!input) return;
+         var isText = input.getAttribute('type') === 'text';
+         input.setAttribute('type', isText ? 'password' : 'text');
+         var ic = btn.querySelector('i');
+         if(ic){
+            ic.classList.toggle('fa-eye', isText);
+            ic.classList.toggle('fa-eye-slash', !isText);
+         }
+      });
+   });
+});
 </script>
+
+<?php @include_once __DIR__ . '/templates/footer.php'; ?>
 </body>
 </html>
+<?php
+// Flush and end output buffering if started here
+if (ob_get_level()) {
+   ob_end_flush();
+}
+?>

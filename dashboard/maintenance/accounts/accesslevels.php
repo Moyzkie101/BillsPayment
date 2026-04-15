@@ -1,17 +1,45 @@
 <?php
 include '../../../config/config.php';
+
 session_start();
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }
+// include permission helpers (provides has_permission(), etc.)
+include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
+
+// Allow access if the permission helper is present and the user
+// has either the generic 'Access Levels' permission, the
+// 'Maintenance Accounts Access Levels' permission, or the
+// superuser sentinel access level (-1). This avoids denying
+// access when permission key names differ between the map
+// and legacy entries.
+if (!function_exists('has_permission') || (
+    !has_permission('Access Levels')
+    && !has_permission('Maintenance Accounts Access Levels')
+    && !(isset($_SESSION['access_level']) && intval($_SESSION['access_level']) === -1)
+)) {
+    header('Location: ../../home.php');
+    exit;
 }
 
-if (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'admin') {
+// prefer explicit session values for current user email; do not gate on role
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
+
+// Allow access for admins, or users with the admin sentinel (-1),
+// or users who have the specific maintenance permission.
+$allowed = false;
+// Allow access for users with superuser access level (-1) or
+// users who have the maintenance permission. Do not base access
+// solely on the `user_type` role value.
+if (isset($_SESSION['access_level']) && intval($_SESSION['access_level']) === -1) {
+    $allowed = true;
+}
+if (function_exists('has_permission') && has_permission('Maintenance Accounts Access Levels')) {
+    $allowed = true;
+}
+
+if (!$allowed) {
     header('Location: ../../../index.php');
     exit;
 }
@@ -184,15 +212,16 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
         .perm-toggle-icon { transition: transform .18s ease; }
 
         /* Accent palette - used for group headers / titles */
-        .accent-0 { --accent: #ef4444; }
-        .accent-1 { --accent: #0ea5a4; }
-        .accent-2 { --accent: #f59e0b; }
-        .accent-3 { --accent: #3b82f6; }
-        .accent-4 { --accent: #8b5cf6; }
+        /* Use darker reds only (brand palette) to avoid pale/invisible accents */
+        .accent-0 { --accent: #7f1d1d; }
+        .accent-1 { --accent: #b91c1c; }
+        .accent-2 { --accent: #c62828; }
+        .accent-3 { --accent: #ef4444; }
+        .accent-4 { --accent: #f87171; }
 
         .perm-group-header .perm-group-title { color: var(--accent); }
         .permission-card .card-title { color: rgba(0,0,0,0.8); }
-        .permission-card.selected { box-shadow: 0 0 0 0.18rem rgba(99,102,241,0.12); }
+        .permission-card.selected { box-shadow: 0 0 0 0.18rem rgba(198,40,40,0.14); }
 
         #permissionCards {
             border: 1px solid #e5e7eb;
@@ -265,6 +294,17 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
         #permissionPreview .preview-item:hover {
             background: #f8fafc;
             border-color: #dbe3ee;
+        }
+
+        /* Swap Reset All button default and hover styles: filled by default, outline on hover */
+        #resetAllBtn {
+            transition: all .12s ease;
+        }
+        #resetAllBtn:hover {
+            background: #ffffff !important;
+            color: #dc3545 !important;
+            border: 1px solid #dc3545 !important;
+            box-shadow: none !important;
         }
 
         #permissionPreview .preview-item .label {
@@ -341,24 +381,29 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
         </div>
 
         <div class="bp-card container-fluid mt-3 p-4">
-            <div class="row mb-3">
-                <div class="col-md-6 col-lg-4">
-                        <div class="input-group">
-                            <span class="input-group-text bg-white" id="searchIcon" style="border-right:0;">
-                                <i class="fa-solid fa-magnifying-glass" aria-hidden="true" style="color:#6b7280;"></i>
-                            </span>
-                            <input
-                                type="search"
-                                id="searchInput"
-                                class="form-control"
-                                placeholder="Search by ID Number / First Name / Last Name / Email"
-                                aria-describedby="searchIcon"
-                            />
-                            <button class="btn btn-outline-secondary" type="button" id="searchBtn" title="Search">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-                            </button>
-                        </div>
+            <div class="row mb-3 align-items-center">
+                <div class="col-md-8 col-lg-6">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white" id="searchIcon" style="border-right:0;">
+                            <i class="fa-solid fa-magnifying-glass" aria-hidden="true" style="color:#6b7280;"></i>
+                        </span>
+                        <input
+                            type="search"
+                            id="searchInput"
+                            class="form-control"
+                            placeholder="Search by ID Number / First Name / Last Name / Email"
+                            aria-describedby="searchIcon"
+                        />
+                        <button class="btn btn-outline-secondary" type="button" id="searchBtn" title="Search">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </button>
                     </div>
+                </div>
+                <div class="col-md-4 col-lg-6 text-end">
+                    <button class="btn btn-danger" type="button" id="resetAllBtn" title="Reset All">
+                        Reset All
+                    </button>
+                </div>
             </div>
 
             <div class="table-responsive">
@@ -459,8 +504,14 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
             let selectedRow = null;
             let selectedPermissions = [];
             let computedLevelFromCards = 0;
-            const tree = window.AccessLevelManager.getPermissionTree();
-            const allPermissionKeys = flattenTree(tree);
+
+            function getCurrentTree() {
+                return window.AccessLevelManager.getPermissionTree() || [];
+            }
+
+            function getAllPermissionKeys() {
+                return flattenTree(getCurrentTree());
+            }
 
             function renderSelectedCardsSummary() {
                 if (!selectedPermissions.length) {
@@ -530,6 +581,7 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
             }
 
             function renderPermissionCards() {
+                const tree = getCurrentTree();
                 const cardsContainer = $('#permissionCards');
                 const previewList = $('#permissionPreviewList');
                 // clear previous render to avoid duplicate nodes when modal reopened
@@ -651,6 +703,31 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 return window.AccessLevelManager.descendantsOf(parentKey) || [];
             }
 
+            function collectLeafKeys(nodes) {
+                const out = [];
+                (nodes || []).forEach(function walk(node) {
+                    if (!node) return;
+                    if (!node.children || !node.children.length) {
+                        out.push(node.key);
+                    } else {
+                        (node.children || []).forEach(walk);
+                    }
+                });
+                return out.sort();
+            }
+
+            function normalizePermissionList(items) {
+                return Array.from(new Set(Array.isArray(items) ? items : [])).sort();
+            }
+
+            function isAllLeafSelected(leafKeys) {
+                const selected = normalizePermissionList(leafKeys);
+                const currentAllLeafKeys = normalizePermissionList(collectLeafKeys(window.AccessLevelManager.getPermissionTree()));
+                return selected.length > 0
+                    && selected.length === currentAllLeafKeys.length
+                    && selected.every(function(k, i) { return k === currentAllLeafKeys[i]; });
+            }
+
             function syncCardSelectionUI() {
                 const selectedSet = new Set(selectedPermissions);
                 $('#permissionCards .permission-card').each(function() {
@@ -701,15 +778,42 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 // but the persisted mapping and generated map are based on leaf keys only.
                 const leafSelected = selectedPermissions.filter(function(p) {
                     return (getDescendants(p) || []).length === 0;
-                }).sort();
+                });
+                const normalizedLeafSelected = normalizePermissionList(leafSelected);
 
-                const matchedLevel = window.AccessLevelManager.findAccessLevelByPermissions(leafSelected);
+                // Robust full-selection detection: if the normalized leaf
+                // selection exactly matches the set of all leaf keys from
+                // the current permission tree, treat it as the sentinel -1.
+                // This handles timing or map-generation differences where
+                // an exact key-by-key match may fail.
+                try {
+                    const allLeafKeys = collectLeafKeys(window.AccessLevelManager.getPermissionTree());
+                    if (normalizedLeafSelected.length > 0 && normalizedLeafSelected.length === allLeafKeys.length) {
+                        computedLevelFromCards = -1;
+                        applyPermissionPreview();
+                        $('#modalCurrentLevel').text('-1');
+                        renderSelectedCardsSummary();
+                        return;
+                    }
+                } catch (e) {
+                    // fall through to existing logic on error
+                }
+
+                if (isAllLeafSelected(normalizedLeafSelected)) {
+                    computedLevelFromCards = -1;
+                    applyPermissionPreview();
+                    $('#modalCurrentLevel').text('-1');
+                    renderSelectedCardsSummary();
+                    return;
+                }
+
+                const matchedLevel = window.AccessLevelManager.findAccessLevelByPermissions(normalizedLeafSelected);
 
                 // If no exact match found in the explicit map, compute a
                 // deterministic combination index based on root menus.
                 let computedCombo = 0;
                 if (!matchedLevel) {
-                    computedCombo = window.AccessLevelManager.computeCombinationIndex(leafSelected) || 0;
+                    computedCombo = window.AccessLevelManager.computeCombinationIndex(normalizedLeafSelected) || 0;
                 }
 
                 const nextLevel = window.AccessLevelManager.getNextAccessLevel();
@@ -761,6 +865,61 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 }
             });
 
+            // Reset All button: set all non-sentinel users to level 1; re-apply -1 users
+            $('#resetAllBtn').on('click', function() {
+                Swal.fire({
+                    title: 'Reset all users Default Access Level and Re apply Admin Access Level',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, reset all',
+                    cancelButtonText: 'Cancel'
+                }).then(function(result) {
+                    if (!result || !result.isConfirmed) return;
+
+                    $.ajax({
+                        url: '../../../models/updated/reset-all-access-levels.php',
+                        method: 'POST',
+                        dataType: 'json'
+                    }).done(function(resp) {
+                        if (!resp || !resp.success) {
+                            Swal.fire({ icon: 'error', title: 'Failed', text: resp && resp.message ? resp.message : 'Reset failed.' });
+                            return;
+                        }
+
+                        // Update table rows if details returned, otherwise reload
+                        if (Array.isArray(resp.updated) && resp.updated.length) {
+                            resp.updated.forEach(function(u) {
+                                var idn = (u.id_number || '').toString().toLowerCase();
+                                var row = $('#users-table tbody tr').filter(function() {
+                                    return String($(this).attr('data-id-number') || '').toLowerCase() === idn;
+                                }).first();
+
+                                if (!row || !row.length) return;
+
+                                try {
+                                    var du = row.attr('data-user');
+                                    var obj = du ? JSON.parse(du) : {};
+                                    obj.access_level = parseInt(u.access_level, 10) || 0;
+                                    row.attr('data-user', JSON.stringify(obj));
+                                    row.find('.access-level-cell').text(String(obj.access_level));
+                                } catch (e) {
+                                    // ignore
+                                }
+                            });
+                        }
+
+                        Swal.fire({ icon: 'success', title: 'Reset complete', text: resp.message || 'All users updated.' });
+
+                        // If current session was affected, force reload to refresh menus
+                        if (resp.current_user_changed) {
+                            window.location.reload(true);
+                        }
+                    }).fail(function() {
+                        Swal.fire({ icon: 'error', title: 'Server error', text: 'Failed to perform reset.' });
+                    });
+                });
+            });
+
             $('#users-table tbody').on('click', 'tr', function() {
                 if ($(this).find('td').length === 0) {
                     return;
@@ -800,14 +959,24 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 }).done(function(resp) {
                     if (resp && resp.success && Array.isArray(resp.permissions) && resp.permissions.length) {
                         // use saved (leaf) permissions
-                        selectedPermissions = resp.permissions.slice().sort();
+                        selectedPermissions = normalizePermissionList(resp.permissions);
                     } else {
                         // fallback to legacy mapping by numeric access level
-                        selectedPermissions = window.AccessLevelManager.getPermissionsByLevel(currentLevel);
+                        selectedPermissions = normalizePermissionList(window.AccessLevelManager.getPermissionsByLevel(currentLevel));
                     }
                 }).fail(function() {
-                    selectedPermissions = window.AccessLevelManager.getPermissionsByLevel(currentLevel);
+                    selectedPermissions = normalizePermissionList(window.AccessLevelManager.getPermissionsByLevel(currentLevel));
                 }).always(function() {
+                    // keep Select All checkbox aligned with current loaded permissions
+                    const currentLeafKeys = collectLeafKeys(window.AccessLevelManager.getPermissionTree());
+                    const selectedLeafKeys = normalizePermissionList(selectedPermissions.filter(function(p) {
+                        return (getDescendants(p) || []).length === 0;
+                    }));
+                    const isFull = selectedLeafKeys.length > 0
+                        && selectedLeafKeys.length === currentLeafKeys.length
+                        && selectedLeafKeys.every(function(k, i) { return k === currentLeafKeys[i]; });
+                    $('#selectAllPerms').prop('checked', isFull);
+
                     renderPermissionCards();
                     syncCardSelectionUI();
                     renderSelectedCardsSummary();
@@ -861,8 +1030,9 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 }
 
                 selectedPermissions = Array.from(selectedSet).filter(function (permission) {
-                    return allPermissionKeys.indexOf(permission) !== -1;
-                }).sort();
+                    return getAllPermissionKeys().indexOf(permission) !== -1;
+                });
+                selectedPermissions = normalizePermissionList(selectedPermissions);
 
                 syncCardSelectionUI();
                 updateComputedSelectionState();
@@ -881,7 +1051,7 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
 
             $(document).on('change', '#selectAllPerms', function() {
                 if ($(this).is(':checked')) {
-                    selectedPermissions = allPermissionKeys.slice().sort();
+                    selectedPermissions = normalizePermissionList(getAllPermissionKeys());
                 } else {
                     selectedPermissions = [];
                 }
@@ -903,13 +1073,26 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 positionPermissionPreview();
             });
 
-            $(document).on('wheel', '#permissionPreviewList', function(e) {
-                const original = e.originalEvent;
-                const deltaY = original && typeof original.deltaY === 'number' ? original.deltaY : 0;
-                this.scrollTop += deltaY;
-                e.preventDefault();
-                e.stopPropagation();
-            });
+            // Use a non-passive wheel listener on the preview list so we can
+            // call preventDefault() to stop the page from scrolling when
+            // the user scrolls inside the permission preview panel.
+            (function attachPreviewWheel() {
+                function addWheel() {
+                    const el = document.getElementById('permissionPreviewList');
+                    if (!el) return;
+                    if (el._wheelAttached) return;
+                    el._wheelAttached = true;
+                    el.addEventListener('wheel', function(evt) {
+                        const deltaY = typeof evt.deltaY === 'number' ? evt.deltaY : 0;
+                        this.scrollTop += deltaY;
+                        evt.preventDefault();
+                        evt.stopPropagation();
+                    }, { passive: false });
+                }
+
+                addWheel();
+                $(document).on('shown.bs.modal', function() { addWheel(); });
+            })();
 
             $('#saveAccessLevelBtn').on('click', function() {
                 if (!selectedUser || !selectedRow) {
@@ -925,12 +1108,26 @@ $columns = ['id', 'id_number', 'first_name', 'middle_name', 'last_name', 'email'
                 // send only leaf keys to server so mapping remains leaf-based
                 const leafSelectedToSave = selectedPermissions.filter(function(p) {
                     return (getDescendants(p) || []).length === 0;
-                }).sort();
+                });
+                const normalizedLeafToSave = normalizePermissionList(leafSelectedToSave);
+
+                // Recompute current leaf keys from the live permission tree (map may load async)
+                // If all leaf permissions are selected, use sentinel -1
+                let levelToSave = computedLevelFromCards;
+                if ($('#selectAllPerms').is(':checked') || isAllLeafSelected(normalizedLeafToSave)) {
+                    levelToSave = -1;
+                }
+
+                // Debug: log counts and final level sent
+                try {
+                    const currentAllLeafKeys = collectLeafKeys(window.AccessLevelManager.getPermissionTree());
+                    console.log('saveAccessLevel: leafSelected=', normalizedLeafToSave.length, 'allLeaf=', (currentAllLeafKeys||[]).length, 'levelToSave=', levelToSave);
+                } catch (e) {}
 
                 window.AccessLevelManager.updateUserAccessLevel(
                     selectedUser.id_number,
-                    computedLevelFromCards,
-                    leafSelectedToSave,
+                    levelToSave,
+                    normalizedLeafToSave,
                     function(response) {
                         if (!response || !response.success) {
                             Swal.fire({ icon: 'error', title: 'Failed', text: response && response.message ? response.message : 'Failed to update access level.' });

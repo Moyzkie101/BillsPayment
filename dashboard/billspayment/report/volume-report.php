@@ -5,28 +5,14 @@ require '../../../vendor/autoload.php';
 
 // Start the session
 session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Volume Report','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }else{
-        // Redirect to login page if user_type is not set
-        header("Location: ../../../index.php");
-        session_abort();
-        session_destroy();
-        exit();
-    }
-}else {
-    // Redirect to login page if user_type is not set
-    header("Location: ../../../index.php");
-    session_abort();
-    session_destroy();
-    exit();
-}
+// prefer explicit session values for current user email; avoid role-based gating
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 // $partnersQuery = "SELECT partner_name FROM masterdata.partner_masterfile order by partner_name";
 // $partnersResult = $conn->query($partnersQuery);
@@ -103,7 +89,13 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
     // Partner filter
     if (!empty($partner)) {
         if($partner !== 'All'){
-            $whereConditions[] = "mpm.partner_name = ?";
+            if($partner === 'SECURITY BANK') {
+                $whereConditions[] = "ap.partner_name = ?";
+            }elseif($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING'){
+                $whereConditions[] = "ap.partner_name = ?";
+            }else{
+                $whereConditions[] = "ap.partner_name = ?";
+            }
             $params[] = $partner;
             $types .= 's';
         }
@@ -121,9 +113,13 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
                             CASE 
                                 WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
                                 WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                                ELSE CONCAT('temp_', bt.partner_name)
+                                ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
                             END COLLATE utf8mb4_general_ci AS partner_key,
-                            bt.partner_name,
+                            CASE 
+                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                                ELSE bt.partner_name
+                            END AS partner_name,
+                            MAX(bt.sub_billers_name) AS sub_billers_name,
                             COUNT(*) AS vol1,
                             SUM(bt.amount_paid) AS principal1,
                             SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
@@ -132,23 +128,30 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
                         WHERE
                             $dateCondition
                             AND bt.status IS NULL 
-                            AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                            AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
                         GROUP BY
                             CASE 
                                 WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
                                 WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                                ELSE CONCAT('temp_', bt.partner_name)
+                                ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
                             END COLLATE utf8mb4_general_ci,
-                            bt.partner_name
+                            CASE 
+                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                                ELSE bt.partner_name
+                            END
                 ),
                 adjustment_vol AS (
                     SELECT
                         CASE 
                             WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
                             WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                            ELSE CONCAT('temp_', bt.partner_name)
+                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
                         END COLLATE utf8mb4_general_ci AS partner_key,
-                        bt.partner_name,
+                        CASE 
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            ELSE bt.partner_name
+                        END AS partner_name,
+                        MAX(bt.sub_billers_name) AS sub_billers_name,
                         COUNT(*) AS vol2,
                         SUM(bt.amount_paid) AS principal2,
                         SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
@@ -157,14 +160,17 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
                     WHERE
                         $dateCondition
                         AND bt.status = '*' 
-                        AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                        AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
                     GROUP BY
                         CASE 
                             WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
                             WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                            ELSE CONCAT('temp_', bt.partner_name)
+                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
                         END COLLATE utf8mb4_general_ci,
-                        bt.partner_name
+                        CASE 
+                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                            ELSE bt.partner_name
+                        END
                 ),
                 all_partners AS (
                     -- Partners from master file
@@ -187,6 +193,7 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
 
                 SELECT
                     ap.partner_name,
+                    COALESCE(MAX(sv.sub_billers_name), MAX(av.sub_billers_name)) AS sub_billers_name,
                     SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
                     SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
                     SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
@@ -201,15 +208,9 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
                 FROM
                     all_partners AS ap
                 LEFT JOIN
-                    summary_vol AS sv ON (
-                        ap.partner_key = sv.partner_key
-                        OR ap.partner_name = sv.partner_name
-                    )
+                    summary_vol AS sv ON ap.partner_name = sv.partner_name
                 LEFT JOIN
-                    adjustment_vol AS av ON (
-                        ap.partner_key = av.partner_key
-                        OR ap.partner_name = av.partner_name
-                    )
+                    adjustment_vol AS av ON ap.partner_name = av.partner_name
                 LEFT JOIN
                     masterdata.partner_masterfile AS mpm ON (
                         ap.partner_name = mpm.partner_name
@@ -709,17 +710,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                     <input type="date" class="form-control" name="endDate" required>
                                 </div>
 
-                                <!-- Action Button -->
-                                <div class="col-md-1 col-sm-6">
-                                    <div class="col-md-3 d-flex align-items-end">
+                                <!-- Action Buttons -->
+                                <div class="col-md-auto col-sm-12">
+                                    <div class="d-flex align-items-end flex-wrap" style="gap:8px;">
                                         <button type="button" class="btn btn-secondary" id="generateReport" disabled>Generate</button>
-                                    </div>
-                                    
-                                </div>
-
-                                <!-- Export + Debug Buttons (inline) -->
-                                <div class="col-md-1 col-sm-6">
-                                    <div class="d-flex align-items-end" style="gap:8px; white-space:nowrap;">
                                         <button class="btn btn-danger" id="exportButton" type="button" style="display:none;">Export to</button>
                                         <button class="btn btn-warning" id="debugButton" type="button" style="display:none;">Debug Report</button>
                                     </div>
@@ -958,6 +952,8 @@ $(document).ready(function() {
     $('#exportButton').hide();
     // Client-side cache for debug responses
     var debugCache = {};
+    // Keep latest generated report rows for recon comparison
+    var latestGeneratedReportData = [];
     
     // Handle date input changes
     $('input[name="startDate"], input[name="endDate"]').on('change', function() {
@@ -982,7 +978,6 @@ $(document).ready(function() {
         
         // Hide export button when filter type changes
         $('#exportButton').hide();
-        
         // Clear the report table
         clearReportTable();
         
@@ -1581,6 +1576,8 @@ $(document).ready(function() {
     function populateReportTable(data) {
         const tbody = $('#transactionReportTable tbody');
         tbody.empty();
+
+        latestGeneratedReportData = Array.isArray(data) ? data : [];
         
         let totals = {
             summaryVol: 0,
@@ -1607,10 +1604,20 @@ $(document).ready(function() {
             const displayData = data.slice(0, 15);
 
             data.forEach((row, index) => {
+                const sub_billers_name_raw = (row.sub_billers_name || '').toString().trim();
+                const partner_name_value = (row.partner_name || '').toString().trim();
+                let partner_name_raw = partner_name_value;
+
+                if (sub_billers_name_raw === 'MYLORA CORPORATION' || sub_billers_name_raw === 'JUNANS MARKETING') {
+                    partner_name_raw = sub_billers_name_raw;
+                } else if (sub_billers_name_raw === '' && partner_name_value === 'SECURITY BANK') {
+                    partner_name_raw = partner_name_value;
+                }
+
                 const tr = $(`
                 <tr>
                     <td>${index + 1}</td>
-                    <td>${row.partner_name || ''}</td>
+                    <td>${partner_name_raw}</td>
                     <td></td>
                     <td></td>
                     <td class="text-end">${parseInt(row.summary_vol || 0).toLocaleString()}</td>
@@ -1713,7 +1720,6 @@ $(document).ready(function() {
         
         // Hide export button when partner changes
         $('#exportButton').hide();
-        
         // Clear the report table
         clearReportTable();
         
@@ -1789,6 +1795,29 @@ $(document).ready(function() {
             }
         });
     });
+
+    function toNumber(value) {
+        if (typeof value === 'number') return value;
+        if (value === null || value === undefined) return 0;
+
+        const text = value.toString().trim();
+        if (!text) return 0;
+
+        const negativeParen = /^\(.*\)$/.test(text);
+        const cleaned = text.replace(/[(),\s]/g, '').replace(/,/g, '');
+        const numeric = parseFloat(cleaned);
+        if (Number.isNaN(numeric)) return 0;
+
+        return negativeParen ? -Math.abs(numeric) : numeric;
+    }
+
+    function formatInt(value) {
+        return Math.round(value || 0).toLocaleString('en-US');
+    }
+
+    function formatMoney(value) {
+        return (value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
 
     // Build and render debug modal from response
     function renderDebugModal(resp) {
@@ -2095,7 +2124,6 @@ $(document).ready(function() {
         
         // Hide export button when dates change
         $('#exportButton').hide();
-        
         // Clear the report table
         clearReportTable();
         

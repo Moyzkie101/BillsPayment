@@ -11,10 +11,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  (isset($input['partnerID']) ? $input['partnerID'] : '');
     $partnerID_kpx = isset($_POST['partner_id_kpx']) ? $_POST['partner_id_kpx'] :
                      (isset($input['partnerID_kpx']) ? $input['partnerID_kpx'] : '');
+    $partnerName = isset($_POST['partner_name']) ? trim($_POST['partner_name']) :
+                   (isset($input['partner_name']) ? trim($input['partner_name']) : '');
+    $filterPartnerIDKpx = isset($_POST['filter_partner_id_kpx']) ? trim($_POST['filter_partner_id_kpx']) :
+                         (isset($input['filter_partner_id_kpx']) ? trim($input['filter_partner_id_kpx']) : '');
     
     $response = ['success' => false, 'partner_name' => null];
     
-    if ($partnerID !== '' && $partnerID !== 'All') {
+    if ($partnerName !== '') {
+        // Exact partner name lookup, optionally constrained by KPX partner id.
+        if ($filterPartnerIDKpx !== '') {
+            $sql = "SELECT partner_name FROM masterdata.partner_masterfile WHERE partner_name = ? AND partner_id_kpx = ? LIMIT 1";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ss", $partnerName, $filterPartnerIDKpx);
+        } else {
+            $sql = "SELECT partner_name FROM masterdata.partner_masterfile WHERE partner_name = ? LIMIT 1";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("s", $partnerName);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $response['success'] = true;
+            $response['partner_name'] = $row['partner_name'];
+        }
+    } elseif ($partnerID !== '' && $partnerID !== 'All') {
         // Try to find by partner_id or partner_id_kpx
         $sql = "SELECT partner_name FROM masterdata.partner_masterfile 
                 WHERE partner_id = ? OR partner_id_kpx = ? LIMIT 1";

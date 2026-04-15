@@ -4,20 +4,19 @@ include '../../../config/config.php';
 require '../../../vendor/autoload.php';
 
 // Start the session
+
 session_start();
+@include_once __DIR__ . '/../../../templates/middleware.php';
+$id = resolve_user_identifier();
+if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
+if (!function_exists('has_any_permission') || !has_any_permission(['Adjustment Entry Per Branch','Bills Payment'])) { header('Location: ../../home.php'); exit; }
 
 $settlement_view = $_POST['settlement_view'] ?? 'filter';
 $partner_options = [];
 
 
-if (isset($_SESSION['user_type'])) {
-    $current_user_email = '';
-    if ($_SESSION['user_type'] === 'admin' && isset($_SESSION['admin_email'])) {
-        $current_user_email = $_SESSION['admin_email'];
-    } elseif ($_SESSION['user_type'] === 'user' && isset($_SESSION['user_email'])) {
-        $current_user_email = $_SESSION['user_email'];
-    }
-}
+// prefer explicit session values for current user email
+$current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 try {
     $partnersQuery = "SELECT DISTINCT partner_name FROM masterdata.partner_masterfile WHERE status = 'ACTIVE' AND partner_name IS NOT NULL AND partner_name <> '' ORDER BY partner_name";
@@ -106,6 +105,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                         OR TRIM(bt.settle_unsettle) = ''
                         OR UPPER(TRIM(bt.settle_unsettle)) = 'UNSETTLE'
                     )
+                    AND bt.rfp_no IS NULL
+                    AND bt.cad_no IS NULL
+                    AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
                     AND bt.reference_no LIKE ?
                   ORDER BY bt.datetime ASC, bt.reference_no ASC";
 
@@ -171,29 +173,16 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
         $types .= 'ss';
     }
 
-    $partnerIds = [];
+    // Partner owner filter based on sub_billers_name rules
+    $partnerOwnerCondition = '';
     if ($partner !== '' && $partner !== 'All') {
-        $partnerConvertSQL = "SELECT DISTINCT partner_id, partner_id_kpx FROM masterdata.partner_masterfile WHERE partner_name = ? AND status = 'ACTIVE'";
-        $partnerStmt = $conn->prepare($partnerConvertSQL);
-
-        if ($partnerStmt) {
-            $partnerStmt->bind_param('s', $partner);
-            $partnerStmt->execute();
-            $partnerResult = $partnerStmt->get_result();
-
-            while ($row = $partnerResult->fetch_assoc()) {
-                if (!empty($row['partner_id'])) {
-                    $partnerIds[] = trim((string)$row['partner_id']);
-                }
-                if (!empty($row['partner_id_kpx'])) {
-                    $partnerIds[] = trim((string)$row['partner_id_kpx']);
-                }
-            }
-
-            $partnerStmt->close();
+        if ($partner === 'SECURITY BANK') {
+            $partnerOwnerCondition = ' AND bt.partner_name = ? AND (bt.sub_billers_name IS NULL OR TRIM(bt.sub_billers_name) = \'\')';
+        } elseif ($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING') {
+            $partnerOwnerCondition = ' AND bt.sub_billers_name = ?';
+        } else {
+            $partnerOwnerCondition = ' AND bt.partner_name = ?';
         }
-
-        $partnerIds = array_values(array_unique(array_filter($partnerIds)));
     }
 
         $query = "SELECT
@@ -218,19 +207,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                     bt.settle_unsettle IS NULL
                     OR TRIM(bt.settle_unsettle) = ''
                     OR UPPER(TRIM(bt.settle_unsettle)) = 'UNSETTLE'
-                )";
+                )
+                AND bt.rfp_no IS NULL
+                AND bt.cad_no IS NULL
+                AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+                $partnerOwnerCondition";
 
     if ($partner !== '' && $partner !== 'All') {
-        if (!empty($partnerIds)) {
-            $partnerIdPlaceholders = implode(',', array_fill(0, count($partnerIds), '?'));
-            $query .= " AND (bt.partner_id IN ($partnerIdPlaceholders) OR bt.partner_id_kpx IN ($partnerIdPlaceholders))";
-            $params = array_merge($params, $partnerIds, $partnerIds);
-            $types .= str_repeat('s', count($partnerIds) * 2);
-        } else {
-            $query .= " AND bt.partner_name = ?";
-            $params[] = $partner;
-            $types .= 's';
-        }
+        $params[] = $partner;
+        $types .= 's';
     }
 
     $query .= ' ORDER BY bt.datetime ASC, bt.reference_no ASC';
@@ -268,6 +253,195 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
     exit();
 }
 
+if (isset($_POST['action']) && $_POST['action'] === 'get_logs_list') {
+    header('Content-Type: application/json');
+
+    $settlementView = $_POST['settlementView'] ?? 'filter';
+    $partner = trim((string)($_POST['partner'] ?? ''));
+    $filterType = trim((string)($_POST['filterType'] ?? ''));
+    $startDate = trim((string)($_POST['startDate'] ?? ''));
+    $endDate = trim((string)($_POST['endDate'] ?? ''));
+    $referenceNumber = trim((string)($_POST['referenceNumber'] ?? ''));
+
+    $params = [];
+    $types = '';
+
+    if ($settlementView === 'reference') {
+        if ($referenceNumber === '') {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Reference Number is required for logs.',
+                'data' => []
+            ]);
+            exit();
+        }
+    } else {
+        if ($filterType === '' || $startDate === '') {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Missing required filters for logs.',
+                'data' => []
+            ]);
+            exit();
+        }
+
+        if ($filterType === 'daily') {
+            $endDate = $startDate;
+        } elseif ($filterType === 'date-range') {
+            $endDate = $endDate !== '' ? $endDate : $startDate;
+        } elseif ($filterType === 'monthly') {
+            $startDate = $startDate . '-01';
+            $endDate = date('Y-m-t', strtotime($startDate));
+        }
+    }
+
+    // Partner owner filter based on sub_billers_name rules
+    $partnerOwnerConditionLogs = '';
+    if ($partner !== '' && $partner !== 'All') {
+        if ($partner === 'SECURITY BANK') {
+            $partnerOwnerConditionLogs = ' AND mbt.partner_name = ? AND (mbt.sub_billers_name IS NULL OR TRIM(mbt.sub_billers_name) = \'\')';
+        } elseif ($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING') {
+            $partnerOwnerConditionLogs = ' AND mbt.sub_billers_name = ?';
+        } else {
+            $partnerOwnerConditionLogs = ' AND mbt.partner_name = ?';
+        }
+    }
+
+    $query = "SELECT
+                msabt.posting_date,
+                CASE
+                    WHEN msabt.edited_datetime IS NOT NULL
+                        THEN msabt.edited_datetime
+                    ELSE msabt.prev_datetime
+                END AS transaction_date,
+                msabt.reference_no AS reference_number,
+                CASE
+                    WHEN msabt.edited_payor IS NOT NULL AND TRIM(msabt.edited_payor) <> ''
+                        THEN msabt.edited_payor
+                    ELSE msabt.prev_payor
+                END AS payor_name,
+                CASE
+                    WHEN msabt.edited_address IS NOT NULL AND TRIM(msabt.edited_address) <> ''
+                        THEN msabt.edited_address
+                    ELSE msabt.prev_address
+                END AS payor_address,
+                CASE
+                    WHEN msabt.edited_account_no IS NOT NULL AND TRIM(msabt.edited_account_no) <> ''
+                        THEN msabt.edited_account_no
+                    ELSE msabt.prev_account_no
+                END AS account_number,
+                CASE
+                    WHEN msabt.edited_account_name IS NOT NULL AND TRIM(msabt.edited_account_name) <> ''
+                        THEN msabt.edited_account_name
+                    ELSE msabt.prev_account_name
+                END AS account_name,
+                CASE
+                    WHEN msabt.edited_amount_paid IS NOT NULL AND TRIM(msabt.edited_amount_paid) <> ''
+                        THEN msabt.edited_amount_paid
+                    ELSE msabt.prev_amount_paid
+                END AS principal,
+                CASE
+                    WHEN msabt.edited_charge_to_customer IS NOT NULL AND TRIM(msabt.edited_charge_to_customer) <> ''
+                        THEN msabt.edited_charge_to_customer
+                    ELSE msabt.prev_charge_to_customer
+                END AS charge_to_customer,
+                CASE
+                    WHEN msabt.edited_charge_to_partner IS NOT NULL AND TRIM(msabt.edited_charge_to_partner) <> ''
+                        THEN msabt.edited_charge_to_partner
+                    ELSE msabt.prev_charge_to_partner
+                END AS charge_to_partner,
+                CASE
+                    WHEN msabt.edited_contact_no IS NOT NULL AND TRIM(msabt.edited_contact_no) <> ''
+                        THEN msabt.edited_contact_no
+                    ELSE msabt.prev_contact_no
+                END AS contact_number,
+                CASE
+                    WHEN msabt.edited_other_details IS NOT NULL AND TRIM(msabt.edited_other_details) <> ''
+                        THEN msabt.edited_other_details
+                    ELSE msabt.prev_other_details
+                END AS other_details,
+                CASE
+                    WHEN msabt.edited_outlet IS NOT NULL AND TRIM(msabt.edited_outlet) <> ''
+                        THEN msabt.edited_outlet
+                    ELSE msabt.prev_outlet
+                END AS branch_outlet,
+                CASE
+                    WHEN msabt.edited_operator IS NOT NULL AND TRIM(msabt.edited_operator) <> ''
+                        THEN msabt.edited_operator
+                    ELSE msabt.prev_operator
+                END AS branch_operator,
+                msabt.reason_note
+            FROM mldb.settle_adjustment_branch_transaction AS msabt
+            INNER JOIN mldb.billspayment_transaction AS mbt
+                    ON mbt.reference_no = msabt.reference_no
+                     AND mbt.datetime = CASE
+                                            WHEN msabt.edited_datetime IS NOT NULL
+                                                THEN msabt.edited_datetime
+                                            ELSE msabt.prev_datetime
+                                        END
+            WHERE (mbt.status IS NULL OR mbt.status <> '*')
+                AND mbt.rfp_no IS NULL
+                AND mbt.cad_no IS NULL
+                            AND mbt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')";
+
+    if ($settlementView === 'reference') {
+        $query .= ' AND msabt.reference_no LIKE ?';
+        $params[] = '%' . $referenceNumber . '%';
+        $types .= 's';
+    } else {
+        if ($filterType === 'daily') {
+            $query .= ' AND DATE(mbt.datetime) = ?';
+            $params[] = $startDate;
+            $types .= 's';
+        } else {
+            $query .= ' AND DATE(mbt.datetime) BETWEEN ? AND ?';
+            $params[] = $startDate;
+            $params[] = $endDate;
+            $types .= 'ss';
+        }
+    }
+
+    if ($partner !== '' && $partner !== 'All') {
+        $query .= $partnerOwnerConditionLogs;
+        $params[] = $partner;
+        $types .= 's';
+    }
+
+    $query .= ' ORDER BY mbt.datetime ASC, msabt.reference_no ASC';
+
+    try {
+        $stmt = $conn->prepare($query);
+        if (!$stmt) {
+            throw new Exception('Prepare failed: ' . $conn->error);
+        }
+
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Logs loaded successfully.',
+            'totalRows' => count($rows),
+            'data' => $rows
+        ]);
+    } catch (Exception $e) {
+        error_log('Settle transaction get_logs_list error: ' . $e->getMessage());
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Database error: ' . $e->getMessage(),
+            'data' => []
+        ]);
+    }
+
+    exit();
+}
+
 if (isset($_POST['action']) && $_POST['action'] === 'submit_changes') {
     header('Content-Type: application/json');
 
@@ -284,6 +458,26 @@ if (isset($_POST['action']) && $_POST['action'] === 'submit_changes') {
         exit();
     }
 
+    $buildEditedDatetime = function ($prevDatetime, $postingDate) {
+        $prevDatetime = trim((string)$prevDatetime);
+        $postingDate = trim((string)$postingDate);
+
+        if ($prevDatetime === '') {
+            return '';
+        }
+
+        if ($postingDate === '') {
+            return $prevDatetime;
+        }
+
+        $timePart = '00:00:00';
+        if (preg_match('/\d{2}:\d{2}:\d{2}$/', $prevDatetime, $matches)) {
+            $timePart = $matches[0];
+        }
+
+        return $postingDate . ' ' . $timePart;
+    };
+
     $normalizedChanges = [];
     foreach ($decodedChanges as $item) {
         if (!is_array($item)) {
@@ -299,12 +493,18 @@ if (isset($_POST['action']) && $_POST['action'] === 'submit_changes') {
             continue;
         }
 
+        $postingDate = isset($item['posting_date']) ? trim((string)$item['posting_date']) : '';
+        $prevDatetime = $transactionDatetime;
+        $editedDatetime = $buildEditedDatetime($prevDatetime, $postingDate);
+
         $normalizedChanges[] = [
             'reference_key' => $referenceKey,
             'reference_number' => $referenceNumber,
             'transaction_datetime' => $transactionDatetime,
+            'prev_datetime' => $prevDatetime,
+            'edited_datetime' => $editedDatetime,
             'reason_note' => $reasonNote,
-            'posting_date' => isset($item['posting_date']) ? trim((string)$item['posting_date']) : '',
+            'posting_date' => $postingDate,
             'payor' => isset($item['payor']) ? trim((string)$item['payor']) : '',
             'address' => isset($item['address']) ? trim((string)$item['address']) : '',
             'account_no' => isset($item['account_no']) ? trim((string)$item['account_no']) : '',
@@ -352,8 +552,29 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
         return str_replace(',', '', trim((string)$value));
     };
 
+    $buildEditedDatetime = function ($prevDatetime, $postingDate) {
+        $prevDatetime = trim((string)$prevDatetime);
+        $postingDate = trim((string)$postingDate);
+
+        if ($prevDatetime === '') {
+            return '';
+        }
+
+        if ($postingDate === '') {
+            return $prevDatetime;
+        }
+
+        $timePart = '00:00:00';
+        if (preg_match('/\d{2}:\d{2}:\d{2}$/', $prevDatetime, $matches)) {
+            $timePart = $matches[0];
+        }
+
+        return $postingDate . ' ' . $timePart;
+    };
+
     $insertSql = "INSERT INTO mldb.settle_adjustment_branch_transaction (
-                    datetime, reference_no,
+                    prev_datetime, reference_no,
+                    edited_datetime,
                     prev_payor, edited_payor,
                     prev_address, edited_address,
                     prev_account_no, edited_account_no,
@@ -370,6 +591,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 )
                 SELECT
                     bt.datetime, bt.reference_no,
+                    ?,
                     bt.payor, ?,
                     bt.address, ?,
                     bt.account_no, ?,
@@ -385,17 +607,20 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     ?, ?, NOW()
                 FROM mldb.billspayment_transaction bt
                 WHERE bt.reference_no = ?
-                  AND bt.datetime = ?
+                AND bt.datetime = ?
+                AND bt.rfp_no IS NULL
+                AND bt.cad_no IS NULL
                   AND NOT EXISTS (
                     SELECT 1
                     FROM mldb.settle_adjustment_branch_transaction st
                     WHERE st.reference_no = bt.reference_no
-                      AND st.datetime = bt.datetime
+                      AND st.prev_datetime = bt.datetime
                   )
                 LIMIT 1";
 
         $insertLatePostingSql = "INSERT INTO mldb.settle_adjustment_branch_transaction (
-                                        datetime, reference_no,
+                                        prev_datetime, reference_no,
+                                        edited_datetime,
                                         prev_payor,
                                         prev_address,
                                         prev_account_no,
@@ -413,6 +638,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                 )
                                 SELECT
                                         bt.datetime, bt.reference_no,
+                                    ?,
                                         bt.payor,
                                         bt.address,
                                         bt.account_no,
@@ -430,16 +656,19 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                 FROM mldb.billspayment_transaction bt
                                 WHERE bt.reference_no = ?
                                     AND bt.datetime = ?
+                                    AND bt.rfp_no IS NULL
+                                    AND bt.cad_no IS NULL
                                     AND NOT EXISTS (
                                         SELECT 1
                                         FROM mldb.settle_adjustment_branch_transaction st
                                         WHERE st.reference_no = bt.reference_no
-                                            AND st.datetime = bt.datetime
+                                            AND st.prev_datetime = bt.datetime
                                     )
                                 LIMIT 1";
 
         $insertWrongAmountSql = "INSERT INTO mldb.settle_adjustment_branch_transaction (
-                                        datetime, reference_no,
+                                        prev_datetime, reference_no,
+                                        edited_datetime,
                                         prev_payor,
                                         prev_address,
                                         prev_account_no,
@@ -457,6 +686,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                 )
                                 SELECT
                                         bt.datetime, bt.reference_no,
+                                    ?,
                                         bt.payor,
                                         bt.address,
                                         bt.account_no,
@@ -474,11 +704,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                 FROM mldb.billspayment_transaction bt
                                 WHERE bt.reference_no = ?
                                     AND bt.datetime = ?
+                                    AND bt.rfp_no IS NULL
+                                    AND bt.cad_no IS NULL
                                     AND NOT EXISTS (
                                         SELECT 1
                                         FROM mldb.settle_adjustment_branch_transaction st
                                         WHERE st.reference_no = bt.reference_no
-                                            AND st.datetime = bt.datetime
+                                            AND st.prev_datetime = bt.datetime
                                     )
                                 LIMIT 1";
 
@@ -486,22 +718,34 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                                                         FROM mldb.billspayment_transaction bt
                                                                         WHERE bt.reference_no = ?
                                                                             AND bt.datetime = ?
+                                                                            AND bt.rfp_no IS NULL
+                                                                            AND bt.cad_no IS NULL
                                                                         LIMIT 1";
 
         $updateLatePostingSql = "UPDATE mldb.billspayment_transaction
-                                                                SET settle_unsettle = 'Settle'
+                                                                SET settle_unsettle = 'Settle',
+                                                                        report_date = ?,
+                                                                        settlement_date = ?,
+                                                                        datetime = ?
                                                             WHERE datetime = ?
                                                                 AND reference_no = ?
+                                                                AND rfp_no IS NULL
+                                                                AND cad_no IS NULL
                                                                 AND (partner_id = ? OR partner_id_kpx = ?)
                                                             LIMIT 1";
 
         $updateWrongAmountSql = "UPDATE mldb.billspayment_transaction
                                                                 SET settle_unsettle = 'Settle',
+                                                                        report_date = ?,
+                                                                        settlement_date = ?,
+                                                                        datetime = ?,
                                                                         amount_paid = ?,
                                                                         charge_to_customer = ?,
                                                                         charge_to_partner = ?
                                                             WHERE datetime = ?
                                                                 AND reference_no = ?
+                                                                AND rfp_no IS NULL
+                                                                AND cad_no IS NULL
                                                                 AND (partner_id = ? OR partner_id_kpx = ?)
                                                             LIMIT 1";
 
@@ -511,6 +755,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         address = ?,
                                         account_no = ?,
                                         account_name = ?,
+                                        report_date = ?,
+                                        settlement_date = ?,
+                                        datetime = ?,
                                         amount_paid = ?,
                                         charge_to_customer = ?,
                                         charge_to_partner = ?,
@@ -521,6 +768,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                                         settle_unsettle = 'Settle'
                                     WHERE reference_no = ?
                                         AND datetime = ?
+                                        AND rfp_no IS NULL
+                                        AND cad_no IS NULL
                                     LIMIT 1";
 
     try {
@@ -570,7 +819,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
             $referenceNumber = trim((string)($item['reference_number'] ?? ''));
             $transactionDatetime = trim((string)($item['transaction_datetime'] ?? ''));
-            if ($referenceNumber === '' || $transactionDatetime === '') {
+            $prevDatetime = trim((string)($item['prev_datetime'] ?? $transactionDatetime));
+            if ($referenceNumber === '' || $prevDatetime === '') {
                 continue;
             }
 
@@ -587,6 +837,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             $editedOperator = trim((string)($item['operator'] ?? ''));
             $reasonNote = trim((string)($item['reason_note'] ?? ''));
             $postingDate = trim((string)($item['posting_date'] ?? ''));
+            $editedDatetime = trim((string)($item['edited_datetime'] ?? ''));
+            if ($editedDatetime === '') {
+                $editedDatetime = $buildEditedDatetime($prevDatetime, $postingDate);
+            }
 
             if ($reasonNote === 'late-posting') {
                 if ($postingDate === '') {
@@ -594,12 +848,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 }
 
                 $lateInsertStmt->bind_param(
-                    str_repeat('s', 5),
+                    str_repeat('s', 6),
+                    $editedDatetime,
                     $postingDate,
                     $reasonNote,
                     $modifiedBy,
                     $referenceNumber,
-                    $transactionDatetime
+                    $prevDatetime
                 );
 
                 $lateInsertStmt->execute();
@@ -615,7 +870,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 $latePartnerLookupStmt->bind_param(
                     str_repeat('s', 2),
                     $referenceNumber,
-                    $transactionDatetime
+                    $prevDatetime
                 );
                 $latePartnerLookupStmt->execute();
                 $latePartnerLookupResult = $latePartnerLookupStmt->get_result();
@@ -627,8 +882,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
                 if ($partnerId !== '' || $partnerIdKpx !== '') {
                     $lateUpdateStmt->bind_param(
-                        str_repeat('s', 4),
-                        $transactionDatetime,
+                        str_repeat('s', 7),
+                        $postingDate,
+                        $postingDate,
+                        $editedDatetime,
+                        $prevDatetime,
                         $referenceNumber,
                         $partnerId,
                         $partnerIdKpx
@@ -648,7 +906,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 }
 
                 $wrongAmountInsertStmt->bind_param(
-                    str_repeat('s', 8),
+                    str_repeat('s', 9),
+                    $editedDatetime,
                     $editedAmountPaid,
                     $editedChargeCustomer,
                     $editedChargePartner,
@@ -656,7 +915,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     $reasonNote,
                     $modifiedBy,
                     $referenceNumber,
-                    $transactionDatetime
+                    $prevDatetime
                 );
 
                 $wrongAmountInsertStmt->execute();
@@ -672,7 +931,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 $latePartnerLookupStmt->bind_param(
                     str_repeat('s', 2),
                     $referenceNumber,
-                    $transactionDatetime
+                    $prevDatetime
                 );
                 $latePartnerLookupStmt->execute();
                 $latePartnerLookupResult = $latePartnerLookupStmt->get_result();
@@ -684,11 +943,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
                 if ($partnerId !== '' || $partnerIdKpx !== '') {
                     $wrongAmountUpdateStmt->bind_param(
-                        str_repeat('s', 7),
+                        str_repeat('s', 10),
+                        $postingDate,
+                        $postingDate,
+                        $editedDatetime,
                         $editedAmountPaid,
                         $editedChargeCustomer,
                         $editedChargePartner,
-                        $transactionDatetime,
+                        $prevDatetime,
                         $referenceNumber,
                         $partnerId,
                         $partnerIdKpx
@@ -703,7 +965,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             }
 
             $stmt->bind_param(
-                str_repeat('s', 15),
+                str_repeat('s', 16),
+                $editedDatetime,
                 $editedPayor,
                 $editedAddress,
                 $editedAccountNo,
@@ -718,7 +981,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 $reasonNote,
                 $modifiedBy,
                 $referenceNumber,
-                $transactionDatetime
+                $prevDatetime
             );
 
             $stmt->execute();
@@ -729,11 +992,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             }
 
             $updateStmt->bind_param(
-                str_repeat('s', 13),
+                str_repeat('s', 16),
                 $editedPayor,
                 $editedAddress,
                 $editedAccountNo,
                 $editedAccountName,
+                $postingDate,
+                $postingDate,
+                $editedDatetime,
                 $editedAmountPaid,
                 $editedChargeCustomer,
                 $editedChargePartner,
@@ -742,7 +1008,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 $editedOutlet,
                 $editedOperator,
                 $referenceNumber,
-                $transactionDatetime
+                $prevDatetime
             );
             $updateStmt->execute();
             if ($updateStmt->affected_rows > 0) {
@@ -1146,7 +1412,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             <div class="bp-section-title">
                 <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
                 <div>
-                    <h2>Adjustment Entry</h2>
+                    <h2>Adjustment Entry - (UNDER CONSTRUCTION)</h2>
                     <!-- <p class="bp-section-sub">Sample Description</p> -->
                 </div>
             </div>
@@ -1239,7 +1505,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 <div class="card-body settle-report-body">
                     <div class="d-flex justify-content-end align-items-center mb-2 gap-2">
                         <div class="d-flex gap-2">
-                            <button id="settle-logs" type="button" class="btn btn-secondary" disabled>Logs</button>
+                            <button id="settle-logs" type="button" class="btn btn-secondary" style="display: none;" disabled>Logs</button>
                             <button id="settle-edit" type="button" class="btn btn-secondary" disabled>Reason</button>
                             <button id="settle-save" type="button" class="btn btn-secondary" disabled>Save</button>
                         </div>
@@ -1308,7 +1574,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
         </div>
     </div>
 
-    <div class="modal fade" id="settlementEditModal" tabindex="-1" aria-labelledby="settlementEditModalLabel" aria-hidden="true">
+    <div class="modal fade" id="settlementEditModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="settlementEditModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
@@ -1320,6 +1586,70 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-danger" id="settlementSubmitChanges">Submit Changes</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="settlementLogsModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="settlementLogsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="settlementLogsModalLabel">Settlement Logs</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-end align-items-center mb-2 gap-2">
+                        <div id="logsTableStatus" class="small text-muted me-auto"></div>
+                        <div class="input-group table-search-wrap">
+                            <span class="input-group-text bg-white">
+                                <i class="fas fa-search text-muted"></i>
+                            </span>
+                            <input
+                                type="text"
+                                id="logsTableSearchInput"
+                                class="form-control"
+                                placeholder="Search logs..."
+                                aria-label="Search logs"
+                            >
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table id="settlementLogsTable" class="table table-bordered table-hover table-striped">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th class="text-truncate text-center align-middle table-checkbox-cell">
+                                        <div class="form-check d-flex justify-content-center m-0">
+                                            <input class="form-check-input" type="checkbox" id="logsSelectAllRows" aria-label="Select all log rows">
+                                        </div>
+                                    </th>
+                                    <th class="text-truncate text-center align-middle">Settlement Date</th>
+                                    <th class="text-truncate text-center align-middle">Reference Number</th>
+                                    <th class="text-truncate text-center align-middle">Payor Name</th>
+                                    <th class="text-truncate text-center align-middle">Payor Address</th>
+                                    <th class="text-truncate text-center align-middle">Account Number</th>
+                                    <th class="text-truncate text-center align-middle">Account Name</th>
+                                    <th class="text-truncate text-center align-middle">Principal</th>
+                                    <th class="text-truncate text-center align-middle">Charge to Customer</th>
+                                    <th class="text-truncate text-center align-middle">Charge to Partner</th>
+                                    <th class="text-truncate text-center align-middle">Contact Number</th>
+                                    <th class="text-truncate text-center align-middle">Other Details</th>
+                                    <th class="text-truncate text-center align-middle">Branch Outlet</th>
+                                    <th class="text-truncate text-center align-middle">Branch Operator</th>
+                                    <th class="text-truncate text-center align-middle">Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="16" class="text-center text-muted">No logs available.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="logsReasonButton" class="btn btn-secondary" disabled>Edit</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
@@ -1340,6 +1670,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             const $dayButtonsWrapper = $('#dayButtonsWrapper');
             const $reportStatus = $('#reportStatus');
             const $tableSearchInput = $('#tableSearchInput');
+            const $settleLogsBtn = $('#settle-logs');
             const $settleEditBtn = $('#settle-edit');
             const $settleSaveBtn = $('#settle-save');
             const $settlementViewRadios = $('input[name="settlement_view"]');
@@ -1348,6 +1679,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
             const $referenceNumberWrap = $('#referenceNumberWrap');
             const $referenceNumberInput = $('#referenceNumberInput');
             const $loadingOverlay = $('#loading-overlay');
+            const $settlementSubmitChangesBtn = $('#settlementSubmitChanges');
+            const $settlementEditModalLabel = $('#settlementEditModalLabel');
             const settlementEditModalEl = document.getElementById('settlementEditModal');
             const settlementEditModal = settlementEditModalEl ? new bootstrap.Modal(settlementEditModalEl) : null;
             let currentRangeStart = '';
@@ -1359,6 +1692,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
 
             function hideGenerateLoadingOverlay() {
                 $loadingOverlay.hide();
+            }
+
+            function activateLogsButton() {
+                $settleLogsBtn
+                    .show()
+                    .prop('disabled', false)
+                    .removeClass('btn-secondary btn-danger btn-success')
+                    .addClass('btn-warning text-dark');
             }
 
             partnerDropdown.select2({
@@ -1777,6 +2118,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     $dayFilterContainer.hide();
                     $dayButtonsWrapper.find('.day-button').not('#allDaysButton').remove();
                     setDayActive($('#allDaysButton'));
+                    activateLogsButton();
                     requestReport('', '');
                     return;
                 }
@@ -1829,6 +2171,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     setDayActive($('#allDaysButton'));
                 }
 
+                activateLogsButton();
                 requestReport(startDate, endDate);
             });
 
@@ -1872,6 +2215,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     return;
                 }
 
+                $settlementEditModalLabel.text('Reason');
+                $settlementSubmitChangesBtn.text('Submit Changes');
                 window.populateSettlementEditModal(selectedRows);
 
                 if (settlementEditModal) {
@@ -2473,6 +2818,306 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_changes') {
                     });
                 }
             });
+        });
+    </script>
+
+    <script>
+        $(function () {
+            const $logsBtn = $('#settle-logs');
+            const logsModalEl = document.getElementById('settlementLogsModal');
+            const logsModal = logsModalEl ? new bootstrap.Modal(logsModalEl) : null;
+            const $logsTableBody = $('#settlementLogsTable tbody');
+            const $logsSearchInput = $('#logsTableSearchInput');
+            const $logsStatus = $('#logsTableStatus');
+            const $logsSelectAllRows = $('#logsSelectAllRows');
+
+            function escapeLogsHtml(value) {
+                return String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function formatLogsAmount(value) {
+                const text = String(value ?? '').replace(/,/g, '').trim();
+                if (text === '') {
+                    return '';
+                }
+
+                const numeric = parseFloat(text);
+                if (Number.isNaN(numeric)) {
+                    return String(value ?? '').trim();
+                }
+
+                return numeric.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            function fetchLogsList() {
+                return $.ajax({
+                    url: window.location.pathname,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action: 'get_logs_list',
+                        settlementView: $('input[name="settlement_view"]:checked').val() || 'filter',
+                        partner: $('#partnerlistDropdown').val(),
+                        filterType: $('#filterType').val(),
+                        startDate: $('#startDate').val(),
+                        endDate: $('#endDate').val(),
+                        referenceNumber: $('#referenceNumberInput').val()
+                    }
+                });
+            }
+
+            function renderLogsTable(rows) {
+                $logsTableBody.empty();
+                $logsSelectAllRows.prop('checked', false);
+
+                if (!Array.isArray(rows) || rows.length === 0) {
+                    $logsTableBody.html('<tr><td colspan="16" class="text-center text-muted">No logs available.</td></tr>');
+                    $logsStatus.text('Found 0 log record(s).');
+                    return;
+                }
+
+                rows.forEach(function (row) {
+                    const tr = `
+                        <tr data-reference-key="${escapeLogsHtml(row.reference_number || '')}" data-transaction-datetime="${escapeLogsHtml(row.transaction_date || '')}" data-posting-date="${escapeLogsHtml(row.posting_date || '')}">
+                            <td class="table-checkbox-cell">
+                                <div class="form-check d-flex justify-content-center m-0">
+                                    <input class="form-check-input logs-row-select" type="checkbox" aria-label="Select log row">
+                                </div>
+                            </td>
+                            <td class="text-truncate">${escapeLogsHtml(row.posting_date || '')}</td>
+                            <td class="text-truncate">${escapeLogsHtml(row.reference_number)}</td>
+                            <td class="text-truncate">${escapeLogsHtml(row.payor_name)}</td>
+                            <td class="text-truncate">${escapeLogsHtml(row.payor_address)}</td>
+                            <td class="text-truncate">${escapeLogsHtml(row.account_number)}</td>
+                            <td class="text-truncate">${escapeLogsHtml(row.account_name)}</td>
+                            <td class="text-end">${escapeLogsHtml(formatLogsAmount(row.principal))}</td>
+                            <td class="text-end">${escapeLogsHtml(formatLogsAmount(row.charge_to_customer))}</td>
+                            <td class="text-end">${escapeLogsHtml(formatLogsAmount(row.charge_to_partner))}</td>
+                            <td class="text-truncate">${escapeLogsHtml(row.contact_number)}</td>
+                            <td class="text-truncate">${escapeLogsHtml(row.other_details)}</td>
+                            <td class="text-truncate">${escapeLogsHtml(row.branch_outlet)}</td>
+                            <td class="text-truncate">${escapeLogsHtml(row.branch_operator)}</td>
+                            <td class="text-truncate">${escapeLogsHtml(row.reason_note || '')}</td>
+                        </tr>
+                    `;
+
+                    $logsTableBody.append(tr);
+                });
+
+                $logsStatus.text(`Found ${rows.length} log record(s).`);
+            }
+
+            function updateLogsSelectAllState() {
+                const $checkboxes = $('#settlementLogsTable tbody .logs-row-select');
+                const total = $checkboxes.length;
+                const checked = $checkboxes.filter(':checked').length;
+                $logsSelectAllRows.prop('checked', total > 0 && total === checked);
+            }
+
+            function filterLogsTable(searchText) {
+                const keyword = String(searchText || '').toLowerCase().trim();
+                const $rows = $('#settlementLogsTable tbody tr');
+                let visibleCount = 0;
+
+                $rows.each(function () {
+                    const $row = $(this);
+                    const isEmptyRow = $row.find('td').length === 1;
+
+                    if (isEmptyRow) {
+                        $row.toggle(keyword === '');
+                        return;
+                    }
+
+                    const rowText = $row.text().toLowerCase();
+                    const matched = keyword === '' || rowText.includes(keyword);
+                    $row.toggle(matched);
+                    if (matched) {
+                        visibleCount += 1;
+                    }
+                });
+
+                if (keyword === '') {
+                    const total = $('#settlementLogsTable tbody tr').not(':has(td[colspan])').length;
+                    $logsStatus.text(`Found ${total} log record(s).`);
+                } else {
+                    $logsStatus.text(`Showing ${visibleCount} filtered log record(s).`);
+                }
+            }
+
+            $logsBtn.on('click', function () {
+                if ($(this).prop('disabled')) {
+                    return;
+                }
+
+                $logsSearchInput.val('');
+                $logsStatus.text('Loading logs...');
+
+                fetchLogsList()
+                    .done(function (result) {
+                        if (!result || result.status !== 'success') {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Logs Failed',
+                                text: (result && result.message) ? result.message : 'Unable to load logs.'
+                            });
+                            renderLogsTable([]);
+                            return;
+                        }
+
+                        renderLogsTable(result.data || []);
+                    })
+                    .fail(function () {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Connection Error',
+                            text: 'Failed to load logs. Please try again.'
+                        });
+                        renderLogsTable([]);
+                    });
+
+                if (logsModal) {
+                    logsModal.show();
+                }
+            });
+
+            $logsSearchInput.on('input', function () {
+                filterLogsTable($(this).val());
+            });
+
+            $logsSelectAllRows.on('change', function () {
+                const isChecked = $(this).is(':checked');
+                $('#settlementLogsTable tbody .logs-row-select').prop('checked', isChecked);
+            });
+
+            $('#settlementLogsTable').on('change', '.logs-row-select', function () {
+                updateLogsSelectAllState();
+            });
+        });
+    </script>
+
+    <script>
+        $(function () {
+            const $logsReasonBtn = $('#logsReasonButton');
+            const $settlementSubmitChangesBtn = $('#settlementSubmitChanges');
+            const $settlementEditModalLabel = $('#settlementEditModalLabel');
+            const logsModalEl = document.getElementById('settlementLogsModal');
+            const settlementEditModalEl = document.getElementById('settlementEditModal');
+            let shouldReturnToLogsModal = false;
+
+            function updateLogsReasonButtonState() {
+                const checkedCount = $('#settlementLogsTable tbody .logs-row-select:checked').length;
+                const hasSelection = checkedCount > 0;
+
+                if (hasSelection) {
+                    $logsReasonBtn.prop('disabled', false).removeClass('btn-secondary').addClass('btn-danger');
+                } else {
+                    $logsReasonBtn.prop('disabled', true).removeClass('btn-danger').addClass('btn-secondary');
+                }
+            }
+
+            function collectSelectedLogsRowsForReason() {
+                const selectedRows = [];
+
+                $('#settlementLogsTable tbody .logs-row-select:checked').each(function () {
+                    const $row = $(this).closest('tr');
+                    const $cells = $row.find('td');
+                    const transactionDatetime = String($row.attr('data-transaction-datetime') || '').trim();
+                    const postingDate = String($row.attr('data-posting-date') || '').trim();
+                    const referenceNumber = $cells.eq(2).text().trim();
+
+                    selectedRows.push({
+                        referenceNumber: referenceNumber,
+                        transactionDatetime: transactionDatetime,
+                        referenceKey: buildSettlementRowKey(referenceNumber, transactionDatetime),
+                        payor: $cells.eq(3).text().trim(),
+                        address: $cells.eq(4).text().trim(),
+                        accountNo: $cells.eq(5).text().trim(),
+                        accountName: $cells.eq(6).text().trim(),
+                        amountPaid: $cells.eq(7).text().trim(),
+                        chargeToCustomer: $cells.eq(8).text().trim(),
+                        chargeToPartner: $cells.eq(9).text().trim(),
+                        contactNo: $cells.eq(10).text().trim(),
+                        otherDetails: $cells.eq(11).text().trim(),
+                        mlOutlet: $cells.eq(12).text().trim(),
+                        operator: $cells.eq(13).text().trim(),
+                        reasonNote: $cells.eq(14).text().trim(),
+                        postingDate: postingDate
+                    });
+                });
+
+                return selectedRows;
+            }
+
+            $('#settlementLogsTable').on('change', '.logs-row-select', function () {
+                updateLogsReasonButtonState();
+            });
+
+            $('#logsSelectAllRows').on('change', function () {
+                updateLogsReasonButtonState();
+            });
+
+            $('#settle-logs').on('click', function () {
+                updateLogsReasonButtonState();
+            });
+
+            $logsReasonBtn.on('click', function () {
+                if ($(this).prop('disabled')) {
+                    return;
+                }
+
+                const selectedRows = collectSelectedLogsRowsForReason();
+                if (!Array.isArray(selectedRows) || selectedRows.length === 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'No Selection',
+                        text: 'Please select at least one logs row.'
+                    });
+                    return;
+                }
+
+                if (typeof window.populateSettlementEditModal === 'function') {
+                    window.populateSettlementEditModal(selectedRows);
+                }
+
+                $settlementEditModalLabel.text('Edit');
+                $settlementSubmitChangesBtn.text('Update');
+
+                shouldReturnToLogsModal = true;
+
+                const logsModalInstance = logsModalEl ? bootstrap.Modal.getInstance(logsModalEl) : null;
+                if (logsModalInstance) {
+                    logsModalInstance.hide();
+                }
+
+                const settlementEditModalInstance = settlementEditModalEl ? bootstrap.Modal.getOrCreateInstance(settlementEditModalEl) : null;
+                if (settlementEditModalInstance) {
+                    settlementEditModalInstance.show();
+                }
+            });
+
+            if (settlementEditModalEl) {
+                $(settlementEditModalEl).on('click', '[data-bs-dismiss="modal"]', function () {
+                    if (shouldReturnToLogsModal) {
+                        setTimeout(function () {
+                            const logsModalInstance = logsModalEl ? bootstrap.Modal.getOrCreateInstance(logsModalEl) : null;
+                            if (logsModalInstance) {
+                                logsModalInstance.show();
+                            }
+                        }, 150);
+                    }
+                });
+
+                $(settlementEditModalEl).on('hidden.bs.modal', function () {
+                    shouldReturnToLogsModal = false;
+                });
+            }
+
+            updateLogsReasonButtonState();
         });
     </script>
 </body>
