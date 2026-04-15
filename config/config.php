@@ -5,7 +5,7 @@
     // $username = ["root", "mlcad"];
     $password = "Password1";
     // $password = ["Password1", "CADMLhuillier2023"];
-    $database = ["mldb", "masterdata"];
+    $database = ["mldb", "masterdata", "support_ticket"];
 
     date_default_timezone_set('Asia/Manila');
 
