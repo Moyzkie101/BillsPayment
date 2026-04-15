@@ -843,7 +843,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             <div class="bp-section-title">
                 <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
                 <div>
-                    <h2>Settlement Per Bank</h2>
+                    <h2>Settlement Per Bank - (UNDER CONSTRUCTION)</h2>
                     <!-- <p class="bp-section-sub">Sample Description</p> -->
                 </div>
             </div>

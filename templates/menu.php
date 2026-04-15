@@ -527,22 +527,19 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <i class="fa-solid fa-chevron-down" id="open-set-masterfile" style="display: none"></i>
             </div>
 
-            <!-- Set Masterfiles Partner List Buttons -->
-            <?php if (has_permission('Maintenance Masterfiles Partner List')): ?>
-            <div class="onetab-sub" id="set-masterfile-partner-nav" style="display: none;">
+            <!-- Set Masterfiles submenu items -->
+            <div class="onetab-sub" id="set-masterfile-nav" style="display: none;">
+                <?php if (has_permission('Maintenance Masterfiles Partner List')): ?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/masterfiles/masterfile-partner-list.php'">
                     <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-partner-list.php"><i class="fa-solid fa-receipt"></i> Partner List</a>
                 </div>
-            </div>
-            <?php endif; ?>
-            <!-- Set Masterfiles Bank List Buttons -->
-            <?php if (has_permission('Maintenance Masterfiles Bank List')): ?>
-            <div class="onetab-sub" id="set-masterfile-bank-nav" style="display: none;">
+                <?php endif; ?>
+                <?php if (has_permission('Maintenance Masterfiles Bank List')): ?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php'">
                     <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php"><i class="fa-solid fa-receipt"></i> Bank List</a>
                 </div>
+                <?php endif; ?>
             </div>
-            <?php endif; ?>
             <?php endif; ?>
         <?php endif; ?>
 
@@ -557,20 +554,26 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <!-- Tools Submenu -->
         <div class="onetab-sub" id="tools-nav" style="display: none;">
                 <?php if (has_permission('Tools KPX Generator')): ?>
-                <div class="sub" onclick="window.open('<?php echo $auth_url; ?>mlauto/index.html', '_blank')">
+                <div class="sub">
                     <a href="<?php echo $auth_url; ?>mlauto/index.html" target="_blank" rel="noopener noreferrer">KPX/KP7 Generator</a>
             </div>
                 <?php endif; ?>
                 <?php if (has_permission('Tools Branch Maker')): ?>
-                <div class="sub" onclick="window.open('<?php echo $auth_url; ?>mlbranchmaker/convert.html', '_blank')">
+                <div class="sub">
                     <a href="<?php echo $auth_url; ?>mlbranchmaker/convert.html" target="_blank" rel="noopener noreferrer">Branch Maker</a>
             </div>
                 <?php endif; ?>
                 <?php if (has_permission('Tools File Fetch')): ?>
-                <div class="sub" onclick="window.open('<?php echo $auth_url; ?>recontool/sample.html', '_blank')">
+                <div class="sub">
                     <a href="<?php echo $auth_url; ?>recontool/sample.html" target="_blank" rel="noopener noreferrer">File Fetch</a>
             </div>
                 <?php endif; ?>
+                <?php if (has_permission('Tools Excel Unlock Password')): ?>
+                <div class="sub">
+                    <a href="<?php echo $auth_url; ?>exceldecryptpassword/index.html" target="_blank" rel="noopener noreferrer">Excel Unlock Password Generator</a>
+            </div>
+                <?php endif; ?>
+                
         </div>
         <?php endif; ?>
 
@@ -689,14 +692,28 @@ const underConstructionIds = [
             parentNav.style.display = 'block';
         }
 
-        const parentTab = findPreviousByClass(parentNav, 'tabcat');
+        // Only bind to the nearest direct sibling tab category.
+        // Using a broad previous search can accidentally pick a tabcat
+        // from another top-level menu (e.g., Bills Payment Report while in TRL).
+        const immediatePrev = parentNav ? parentNav.previousElementSibling : null;
+        const parentTab = (immediatePrev && immediatePrev.classList && immediatePrev.classList.contains('tabcat'))
+            ? immediatePrev
+            : null;
         if (parentTab) {
             parentTab.style.display = 'flex';
             parentTab.classList.add('active');
             setArrowExpanded(parentTab, true);
         }
 
-        const mainParent = findPreviousByClass(parentNav, 'onetab');
+        // Resolve top-level parent from local structure first.
+        let mainParent = null;
+        if (parentTab) {
+            mainParent = findPreviousByClass(parentTab, 'onetab');
+        } else if (immediatePrev && immediatePrev.classList && immediatePrev.classList.contains('onetab')) {
+            mainParent = immediatePrev;
+        } else {
+            mainParent = findPreviousByClass(parentNav, 'onetab');
+        }
         if (mainParent) {
             mainParent.classList.add('active');
             setArrowExpanded(mainParent, true);
