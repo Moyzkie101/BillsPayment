@@ -93,6 +93,17 @@ if (!defined('SUPPORT_TICKET_BOOTSTRAP_LOADED')) {
         exit;
     }
 
+    function st_is_ajax_request()
+    {
+        $xrw = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+        if ($xrw === 'xmlhttprequest') {
+            return true;
+        }
+
+        $accept = strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? ''));
+        return strpos($accept, 'application/json') !== false;
+    }
+
     function st_json($success, $message, $data = [], $status = 200)
     {
         http_response_code($status);

@@ -313,6 +313,14 @@
   transition: opacity 0.18s ease, transform 0.22s ease;
   z-index: 130000;
 }
+.st-copy-toast--success {
+  background: rgba(22, 101, 52, 0.96);
+}
+
+.st-copy-toast--danger {
+  background: rgba(153, 27, 27, 0.96);
+}
+
 .st-copy-toast--show {
   opacity: 1;
   transform: translateY(0);

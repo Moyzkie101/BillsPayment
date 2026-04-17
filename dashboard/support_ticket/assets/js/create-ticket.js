@@ -317,21 +317,93 @@
     }
 
     function bindAmountInputs(form) {
+        var amountInput = byId('amount');
         var wrongAmount = byId('wrong_amount');
         var correctAmount = byId('correct_amount');
 
+        // track whether the user manually edited the wrong amount
+        var userEditedWrong = false;
+        // last synced numeric amount from the transaction details
+        var lastSyncedAmount = NaN;
+
+        function updateWrongMismatchIndicator() {
+            if (!wrongAmount) return;
+            var amt = amountInput ? parseCurrencyToNumber(amountInput.value) : NaN;
+            var wrong = parseCurrencyToNumber(wrongAmount.value);
+            var mismatch = false;
+            if (isNaN(amt) && isNaN(wrong)) mismatch = false;
+            else if (isNaN(amt) && !isNaN(wrong)) mismatch = true;
+            else if (!isNaN(amt) && isNaN(wrong)) mismatch = true;
+            else mismatch = Math.abs(amt - wrong) > 0.00001;
+
+            if (mismatch) {
+                wrongAmount.style.borderColor = '#dc2626';
+                wrongAmount.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.06)';
+            } else {
+                wrongAmount.style.borderColor = '';
+                wrongAmount.style.boxShadow = '';
+            }
+        }
+
+        // wrong amount bindings
         if (wrongAmount) {
-            wrongAmount.addEventListener('input', function () { computeTypeReason(form); });
-            wrongAmount.addEventListener('blur', function () { formatInputCurrency(wrongAmount); computeTypeReason(form); });
+            wrongAmount.addEventListener('input', function () {
+                userEditedWrong = true;
+                computeTypeReason(form);
+                updateWrongMismatchIndicator();
+            });
+            wrongAmount.addEventListener('blur', function () {
+                formatInputCurrency(wrongAmount);
+                computeTypeReason(form);
+                updateWrongMismatchIndicator();
+            });
             wrongAmount.addEventListener('focus', function () { unformatInputCurrency(wrongAmount); });
             if (wrongAmount.value) formatInputCurrency(wrongAmount);
         }
 
+        // correct amount bindings
         if (correctAmount) {
-            correctAmount.addEventListener('input', function () { computeTypeReason(form); });
-            correctAmount.addEventListener('blur', function () { formatInputCurrency(correctAmount); computeTypeReason(form); });
+            correctAmount.addEventListener('input', function () { computeTypeReason(form); updateWrongMismatchIndicator(); });
+            correctAmount.addEventListener('blur', function () { formatInputCurrency(correctAmount); computeTypeReason(form); updateWrongMismatchIndicator(); });
             correctAmount.addEventListener('focus', function () { unformatInputCurrency(correctAmount); });
             if (correctAmount.value) formatInputCurrency(correctAmount);
+        }
+
+        // amount (transaction details) bindings: auto-fill wrong_amount unless user edited it
+        if (amountInput) {
+            // initialize
+            var initAmt = parseCurrencyToNumber(amountInput.value);
+            if (!isNaN(initAmt)) {
+                lastSyncedAmount = initAmt;
+                if (wrongAmount && (wrongAmount.value === '' || parseCurrencyToNumber(wrongAmount.value) === lastSyncedAmount || !userEditedWrong)) {
+                    wrongAmount.value = formatCurrencyNumber(initAmt);
+                    userEditedWrong = false;
+                }
+                if (amountInput.value) formatInputCurrency(amountInput);
+            }
+
+            amountInput.addEventListener('input', function () {
+                var newAmt = parseCurrencyToNumber(amountInput.value);
+                if (!isNaN(newAmt)) {
+                    var wrongNum = wrongAmount ? parseCurrencyToNumber(wrongAmount.value) : NaN;
+                    // update wrong amount if user hasn't manually edited it or it matches last synced value
+                    if (!userEditedWrong || isNaN(wrongNum) || Math.abs((wrongNum || 0) - (lastSyncedAmount || 0)) < 0.00001) {
+                        if (wrongAmount) wrongAmount.value = formatCurrencyNumber(newAmt);
+                        userEditedWrong = false;
+                    }
+                    lastSyncedAmount = newAmt;
+                } else {
+                    if (!userEditedWrong && wrongAmount) wrongAmount.value = '';
+                    lastSyncedAmount = NaN;
+                }
+                computeTypeReason(form);
+                updateWrongMismatchIndicator();
+            });
+
+            amountInput.addEventListener('blur', function () { formatInputCurrency(amountInput); updateWrongMismatchIndicator(); });
+            amountInput.addEventListener('focus', function () { unformatInputCurrency(amountInput); });
+
+            if (amountInput.value) formatInputCurrency(amountInput);
         }
     }
 
@@ -471,6 +543,12 @@
             renderFiles();
         }
 
+        window.stResetCreateAttachments = function () {
+            files = [];
+            updateInputFiles();
+            renderFiles();
+        };
+
         area.addEventListener('click', function () { input.click(); });
         input.addEventListener('change', function () { addFiles(input.files); });
 
@@ -515,9 +593,59 @@
         var confirmClose = byId('stCloseConfirmModal');
         var confirmCancel = byId('stCancelSubmitBtn');
         var confirmConfirm = byId('stConfirmSubmitBtn');
+        var createModal = byId('createTicketModal');
+        var submitBtn = form.querySelector('button[type="submit"]');
+
+        function showToast(message, type) {
+            if (window.stShowToast) {
+                window.stShowToast(message, type || 'success');
+            }
+        }
 
         function openConfirm() { if (confirmModal) confirmModal.classList.add('open'); }
         function closeConfirm() { if (confirmModal) confirmModal.classList.remove('open'); }
+        function closeCreateModal() { if (createModal) createModal.classList.remove('open'); }
+
+        function submitCreateTicketAjax() {
+            if (!form) return;
+
+            var formData = new FormData(form);
+            if (confirmConfirm) confirmConfirm.disabled = true;
+            if (submitBtn) submitBtn.disabled = true;
+
+            fetch(form.getAttribute('action') || window.location.href, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            }).then(function (res) {
+                return res.json().catch(function () {
+                    return { success: false, message: 'Unexpected server response.' };
+                });
+            }).then(function (json) {
+                if (!json || !json.success) {
+                    showToast((json && json.message) ? json.message : 'Unable to create ticket.', 'danger');
+                    return;
+                }
+
+                showToast(json.message || 'Ticket created successfully.', 'success');
+                closeCreateModal();
+                form.reset();
+                if (window.stResetCreateAttachments) {
+                    window.stResetCreateAttachments();
+                }
+
+                // Re-apply default visibility/requirements after reset.
+                manageRequestFields(form);
+            }).catch(function () {
+                showToast('Network error while creating ticket.', 'danger');
+            }).finally(function () {
+                if (confirmConfirm) confirmConfirm.disabled = false;
+                if (submitBtn) submitBtn.disabled = false;
+            });
+        }
 
         if (confirmClose) confirmClose.addEventListener('click', closeConfirm);
         if (confirmCancel) confirmCancel.addEventListener('click', closeConfirm);
@@ -533,8 +661,7 @@
             confirmConfirm.addEventListener('click', function () {
                 if (!form) return;
                 closeConfirm();
-                // use native submit to bypass this submit handler
-                form.submit();
+                submitCreateTicketAjax();
             });
         }
     });

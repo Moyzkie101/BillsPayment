@@ -184,11 +184,6 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
         <?php endif; ?>
 
         <div class="container-fluid st-wrapper">
-            <?php if ($flash): ?>
-                <div class="alert alert-<?php echo htmlspecialchars($flash['type']); ?>" role="alert">
-                    <?php echo htmlspecialchars($flash['message']); ?>
-                </div>
-            <?php endif; ?>
 
             <div class="st-toolbar">
                 <div class="st-small">Select mode to view your tickets.</div>
@@ -779,12 +774,12 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                     </div>
 
                                     <div class="field-group overstated-group" style="display:none;">
-                                        <label for="wrong_amount"><span class="material-icons">payments</span> Amount</label>
+                                        <label for="wrong_amount"><span class="material-icons">payments</span> Wrong Amount</label>
                                         <input id="wrong_amount" name="wrong_amount" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
                                     </div>
 
                                     <div class="field-group overstated-group" style="display:none;">
-                                        <label for="correct_amount"><span class="material-icons">payments</span> Amount</label>
+                                        <label for="correct_amount"><span class="material-icons">payments</span> Correct Amount</label>
                                         <input id="correct_amount" name="correct_amount" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
                                     </div>
 
@@ -853,6 +848,12 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
 
         <?php include '../../templates/footer.php'; ?>
     </div>
+
+    <?php if ($flash): ?>
+    <script>
+        window.supportTicketInitialFlash = <?php echo json_encode(['type' => (string) ($flash['type'] ?? 'success'), 'message' => (string) ($flash['message'] ?? '')]); ?>;
+    </script>
+    <?php endif; ?>
 
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
     <script>

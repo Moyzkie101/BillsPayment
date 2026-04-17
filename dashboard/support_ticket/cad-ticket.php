@@ -172,11 +172,6 @@ foreach ($cadActive as $ticket) {
         <?php endif; ?>
 
         <div class="container-fluid st-wrapper">
-            <?php if ($flash): ?>
-                <div class="alert alert-<?php echo htmlspecialchars($flash['type']); ?>" role="alert">
-                    <?php echo htmlspecialchars($flash['message']); ?>
-                </div>
-            <?php endif; ?>
 
             <div class="mode-cards" data-st-mode-group data-st-param="mode">
                 <label class="mode-card <?php echo $mode === 'open' ? 'selected' : ''; ?>" data-mode="open">
@@ -670,6 +665,12 @@ foreach ($cadActive as $ticket) {
 
         <?php include '../../templates/footer.php'; ?>
     </div>
+
+    <?php if ($flash): ?>
+    <script>
+        window.supportTicketInitialFlash = <?php echo json_encode(['type' => (string) ($flash['type'] ?? 'success'), 'message' => (string) ($flash['message'] ?? '')]); ?>;
+    </script>
+    <?php endif; ?>
 
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
 </body>

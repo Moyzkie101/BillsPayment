@@ -616,35 +616,221 @@
         });
     }
 
-    function showCopyToast(message) {
-        if (!message) message = 'Ticket number copied to clipboard';
+    function stShowToast(message, type) {
+        if (!message) return;
+        var tone = (type || 'success').toLowerCase();
+        var klass = tone === 'danger' ? 'st-copy-toast--danger' : 'st-copy-toast--success';
         var existing = document.getElementById('st-copy-toast');
         if (existing) {
             existing.textContent = message;
-            existing.classList.remove('st-copy-toast--hide');
-            existing.classList.add('st-copy-toast--show');
+            existing.classList.remove('st-copy-toast--hide', 'st-copy-toast--danger', 'st-copy-toast--success');
+            existing.classList.add('st-copy-toast--show', klass);
             clearTimeout(existing._hideTimeout);
             existing._hideTimeout = setTimeout(function () {
                 existing.classList.remove('st-copy-toast--show');
                 existing.classList.add('st-copy-toast--hide');
                 setTimeout(function () { try { existing.remove(); } catch (e) {} }, 260);
-            }, 1800);
+            }, 2200);
             return;
         }
 
         var toast = document.createElement('div');
         toast.id = 'st-copy-toast';
-        toast.className = 'st-copy-toast st-copy-toast--show';
+        toast.className = 'st-copy-toast st-copy-toast--show ' + klass;
         toast.textContent = message;
         document.body.appendChild(toast);
         toast._hideTimeout = setTimeout(function () {
             toast.classList.remove('st-copy-toast--show');
             toast.classList.add('st-copy-toast--hide');
             setTimeout(function () { try { toast.remove(); } catch (e) {} }, 260);
-        }, 1800);
+        }, 2200);
+    }
+
+    function showCopyToast(message) {
+        stShowToast(message || 'Ticket number copied to clipboard', 'success');
+    }
+
+    function initInitialFlashToast() {
+        var flash = window.supportTicketInitialFlash;
+        if (!flash || !flash.message) return;
+        var type = String(flash.type || 'success').toLowerCase();
+        stShowToast(String(flash.message), type === 'danger' ? 'danger' : 'success');
+    }
+
+    function clearReplyFormUI(form) {
+        if (!form) return;
+        var textarea = form.querySelector('textarea[name="message"]');
+        if (textarea) textarea.value = '';
+
+        var fileInput = form.querySelector('input[type="file"][id^="reply_attachments_"]');
+        if (fileInput) {
+            fileInput.value = '';
+            var suffix = (fileInput.id || '').replace('reply_attachments_', '');
+            var preview = document.getElementById('replyPreview_' + suffix);
+            if (preview) preview.innerHTML = '';
+        }
+    }
+
+    function shouldHandleAjaxReply(form) {
+        if (!form) return false;
+        var action = String(form.getAttribute('action') || '').toLowerCase();
+        if (action.indexOf('controllers/branch/reply-ticket.php') !== -1) {
+            return true;
+        }
+
+        if (action.indexOf('controllers/vpo/submit-ticket.php') !== -1 || action.indexOf('controllers/cad/submit-ticket.php') !== -1) {
+            var actionInput = form.querySelector('input[name="action"]');
+            return !!actionInput && String(actionInput.value || '').toLowerCase() === 'reply';
+        }
+
+        return false;
+    }
+
+    function stEscapeHtml(str) {
+        return String(str == null ? '' : str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function getReplySenderRole(form) {
+        if (!form) return 'SYSTEM';
+        var action = String(form.getAttribute('action') || '').toLowerCase();
+        if (action.indexOf('/branch/reply-ticket.php') !== -1) return 'BRANCH';
+        if (action.indexOf('/vpo/submit-ticket.php') !== -1) return 'VPO';
+        if (action.indexOf('/cad/submit-ticket.php') !== -1) return 'CAD';
+        return 'SYSTEM';
+    }
+
+    function nowTrailDatetimeText() {
+        try {
+            return new Date().toLocaleString(undefined, {
+                month: 'short',
+                day: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            }).replace(',', '');
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function appendRealtimeReplyToTrail(form, messageText) {
+        if (!form || !messageText) return;
+
+        var modal = form.closest('.tm-modal');
+        if (!modal) return;
+
+        var trail = modal.querySelector('.tm-trail');
+        if (!trail) return;
+
+        var empty = trail.querySelector('.tm-empty-trail');
+        if (empty && empty.parentNode) {
+            empty.parentNode.removeChild(empty);
+        }
+
+        var prevLatest = trail.querySelector('.tm-trail-card[data-tm-latest]');
+        if (prevLatest) {
+            prevLatest.removeAttribute('data-tm-latest');
+        }
+
+        var role = getReplySenderRole(form);
+        var icon = '⚙️';
+        var avatarClass = 'tm-trail-avatar--system';
+        if (role === 'BRANCH') {
+            icon = '🟢';
+            avatarClass = 'tm-trail-avatar--branch';
+        } else if (role === 'VPO') {
+            icon = '🔵';
+            avatarClass = 'tm-trail-avatar--vpo';
+        } else if (role === 'CAD') {
+            icon = '🔴';
+            avatarClass = 'tm-trail-avatar--cad';
+        }
+
+        var dtText = nowTrailDatetimeText();
+        var safeMessage = stEscapeHtml(messageText).replace(/\n/g, '<br>');
+
+        var item = document.createElement('div');
+        item.className = 'tm-trail-item';
+        item.innerHTML =
+            '<div class="tm-trail-dot-wrap">' +
+                '<div class="tm-trail-avatar ' + avatarClass + '">' + stEscapeHtml(icon) + '</div>' +
+            '</div>' +
+            '<div class="tm-trail-card tm-expanded" data-tm-latest="1">' +
+                '<div class="tm-trail-card-header">' +
+                    '<div class="tm-trail-avatar ' + avatarClass + '">' + stEscapeHtml(icon) + '</div>' +
+                    '<div class="tm-trail-meta">' +
+                        '<div class="tm-trail-sender"><span>' + stEscapeHtml(role) + '</span></div>' +
+                        '<div class="tm-trail-datetime">' + stEscapeHtml(dtText) + '</div>' +
+                    '</div>' +
+                    '<div class="tm-trail-type-label tm-trail-type-label--message">Message</div>' +
+                    '<div class="tm-trail-chevron">›</div>' +
+                '</div>' +
+                '<div class="tm-trail-card-body">' +
+                    '<div class="tm-trail-message">' + safeMessage + '</div>' +
+                '</div>' +
+            '</div>';
+
+        trail.appendChild(item);
+        adjustTrailCardHeights(modal);
+
+        var body = modal.querySelector('.tm-body');
+        if (body) {
+            requestAnimationFrame(function () {
+                body.scrollTop = body.scrollHeight;
+            });
+        }
+    }
+
+    function initAjaxReplySubmits() {
+        var forms = document.querySelectorAll('form[method="post"], form[method="POST"]');
+        forms.forEach(function (form) {
+            if (!shouldHandleAjaxReply(form)) return;
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+
+                var formData = new FormData(form);
+                var submittedMessage = String(formData.get('message') || '').trim();
+                var submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
+
+                fetch(form.getAttribute('action') || window.location.href, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                }).then(function (res) {
+                    return res.json().catch(function () {
+                        return { success: false, message: 'Unexpected server response.' };
+                    });
+                }).then(function (json) {
+                    if (!json || !json.success) {
+                        stShowToast((json && json.message) ? json.message : 'Unable to submit reply.', 'danger');
+                        return;
+                    }
+
+                    appendRealtimeReplyToTrail(form, submittedMessage);
+                    clearReplyFormUI(form);
+                    stShowToast(json.message || 'Reply submitted successfully.', 'success');
+                }).catch(function () {
+                    stShowToast('Network error while submitting reply.', 'danger');
+                }).finally(function () {
+                    if (submitBtn) submitBtn.disabled = false;
+                });
+            });
+        });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        window.stShowToast = stShowToast;
         initModeCards();
         initCreateModal();
         initTicketTrailModals();
@@ -654,5 +840,7 @@
         initAttachmentPreviews();
         initReplyAttachmentPreviews();
         initTicketCopyButtons();
+        initAjaxReplySubmits();
+        initInitialFlashToast();
     });
 })();

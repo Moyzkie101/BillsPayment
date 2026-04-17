@@ -10,8 +10,23 @@ if (in_array($returnMode, ['open', 'active', 'closed'], true)) {
     $redirectBack .= '?mode=' . $returnMode;
 }
 
+$isAjax = st_is_ajax_request();
+$fail = function ($message, $statusCode = 400) use ($isAjax, $redirectBack) {
+    if ($isAjax) {
+        st_json(false, $message, [], $statusCode);
+    }
+    st_redirect_with_flash('cad_ticket', 'danger', $message, $redirectBack);
+};
+
+$ok = function ($message, $data = []) use ($isAjax, $redirectBack) {
+    if ($isAjax) {
+        st_json(true, $message, $data, 200);
+    }
+    st_redirect_with_flash('cad_ticket', 'success', $message, $redirectBack);
+};
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    st_redirect_with_flash('cad_ticket', 'danger', 'Invalid request method.', $redirectBack);
+    $fail('Invalid request method.', 405);
 }
 
 $action = trim((string) ($_POST['action'] ?? 'reply'));
@@ -20,15 +35,15 @@ $message = trim((string) ($_POST['message'] ?? ''));
 $userId = st_user_id_or_null();
 
 if ($ticketId <= 0 || $userId === null) {
-    st_redirect_with_flash('cad_ticket', 'danger', 'Invalid ticket or user context.', $redirectBack);
+    $fail('Invalid ticket or user context.', 401);
 }
 
 if (!in_array($action, ['reply', 'transfer_to_vpo'], true)) {
-    st_redirect_with_flash('cad_ticket', 'danger', 'Invalid action.', $redirectBack);
+    $fail('Invalid action.');
 }
 
 if ($action === 'reply' && $message === '') {
-    st_redirect_with_flash('cad_ticket', 'danger', 'Reply message is required.', $redirectBack);
+    $fail('Reply message is required.');
 }
 
 $conn->autocommit(false);
@@ -73,7 +88,7 @@ try {
 
         $conn->commit();
         $conn->autocommit(true);
-        st_redirect_with_flash('cad_ticket', 'success', 'Reply submitted.', $redirectBack);
+        $ok('Reply submitted successfully.');
     }
 
     $transferMessage = $message !== '' ? $message : 'Ticket transferred to VPO.';
@@ -119,9 +134,9 @@ try {
 
     $conn->commit();
     $conn->autocommit(true);
-    st_redirect_with_flash('cad_ticket', 'success', 'Ticket transferred to VPO.', $redirectBack);
+    $ok('Ticket transferred to VPO.');
 } catch (Exception $e) {
     $conn->rollback();
     $conn->autocommit(true);
-    st_redirect_with_flash('cad_ticket', 'danger', $e->getMessage(), $redirectBack);
+    $fail($e->getMessage(), 500);
 }
