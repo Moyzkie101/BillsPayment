@@ -38,6 +38,11 @@ if (is_string($validation_error_json) && $validation_error_json !== '') {
 
 $validation_summary = $validation_payload['summary'] ?? [];
 
+// Redirect to the import page if consolidated_data is empty
+if (empty($consolidated_data)) {
+    header("Location:../../dashboard/billspayment/import/billspay-transaction.php");
+    exit();
+}
 ?>
 
 <!DOCTYPE html>

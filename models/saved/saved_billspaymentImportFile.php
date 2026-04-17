@@ -213,7 +213,7 @@
                         return !$isValidRegion;
                     }
 
-                    function checkhadPartnerID($conn, $fileType, $partner, $partnerId) {
+                    function checkhadPartnerID($conn, $fileType, $partner, $partnerIds_kp7, $partnerIds_kpx) {
                         $partnerExists = false;
                         
                         if($fileType === 'KP7') {
@@ -221,7 +221,7 @@
                                 // Check if the partner ID from the Excel file exists in the database
                                 $sql = "SELECT COUNT(*) as count FROM masterdata.partner_masterfile WHERE partner_id = ? LIMIT 1";
                                 $stmt = $conn->prepare($sql);
-                                $stmt->bind_param("s", $partnerId);
+                                $stmt->bind_param("s", $partnerIds_kp7);
                                 $stmt->execute();
                                 $result = $stmt->get_result();
                                 
@@ -240,7 +240,20 @@
                         elseif($fileType === 'KPX') {
                             if($partner === 'All') {
                                 // KPX "All" has no stable partner id in-row, so do not block valid rows on partner lookup.
-                                $partnerExists = true;
+                                $sql = "SELECT COUNT(*) as count FROM masterdata.partner_masterfile WHERE partner_id_kpx = ? LIMIT 1";
+                                $stmt = $conn->prepare($sql);
+                                $stmt->bind_param("s", $partnerIds_kpx);
+                                $stmt->execute();
+                                $result = $stmt->get_result();
+                                
+                                if ($result) {
+                                    $row = $result->fetch_assoc();
+                                    if ($row && $row['count'] > 0) {
+                                        $partnerExists = true;
+                                    }
+                                }
+                                $stmt->close();
+                                // $partnerExists = true;
                             } else {
                                 // For specific partner selection, assume it exists since it was selected from dropdown
                                 $partnerExists = true;
@@ -563,25 +576,25 @@
     
                                 if($partner === 'All'){
                                     $partnerName = $conn->real_escape_string(strval($worksheet->getCell('R' . $row)->getValue()));
-                                    $partnerId = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
+                                    $partnerIds_kp7 = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
 
                                     $getGLCode_partner_kpx = "SELECT partner_id_kpx, gl_code FROM masterdata.partner_masterfile where partner_id = ? LIMIT 1";
                                     $stmt = $conn->prepare($getGLCode_partner_kpx);
                                     if ($stmt) {
-                                        $stmt->bind_param("s", $partnerId);
+                                        $stmt->bind_param("s", $partnerIds_kp7);
                                         $stmt->execute();
                                         $result = $stmt->get_result();
                                         if ($result && $result->num_rows > 0) {
                                             $GLCodeData = $result->fetch_assoc();
                                             if ($GLCodeData) {
-                                                $PartnerID_KPX = $conn->real_escape_string(strval($GLCodeData['partner_id_kpx']));
+                                                $partnerIds_kpx = $conn->real_escape_string(strval($GLCodeData['partner_id_kpx']));
                                                 $GLCode = $conn->real_escape_string(strval($GLCodeData['gl_code']));
                                             }else{
-                                                $PartnerID_KPX = null;
+                                                $partnerIds_kpx = null;
                                                 $GLCode = null;
                                             }
                                         }else{
-                                            $PartnerID_KPX = null;
+                                            $partnerIds_kpx = null;
                                             $GLCode = null;
                                         }
                                         $stmt->close();
@@ -589,8 +602,8 @@
                                 }
                                 else{
                                     $partnerName = $conn->real_escape_string(strval($PartnerName));
-                                    $partnerId = $conn->real_escape_string(strval($PartnerID));
-                                    $PartnerID_KPX = $conn->real_escape_string(strval($PartnerID_KPX));
+                                    $partnerIds_kp7 = $conn->real_escape_string(strval($PartnerID));
+                                    $partnerIds_kpx = $conn->real_escape_string(strval($PartnerID_KPX));
                                     $GLCode = $conn->real_escape_string(strval($GLCode));
                                 }
     
@@ -955,8 +968,7 @@
                                         }
                                     }
 
-                                } 
-                                elseif ($getColumnLabels[2] === 'Date / Time'){
+                                } elseif ($getColumnLabels[2] === 'Date / Time'){
                                     $datetime_raw = $worksheet->getCell('C' . $row)->getValue();
 
                                     if ($datetime_raw) {
@@ -1117,38 +1129,38 @@
                                 
                                 if ($partner === 'All'){ // CONSOLIDATED
                                     if($getColumnLabels[12] === 'Branch ID'){
-                                        $PartnerID_KPX = $conn->real_escape_string(strval($worksheet->getCell('U' . $row)->getValue()));
+                                        $partnerIds_kpx = $conn->real_escape_string(strval($worksheet->getCell('U' . $row)->getValue()));
                                         $partnerName = $conn->real_escape_string(strval($worksheet->getCell('V' . $row)->getValue()));
                                     }else { // WITHOUT BRANCH ID COLUMN AND REGION CODE COLUMN
-                                        $PartnerID_KPX = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
+                                        $partnerIds_kpx = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
                                         $partnerName = $conn->real_escape_string(strval($worksheet->getCell('T' . $row)->getValue()));
                                     }
 
                                     $getGLCode_partner_ID = "SELECT partner_id, gl_code FROM masterdata.partner_masterfile where partner_id_kpx = ? LIMIT 1";
                                     $stmt = $conn->prepare($getGLCode_partner_ID);
                                     if ($stmt) {
-                                        $stmt->bind_param("s", $PartnerID_KPX);
+                                        $stmt->bind_param("s", $partnerIds_kpx);
                                         $stmt->execute();
                                         $result = $stmt->get_result();
                                         if ($result && $result->num_rows > 0) {
                                             $GLCodeData = $result->fetch_assoc();
                                             if ($GLCodeData) {
-                                                $partnerId = $conn->real_escape_string(strval($GLCodeData['partner_id']));
+                                                $partnerIds_kp7 = $conn->real_escape_string(strval($GLCodeData['partner_id']));
                                                 $GLCode = $conn->real_escape_string(strval($GLCodeData['gl_code']));
                                             }else{
-                                                $partnerId = null;
+                                                $partnerIds_kp7 = null;
                                                 $GLCode = null;
                                             }
                                         }else{
-                                            $partnerId = null;
+                                            $partnerIds_kp7 = null;
                                             $GLCode = null;
                                         }
                                         $stmt->close();
                                     }
                                 }else { // Per Partner
                                     $partnerName = $conn->real_escape_string(strval($PartnerName));
-                                    $partnerId = $conn->real_escape_string(strval($PartnerID));
-                                    $PartnerID_KPX = $conn->real_escape_string(strval($PartnerID_KPX));
+                                    $partnerIds_kp7 = $conn->real_escape_string(strval($PartnerID));
+                                    $partnerIds_kpx = $conn->real_escape_string(strval($PartnerID_KPX));
                                     $GLCode = $conn->real_escape_string(strval($GLCode));
                                 }
                             }else {
@@ -1178,7 +1190,7 @@
                         $date_uploaded = date('Y-m-d');
 
                         $is_duplicate = checkDuplicateData($conn, $reference_number, $datetime);
-                        $is_partner_not_found = checkhadPartnerID($conn, $fileType, $partner, $partnerId);
+                        $is_partner_not_found = checkhadPartnerID($conn, $fileType, $partner, $partnerIds_kp7, $partnerIds_kpx);
                         $is_region_not_found = checkSpelledRegionName($conn, $fileType, $region_description, $region_code);
                         $is_branch_not_found = checkHadBranchID($conn, $branch_id);
 
@@ -1214,7 +1226,8 @@
                                     'region_description' => $region_description,
                                     'person_operator' => $person_operator,
                                     'partner_name' => $partnerName,
-                                    'partner_id' => $partnerId,
+                                    'partner_id' => $partnerIds_kp7,
+                                    'partner_id_kpx' => $partnerIds_kpx,
                                     'account_number' => $account_number,
                                     'account_name' => $account_name,
                                     'contact_number' => $contact_number,
@@ -1225,7 +1238,8 @@
                         if ($is_partner_not_found) {
                             $partner_not_found_data[] = [
                                 'row' => $row,
-                                'partner_id' => $partnerId,
+                                'partner_id' => $partnerIds_kp7,
+                                'partner_id_kpx' => $partnerIds_kpx,
                                 'partner_name' => $partnerName
                             ];
                         }
@@ -1246,7 +1260,8 @@
                                 'region_code' => $region_code,
                                 'person_operator' => $person_operator,
                                 'partner_name' => $partnerName,
-                                'partner_id' => $partnerId,
+                                'partner_id' => $partnerIds_kp7,
+                                'partner_id_kpx' => $partnerIds_kpx,
                                 'account_number' => $account_number,
                                 'account_name' => $account_name,
                                 'contact_number' => $contact_number,
@@ -1272,7 +1287,8 @@
                                 'region_code' => $region_code,
                                 'person_operator' => $person_operator,
                                 'partner_name' => $partnerName,
-                                'partner_id' => $partnerId,
+                                'partner_id' => $partnerIds_kp7,
+                                'partner_id_kpx' => $partnerIds_kpx,
                                 'account_number' => $account_number,
                                 'account_name' => $account_name,
                                 'contact_number' => $contact_number,
@@ -1301,7 +1317,8 @@
                                 'ml_outlet' => $branch_outlet,
                                 'region_code' => $region_code,
                                 'region' => $region_description,
-                                'partner_id' => $partnerId,
+                                'partner_id' => $partnerIds_kp7,
+                                'partner_id_kpx' => $partnerIds_kpx,
                                 'partner_name' => $partnerName,
                                 'error_remarks' => implode('; ', $row_error_modules),
                                 'validation_modules' => $row_error_modules
@@ -1332,8 +1349,8 @@
                                     'region_description' => $region_description,
                                     'person_operator' => $person_operator,
                                     'partner_name' => $partnerName,
-                                    'partner_id' => $partnerId,
-                                    'PartnerID_KPX' => $PartnerID_KPX,
+                                    'partner_id' => $partnerIds_kp7,
+                                    'partner_id_kpx' => $partnerIds_kpx,
                                     'GLCode' => $GLCode,
                                     'remote_branch' => $remote_branch,
                                     'remote_operator' => $remote_operator,
@@ -1371,8 +1388,8 @@
                                     'region_description' => $region_description,
                                     'person_operator' => $person_operator,
                                     'partner_name' => $partnerName,
-                                    'partner_id' => $partnerId,
-                                    'PartnerID_KPX' => $PartnerID_KPX,
+                                    'partner_id' => $partnerIds_kp7,
+                                    'partner_id_kpx' => $partnerIds_kpx,
                                     'GLCode' => $GLCode,
                                     'remote_branch' => $remote_branch,
                                     'remote_operator' => $remote_operator,
@@ -1565,8 +1582,8 @@
                 $region_description = $row['region_description'];
                 $person_operator = $row['person_operator'];
                 $partner_name = $row['partner_name'];
-                $partner_id = $row['partner_id'];
-                $partner_ID_KPX = $row['PartnerID_KPX'] ?? null;
+                $partner_id = $row['partner_id_kp7'] ?? null;
+                $partner_ID_KPX = $row['partner_id_kpx'] ?? null;
                 $GLCode = $row['GLCode'] ?? null;
                 $imported_by = $row['imported_by'];
                 $imported_date = $row['date_uploaded'];

@@ -502,8 +502,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                     <select class="form-select" name="billerlist" required>
                                         <option value="">Select Biller Type</option>
                                         <option value="ALL">ALL</option>
-                                        <option value="main-biller">Biller</option>
-                                        <option value="child-biller">Child Biller</option>
+                                        <option value="biller">Biller</option>
+                                        <option value="sub-biller">Sub Biller</option>
                                     </select>
                                 </div>
 
