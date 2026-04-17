@@ -467,7 +467,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div>
         <?php endif; ?>
 
-        <?php if (has_any_permission(['Accounts','Maintenance Accounts User Management','Maintenance Accounts Access Levels','Maintenance Duplicate Transaction','Maintenance Masterfiles Partner List','Maintenance Masterfiles Bank List'])): ?>
+        <?php if (has_any_permission(['Accounts','Maintenance Accounts User Management','Maintenance Accounts Access Levels','Maintenance Duplicate Transaction','Maintenance Masterfiles Partner List','Maintenance Masterfiles Bank List','Support Ticket Report','Maintenance Support Ticket'])): ?>
             <!-- Show/Hide Set Maintenance Main-menu -->
             <div class="onetab" id="set-btn">
             <h6><i class="fa-solid fa-wrench"></i> Maintenance</h6>
@@ -543,6 +543,22 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 </div>
             </div>
             <?php endif; ?>
+            <?php endif; ?>
+
+            <?php if (has_any_permission(['Support Ticket Report','Maintenance Support Ticket'])): ?>
+            <!-- Show/Hide Set support ticket Sub-menu -->
+            <div class="tabcat" id="set-support-ticket-btn" style="display: none;">
+                <h6><i class="fa-solid fa-ticket-simple"></i> Support Ticket</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-set-support-ticket" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-set-support-ticket" style="display: none"></i>
+            </div>
+
+            <!-- Set Support Ticket Buttons -->
+            <div class="onetab-sub" id="set-support-ticket-nav" style="display: none;">
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/ticket/ticket-managment.php'">
+                    <a href="<?php echo $base_url; ?>maintenance/ticket/ticket-managment.php"><i class="fa-solid fa-ticket"></i> Tickets</a>
+                </div>
+            </div>
             <?php endif; ?>
         <?php endif; ?>
 
