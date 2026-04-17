@@ -35,7 +35,7 @@ This module implements the Support Ticket flow defined in `support_ticket.md`.
 ## Permission keys used
 
 - `Support Ticket Create`
-- `Support Ticket BPO`
+- `Support Ticket VPO`
 - `Support Ticket CAD`
 
 ## Notes

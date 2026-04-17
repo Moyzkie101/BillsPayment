@@ -2,7 +2,7 @@
 include_once __DIR__ . '/../../includes/bootstrap.php';
 
 st_require_login('../../../../login_form.php');
-st_require_permission_page(['Support Ticket BPO'], '../../../home.php');
+st_require_permission_page(['Support Ticket VPO'], '../../../home.php');
 
 $returnMode = strtolower(trim((string) ($_POST['return_mode'] ?? '')));
 $redirectBack = '../../bpo-ticket.php';

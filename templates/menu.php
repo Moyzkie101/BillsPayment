@@ -266,7 +266,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <?php endif; ?>
         <?php endif; ?>
 
-        <?php if (has_any_permission(['TRL Import','TRL Entry','TRL Review','TRL Report'])): ?>
+        <?php if (has_any_permission(['TRL Import','TRL Entry','TRL Review','TRL Report','TRL Ticket Entry'])): ?>
         <!-- Billspayment - TRL (Transaction Request Log) - top-level menu -->
         <div class="onetab" id="bp-trl-btn">
             <h6><i class="fa-solid fa-list"></i> Billspayment - TRL</h6>
@@ -286,6 +286,8 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <a href="<?php echo $auth_url; ?>dashboard/trl/trl-entry/trl-entry.php"><i class="fa-solid fa-pen-to-square"></i> TRL - Entry</a>
             </div>
             <?php endif; ?>
+
+            <!-- TRL - Ticket Entry moved to Support Ticket menu to keep permission scoped to Support Ticket -->
 
             <?php if (has_permission('TRL Review')): ?>
             <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-review/trl-review.php'">
@@ -435,7 +437,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <?php endif; ?>
         </div>
         <?php endif; ?>
-        <?php if (has_any_permission(['Support Ticket Create','Support Ticket BPO','Support Ticket CAD','Support Ticket Report'])): ?>
+        <?php if (has_any_permission(['Support Ticket Create','Support Ticket VPO','Support Ticket CAD','Support Ticket Report'])): ?>
             <div class="onetab" id="support-ticket-btn">
                 <h6><i class="fa-solid fa-ticket-simple"></i> Support Ticket</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-support-ticket" style="display: block"></i>
@@ -448,9 +450,14 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     <a href="<?php echo $base_url; ?>support_ticket/create-ticket.php"><i class="fa-solid fa-plus"></i> Create Ticket</a>
                 </div>
                 <?php endif; ?>
-                <?php if (has_permission('Support Ticket BPO')): ?>
+                <?php if (has_permission('Support Ticket VPO')): ?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/bpo-ticket.php'">
                     <a href="<?php echo $base_url; ?>support_ticket/bpo-ticket.php"><i class="fa-solid fa-headset"></i> VPO Ticket</a>
+                </div>
+                <?php endif; ?>
+                <?php if (has_permission('TRL Ticket Entry')): ?>
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>dashboard/trl/trl-ticket_entry/trl-entry_ticket.php'">
+                    <a href="<?php echo $base_url; ?>dashboard/trl/trl-ticket_entry/trl-entry_ticket.php"><i class="fa-solid fa-ticket"></i> TRL - Ticket Entry</a>
                 </div>
                 <?php endif; ?>
                 <?php if (has_permission('Support Ticket CAD')): ?>

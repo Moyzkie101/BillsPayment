@@ -3,7 +3,7 @@ include_once __DIR__ . '/includes/bootstrap.php';
 include_once __DIR__ . '/includes/ticket_queries.php';
 
 st_require_login('../../login_form.php');
-st_require_permission_page(['Support Ticket BPO'], '../home.php');
+st_require_permission_page(['Support Ticket VPO'], '../home.php');
 
 $userId = st_user_id_or_null();
 $flash = st_flash_get('vpo_ticket');
