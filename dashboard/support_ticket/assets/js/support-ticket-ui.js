@@ -719,7 +719,14 @@
         }
     }
 
-    function appendRealtimeReplyToTrail(form, messageText) {
+    function formatBytesShort(bytes) {
+        if (!bytes) return '0 B';
+        var sizes = ['B', 'KB', 'MB', 'GB'];
+        var i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
+    }
+
+    function appendRealtimeReplyToTrail(form, messageText, attachments) {
         if (!form || !messageText) return;
 
         var modal = form.closest('.tm-modal');
@@ -754,6 +761,25 @@
 
         var dtText = nowTrailDatetimeText();
         var safeMessage = stEscapeHtml(messageText).replace(/\n/g, '<br>');
+        var attachmentHtml = '';
+
+        if (attachments && attachments.length) {
+            var nodes = [];
+            attachments.forEach(function (file) {
+                if (!file) return;
+                nodes.push(
+                    '<div class="tm-attachment" title="Attachment uploaded">' +
+                        '<span class="tm-attachment-icon"><i class="fa-solid fa-paperclip" aria-hidden="true"></i></span>' +
+                        '<span class="tm-attachment-name">' + stEscapeHtml(file.name || 'Attachment') + '</span>' +
+                        '<span class="tm-attachment-size">' + stEscapeHtml(formatBytesShort(file.size || 0)) + '</span>' +
+                    '</div>'
+                );
+            });
+
+            if (nodes.length) {
+                attachmentHtml = '<div class="tm-attachments">' + nodes.join('') + '</div>';
+            }
+        }
 
         var item = document.createElement('div');
         item.className = 'tm-trail-item';
@@ -773,6 +799,7 @@
                 '</div>' +
                 '<div class="tm-trail-card-body">' +
                     '<div class="tm-trail-message">' + safeMessage + '</div>' +
+                    attachmentHtml +
                 '</div>' +
             '</div>';
 
@@ -797,6 +824,8 @@
 
                 var formData = new FormData(form);
                 var submittedMessage = String(formData.get('message') || '').trim();
+                var fileInput = form.querySelector('input[type="file"][id^="reply_attachments_"]');
+                var submittedAttachments = fileInput && fileInput.files ? Array.prototype.slice.call(fileInput.files) : [];
                 var submitBtn = form.querySelector('button[type="submit"]');
                 if (submitBtn) submitBtn.disabled = true;
 
@@ -817,7 +846,7 @@
                         return;
                     }
 
-                    appendRealtimeReplyToTrail(form, submittedMessage);
+                    appendRealtimeReplyToTrail(form, submittedMessage, submittedAttachments);
                     clearReplyFormUI(form);
                     stShowToast(json.message || 'Reply submitted successfully.', 'success');
                 }).catch(function () {
