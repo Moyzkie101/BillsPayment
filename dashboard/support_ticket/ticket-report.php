@@ -1120,6 +1120,76 @@ if ($searchTicketNumber !== '') {
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        // copy ticket number on click
+                        onClick: function (evt, activeEls) {
+                            try {
+                                if (!activeEls || !activeEls.length) return;
+                                var idx = activeEls[0].index;
+                                var ticket = (agingTickets && agingTickets[idx]) ? agingTickets[idx] : (agingLabels && agingLabels[idx] ? agingLabels[idx] : '');
+                                if (!ticket) return;
+
+                                function showToast(msg, type) {
+                                    if (window.stShowToast) {
+                                        window.stShowToast(msg, type === 'danger' ? 'danger' : 'success');
+                                        return;
+                                    }
+                                    var existing = document.getElementById('st-copy-toast');
+                                    var klass = (type === 'danger') ? 'st-copy-toast--danger' : 'st-copy-toast--success';
+                                    if (existing) {
+                                        existing.textContent = msg;
+                                        existing.classList.remove('st-copy-toast--hide', 'st-copy-toast--danger', 'st-copy-toast--success');
+                                        existing.classList.add('st-copy-toast--show', klass);
+                                        clearTimeout(existing._hideTimeout);
+                                        existing._hideTimeout = setTimeout(function () {
+                                            existing.classList.remove('st-copy-toast--show');
+                                            existing.classList.add('st-copy-toast--hide');
+                                            setTimeout(function () { try { existing.remove(); } catch (e) {} }, 260);
+                                        }, 2200);
+                                        return;
+                                    }
+                                    var toast = document.createElement('div');
+                                    toast.id = 'st-copy-toast';
+                                    toast.className = 'st-copy-toast st-copy-toast--show ' + klass;
+                                    toast.textContent = msg;
+                                    document.body.appendChild(toast);
+                                    toast._hideTimeout = setTimeout(function () {
+                                        toast.classList.remove('st-copy-toast--show');
+                                        toast.classList.add('st-copy-toast--hide');
+                                        setTimeout(function () { try { toast.remove(); } catch (e) {} }, 260);
+                                    }, 2200);
+                                }
+
+                                function fallbackCopy(text) {
+                                    var ta = document.createElement('textarea');
+                                    ta.value = String(text || '');
+                                    ta.style.position = 'fixed';
+                                    ta.style.left = '-9999px';
+                                    document.body.appendChild(ta);
+                                    ta.select();
+                                    try {
+                                        var ok = document.execCommand('copy');
+                                        document.body.removeChild(ta);
+                                        if (ok) showToast('Ticket number copied to clipboard');
+                                        else showToast('Unable to copy ticket number', 'danger');
+                                    } catch (err) {
+                                        document.body.removeChild(ta);
+                                        showToast('Unable to copy ticket number', 'danger');
+                                    }
+                                }
+
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    navigator.clipboard.writeText(ticket).then(function () {
+                                        showToast('Ticket number copied to clipboard');
+                                    }).catch(function () {
+                                        fallbackCopy(ticket);
+                                    });
+                                } else {
+                                    fallbackCopy(ticket);
+                                }
+                            } catch (e) {
+                                // ignore click errors
+                            }
+                        },
                         indexAxis: 'y',
                         scales: {
                             x: { beginAtZero: true, title: { display: true, text: 'Hours' } },
