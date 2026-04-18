@@ -719,7 +719,14 @@ if ($searchTicketNumber !== '') {
                         <div class="tm-header">
                             <div class="tm-header-top">
                                 <div class="tm-header-left">
-                                    <div class="tm-ticket-number"><span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>Ticket #: <span class="tm-ticket-id-value"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span> <button type="button" class="tm-copy-ticket" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" title="Copy ticket number" aria-label="Copy ticket number"><i class="fa-solid fa-clipboard" aria-hidden="true"></i></button></div>
+                                    <div class="tm-ticket-number tm-ticket-number--card">
+                                        <div class="tm-ticket-number-main">
+                                            <span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
+                                            <span class="tm-ticket-number-label">Ticket</span>
+                                            <span class="tm-ticket-id-value"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
+                                        </div>
+                                        <button type="button" class="tm-copy-ticket" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" title="Copy ticket number" aria-label="Copy ticket number"><i class="fa-solid fa-clipboard" aria-hidden="true"></i></button>
+                                    </div>
                                     <div class="tm-ticket-meta-grid">
                                         <div class="tm-meta-item"><div class="tm-meta-label">Reference No.</div><div class="tm-meta-value"><?php echo htmlspecialchars($hdrReference); ?></div></div>
                                         <div class="tm-meta-item"><div class="tm-meta-label">Transaction D/T</div><div class="tm-meta-value"><?php echo htmlspecialchars($hdrTransfer); ?></div></div>
@@ -733,7 +740,7 @@ if ($searchTicketNumber !== '') {
                                     </div>
                                 </div>
                                 <div class="tm-header-right">
-                                    <div class="tm-header-actions">
+                                    <div class="tm-header-actions tm-header-actions--card">
                                         <div class="tm-header-actions-top">
                                             <div class="tm-status tm-status--<?php echo htmlspecialchars($statusLower); ?>"><?php echo htmlspecialchars((string) $ticket['status']); ?></div>
                                             <button type="button" class="tm-close-btn" data-st-close-modal="stTicketTrailModalReport-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
