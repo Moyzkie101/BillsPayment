@@ -23,7 +23,10 @@ if ($ticketId <= 0) {
 $schema = st_schema();
 
 $ticketNumber = '';
-$q = $conn->prepare("SELECT ticket_number FROM {$schema}.tickets WHERE id = ? LIMIT 1");
+$createdById = 0;
+$vpoOwnerId = 0;
+$cadOwnerId = 0;
+$q = $conn->prepare("SELECT ticket_number, created_by, vpo_owner, cad_owner FROM {$schema}.tickets WHERE id = ? LIMIT 1");
 if ($q) {
     $q->bind_param('i', $ticketId);
     if ($q->execute()) {
@@ -31,6 +34,9 @@ if ($q) {
         $row = $res ? $res->fetch_assoc() : null;
         if ($row) {
             $ticketNumber = (string) ($row['ticket_number'] ?? '');
+            $createdById = (int) ($row['created_by'] ?? 0);
+            $vpoOwnerId = (int) ($row['vpo_owner'] ?? 0);
+            $cadOwnerId = (int) ($row['cad_owner'] ?? 0);
         }
     }
     $q->close();
@@ -43,32 +49,53 @@ if ($ticketNumber === '') {
 $conn->begin_transaction();
 
 try {
-    $statements = [
-        "DELETE FROM {$schema}.ticket_attachments WHERE ticket_id = ?",
-        "DELETE FROM {$schema}.ticket_trails WHERE ticket_id = ?",
-        "DELETE FROM {$schema}.ticket_info WHERE ticket_number = ?",
-        "DELETE FROM {$schema}.ticket_info_wrongbiller WHERE ticket_number = ?",
-        "DELETE FROM {$schema}.ticket_info_overstatedamount WHERE ticket_number = ?",
-        "DELETE FROM {$schema}.ticket_info_cancelledtransaction WHERE ticket_number = ?",
-        "DELETE FROM {$schema}.ticket_badge WHERE ticket_number = ?",
-        "DELETE FROM {$schema}.ticket_active WHERE ticket_number = ?",
-    ];
+    $deleteByTicketId = function ($tableName) use ($conn, $schema, $ticketId) {
+        if (!st_table_exists($conn, $tableName)) {
+            return;
+        }
 
-    foreach ($statements as $sql) {
+        $sql = "DELETE FROM {$schema}.{$tableName} WHERE ticket_id = ?";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
-            continue;
+            throw new Exception('Unable to prepare delete for ' . $tableName . '.');
         }
 
-        if (strpos($sql, 'ticket_id = ?') !== false) {
-            $stmt->bind_param('i', $ticketId);
-        } else {
-            $stmt->bind_param('s', $ticketNumber);
+        $stmt->bind_param('i', $ticketId);
+        if (!$stmt->execute()) {
+            $err = $stmt->error;
+            $stmt->close();
+            throw new Exception('Unable to delete related rows from ' . $tableName . ': ' . $err);
         }
-
-        $stmt->execute();
         $stmt->close();
-    }
+    };
+
+    $deleteByTicketNumber = function ($tableName) use ($conn, $schema, $ticketNumber) {
+        if (!st_table_exists($conn, $tableName)) {
+            return;
+        }
+
+        $sql = "DELETE FROM {$schema}.{$tableName} WHERE ticket_number = ?";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception('Unable to prepare delete for ' . $tableName . '.');
+        }
+
+        $stmt->bind_param('s', $ticketNumber);
+        if (!$stmt->execute()) {
+            $err = $stmt->error;
+            $stmt->close();
+            throw new Exception('Unable to delete related rows from ' . $tableName . ': ' . $err);
+        }
+        $stmt->close();
+    };
+
+    $deleteByTicketId('ticket_attachments');
+    $deleteByTicketId('ticket_trails');
+    $deleteByTicketNumber('ticket_info_wrongbiller');
+    $deleteByTicketNumber('ticket_info_overstatedamount');
+    $deleteByTicketNumber('ticket_info_cancelledtransaction');
+    $deleteByTicketNumber('ticket_info');
+    $deleteByTicketNumber('ticket_badge');
 
     $del = $conn->prepare("DELETE FROM {$schema}.tickets WHERE id = ? LIMIT 1");
     if (!$del) {
@@ -84,6 +111,20 @@ try {
 
     if ($affected <= 0) {
         throw new Exception('Ticket was not deleted.');
+    }
+
+    if (st_table_exists($conn, 'ticket_active')) {
+        $ownerIds = array_unique(array_values(array_filter([
+            $createdById,
+            $vpoOwnerId,
+            $cadOwnerId,
+        ], function ($id) {
+            return (int) $id > 0;
+        })));
+
+        foreach ($ownerIds as $ownerId) {
+            st_sync_ticket_active_counts($conn, (int) $ownerId);
+        }
     }
 
     $conn->commit();
