@@ -40,8 +40,8 @@
   --tm-sys-dot:        #9e9d97;
 
   /* Status badge colors */
-  --tm-status-open-bg:       #f0eeea;
-  --tm-status-open-text:     #4a4945;
+  --tm-status-open-bg:       #d1fae5;
+  --tm-status-open-text:     #065f46;
   --tm-status-accepted-bg:   #e5effa;
   --tm-status-accepted-text: #0c3f7a;
   --tm-status-resolving-bg:  #fef3e2;
