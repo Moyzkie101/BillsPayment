@@ -624,6 +624,34 @@
 .tm-trail-avatar--cad    { background: var(--tm-cad-bg);    color: var(--tm-cad-text); }
 .tm-trail-avatar--system { background: var(--tm-sys-bg);    color: var(--tm-sys-text); }
 
+.tm-trail-avatar-icon {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  object-fit: contain;
+  display: block;
+  /* Normalize raw black SVG icon files and tint by role filters below */
+  filter: brightness(0) saturate(100%);
+}
+
+.tm-trail-avatar-icon--branch {
+  filter: brightness(0) saturate(100%) invert(45%) sepia(27%) saturate(1183%) hue-rotate(111deg) brightness(96%) contrast(90%);
+}
+
+.tm-trail-avatar-icon--vpo {
+  filter: brightness(0) saturate(100%) invert(43%) sepia(78%) saturate(1642%) hue-rotate(190deg) brightness(94%) contrast(89%);
+}
+
+.tm-trail-avatar-icon--cad {
+  filter: brightness(0) saturate(100%) invert(43%) sepia(74%) saturate(765%) hue-rotate(344deg) brightness(91%) contrast(92%);
+}
+
+.tm-trail-avatar i.fa-gear {
+  font-size: 18px;
+  color: var(--tm-sys-dot);
+}
+
 .tm-trail-meta {
   flex: 1;
   min-width: 0;

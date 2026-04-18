@@ -12,6 +12,15 @@ if (!in_array($mode, ['open', 'active', 'closed'], true)) {
     $mode = 'open';
 }
 
+function st_trail_role_icon_asset_maintenance($role)
+{
+    $r = strtoupper(trim((string) $role));
+    if ($r === 'BRANCH') return '../../../assets/images/icons/branch-icon.svg';
+    if ($r === 'VPO') return '../../../assets/images/icons/vpo-icon.svg';
+    if ($r === 'CAD') return '../../../assets/images/icons/cad-icon.svg';
+    return '';
+}
+
 $ticketSearchInput = trim((string) ($_GET['ticket_search'] ?? ''));
 $ticketSearchNormalized = strtoupper($ticketSearchInput);
 $ticketSearchFoundMode = '';
@@ -531,6 +540,8 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                             if ($trailRole === 'BRANCH') $avatarClass = 'tm-trail-avatar--branch';
                                             elseif ($trailRole === 'VPO') $avatarClass = 'tm-trail-avatar--vpo';
                                             elseif ($trailRole === 'CAD') $avatarClass = 'tm-trail-avatar--cad';
+                                            $trailIconAsset = st_trail_role_icon_asset_maintenance($trailRole);
+                                            $trailRoleClass = strtolower($trailRole);
 
                                             $trailOwnerTooltip = '';
                                             if ($trailRole === 'BRANCH') {
@@ -543,11 +554,23 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                         ?>
                                         <div class="tm-trail-item">
                                             <div class="tm-trail-dot-wrap">
-                                                <div class="tm-trail-avatar <?php echo $avatarClass; ?>"><?php echo htmlspecialchars(st_trail_role_icon_report($trailRole)); ?></div>
+                                                <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
+                                                    <?php if ($trailIconAsset !== ''): ?>
+                                                        <img class="tm-trail-avatar-icon tm-trail-avatar-icon--<?php echo htmlspecialchars($trailRoleClass); ?>" src="<?php echo htmlspecialchars($trailIconAsset, ENT_QUOTES); ?>" alt="" aria-hidden="true">
+                                                    <?php else: ?>
+                                                        <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                                                    <?php endif; ?>
+                                                </div>
                                             </div>
                                             <div class="tm-trail-card <?php echo $trailRole === 'SYSTEM' ? 'tm-trail-card--system' : ''; ?> <?php echo $trailIndex === $lastTrailIndex ? 'tm-expanded' : ''; ?>" <?php echo $trailIndex === $lastTrailIndex ? 'data-tm-latest="1"' : ''; ?>>
                                                 <div class="tm-trail-card-header">
-                                                    <div class="tm-trail-avatar <?php echo $avatarClass; ?>"><?php echo htmlspecialchars(st_trail_role_icon_report($trailRole)); ?></div>
+                                                    <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
+                                                        <?php if ($trailIconAsset !== ''): ?>
+                                                            <img class="tm-trail-avatar-icon tm-trail-avatar-icon--<?php echo htmlspecialchars($trailRoleClass); ?>" src="<?php echo htmlspecialchars($trailIconAsset, ENT_QUOTES); ?>" alt="" aria-hidden="true">
+                                                        <?php else: ?>
+                                                            <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                                                        <?php endif; ?>
+                                                    </div>
                                                     <div class="tm-trail-meta">
                                                         <div class="tm-trail-sender">
                                                             <span><?php echo htmlspecialchars($trailRole); ?></span>
