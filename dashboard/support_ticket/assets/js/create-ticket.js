@@ -96,6 +96,29 @@
         // otherwise nothing to bind
     }
 
+    function bindCorrectBillerLookup() {
+        var correctName = byId('correct_biller_name');
+        var correctId = byId('correct_biller_id');
+        if (!correctName || !correctId) return;
+
+        var map = window.createTicketSubbillerMap || {};
+
+        function syncCorrectBiller() {
+            var val = (correctName.value || '').trim();
+            var key = val.toLowerCase();
+            var info = map[key] || null;
+            if (info) {
+                correctId.value = info.id || '';
+            } else {
+                correctId.value = '';
+            }
+        }
+
+        correctName.addEventListener('input', syncCorrectBiller);
+        correctName.addEventListener('change', syncCorrectBiller);
+        syncCorrectBiller();
+    }
+
     function bindRefToggle(form) {
         var toggle = byId('mRefToggle');
         var refGroup = form ? form.querySelector('[data-ref-group]') : null;
@@ -581,6 +604,7 @@
         if (!form) return;
 
         bindSubbillerSelect();
+        bindCorrectBillerLookup();
         bindRefToggle(form);
         bindPaymentBranchLookup();
         bindTypeSelect(form);

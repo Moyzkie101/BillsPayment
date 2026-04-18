@@ -171,13 +171,18 @@ if (isset($conn)) {
                     </div>
 
                     <div class="field-group">
-                        <label for="mCorrectBillerId"><span class="material-icons">check_circle</span> Correct Biller ID</label>
-                        <input id="mCorrectBillerId" name="correct_biller_id" class="field-input required-field" type="text" placeholder="Enter correct biller ID" required>
+                        <label for="mCorrectBillerName"><span class="material-icons">business</span> Correct Biller Name</label>
+                        <input id="mCorrectBillerName" name="correct_biller_name" class="field-input required-field" type="text" list="mCorrectBillerDatalist" placeholder="Search subbiller or select..." required>
+                        <datalist id="mCorrectBillerDatalist">
+                            <?php foreach ($subbillers as $sb): ?>
+                                <option value="<?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>"></option>
+                            <?php endforeach; ?>
+                        </datalist>
                     </div>
 
                     <div class="field-group">
-                        <label for="mCorrectBillerName"><span class="material-icons">business</span> Correct Biller Name</label>
-                        <input id="mCorrectBillerName" name="correct_biller_name" class="field-input required-field" type="text" placeholder="Enter correct biller name" required>
+                        <label for="mCorrectBillerId"><span class="material-icons">check_circle</span> Correct Biller ID</label>
+                        <input id="mCorrectBillerId" name="correct_biller_id" class="field-input required-field" type="text" placeholder="Auto-filled from biller name" readonly required>
                     </div>
 
                     <div class="field-group field-fullwidth">
@@ -268,6 +273,21 @@ if (isset($conn)) {
         billerInput.addEventListener('input', syncBiller);
         billerInput.addEventListener('change', syncBiller);
         syncBiller();
+    }
+
+    // Correct biller name (wrong biller request) -> auto-fill correct biller id
+    var correctBillerName = byId('mCorrectBillerName');
+    var correctBillerId = byId('mCorrectBillerId');
+    if (correctBillerName && correctBillerId) {
+        function syncCorrectBiller() {
+            var key = (correctBillerName.value || '').trim().toLowerCase();
+            var info = trlBillerMap[key] || null;
+            correctBillerId.value = info ? (info.id || '') : '';
+        }
+
+        correctBillerName.addEventListener('input', syncCorrectBiller);
+        correctBillerName.addEventListener('change', syncCorrectBiller);
+        syncCorrectBiller();
     }
 })();
 </script>

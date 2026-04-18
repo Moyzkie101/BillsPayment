@@ -2,6 +2,17 @@
 $searchRef = trim((string) ($_GET['search_ref'] ?? ''));
 $autoFound = null;
 $autoError = '';
+$subbillers = [];
+
+if (isset($conn)) {
+    $subSql = "SELECT subbiller_ext_id, subbiller_name, partner_ext_id FROM support_ticket.vw_mldb_subbillers ORDER BY subbiller_name ASC";
+    $subRes = $conn->query($subSql);
+    if ($subRes) {
+        while ($sb = $subRes->fetch_assoc()) {
+            $subbillers[] = $sb;
+        }
+    }
+}
 
 if ($searchRef !== '') {
     $escapedRef = mysqli_real_escape_string($conn, $searchRef);
@@ -174,13 +185,18 @@ if ($searchRef !== '') {
                         </div>
 
                         <div class="field-group">
-                            <label for="autoCorrectBillerId"><span class="material-icons">check_circle</span> Correct Biller ID</label>
-                            <input id="autoCorrectBillerId" name="correct_biller_id" class="field-input required-field" type="text" placeholder="Enter correct biller ID" required>
+                            <label for="autoCorrectBillerName"><span class="material-icons">business</span> Correct Biller Name</label>
+                            <input id="autoCorrectBillerName" name="correct_biller_name" class="field-input required-field" type="text" list="autoCorrectBillerDatalist" placeholder="Search subbiller or select..." required>
+                            <datalist id="autoCorrectBillerDatalist">
+                                <?php foreach ($subbillers as $sb): ?>
+                                    <option value="<?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>"></option>
+                                <?php endforeach; ?>
+                            </datalist>
                         </div>
 
                         <div class="field-group">
-                            <label for="autoCorrectBillerName"><span class="material-icons">business</span> Correct Biller Name</label>
-                            <input id="autoCorrectBillerName" name="correct_biller_name" class="field-input required-field" type="text" placeholder="Enter correct biller name" required>
+                            <label for="autoCorrectBillerId"><span class="material-icons">check_circle</span> Correct Biller ID</label>
+                            <input id="autoCorrectBillerId" name="correct_biller_id" class="field-input required-field" type="text" placeholder="Auto-filled from biller name" readonly required>
                         </div>
 
                         <div class="field-group field-fullwidth">
@@ -193,3 +209,35 @@ if ($searchRef !== '') {
         </form>
     <?php endif; ?>
 </section>
+
+<script>
+(function () {
+    function byId(id) { return document.getElementById(id); }
+
+    var autoBillerMap = <?php
+        $bm = [];
+        foreach ($subbillers as $sb) {
+            $name = strtolower((string) ($sb['subbiller_name'] ?? ''));
+            if ($name === '') continue;
+            $bm[$name] = [
+                'id' => (string) ($sb['subbiller_ext_id'] ?? '')
+            ];
+        }
+        echo json_encode($bm);
+    ?>;
+
+    var correctName = byId('autoCorrectBillerName');
+    var correctId = byId('autoCorrectBillerId');
+    if (!correctName || !correctId) return;
+
+    function syncCorrectBiller() {
+        var key = (correctName.value || '').trim().toLowerCase();
+        var info = autoBillerMap[key] || null;
+        correctId.value = info ? (info.id || '') : '';
+    }
+
+    correctName.addEventListener('input', syncCorrectBiller);
+    correctName.addEventListener('change', syncCorrectBiller);
+    syncCorrectBiller();
+})();
+</script>
