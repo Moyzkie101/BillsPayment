@@ -159,6 +159,22 @@ foreach ($cadActive as $ticket) {
     <link rel="stylesheet" href="assets/css/ticket-modal.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="assets/css/image-preview.css?v=<?php echo time(); ?>">
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
+    <style>
+        .tm-header-branch-close {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            width: 100%;
+        }
+
+        .tm-header-branch-close > button {
+            display: inline-flex;
+            margin: 0;
+            width: calc(50% - 4px);
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
 </head>
 <body>
     <div class="main-container">
@@ -367,6 +383,13 @@ foreach ($cadActive as $ticket) {
                                     </div>
                                 </div>
                             </div>
+
+                            <?php if ($isCadActionable): ?>
+                                <div class="tm-header-branch-close">
+                                    <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-open="stTransferToVpoConfirm-<?php echo $ticketId; ?>">Transfer to VPO</button>
+                                    <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-close-picker-open="stClosePickerCad-<?php echo $ticketId; ?>"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Close Ticket</button>
+                                </div>
+                            <?php endif; ?>
                         </div>
 
                         <div class="tm-body">
@@ -609,16 +632,15 @@ foreach ($cadActive as $ticket) {
                             <div class="tm-footer tm-footer--open">
                                 <?php if ($isCadActionable): ?>
                                 <div class="tm-footer-inner" style="display:block;">
-                                    <form method="post" action="controllers/cad/submit-ticket.php" style="display:flex;gap:8px;align-items:stretch;margin-bottom:8px;width:100%;">
+                                    <form method="post" action="controllers/cad/submit-ticket.php" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;width:100%;">
                                         <input type="hidden" name="action" value="reply">
                                         <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
                                         <input type="hidden" name="return_mode" value="active">
                                         <div class="tm-textarea-container" style="flex:1;min-width:0;">
                                             <textarea name="message" class="tm-textarea" placeholder="Type your reply..." required></textarea>
                                         </div>
-                                        <div style="display:flex;gap:8px;align-items:stretch;flex:0 0 auto;">
+                                        <div style="display:flex;gap:8px;align-items:center;flex:0 0 auto;">
                                             <button type="submit" class="tm-btn tm-btn--red">Submit</button>
-                                            <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-open="stTransferToVpoConfirm-<?php echo $ticketId; ?>">Transfer to VPO</button>
                                         </div>
                                     </form>
 
@@ -640,11 +662,6 @@ foreach ($cadActive as $ticket) {
                                             </div>
                                         </div>
                                     </div>
-
-                                        <div style="margin-top:4px;display:flex;justify-content:flex-end;">
-                                        <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-close-picker-open="stClosePickerCad-<?php echo $ticketId; ?>"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Close Ticket</button>
-                                    </div>
-
                                     <div class="tm-submodal-overlay" id="stClosePickerCad-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
                                         <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Close ticket options">
                                             <div class="tm-submodal-title">Close Ticket</div>

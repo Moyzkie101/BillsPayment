@@ -160,6 +160,23 @@ foreach ($vpoActive as $ticket) {
     <link rel="stylesheet" href="assets/css/ticket-modal.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="assets/css/image-preview.css?v=<?php echo time(); ?>">
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
+    <style>
+        /* Match create-ticket placement: full-width header close action */
+        .tm-header-branch-close {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            width: 100%;
+        }
+
+        .tm-header-branch-close > button {
+            display: inline-flex;
+            margin: 0;
+            width: calc(50% - 4px);
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
 </head>
 <body>
     <div class="main-container">
@@ -368,9 +385,40 @@ foreach ($vpoActive as $ticket) {
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <div class="tm-body">
+                                <?php if ($isVpoActionable): ?>
+                                    <div class="tm-header-branch-close">
+                                        <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-open="stTransferToCadConfirm-<?php echo $ticketId; ?>">Transfer to CAD</button>
+                                        <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-close-picker-open="stClosePickerVpo-<?php echo $ticketId; ?>"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Close Ticket</button>
+                                    </div>
+
+                                    <div class="tm-submodal-overlay" id="stClosePickerVpo-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
+                                        <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Close ticket options">
+                                            <div class="tm-submodal-title">Close Ticket</div>
+                                            <div class="tm-submodal-ticket-info">Choose how to close Ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
+                                            <hr class="tm-submodal-divider">
+                                            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+                                                <form method="post" action="controllers/vpo/close-ticket.php">
+                                                    <input type="hidden" name="close_mode" value="auto">
+                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                                    <input type="hidden" name="return_mode" value="active">
+                                                    <button class="tm-btn tm-btn--transfer" type="submit">Auto Close</button>
+                                                </form>
+                                                <form method="post" action="controllers/vpo/close-ticket.php">
+                                                    <input type="hidden" name="close_mode" value="immediate">
+                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                                    <input type="hidden" name="return_mode" value="active">
+                                                    <button class="tm-btn tm-btn--danger" type="submit">Close Immediately</button>
+                                                </form>
+                                            </div>
+                                            <div class="tm-submodal-footer" style="margin-top:10px;">
+                                                <button type="button" class="tm-btn tm-btn--outline" data-close-picker-cancel="stClosePickerVpo-<?php echo $ticketId; ?>">Cancel</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+
+                            <div class="tm-body">
                             <div class="tm-trail">
                                 <?php if (empty($trails)): ?>
                                     <div class="tm-empty-trail">No trail entries yet.</div>
@@ -610,16 +658,15 @@ foreach ($vpoActive as $ticket) {
                             <div class="tm-footer tm-footer--open">
                                 <?php if ($isVpoActionable): ?>
                                 <div class="tm-footer-inner" style="display:block;">
-                                    <form method="post" action="controllers/vpo/submit-ticket.php" style="display:flex;gap:8px;align-items:stretch;margin-bottom:8px;width:100%;">
+                                    <form method="post" action="controllers/vpo/submit-ticket.php" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;width:100%;">
                                         <input type="hidden" name="action" value="reply">
                                         <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
                                         <input type="hidden" name="return_mode" value="active">
                                         <div class="tm-textarea-container" style="flex:1;min-width:0;">
                                             <textarea name="message" class="tm-textarea" placeholder="Type your reply..." required></textarea>
                                         </div>
-                                        <div style="display:flex;gap:8px;align-items:stretch;flex:0 0 auto;">
+                                        <div style="display:flex;gap:8px;align-items:center;flex:0 0 auto;">
                                             <button type="submit" class="tm-btn tm-btn--red">Submit</button>
-                                            <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-open="stTransferToCadConfirm-<?php echo $ticketId; ?>">Transfer to CAD</button>
                                         </div>
                                     </form>
 
@@ -642,34 +689,7 @@ foreach ($vpoActive as $ticket) {
                                         </div>
                                     </div>
 
-                                    <div style="margin-top:4px;display:flex;justify-content:flex-end;">
-                                        <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-close-picker-open="stClosePickerVpo-<?php echo $ticketId; ?>"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Close Ticket</button>
-                                    </div>
-
-                                    <div class="tm-submodal-overlay" id="stClosePickerVpo-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
-                                        <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Close ticket options">
-                                            <div class="tm-submodal-title">Close Ticket</div>
-                                            <div class="tm-submodal-ticket-info">Choose how to close Ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
-                                            <hr class="tm-submodal-divider">
-                                            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-                                                <form method="post" action="controllers/vpo/close-ticket.php">
-                                                    <input type="hidden" name="close_mode" value="auto">
-                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
-                                                    <input type="hidden" name="return_mode" value="active">
-                                                    <button class="tm-btn tm-btn--transfer" type="submit">Auto Close</button>
-                                                </form>
-                                                <form method="post" action="controllers/vpo/close-ticket.php">
-                                                    <input type="hidden" name="close_mode" value="immediate">
-                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
-                                                    <input type="hidden" name="return_mode" value="active">
-                                                    <button class="tm-btn tm-btn--danger" type="submit">Close Immediately</button>
-                                                </form>
-                                            </div>
-                                            <div class="tm-submodal-footer" style="margin-top:10px;">
-                                                <button type="button" class="tm-btn tm-btn--outline" data-close-picker-cancel="stClosePickerVpo-<?php echo $ticketId; ?>">Cancel</button>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    
                                 </div>
                                 <?php else: ?>
                                 <div class="tm-footer tm-footer--closed">Ticket is currently handled by CAD. You can still view the conversation timeline.</div>
