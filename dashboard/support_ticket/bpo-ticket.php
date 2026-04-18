@@ -418,6 +418,8 @@ foreach ($vpoActive as $ticket) {
                                     </div>
                                 <?php endif; ?>
 
+                        </div>
+
                             <div class="tm-body">
                             <div class="tm-trail">
                                 <?php if (empty($trails)): ?>
