@@ -253,15 +253,14 @@ if ($searchTicketNumber !== '') {
 
         .st-search-wrap {
             display: flex;
-            flex-wrap: wrap;
             gap: 8px;
             align-items: center;
             margin-bottom: 12px;
         }
 
         .st-search-wrap input[type="text"] {
-            width: 280px;
-            max-width: 100%;
+            flex: 1 1 auto;
+            min-width: 0;
             border: 1px solid #d1d5db;
             border-radius: 8px;
             padding: 8px 10px;
@@ -596,7 +595,6 @@ if ($searchTicketNumber !== '') {
                 <input type="hidden" name="mode" value="<?php echo htmlspecialchars($mode); ?>">
                 <input type="text" name="ticket_number" value="<?php echo htmlspecialchars($searchTicketNumber); ?>" placeholder="Search Ticket Number">
                 <button type="submit"><i class="fa-solid fa-magnifying-glass"></i> Search Ticket</button>
-                <a href="ticket-report.php?mode=<?php echo urlencode($mode); ?>">Clear Search</a>
             </form>
 
             <div class="mode-cards" data-st-mode-group data-st-param="mode">
