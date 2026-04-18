@@ -28,6 +28,10 @@ $searchNotFound = false;
 
 $allTickets = st_get_report_tickets($conn);
 [$openTickets, $activeTickets, $closedTickets] = st_partition_report_tickets($allTickets);
+// Counts for mode badges
+$openCount = count($openTickets);
+$activeCount = count($activeTickets);
+$closedCount = count($closedTickets);
 
 if ($ticketSearchNormalized !== '') {
     $ticketFoundId = 0;
@@ -300,18 +304,21 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                     <input type="radio" name="maintMode" value="open" <?php echo $mode === 'open' ? 'checked' : ''; ?>>
                     <div class="mode-icon"><i class="fa-solid fa-inbox"></i></div>
                     <div class="mode-text"><p class="mode-label">OPEN</p><small>Unresolved queue</small></div>
+                    <?php if (!empty($openCount)): ?><span class="st-mode-count-badge"><?php echo (int) $openCount; ?></span><?php endif; ?>
                 </label>
 
                 <label class="mode-card <?php echo $mode === 'active' ? 'selected' : ''; ?>" data-mode="active">
                     <input type="radio" name="maintMode" value="active" <?php echo $mode === 'active' ? 'checked' : ''; ?>>
                     <div class="mode-icon"><i class="fa-solid fa-bolt"></i></div>
                     <div class="mode-text"><p class="mode-label">ACTIVE</p><small>In-progress tickets</small></div>
+                    <?php if (!empty($activeCount)): ?><span class="st-mode-count-badge"><?php echo (int) $activeCount; ?></span><?php endif; ?>
                 </label>
 
                 <label class="mode-card <?php echo $mode === 'closed' ? 'selected' : ''; ?>" data-mode="closed">
                     <input type="radio" name="maintMode" value="closed" <?php echo $mode === 'closed' ? 'checked' : ''; ?>>
                     <div class="mode-icon"><i class="fa-solid fa-box-archive"></i></div>
                     <div class="mode-text"><p class="mode-label">CLOSED</p><small>Resolved and closed</small></div>
+                    <?php if (!empty($closedCount)): ?><span class="st-mode-count-badge"><?php echo (int) $closedCount; ?></span><?php endif; ?>
                 </label>
             </div>
 
