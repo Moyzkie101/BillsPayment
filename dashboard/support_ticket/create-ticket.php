@@ -171,6 +171,27 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
     <link rel="stylesheet" href="../trl/trl-report/components/trl-report-subbillers.css?v=<?php echo time(); ?>">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
+    <style>
+        /* Keep branch close action visible in ticket modal header */
+        .tm-header-branch-close {
+            display: flex;
+            justify-content: stretch;
+            margin-top: 8px;
+            width: 100%;
+        }
+
+        .tm-header-branch-close .tm-inline-form {
+            display: flex;
+            margin: 0;
+            width: 100%;
+            justify-content: stretch;
+        }
+
+        .tm-header-branch-close .tm-btn-close-ticket {
+            width: 100%;
+            justify-content: center;
+        }
+    </style>
 </head>
 <body>
     <div class="main-container">
@@ -349,29 +370,31 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                                 <div class="tm-status tm-status--<?php echo htmlspecialchars($ticketStatusLower); ?>"><?php echo htmlspecialchars((string) $ticket['status']); ?></div>
                                                 <button type="button" class="tm-close-btn" data-st-close-modal="stTicketTrailModal-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
                                             </div>
-
-                                            <?php if ($isOpen): ?>
-                                                <form id="stCloseForm-<?php echo $ticketId; ?>" method="post" action="controllers/branch/close-ticket.php" class="tm-inline-form tm-header-actions-bottom">
-                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
-                                                    <input type="hidden" name="return_mode" value="<?php echo htmlspecialchars($mode); ?>">
-                                                    <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-confirm-transfer-open="stCloseConfirm-<?php echo $ticketId; ?>">Close Ticket</button>
-                                                </form>
-
-                                                <div class="tm-submodal-overlay" id="stCloseConfirm-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
-                                                    <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Close ticket confirmation">
-                                                        <div class="tm-submodal-title">Close Ticket Immediately?</div>
-                                                        <div class="tm-submodal-ticket-info">Are you sure you want to close ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?> now?</div>
-                                                        <hr class="tm-submodal-divider">
-                                                        <div class="tm-submodal-footer">
-                                                            <button type="button" class="tm-btn tm-btn--outline" data-confirm-transfer-cancel="stCloseConfirm-<?php echo $ticketId; ?>">Cancel</button>
-                                                            <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-submit="stCloseConfirm-<?php echo $ticketId; ?>" data-transfer-form="stCloseForm-<?php echo $ticketId; ?>">Close Ticket</button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            <?php endif; ?>
                                         </div>
                                 </div>
                             </div>
+
+                            <?php if ($isOpen): ?>
+                                <div class="tm-header-branch-close">
+                                    <form id="stCloseForm-<?php echo $ticketId; ?>" method="post" action="controllers/branch/close-ticket.php" class="tm-inline-form">
+                                        <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                        <input type="hidden" name="return_mode" value="<?php echo htmlspecialchars($mode); ?>">
+                                        <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-confirm-transfer-open="stCloseConfirm-<?php echo $ticketId; ?>">Close Ticket</button>
+                                    </form>
+                                </div>
+
+                                <div class="tm-submodal-overlay" id="stCloseConfirm-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
+                                    <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Close ticket confirmation">
+                                        <div class="tm-submodal-title">Close Ticket Immediately?</div>
+                                        <div class="tm-submodal-ticket-info">Are you sure you want to close ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?> now?</div>
+                                        <hr class="tm-submodal-divider">
+                                        <div class="tm-submodal-footer">
+                                            <button type="button" class="tm-btn tm-btn--outline" data-confirm-transfer-cancel="stCloseConfirm-<?php echo $ticketId; ?>">Cancel</button>
+                                            <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-submit="stCloseConfirm-<?php echo $ticketId; ?>" data-transfer-form="stCloseForm-<?php echo $ticketId; ?>">Close Ticket</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         </div>
 
                         <div class="tm-body">
