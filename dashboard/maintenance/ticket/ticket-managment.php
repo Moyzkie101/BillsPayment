@@ -23,43 +23,43 @@ function st_trail_role_icon_asset_maintenance($role)
 
 $ticketSearchInput = trim((string) ($_GET['ticket_search'] ?? ''));
 $ticketSearchNormalized = strtoupper($ticketSearchInput);
-$ticketSearchFoundMode = '';
-$ticketSearchFound = false;
+$autoOpenModalId = '';
+$searchNotFound = false;
 
 $allTickets = st_get_report_tickets($conn);
 [$openTickets, $activeTickets, $closedTickets] = st_partition_report_tickets($allTickets);
 
 if ($ticketSearchNormalized !== '') {
+    $ticketFoundId = 0;
     foreach ($openTickets as $t) {
         if (strtoupper(trim((string) ($t['ticket_number'] ?? ''))) === $ticketSearchNormalized) {
-            $ticketSearchFoundMode = 'open';
-            $ticketSearchFound = true;
+            $ticketFoundId = (int) ($t['id'] ?? 0);
             break;
         }
     }
 
-    if (!$ticketSearchFound) {
+    if ($ticketFoundId === 0) {
         foreach ($activeTickets as $t) {
             if (strtoupper(trim((string) ($t['ticket_number'] ?? ''))) === $ticketSearchNormalized) {
-                $ticketSearchFoundMode = 'active';
-                $ticketSearchFound = true;
+                $ticketFoundId = (int) ($t['id'] ?? 0);
                 break;
             }
         }
     }
 
-    if (!$ticketSearchFound) {
+    if ($ticketFoundId === 0) {
         foreach ($closedTickets as $t) {
             if (strtoupper(trim((string) ($t['ticket_number'] ?? ''))) === $ticketSearchNormalized) {
-                $ticketSearchFoundMode = 'closed';
-                $ticketSearchFound = true;
+                $ticketFoundId = (int) ($t['id'] ?? 0);
                 break;
             }
         }
     }
 
-    if ($ticketSearchFound && $ticketSearchFoundMode !== '') {
-        $mode = $ticketSearchFoundMode;
+    if ($ticketFoundId > 0) {
+        $autoOpenModalId = 'stTicketTrailModalMaintenance-' . $ticketFoundId;
+    } else {
+        $searchNotFound = true;
     }
 }
 
@@ -290,7 +290,8 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
 
             <?php if ($ticketSearchInput !== ''): ?>
                 <script>
-                    window.supportTicketInitialFlash = <?php echo json_encode([ 'type' => ($ticketSearchFound ? 'success' : 'danger'), 'message' => ($ticketSearchFound ? ('Ticket ' . $ticketSearchInput . ' found in ' . strtoupper($mode) . '.') : ('Ticket ' . $ticketSearchInput . ' was not found.')) ]); ?>;
+                    window.supportTicketInitialFlash = <?php echo json_encode([ 'type' => ($searchNotFound ? 'danger' : 'success'), 'message' => ($searchNotFound ? ('Ticket ' . $ticketSearchInput . ' was not found.') : ('Ticket ' . $ticketSearchInput . ' found.')) ]); ?>;
+                    window.supportTicketAutoOpenModal = <?php echo json_encode($autoOpenModalId); ?>;
                 </script>
             <?php endif; ?>
 
@@ -827,6 +828,19 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                 bindPanelFilters(panel);
             });
         })();
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var autoId = window.supportTicketAutoOpenModal || '';
+            if (!autoId) return;
+            var target = document.getElementById(autoId);
+            if (!target) return;
+            target.classList.add('open');
+            var latestCard = target.querySelector('.tm-trail-card[data-tm-latest]');
+            if (latestCard) latestCard.classList.add('tm-expanded');
+            var body = target.querySelector('.tm-body');
+            if (body) body.scrollTop = body.scrollHeight;
+        });
     </script>
 </body>
 </html>
