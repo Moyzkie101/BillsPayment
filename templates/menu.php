@@ -287,7 +287,11 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div>
             <?php endif; ?>
 
-            <!-- TRL - Ticket Entry moved to Support Ticket menu to keep permission scoped to Support Ticket -->
+            <?php if (has_permission('TRL Ticket Entry')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-ticket_entry/trl-entry_ticket.php'">
+                <a href="<?php echo $auth_url; ?>dashboard/trl/trl-ticket_entry/trl-entry_ticket.php"><i class="fa-solid fa-ticket"></i> TRL - Ticket Entry</a>
+            </div>
+            <?php endif; ?>
 
             <?php if (has_permission('TRL Review')): ?>
             <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-review/trl-review.php'">
@@ -453,11 +457,6 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <?php if (has_permission('Support Ticket VPO')): ?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/bpo-ticket.php'">
                     <a href="<?php echo $base_url; ?>support_ticket/bpo-ticket.php"><i class="fa-solid fa-headset"></i> VPO Ticket</a>
-                </div>
-                <?php endif; ?>
-                <?php if (has_permission('TRL Ticket Entry')): ?>
-                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>dashboard/trl/trl-ticket_entry/trl-entry_ticket.php'">
-                    <a href="<?php echo $base_url; ?>dashboard/trl/trl-ticket_entry/trl-entry_ticket.php"><i class="fa-solid fa-ticket"></i> TRL - Ticket Entry</a>
                 </div>
                 <?php endif; ?>
                 <?php if (has_permission('Support Ticket CAD')): ?>
