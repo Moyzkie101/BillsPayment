@@ -910,7 +910,7 @@
 
 .tm-footer-inner {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 10px;
   flex-wrap: nowrap;
   flex: 1 1 auto; /* allow the inner row to grow and occupy footer space */
