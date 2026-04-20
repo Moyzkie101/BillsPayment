@@ -1,5 +1,6 @@
 <?php
 include_once __DIR__ . '/../../support_ticket/includes/bootstrap.php';
+include_once __DIR__ . '/../../support_ticket/includes/ticket_queries.php';
 
 st_require_login('../../../login_form.php');
 st_require_permission_page(['Support Ticket Report', 'Maintenance Support Ticket'], '../../home.php');
