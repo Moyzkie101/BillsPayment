@@ -1362,12 +1362,13 @@
 
         function collectTicketNumbers() {
             var map = {};
-            var scopeRoot = document.querySelector('[data-st-panel]:not(.hidden)') || document;
-            scopeRoot.querySelectorAll('.st-ticket-row[data-ticket-modal]').forEach(function (row) {
+            // Track all known rows (open/active/closed), not just the visible panel,
+            // so live status changes can move tickets across panels without refresh.
+            document.querySelectorAll('.st-ticket-row[data-ticket-modal]').forEach(function (row) {
                 var tn = getTicketNumberFromRow(row);
                 if (tn) map[tn] = true;
             });
-            return Object.keys(map).slice(0, 120);
+            return Object.keys(map);
         }
 
         function collectOpenModalState() {
