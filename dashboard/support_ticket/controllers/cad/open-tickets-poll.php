@@ -64,7 +64,7 @@ else:
         <span class="st-ticket-col st-col-status">Status</span>
     </div>
     <?php foreach ($cadOpen as $ticket): ?>
-        <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="CAD">
+        <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-status="<?php echo htmlspecialchars((string) ($ticket['status'] ?? '')); ?>" data-seen-role="CAD">
             <?php $cadUnread = (int) ($badgeCounts[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
             <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($cadUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $cadUnread; ?></span><?php endif; ?></span>
             <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>

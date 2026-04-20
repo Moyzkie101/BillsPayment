@@ -94,10 +94,13 @@ try {
 
     if ($action === 'reply') {
         $replyTargetRole = $currentHandler === 'CAD' ? 'CAD' : 'BRANCH';
-        st_insert_trail($conn, $ticketId, 'message', $userId, 'VPO', $replyTargetRole, $message, null);
+        $trailId = st_insert_trail($conn, $ticketId, 'message', $userId, 'VPO', $replyTargetRole, $message, null);
         $conn->commit();
         $conn->autocommit(true);
-        $ok('Reply submitted successfully.');
+        $ok('Reply submitted successfully.', [
+            'trail_id' => (int) $trailId,
+            'ticket_id' => (int) $ticketId,
+        ]);
     }
 
     $transferMessage = $message !== '' ? $message : 'Ticket transferred to CAD.';

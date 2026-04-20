@@ -84,11 +84,14 @@ try {
     }
 
     if ($action === 'reply') {
-        st_insert_trail($conn, $ticketId, 'message', $userId, 'CAD', 'BRANCH', $message, null);
+        $trailId = st_insert_trail($conn, $ticketId, 'message', $userId, 'CAD', 'BRANCH', $message, null);
 
         $conn->commit();
         $conn->autocommit(true);
-        $ok('Reply submitted successfully.');
+        $ok('Reply submitted successfully.', [
+            'trail_id' => (int) $trailId,
+            'ticket_id' => (int) $ticketId,
+        ]);
     }
 
     $transferMessage = $message !== '' ? $message : 'Ticket transferred to VPO.';

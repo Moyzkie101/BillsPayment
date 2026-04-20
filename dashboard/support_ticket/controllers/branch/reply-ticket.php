@@ -119,7 +119,10 @@ try {
     $conn->commit();
     $conn->autocommit(true);
 
-    $ok('Reply submitted successfully.');
+    $ok('Reply submitted successfully.', [
+        'trail_id' => (int) $trailId,
+        'ticket_id' => (int) $ticketId,
+    ]);
 } catch (Exception $e) {
     $conn->rollback();
     $conn->autocommit(true);

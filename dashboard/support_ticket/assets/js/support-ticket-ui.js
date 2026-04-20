@@ -165,11 +165,132 @@
     }
 
     function initTicketTrailModals() {
+        var modalLoadPromises = {};
+        var trailSyncPromises = {};
+
         function closeModalById(id) {
             var m = document.getElementById(id);
             if (m) {
                 m.classList.remove('open');
             }
+        }
+
+        function fetchAndAttachModal(modalId) {
+            var id = String(modalId || '').trim();
+            if (!id) {
+                return Promise.resolve(null);
+            }
+
+            var existing = document.getElementById(id);
+            if (existing) {
+                return Promise.resolve(existing);
+            }
+
+            if (modalLoadPromises[id]) {
+                return modalLoadPromises[id];
+            }
+
+            modalLoadPromises[id] = fetch(window.location.href, {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (res) {
+                if (!res || !res.ok) return null;
+                return res.text();
+            }).then(function (html) {
+                if (!html) return null;
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(html, 'text/html');
+                var fetchedModal = doc.getElementById(id);
+                if (!fetchedModal) return null;
+
+                var host = document.body || document.documentElement;
+                if (!host) return null;
+
+                var imported = document.importNode(fetchedModal, true);
+                host.appendChild(imported);
+                return imported;
+            }).catch(function () {
+                return null;
+            }).finally(function () {
+                delete modalLoadPromises[id];
+            });
+
+            return modalLoadPromises[id];
+        }
+
+        function getTrailSyncEndpoint() {
+            var cfg = window.supportTicketLiveUpdates || null;
+            if (!cfg || !cfg.endpoint) return '';
+
+            if (cfg.trailEndpoint) {
+                return String(cfg.trailEndpoint);
+            }
+
+            var liveEndpoint = String(cfg.endpoint);
+            if (liveEndpoint.indexOf('live-updates.php') === -1) {
+                return '';
+            }
+
+            return liveEndpoint.replace('live-updates.php', 'trail-deltas.php');
+        }
+
+        function syncModalTrails(modalEl) {
+            if (!modalEl) return;
+
+            var cfg = window.supportTicketLiveUpdates || null;
+            if (!cfg || !cfg.scope) return;
+
+            var endpoint = getTrailSyncEndpoint();
+            if (!endpoint) return;
+
+            var modalId = String(modalEl.id || '').trim();
+            var m = modalId.match(/-(\d+)$/);
+            if (!m) return;
+
+            var ticketId = parseInt(m[1], 10) || 0;
+            if (!ticketId) return;
+
+            var syncKey = modalId;
+            if (trailSyncPromises[syncKey]) {
+                return;
+            }
+
+            var trailWrap = modalEl.querySelector('.tm-trail');
+            var lastTrailId = 0;
+            if (trailWrap) {
+                trailWrap.querySelectorAll('.tm-trail-item[data-trail-id]').forEach(function (item) {
+                    var tid = parseInt(item.getAttribute('data-trail-id') || '0', 10) || 0;
+                    if (tid > lastTrailId) lastTrailId = tid;
+                });
+            }
+
+            var params = new URLSearchParams();
+            params.set('scope', String(cfg.scope));
+            params.set('ticket_id', String(ticketId));
+            params.set('since_trail_id', String(lastTrailId));
+
+            trailSyncPromises[syncKey] = fetch(endpoint + '?' + params.toString(), {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (res) {
+                if (!res || !res.ok) return null;
+                return res.json();
+            }).then(function (json) {
+                if (!json || !json.success || !json.data) return;
+                stAppendTrailDeltas(json.data.trail_deltas || {});
+            }).catch(function () {
+                // no-op
+            }).finally(function () {
+                delete trailSyncPromises[syncKey];
+            });
         }
 
         function openModalFromRow(btn) {
@@ -178,8 +299,20 @@
             var targetId = btn.getAttribute('data-ticket-modal');
             if (!targetId) return;
             var targetModal = document.getElementById(targetId);
+            if (!targetModal) {
+                fetchAndAttachModal(targetId).then(function (loadedModal) {
+                    if (loadedModal) {
+                        openModalFromRow(btn);
+                        return;
+                    }
+                    stShowToast('Ticket details are still loading. Please try again.', 'danger');
+                });
+                return;
+            }
+
             if (targetModal) {
                 targetModal.classList.add('open');
+                syncModalTrails(targetModal);
 
                 // Mark ticket badge as seen for the current page role.
                 var seenTicketId = btn.getAttribute('data-ticket-id');
@@ -260,26 +393,26 @@
             openModalFromRow(row);
         });
 
-        var closers = document.querySelectorAll('[data-st-close-modal]');
-        closers.forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var targetId = btn.getAttribute('data-st-close-modal');
-                if (!targetId) return;
-                closeModalById(targetId);
-            });
+        // Delegated close handling so dynamically attached modals also work.
+        document.addEventListener('click', function (e) {
+            var closeBtn = e.target && e.target.closest ? e.target.closest('[data-st-close-modal]') : null;
+            if (!closeBtn) return;
+            var targetId = closeBtn.getAttribute('data-st-close-modal');
+            if (!targetId) return;
+            closeModalById(targetId);
         });
 
-        var backdrops = document.querySelectorAll('.st-ticket-trail-backdrop, .tm-overlay');
-        backdrops.forEach(function (backdrop) {
-            backdrop.addEventListener('click', function (e) {
-                if (e.target === backdrop) {
-                    backdrop.classList.remove('open');
-                }
-            });
+        // Delegated backdrop close for static and dynamically loaded overlays.
+        document.addEventListener('click', function (e) {
+            var target = e.target;
+            if (!target || !target.classList) return;
+            if (!target.classList.contains('tm-overlay') && !target.classList.contains('st-ticket-trail-backdrop')) return;
+            target.classList.remove('open');
         });
 
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape') return;
+            var backdrops = document.querySelectorAll('.st-ticket-trail-backdrop, .tm-overlay');
             backdrops.forEach(function (backdrop) {
                 backdrop.classList.remove('open');
             });
@@ -828,20 +961,6 @@
         if (!flash || !flash.message) return;
         var type = String(flash.type || 'success').toLowerCase();
         stShowToast(String(flash.message), type === 'danger' ? 'danger' : 'success');
-
-        if (window.supportTicketForceReloadOnce === true) {
-            try {
-                var url = new URL(window.location.href);
-                url.searchParams.delete('st_refresh');
-                window.history.replaceState(null, '', url.pathname + (url.search || ''));
-            } catch (e) {
-                // ignore URL rewrite failures
-            }
-
-            setTimeout(function () {
-                window.location.reload();
-            }, 1100);
-        }
     }
 
     function initOpenTicketsPolling() {
@@ -886,9 +1005,6 @@
 
         function shouldPollNow() {
             if (document.hidden) return false;
-
-            var isOpenModeVisible = !panel.classList.contains('hidden');
-            if (!isOpenModeVisible) return false;
 
             var hasOpenOverlay = !!document.querySelector('.tm-overlay.open');
             if (hasOpenOverlay) return false;
@@ -952,6 +1068,106 @@
         return 'Message';
     }
 
+    function stAppendTrailDeltas(trailDeltas) {
+        if (!trailDeltas || typeof trailDeltas !== 'object') return;
+
+        Object.keys(trailDeltas).forEach(function (ticketIdKey) {
+            var deltas = trailDeltas[ticketIdKey];
+            if (!Array.isArray(deltas) || deltas.length === 0) return;
+
+            var overlay = document.querySelector('.tm-overlay[id$="-' + ticketIdKey + '"]');
+            if (!overlay) return;
+
+            var trailWrap = overlay.querySelector('.tm-trail');
+            if (!trailWrap) return;
+
+            var empty = trailWrap.querySelector('.tm-empty-trail');
+            if (empty && empty.parentNode) {
+                empty.parentNode.removeChild(empty);
+            }
+
+            deltas.forEach(function (delta) {
+                var trailId = parseInt(delta.trail_id || 0, 10) || 0;
+                if (!trailId) return;
+                if (trailWrap.querySelector('.tm-trail-item[data-trail-id="' + trailId + '"]')) return;
+
+                var senderRole = String(delta.sender_role || 'SYSTEM').toUpperCase();
+                var type = String(delta.type || 'message').toLowerCase();
+                var message = String(delta.message || '');
+                var dtText = formatTrailDatetimeText(delta.created_at || '');
+
+                var avatarClass = 'tm-trail-avatar--system';
+                if (senderRole === 'BRANCH') {
+                    avatarClass = 'tm-trail-avatar--branch';
+                } else if (senderRole === 'VPO') {
+                    avatarClass = 'tm-trail-avatar--vpo';
+                } else if (senderRole === 'CAD') {
+                    avatarClass = 'tm-trail-avatar--cad';
+                }
+                var avatarInner = buildTrailAvatarInner(senderRole);
+
+                var attachments = Array.isArray(delta.attachments) ? delta.attachments : [];
+                var attachmentsHtml = '';
+                if (attachments.length > 0) {
+                    var nodes = [];
+                    attachments.forEach(function (att) {
+                        var href = stEscapeHtml(String(att.download_url || '#'));
+                        var name = stEscapeHtml(String(att.file_name || 'Attachment'));
+                        var size = stEscapeHtml(String(att.file_size || ''));
+                        nodes.push(
+                            '<a class="tm-attachment" href="' + href + '">' +
+                                '<span class="tm-attachment-icon"><i class="fa-solid fa-paperclip" aria-hidden="true"></i></span>' +
+                                '<span class="tm-attachment-name">' + name + '</span>' +
+                                '<span class="tm-attachment-size">' + size + '</span>' +
+                            '</a>'
+                        );
+                    });
+                    attachmentsHtml = '<div class="tm-attachments">' + nodes.join('') + '</div>';
+                }
+
+                var prevLatest = trailWrap.querySelector('.tm-trail-card[data-tm-latest]');
+                if (prevLatest) {
+                    prevLatest.removeAttribute('data-tm-latest');
+                }
+
+                var item = document.createElement('div');
+                item.className = 'tm-trail-item';
+                item.setAttribute('data-trail-id', String(trailId));
+                item.innerHTML =
+                    '<div class="tm-trail-dot-wrap">' +
+                        '<div class="tm-trail-avatar ' + avatarClass + '">' + avatarInner + '</div>' +
+                    '</div>' +
+                    '<div class="tm-trail-card tm-expanded" data-tm-latest="1">' +
+                        '<div class="tm-trail-card-header">' +
+                            '<div class="tm-trail-avatar ' + avatarClass + '">' + avatarInner + '</div>' +
+                            '<div class="tm-trail-meta">' +
+                                '<div class="tm-trail-sender"><span>' + stEscapeHtml(senderRole) + '</span></div>' +
+                                '<div class="tm-trail-datetime">' + stEscapeHtml(dtText) + '</div>' +
+                            '</div>' +
+                            '<div class="tm-trail-type-label tm-trail-type-label--' + stEscapeHtml(type) + '">' + stEscapeHtml(liveTypeLabel(type)) + '</div>' +
+                            '<div class="tm-trail-chevron">›</div>' +
+                        '</div>' +
+                        '<div class="tm-trail-card-body">' +
+                            '<div class="tm-trail-message">' + stEscapeHtml(message).replace(/\n/g, '<br>') + '</div>' +
+                            attachmentsHtml +
+                        '</div>' +
+                    '</div>';
+
+                trailWrap.appendChild(item);
+            });
+
+            adjustTrailCardHeights(overlay);
+            if (overlay.classList.contains('open')) {
+                var body = overlay.querySelector('.tm-body');
+                if (body) {
+                    requestAnimationFrame(function () {
+                        body.scrollTop = body.scrollHeight;
+                    });
+                }
+            }
+        });
+    }
+
     function initLiveUpdatesPolling() {
         var cfg = window.supportTicketLiveUpdates;
         if (!cfg || !cfg.endpoint || !cfg.scope) return;
@@ -965,6 +1181,7 @@
         var bootstrapped = false;
         var inFlight = false;
         var lastToastTrailId = 0;
+        var requestedTicketSet = {};
 
         function parseTicketIdFromModalId(id) {
             var m = String(id || '').match(/-(\d+)$/);
@@ -983,6 +1200,159 @@
             if (!text) return '';
             var m = text.match(/[A-Z0-9_.-]+/);
             return m ? m[0] : '';
+        }
+
+        function normalizeStatusText(status) {
+            return String(status || '').trim().toLowerCase();
+        }
+
+        function statusPanelForPage(statusLower) {
+            var s = normalizeStatusText(statusLower);
+            var hasActivePanel = !!document.querySelector('[data-st-panel="active"]');
+
+            if (hasActivePanel) {
+                if (s === 'resolved' || s === 'closed') return 'closed';
+                if (s === 'open' || s === 'transferred') return 'open';
+                return 'active';
+            }
+
+            return (s === 'resolved' || s === 'closed') ? 'closed' : 'open';
+        }
+
+        function readRowStatus(row) {
+            if (!row) return '';
+            var explicit = String(row.getAttribute('data-status') || '').trim();
+            if (explicit) return explicit;
+            var node = row.querySelector('.st-col-status .st-status');
+            return node ? String(node.textContent || '').trim() : '';
+        }
+
+        function getPanelElement(panelName) {
+            if (!panelName) return null;
+            return document.querySelector('[data-st-panel="' + panelName + '"]');
+        }
+
+        function getOrCreatePanelTable(panelEl, sourceTable) {
+            if (!panelEl) return null;
+
+            var table = panelEl.querySelector('.st-ticket-table');
+            if (table) return table;
+
+            if (!sourceTable) return null;
+            var head = sourceTable.querySelector('.st-ticket-row-head');
+            if (!head) return null;
+
+            table = document.createElement('div');
+            table.className = 'st-ticket-table';
+            table.setAttribute('role', sourceTable.getAttribute('role') || 'table');
+            if (sourceTable.getAttribute('aria-label')) {
+                table.setAttribute('aria-label', sourceTable.getAttribute('aria-label'));
+            }
+            table.appendChild(head.cloneNode(true));
+            panelEl.appendChild(table);
+            return table;
+        }
+
+        function updatePanelEmptyState(panelEl) {
+            if (!panelEl) return;
+            var table = panelEl.querySelector('.st-ticket-table');
+            var rowCount = panelEl.querySelectorAll('.st-ticket-row[data-ticket-modal]').length;
+            var empty = panelEl.querySelector('.st-empty');
+
+            if (table) {
+                table.style.display = rowCount > 0 ? '' : 'none';
+            }
+
+            if (empty) {
+                empty.style.display = rowCount > 0 ? 'none' : '';
+            }
+        }
+
+        function relocateRowByStatus(row, nextStatus) {
+            if (!row) return;
+
+            var currentPanel = row.closest('[data-st-panel]');
+            var currentPanelName = currentPanel ? String(currentPanel.getAttribute('data-st-panel') || '').trim().toLowerCase() : '';
+            var expectedPanel = statusPanelForPage(nextStatus);
+            if (!expectedPanel || expectedPanel === currentPanelName) {
+                return;
+            }
+
+            var sourceTable = currentPanel ? currentPanel.querySelector('.st-ticket-table') : null;
+            var targetPanel = getPanelElement(expectedPanel);
+            var targetTable = getOrCreatePanelTable(targetPanel, sourceTable);
+            if (!targetTable) {
+                // If there is no table container to receive rows yet, hide stale placement.
+                row.style.display = 'none';
+                return;
+            }
+
+            targetTable.appendChild(row);
+            row.style.display = '';
+
+            updatePanelEmptyState(currentPanel);
+            updatePanelEmptyState(targetPanel);
+        }
+
+        function applyRowStatus(row, nextStatus) {
+            if (!row) return;
+            var clean = String(nextStatus || '').trim();
+            if (!clean) return;
+
+            var lower = normalizeStatusText(clean);
+            row.setAttribute('data-status', clean);
+
+            var statusCell = row.querySelector('.st-col-status');
+            if (!statusCell) return;
+
+            var statusNode = statusCell.querySelector('.st-status');
+            if (!statusNode) {
+                statusNode = document.createElement('span');
+                statusCell.textContent = '';
+                statusCell.appendChild(statusNode);
+            }
+
+            statusNode.className = 'st-status st-status-' + lower;
+            statusNode.textContent = clean;
+
+            var modalId = String(row.getAttribute('data-ticket-modal') || '').trim();
+            if (!modalId) return;
+
+            var overlay = document.getElementById(modalId);
+            if (!overlay) return;
+
+            var modalStatus = overlay.querySelector('.tm-status');
+            if (!modalStatus) return;
+
+            modalStatus.className = 'tm-status tm-status--' + lower;
+            modalStatus.textContent = clean;
+        }
+
+        function applyTicketStatuses(ticketStatuses) {
+            if (!ticketStatuses || typeof ticketStatuses !== 'object') {
+                return;
+            }
+            var rows = document.querySelectorAll('.st-ticket-row[data-ticket-modal]');
+
+            rows.forEach(function (row) {
+                var ticketNo = getTicketNumberFromRow(row);
+                if (!ticketNo) return;
+                if (!requestedTicketSet[ticketNo]) return;
+
+                var state = ticketStatuses[ticketNo];
+                if (!state) {
+                    return;
+                }
+
+                var nextStatus = (typeof state === 'object') ? String(state.status || '') : String(state || '');
+                var prevStatus = readRowStatus(row);
+                if (!nextStatus) return;
+
+                if (normalizeStatusText(prevStatus) !== normalizeStatusText(nextStatus)) {
+                    applyRowStatus(row, nextStatus);
+                    relocateRowByStatus(row, nextStatus);
+                }
+            });
         }
 
         function collectTicketNumbers() {
@@ -1064,104 +1434,7 @@
         }
 
         function appendTrailDeltas(trailDeltas) {
-            if (!trailDeltas || typeof trailDeltas !== 'object') return;
-
-            Object.keys(trailDeltas).forEach(function (ticketIdKey) {
-                var deltas = trailDeltas[ticketIdKey];
-                if (!Array.isArray(deltas) || deltas.length === 0) return;
-
-                var overlay = document.querySelector('.tm-overlay.open[id$="-' + ticketIdKey + '"]');
-                if (!overlay) return;
-
-                var trailWrap = overlay.querySelector('.tm-trail');
-                if (!trailWrap) return;
-
-                var empty = trailWrap.querySelector('.tm-empty-trail');
-                if (empty && empty.parentNode) {
-                    empty.parentNode.removeChild(empty);
-                }
-
-                deltas.forEach(function (delta) {
-                    var trailId = parseInt(delta.trail_id || 0, 10) || 0;
-                    if (!trailId) return;
-                    if (trailWrap.querySelector('.tm-trail-item[data-trail-id="' + trailId + '"]')) return;
-
-                    var senderRole = String(delta.sender_role || 'SYSTEM').toUpperCase();
-                    var type = String(delta.type || 'message').toLowerCase();
-                    var message = String(delta.message || '');
-                    var dtText = String(delta.created_at || '');
-
-                    var avatarClass = 'tm-trail-avatar--system';
-                    var marker = 'S';
-                    if (senderRole === 'BRANCH') {
-                        avatarClass = 'tm-trail-avatar--branch';
-                        marker = 'B';
-                    } else if (senderRole === 'VPO') {
-                        avatarClass = 'tm-trail-avatar--vpo';
-                        marker = 'V';
-                    } else if (senderRole === 'CAD') {
-                        avatarClass = 'tm-trail-avatar--cad';
-                        marker = 'C';
-                    }
-
-                    var attachments = Array.isArray(delta.attachments) ? delta.attachments : [];
-                    var attachmentsHtml = '';
-                    if (attachments.length > 0) {
-                        var nodes = [];
-                        attachments.forEach(function (att) {
-                            var href = stEscapeHtml(String(att.download_url || '#'));
-                            var name = stEscapeHtml(String(att.file_name || 'Attachment'));
-                            var size = stEscapeHtml(String(att.file_size || ''));
-                            nodes.push(
-                                '<a class="tm-attachment" href="' + href + '">' +
-                                    '<span class="tm-attachment-icon"><i class="fa-solid fa-paperclip" aria-hidden="true"></i></span>' +
-                                    '<span class="tm-attachment-name">' + name + '</span>' +
-                                    '<span class="tm-attachment-size">' + size + '</span>' +
-                                '</a>'
-                            );
-                        });
-                        attachmentsHtml = '<div class="tm-attachments">' + nodes.join('') + '</div>';
-                    }
-
-                    var prevLatest = trailWrap.querySelector('.tm-trail-card[data-tm-latest]');
-                    if (prevLatest) {
-                        prevLatest.removeAttribute('data-tm-latest');
-                    }
-
-                    var item = document.createElement('div');
-                    item.className = 'tm-trail-item';
-                    item.setAttribute('data-trail-id', String(trailId));
-                    item.innerHTML =
-                        '<div class="tm-trail-dot-wrap">' +
-                            '<div class="tm-trail-avatar ' + avatarClass + '">' + stEscapeHtml(marker) + '</div>' +
-                        '</div>' +
-                        '<div class="tm-trail-card tm-expanded" data-tm-latest="1">' +
-                            '<div class="tm-trail-card-header">' +
-                                '<div class="tm-trail-avatar ' + avatarClass + '">' + stEscapeHtml(marker) + '</div>' +
-                                '<div class="tm-trail-meta">' +
-                                    '<div class="tm-trail-sender"><span>' + stEscapeHtml(senderRole) + '</span></div>' +
-                                    '<div class="tm-trail-datetime">' + stEscapeHtml(dtText) + '</div>' +
-                                '</div>' +
-                                '<div class="tm-trail-type-label tm-trail-type-label--' + stEscapeHtml(type) + '">' + stEscapeHtml(liveTypeLabel(type)) + '</div>' +
-                                '<div class="tm-trail-chevron">›</div>' +
-                            '</div>' +
-                            '<div class="tm-trail-card-body">' +
-                                '<div class="tm-trail-message">' + stEscapeHtml(message).replace(/\n/g, '<br>') + '</div>' +
-                                attachmentsHtml +
-                            '</div>' +
-                        '</div>';
-
-                    trailWrap.appendChild(item);
-                });
-
-                adjustTrailCardHeights(overlay);
-                var body = overlay.querySelector('.tm-body');
-                if (body) {
-                    requestAnimationFrame(function () {
-                        body.scrollTop = body.scrollHeight;
-                    });
-                }
-            });
+            stAppendTrailDeltas(trailDeltas);
         }
 
         function showNotifications(notifications) {
@@ -1196,6 +1469,10 @@
             params.set('cursor', String(cursor));
 
             var ticketNumbers = collectTicketNumbers();
+            requestedTicketSet = {};
+            ticketNumbers.forEach(function (tn) {
+                requestedTicketSet[tn] = true;
+            });
             if (ticketNumbers.length > 0) {
                 params.set('ticket_numbers', ticketNumbers.join(','));
             }
@@ -1227,6 +1504,7 @@
                 }
 
                 applyBadgeCounts(data.badge_counts || {});
+                applyTicketStatuses(data.ticket_statuses || {});
 
                 if (bootstrapped) {
                     appendTrailDeltas(data.trail_deltas || {});
@@ -1285,6 +1563,72 @@
             .replace(/'/g, '&#039;');
     }
 
+    function resolveTrailIconSrc(role) {
+        var roleLower = String(role || '').toLowerCase();
+        if (roleLower !== 'branch' && roleLower !== 'vpo' && roleLower !== 'cad') {
+            return '';
+        }
+
+        // Prefer source from existing rendered trail icons on page.
+        var probe = document.querySelector('.tm-trail-avatar-icon--' + roleLower);
+        if (probe) {
+            var src = String(probe.getAttribute('src') || '').trim();
+            if (src !== '') {
+                return src;
+            }
+        }
+
+        // Fallback to project-relative absolute path.
+        var prefix = '';
+        try {
+            var pathname = String(window.location.pathname || '');
+            var idx = pathname.toLowerCase().indexOf('/dashboard/');
+            if (idx >= 0) {
+                prefix = pathname.slice(0, idx);
+            }
+        } catch (e) {
+            // ignore path parsing issues
+        }
+
+        if (roleLower === 'branch') return prefix + '/assets/images/icons/branch-icon.svg';
+        if (roleLower === 'vpo') return prefix + '/assets/images/icons/vpo-icon.svg';
+        if (roleLower === 'cad') return prefix + '/assets/images/icons/cad-icon.svg';
+        return '';
+    }
+
+    function buildTrailAvatarInner(role) {
+        var roleUpper = String(role || '').toUpperCase();
+        var roleLower = roleUpper.toLowerCase();
+        var src = resolveTrailIconSrc(roleLower);
+        if (src !== '') {
+            return '<img class="tm-trail-avatar-icon tm-trail-avatar-icon--' + stEscapeHtml(roleLower) + '" src="' + stEscapeHtml(src) + '" alt="" aria-hidden="true">';
+        }
+        return '<i class="fa-solid fa-gear" aria-hidden="true"></i>';
+    }
+
+    function formatTrailDatetimeText(raw) {
+        var value = String(raw || '').trim();
+        if (!value) return '';
+
+        var d = new Date(value.replace(' ', 'T'));
+        if (isNaN(d.getTime())) {
+            return value;
+        }
+
+        try {
+            return d.toLocaleString(undefined, {
+                month: 'short',
+                day: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            }).replace(',', '');
+        } catch (e) {
+            return value;
+        }
+    }
+
     function getReplySenderRole(form) {
         if (!form) return 'SYSTEM';
         var action = String(form.getAttribute('action') || '').toLowerCase();
@@ -1316,7 +1660,7 @@
         return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
     }
 
-    function appendRealtimeReplyToTrail(form, messageText, attachments) {
+    function appendRealtimeReplyToTrail(form, messageText, attachments, serverTrailId) {
         if (!form || !messageText) return;
 
         var modal = form.closest('.tm-modal');
@@ -1324,6 +1668,11 @@
 
         var trail = modal.querySelector('.tm-trail');
         if (!trail) return;
+
+        var realTrailId = parseInt(serverTrailId || 0, 10) || 0;
+        if (realTrailId > 0 && trail.querySelector('.tm-trail-item[data-trail-id="' + realTrailId + '"]')) {
+            return;
+        }
 
         var empty = trail.querySelector('.tm-empty-trail');
         if (empty && empty.parentNode) {
@@ -1336,18 +1685,15 @@
         }
 
         var role = getReplySenderRole(form);
-        var icon = '⚙️';
         var avatarClass = 'tm-trail-avatar--system';
         if (role === 'BRANCH') {
-            icon = '🟢';
             avatarClass = 'tm-trail-avatar--branch';
         } else if (role === 'VPO') {
-            icon = '🔵';
             avatarClass = 'tm-trail-avatar--vpo';
         } else if (role === 'CAD') {
-            icon = '🔴';
             avatarClass = 'tm-trail-avatar--cad';
         }
+        var avatarInner = buildTrailAvatarInner(role);
 
         var dtText = nowTrailDatetimeText();
         var safeMessage = stEscapeHtml(messageText).replace(/\n/g, '<br>');
@@ -1373,13 +1719,16 @@
 
         var item = document.createElement('div');
         item.className = 'tm-trail-item';
+        if (realTrailId > 0) {
+            item.setAttribute('data-trail-id', String(realTrailId));
+        }
         item.innerHTML =
             '<div class="tm-trail-dot-wrap">' +
-                '<div class="tm-trail-avatar ' + avatarClass + '">' + stEscapeHtml(icon) + '</div>' +
+                '<div class="tm-trail-avatar ' + avatarClass + '">' + avatarInner + '</div>' +
             '</div>' +
             '<div class="tm-trail-card tm-expanded" data-tm-latest="1">' +
                 '<div class="tm-trail-card-header">' +
-                    '<div class="tm-trail-avatar ' + avatarClass + '">' + stEscapeHtml(icon) + '</div>' +
+                    '<div class="tm-trail-avatar ' + avatarClass + '">' + avatarInner + '</div>' +
                     '<div class="tm-trail-meta">' +
                         '<div class="tm-trail-sender"><span>' + stEscapeHtml(role) + '</span></div>' +
                         '<div class="tm-trail-datetime">' + stEscapeHtml(dtText) + '</div>' +
@@ -1436,7 +1785,8 @@
                         return;
                     }
 
-                    appendRealtimeReplyToTrail(form, submittedMessage, submittedAttachments);
+                    var serverTrailId = json && json.data ? parseInt(json.data.trail_id || 0, 10) || 0 : 0;
+                    appendRealtimeReplyToTrail(form, submittedMessage, submittedAttachments, serverTrailId);
                     clearReplyFormUI(form);
                     stShowToast(json.message || 'Reply submitted successfully.', 'success');
                 }).catch(function () {

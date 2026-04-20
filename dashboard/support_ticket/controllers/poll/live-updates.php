@@ -84,12 +84,20 @@ function st_live_row_relevant($scope, $row, $userId)
         if ($userId === null) {
             return false;
         }
+        // Include unassigned VPO queue rows so open-mode state stays in sync.
+        if ($handler === 'VPO' && $assignedTo <= 0) {
+            return true;
+        }
         return (($handler === 'VPO' && $assignedTo === (int) $userId) || $vpoOwner === (int) $userId);
     }
 
     if ($scope === 'CAD') {
         if ($userId === null) {
             return false;
+        }
+        // Include unassigned CAD queue rows so open-mode state stays in sync.
+        if ($handler === 'CAD' && $assignedTo <= 0) {
+            return true;
         }
         return (($handler === 'CAD' && $assignedTo === (int) $userId) || $cadOwner === (int) $userId);
     }
@@ -99,6 +107,65 @@ function st_live_row_relevant($scope, $row, $userId)
     }
 
     return false;
+}
+
+function st_live_get_ticket_statuses($conn, $scope, $ticketNumbers, $userId)
+{
+    $out = [];
+    if (empty($ticketNumbers)) {
+        return $out;
+    }
+
+    $schema = st_schema();
+    $safeLiterals = [];
+    foreach ($ticketNumbers as $tn) {
+        $v = strtoupper(trim((string) $tn));
+        if ($v === '' || !preg_match('/^[A-Z0-9_.-]+$/', $v)) {
+            continue;
+        }
+        $safeLiterals[] = "'" . $conn->real_escape_string($v) . "'";
+    }
+
+    if (empty($safeLiterals)) {
+        return $out;
+    }
+
+    $inClause = implode(',', $safeLiterals);
+    $sql = "SELECT ticket_number, status, current_handler_role, assigned_to, created_by, vpo_owner, cad_owner
+            FROM {$schema}.tickets
+            WHERE UPPER(ticket_number) IN ({$inClause})";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        return $out;
+    }
+
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return $out;
+    }
+
+    $res = $stmt->get_result();
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {
+            $ticketNumber = strtoupper(trim((string) ($row['ticket_number'] ?? '')));
+            if ($ticketNumber === '') {
+                continue;
+            }
+
+            if (!st_live_row_relevant($scope, $row, $userId)) {
+                continue;
+            }
+
+            $out[$ticketNumber] = [
+                'status' => (string) ($row['status'] ?? ''),
+                'handler_role' => (string) ($row['current_handler_role'] ?? ''),
+                'assigned_to' => (int) ($row['assigned_to'] ?? 0),
+            ];
+        }
+    }
+
+    $stmt->close();
+    return $out;
 }
 
 function st_live_notification_text($scope, $row, $attachmentCount)
@@ -216,6 +283,8 @@ if (($scope === 'BRANCH' || $scope === 'VPO' || $scope === 'CAD') && !empty($tic
     $badgeCounts = st_get_ticket_badge_counts($conn, $ticketNumbers, $scope);
 }
 
+$ticketStatuses = st_live_get_ticket_statuses($conn, $scope, $ticketNumbers, $userId);
+
 $schema = st_schema();
 
 if ($bootstrap) {
@@ -230,6 +299,7 @@ if ($bootstrap) {
     st_json(true, 'Live updates bootstrap.', [
         'next_cursor' => $maxId,
         'badge_counts' => $badgeCounts,
+        'ticket_statuses' => $ticketStatuses,
         'notifications' => [],
         'trail_deltas' => [],
     ]);
@@ -387,6 +457,7 @@ foreach ($relevantRows as $row) {
 st_json(true, 'Live updates fetched.', [
     'next_cursor' => $nextCursor,
     'badge_counts' => $badgeCounts,
+    'ticket_statuses' => $ticketStatuses,
     'notifications' => $notifications,
     'trail_deltas' => $trailDeltas,
 ]);

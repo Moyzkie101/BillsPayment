@@ -663,6 +663,11 @@
 
                 // Re-apply default visibility/requirements after reset.
                 manageRequestFields(form);
+
+                // Ensure newly created ticket appears immediately in the open list.
+                setTimeout(function () {
+                    window.location.reload();
+                }, 500);
             }).catch(function () {
                 showToast('Network error while creating ticket.', 'danger');
             }).finally(function () {
