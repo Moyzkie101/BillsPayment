@@ -1128,6 +1128,11 @@
                 var prevLatest = trailWrap.querySelector('.tm-trail-card[data-tm-latest]');
                 if (prevLatest) {
                     prevLatest.removeAttribute('data-tm-latest');
+                    prevLatest.classList.remove('tm-expanded');
+                    var prevHeader = prevLatest.querySelector('.tm-trail-card-header');
+                    if (prevHeader) {
+                        prevHeader.setAttribute('aria-expanded', 'false');
+                    }
                 }
 
                 var item = document.createElement('div');
@@ -1682,6 +1687,11 @@
         var prevLatest = trail.querySelector('.tm-trail-card[data-tm-latest]');
         if (prevLatest) {
             prevLatest.removeAttribute('data-tm-latest');
+            prevLatest.classList.remove('tm-expanded');
+            var prevHeader = prevLatest.querySelector('.tm-trail-card-header');
+            if (prevHeader) {
+                prevHeader.setAttribute('aria-expanded', 'false');
+            }
         }
 
         var role = getReplySenderRole(form);

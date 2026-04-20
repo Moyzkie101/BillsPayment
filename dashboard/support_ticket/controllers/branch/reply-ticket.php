@@ -46,7 +46,7 @@ $conn->autocommit(false);
 try {
     $schema = st_schema();
 
-    $lockSql = "SELECT id, status, current_handler_role, created_by, vpo_owner
+    $lockSql = "SELECT id, status, current_handler_role, created_by, vpo_owner, cad_owner
                 FROM {$schema}.tickets
                 WHERE id = ? FOR UPDATE";
     $lockStmt = $conn->prepare($lockSql);
@@ -79,31 +79,45 @@ try {
     $statusNow = strtolower((string) ($ticket['status'] ?? ''));
     $targetRole = (string) $ticket['current_handler_role'];
 
-    // Branch reply on a resolved ticket should reopen it and hand back to VPO owner.
+    // Branch reply on a resolved ticket should reopen it and hand back to a valid owner.
     $trailMeta = null;
 
     if ($statusNow === 'resolved') {
         $vpoOwner = isset($ticket['vpo_owner']) && is_numeric($ticket['vpo_owner']) ? (int) $ticket['vpo_owner'] : 0;
+        $cadOwner = isset($ticket['cad_owner']) && is_numeric($ticket['cad_owner']) ? (int) $ticket['cad_owner'] : 0;
+
+        if ($vpoOwner <= 0 && $cadOwner <= 0) {
+            throw new Exception('Unable to reopen ticket because both VPO and CAD owners are unassigned.');
+        }
+
+        $reopenRole = 'VPO';
+        $reopenStatus = 'accepted';
+        $reopenAssignee = $vpoOwner;
+
+        // Fallback to CAD only when VPO owner is missing but CAD owner exists.
+        if ($reopenAssignee <= 0 && $cadOwner > 0) {
+            $reopenRole = 'CAD';
+            $reopenStatus = 'resolving';
+            $reopenAssignee = $cadOwner;
+        }
+
         $reopenSql = "UPDATE {$schema}.tickets
-                      SET status = 'resolving',
-                          current_handler_role = 'VPO',
-                          assigned_to = " . ($vpoOwner > 0 ? '?' : 'NULL') . "
+                      SET status = ?,
+                          current_handler_role = ?,
+                          assigned_to = ?,
+                          updated_at = NOW()
                       WHERE id = ?";
         $reopenStmt = $conn->prepare($reopenSql);
         if (!$reopenStmt) {
             throw new Exception('Unable to prepare ticket reopen update.');
         }
-        if ($vpoOwner > 0) {
-            $reopenStmt->bind_param('ii', $vpoOwner, $ticketId);
-        } else {
-            $reopenStmt->bind_param('i', $ticketId);
-        }
+        $reopenStmt->bind_param('ssii', $reopenStatus, $reopenRole, $reopenAssignee, $ticketId);
         if (!$reopenStmt->execute()) {
             $reopenStmt->close();
             throw new Exception('Unable to reopen resolved ticket.');
         }
         $reopenStmt->close();
-        $targetRole = 'VPO';
+        $targetRole = $reopenRole;
         $trailMeta = ['reopened' => true];
     } elseif ($targetRole !== 'VPO' && $targetRole !== 'CAD') {
         $targetRole = 'VPO';
