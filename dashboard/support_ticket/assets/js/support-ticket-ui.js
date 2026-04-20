@@ -462,6 +462,37 @@
             });
         });
 
+        // Delegated fallback for reopen target buttons (handles dynamic buttons or missed bindings)
+        document.addEventListener('click', function (e) {
+            try {
+                var delegatedBtn = e.target.closest ? e.target.closest('[data-reopen-target]') : null;
+                if (!delegatedBtn) return;
+
+                var ticketId = delegatedBtn.getAttribute('data-reopen-ticket-id');
+                var target = delegatedBtn.getAttribute('data-reopen-target');
+                if (!ticketId || !target) return;
+
+                var confirmId = 'stReopenConfirmMaint-' + ticketId + '-' + target;
+                var confirmModal = document.getElementById(confirmId);
+                if (!confirmModal) return;
+
+                // if already visible, do nothing (prevents double-handling)
+                if (confirmModal.style.display === 'flex' || confirmModal.getAttribute('aria-hidden') === 'false') return;
+
+                var parentPicker = delegatedBtn.closest('.tm-submodal-overlay');
+                if (parentPicker) {
+                    parentPicker.style.display = 'none';
+                    parentPicker.setAttribute('aria-hidden', 'true');
+                    confirmModal.dataset.reopenParent = parentPicker.id || '';
+                }
+
+                confirmModal.style.display = 'flex';
+                confirmModal.setAttribute('aria-hidden', 'false');
+            } catch (err) {
+                // fail silently — fallback handler should not break other UI
+            }
+        });
+
         var reopenConfirmCancelBtns = document.querySelectorAll('[data-reopen-confirm-cancel]');
         reopenConfirmCancelBtns.forEach(function (btn) {
             btn.addEventListener('click', function () {

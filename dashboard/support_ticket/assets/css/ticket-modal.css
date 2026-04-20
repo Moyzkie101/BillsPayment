@@ -1113,8 +1113,28 @@
 
 
 /* Remaining submodal, animations and responsive rules (copied) */
-.tm-submodal-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.35); border-radius: var(--tm-radius-xl); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 101000; animation: tm-fade-in 0.15s ease; }
-.tm-submodal { background: var(--tm-bg); border: 0.5px solid var(--tm-border-strong); border-radius: var(--tm-radius-lg); padding: 22px 24px 20px; width: 100%; max-width: 380px; animation: tm-slide-up 0.18s cubic-bezier(0.34, 1.2, 0.64, 1); }
+.tm-submodal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 110000;
+  animation: tm-fade-in 0.15s ease;
+}
+
+.tm-submodal {
+  background: var(--tm-bg);
+  border: 0.5px solid var(--tm-border-strong);
+  border-radius: var(--tm-radius-lg);
+  padding: 22px 24px 20px;
+  width: 100%;
+  max-width: 520px;
+  box-sizing: border-box;
+  animation: tm-slide-up 0.18s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
 .tm-submodal-title { font-size: 15px; font-weight: 600; color: var(--tm-text-primary); margin-bottom: 4px; }
 .tm-submodal-ticket-info { font-size: 12px; color: var(--tm-text-secondary); margin-bottom: 18px; }
 .tm-submodal-divider { border: none; border-top: 0.5px solid var(--tm-border); margin: 0 0 16px; }
@@ -1130,6 +1150,65 @@
 .tm-duration-input:focus { border-color: var(--tm-text-primary); }
 .tm-duration-select { height: 30px; padding: 0 8px; border: 0.5px solid var(--tm-border-strong); border-radius: var(--tm-radius-sm); background: var(--tm-bg); color: var(--tm-text-primary); font-family: var(--tm-font); font-size: 13px; outline: none; cursor: pointer; }
 .tm-submodal-footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Re-open picker grid and option cards */
+.tm-reopen-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.tm-reopen-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 0.5px solid var(--tm-border);
+  border-radius: var(--tm-radius-md);
+  background: linear-gradient(180deg, #ffffff 0%, var(--tm-bg-secondary) 100%);
+  text-align: left;
+  justify-content: center;
+  min-height: 64px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s;
+}
+
+.tm-reopen-option { box-sizing: border-box; min-width: 0; }
+
+.tm-reopen-option:hover {
+  transform: translateY(-2px);
+  border-color: transparent;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.10);
+  background: var(--tm-highlight);
+  color: #ffffff;
+}
+
+/* Ensure internal text flips to white on hover */
+.tm-reopen-option:hover .tm-reopen-option-title,
+.tm-reopen-option:hover .tm-reopen-option-desc {
+  color: #ffffff;
+}
+
+.tm-reopen-option:focus {
+  outline: none;
+  box-shadow: 0 0 0 6px rgba(220,53,69,0.12);
+  border-color: var(--tm-highlight);
+}
+
+.tm-reopen-option:active {
+  transform: translateY(-1px) scale(0.995);
+}
+
+.tm-reopen-option-title { font-weight: 700; color: var(--tm-text-primary); }
+.tm-reopen-option-desc { font-size: 12px; color: var(--tm-text-secondary); }
+
+.tm-submodal-footer--center { justify-content: center; }
+.tm-submodal-footer--confirm { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+
+@media (max-width: 600px) {
+  .tm-reopen-grid { grid-template-columns: 1fr; }
+}
 
 @keyframes tm-fade-in  { from { opacity: 0; } to { opacity: 1; } }
 @keyframes tm-fade-out { from { opacity: 1; } to { opacity: 0; } }
