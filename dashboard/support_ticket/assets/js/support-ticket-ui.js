@@ -399,6 +399,43 @@
                 }
             });
         });
+        
+        // Reopen picker handlers (maintenance page uses data-reopen-picker-* attributes)
+        var reopenOpenBtns = document.querySelectorAll('[data-reopen-picker-open]');
+        reopenOpenBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var modalId = btn.getAttribute('data-reopen-picker-open');
+                if (!modalId) return;
+                var modal = document.getElementById(modalId);
+                if (modal) {
+                    modal.style.display = 'flex';
+                    modal.setAttribute('aria-hidden', 'false');
+                }
+            });
+        });
+
+        var reopenCancelBtns = document.querySelectorAll('[data-reopen-picker-cancel]');
+        reopenCancelBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var modalId = btn.getAttribute('data-reopen-picker-cancel');
+                if (!modalId) return;
+                var modal = document.getElementById(modalId);
+                if (modal) {
+                    modal.style.display = 'none';
+                    modal.setAttribute('aria-hidden', 'true');
+                }
+            });
+        });
+
+        var reopenPickers = document.querySelectorAll('.tm-submodal-overlay[id^="stReopenPicker"]');
+        reopenPickers.forEach(function (overlay) {
+            overlay.addEventListener('click', function (e) {
+                if (e.target === overlay) {
+                    overlay.style.display = 'none';
+                    overlay.setAttribute('aria-hidden', 'true');
+                }
+            });
+        });
     }
 
     function initAttachmentPreviews() {

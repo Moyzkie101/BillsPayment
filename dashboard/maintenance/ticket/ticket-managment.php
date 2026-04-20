@@ -691,7 +691,10 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
 
                         <div class="tm-footer tm-footer--open">
                             <div class="tm-footer-inner" style="display:block;">
-                                <div style="margin-top:4px;display:flex;justify-content:flex-end;">
+                                <div style="margin-top:4px;display:flex;justify-content:flex-end;gap:8px;">
+                                    <?php if ($statusLower === 'resolved'): ?>
+                                        <button type="button" class="tm-btn tm-btn--transfer" data-reopen-picker-open="stReopenPickerMaint-<?php echo $ticketId; ?>"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i> Open Ticket</button>
+                                    <?php endif; ?>
                                     <button type="button" class="tm-btn tm-btn--danger tm-btn-close-ticket" data-close-picker-open="stDeletePickerMaint-<?php echo $ticketId; ?>"><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete Ticket</button>
                                 </div>
 
@@ -712,6 +715,28 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                         </div>
                                     </div>
                                 </div>
+                                
+                                <?php if ($statusLower === 'resolved'): ?>
+                                <div class="tm-submodal-overlay" id="stReopenPickerMaint-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
+                                    <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Re-open ticket options">
+                                        <div class="tm-submodal-title">Re-open Ticket</div>
+                                        <div class="tm-submodal-ticket-info">Choose where to re-open Ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
+                                        <hr class="tm-submodal-divider">
+                                        <form method="post" action="../controllers/reopen-ticket.php">
+                                            <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                            <input type="hidden" name="return_mode" value="<?php echo htmlspecialchars($mode); ?>">
+                                            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+                                                <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="target" value="VPO" checked> Open to VPO</label>
+                                                <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="target" value="CAD"> Open to CAD</label>
+                                                <button class="tm-btn tm-btn--transfer" type="submit">Open</button>
+                                            </div>
+                                            <div class="tm-submodal-footer" style="margin-top:10px;">
+                                                <button type="button" class="tm-btn tm-btn--outline" data-reopen-picker-cancel="stReopenPickerMaint-<?php echo $ticketId; ?>">Cancel</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
