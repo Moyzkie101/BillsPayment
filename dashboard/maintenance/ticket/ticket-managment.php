@@ -722,18 +722,48 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                         <div class="tm-submodal-title">Re-open Ticket</div>
                                         <div class="tm-submodal-ticket-info">Choose where to re-open Ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
                                         <hr class="tm-submodal-divider">
+                                        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+                                            <button type="button" class="tm-btn tm-btn--transfer" data-reopen-target="VPO" data-reopen-ticket-id="<?php echo $ticketId; ?>">Open to VPO</button>
+                                            <button type="button" class="tm-btn tm-btn--transfer" data-reopen-target="CAD" data-reopen-ticket-id="<?php echo $ticketId; ?>">Open to CAD</button>
+                                        </div>
+                                        <div class="tm-submodal-footer" style="margin-top:10px;">
+                                            <button type="button" class="tm-btn tm-btn--outline" data-reopen-picker-cancel="stReopenPickerMaint-<?php echo $ticketId; ?>">Cancel</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Confirmation overlays for the two reopen targets -->
+                                <div class="tm-submodal-overlay" id="stReopenConfirmMaint-<?php echo $ticketId; ?>-VPO" style="display:none;" aria-hidden="true">
+                                    <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Confirm reopen to VPO">
+                                        <div class="tm-submodal-title">Confirm Re-open to VPO</div>
+                                        <div class="tm-submodal-ticket-info">Re-open Ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?> to VPO?</div>
+                                        <hr class="tm-submodal-divider">
                                         <form method="post" action="../controllers/reopen-ticket.php">
                                             <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                            <input type="hidden" name="target" value="VPO">
                                             <input type="hidden" name="return_mode" value="<?php echo htmlspecialchars($mode); ?>">
-                                            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
-                                                <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="target" value="VPO" checked> Open to VPO</label>
-                                                <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="target" value="CAD"> Open to CAD</label>
-                                                <button class="tm-btn tm-btn--transfer" type="submit">Open</button>
-                                            </div>
-                                            <div class="tm-submodal-footer" style="margin-top:10px;">
-                                                <button type="button" class="tm-btn tm-btn--outline" data-reopen-picker-cancel="stReopenPickerMaint-<?php echo $ticketId; ?>">Cancel</button>
-                                            </div>
+                                            <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="tm-btn tm-btn--transfer" type="submit">Confirm</button></div>
                                         </form>
+                                        <div class="tm-submodal-footer" style="margin-top:10px;">
+                                            <button type="button" class="tm-btn tm-btn--outline" data-reopen-confirm-cancel="stReopenConfirmMaint-<?php echo $ticketId; ?>-VPO">Cancel</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="tm-submodal-overlay" id="stReopenConfirmMaint-<?php echo $ticketId; ?>-CAD" style="display:none;" aria-hidden="true">
+                                    <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Confirm reopen to CAD">
+                                        <div class="tm-submodal-title">Confirm Re-open to CAD</div>
+                                        <div class="tm-submodal-ticket-info">Re-open Ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?> to CAD?</div>
+                                        <hr class="tm-submodal-divider">
+                                        <form method="post" action="../controllers/reopen-ticket.php">
+                                            <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                            <input type="hidden" name="target" value="CAD">
+                                            <input type="hidden" name="return_mode" value="<?php echo htmlspecialchars($mode); ?>">
+                                            <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="tm-btn tm-btn--transfer" type="submit">Confirm</button></div>
+                                        </form>
+                                        <div class="tm-submodal-footer" style="margin-top:10px;">
+                                            <button type="button" class="tm-btn tm-btn--outline" data-reopen-confirm-cancel="stReopenConfirmMaint-<?php echo $ticketId; ?>-CAD">Cancel</button>
+                                        </div>
                                     </div>
                                 </div>
                                 <?php endif; ?>

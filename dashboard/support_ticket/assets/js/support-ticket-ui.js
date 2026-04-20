@@ -436,6 +436,70 @@
                 }
             });
         });
+        
+        // Buttons inside the reopen picker open a confirmation overlay per-target
+        var reopenTargetBtns = document.querySelectorAll('[data-reopen-target]');
+        reopenTargetBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var ticketId = btn.getAttribute('data-reopen-ticket-id');
+                var target = btn.getAttribute('data-reopen-target');
+                if (!ticketId || !target) return;
+
+                var confirmId = 'stReopenConfirmMaint-' + ticketId + '-' + target;
+                var confirmModal = document.getElementById(confirmId);
+                if (!confirmModal) return;
+
+                // hide the picker modal that contains this button
+                var parentPicker = btn.closest('.tm-submodal-overlay');
+                if (parentPicker) {
+                    parentPicker.style.display = 'none';
+                    parentPicker.setAttribute('aria-hidden', 'true');
+                    confirmModal.dataset.reopenParent = parentPicker.id || '';
+                }
+
+                confirmModal.style.display = 'flex';
+                confirmModal.setAttribute('aria-hidden', 'false');
+            });
+        });
+
+        var reopenConfirmCancelBtns = document.querySelectorAll('[data-reopen-confirm-cancel]');
+        reopenConfirmCancelBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var modalId = btn.getAttribute('data-reopen-confirm-cancel');
+                if (!modalId) return;
+                var modal = document.getElementById(modalId);
+                if (!modal) return;
+                modal.style.display = 'none';
+                modal.setAttribute('aria-hidden', 'true');
+
+                var parentId = modal.dataset.reopenParent;
+                if (parentId) {
+                    var parent = document.getElementById(parentId);
+                    if (parent) {
+                        parent.style.display = 'flex';
+                        parent.setAttribute('aria-hidden', 'false');
+                    }
+                }
+            });
+        });
+
+        var reopenConfirmPickers = document.querySelectorAll('.tm-submodal-overlay[id^="stReopenConfirmMaint-"]');
+        reopenConfirmPickers.forEach(function (overlay) {
+            overlay.addEventListener('click', function (e) {
+                if (e.target === overlay) {
+                    overlay.style.display = 'none';
+                    overlay.setAttribute('aria-hidden', 'true');
+                    var parentId = overlay.dataset.reopenParent;
+                    if (parentId) {
+                        var parent = document.getElementById(parentId);
+                        if (parent) {
+                            parent.style.display = 'flex';
+                            parent.setAttribute('aria-hidden', 'false');
+                        }
+                    }
+                }
+            });
+        });
     }
 
     function initAttachmentPreviews() {
