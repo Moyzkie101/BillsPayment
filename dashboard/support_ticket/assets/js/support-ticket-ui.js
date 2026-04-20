@@ -286,6 +286,18 @@
             btn.addEventListener('click', function () {
                 var modalId = btn.getAttribute('data-confirm-transfer-open');
                 if (!modalId) return;
+
+                // Determine ticket status from the parent modal to prevent actions on resolved tickets
+                var parent = (btn.closest && (btn.closest('.tm-overlay') || btn.closest('.tm-modal'))) || document;
+                var statusEl = parent ? parent.querySelector('.tm-status') : null;
+                var statusText = statusEl ? String(statusEl.textContent || '').trim().toLowerCase() : '';
+
+                // If ticket is resolved, show a toast and do not open the transfer confirm modal
+                if (statusText.indexOf('resolved') !== -1) {
+                    stShowToast('Ticket Cannot be transferred, Status is already Resolved', 'danger');
+                    return;
+                }
+
                 var modal = document.getElementById(modalId);
                 if (modal) {
                     modal.style.display = 'flex';
@@ -312,6 +324,16 @@
             btn.addEventListener('click', function () {
                 var formId = btn.getAttribute('data-transfer-form');
                 if (!formId) return;
+
+                // Prevent submitting transfer if the parent ticket is resolved
+                var parent = (btn.closest && (btn.closest('.tm-overlay') || btn.closest('.tm-modal'))) || document;
+                var statusEl = parent ? parent.querySelector('.tm-status') : null;
+                var statusText = statusEl ? String(statusEl.textContent || '').trim().toLowerCase() : '';
+                if (statusText.indexOf('resolved') !== -1) {
+                    stShowToast('Ticket Cannot be transferred, Status is already Resolved', 'danger');
+                    return;
+                }
+
                 var form = document.getElementById(formId);
                 if (form) {
                     form.submit();
@@ -336,6 +358,17 @@
             btn.addEventListener('click', function () {
                 var modalId = btn.getAttribute('data-close-picker-open');
                 if (!modalId) return;
+
+                // Check ticket status on the parent modal. If already resolved/auto-close,
+                // show an informational toast and do not open the close picker.
+                var parent = (btn.closest && (btn.closest('.tm-overlay') || btn.closest('.tm-modal'))) || document;
+                var statusEl = parent ? parent.querySelector('.tm-status') : null;
+                var statusText = statusEl ? String(statusEl.textContent || '').trim().toLowerCase() : '';
+                if (statusText.indexOf('resolved') !== -1 || statusText.indexOf('auto') !== -1) {
+                    stShowToast('Ticket has already been resolved and will Close within 24 hours.', 'danger');
+                    return;
+                }
+
                 var modal = document.getElementById(modalId);
                 if (modal) {
                     modal.style.display = 'flex';
