@@ -710,6 +710,12 @@ foreach ($cadActive as $ticket) {
     </script>
     <?php endif; ?>
 
+    <?php if (isset($_GET['st_refresh']) && (string) $_GET['st_refresh'] === '1'): ?>
+    <script>
+        window.supportTicketForceReloadOnce = true;
+    </script>
+    <?php endif; ?>
+
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

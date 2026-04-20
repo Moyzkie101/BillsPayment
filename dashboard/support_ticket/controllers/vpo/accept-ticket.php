@@ -1,5 +1,6 @@
 <?php
 include_once __DIR__ . '/../../includes/bootstrap.php';
+include_once __DIR__ . '/../../includes/ticket_queries.php';
 
 st_require_login('../../../../login_form.php');
 st_require_permission_page(['Support Ticket VPO'], '../../../home.php');
@@ -24,6 +25,51 @@ $conn->autocommit(false);
 
 try {
     $schema = st_schema();
+
+    $lockSql = "SELECT id, current_handler_role, assigned_to, status
+                FROM {$schema}.tickets
+                WHERE id = ?
+                FOR UPDATE";
+    $lockStmt = $conn->prepare($lockSql);
+    if (!$lockStmt) {
+        throw new Exception('Unable to prepare ticket lock query.');
+    }
+
+    $lockStmt->bind_param('i', $ticketId);
+    if (!$lockStmt->execute()) {
+        $lockStmt->close();
+        throw new Exception('Unable to lock ticket row.');
+    }
+
+    $lockRes = $lockStmt->get_result();
+    $lockedTicket = $lockRes ? $lockRes->fetch_assoc() : null;
+    $lockStmt->close();
+
+    if (!$lockedTicket) {
+        throw new Exception('Ticket not found.');
+    }
+
+    $currentHandler = strtoupper(trim((string) ($lockedTicket['current_handler_role'] ?? '')));
+    $assignedTo = (int) ($lockedTicket['assigned_to'] ?? 0);
+    $statusNow = strtolower(trim((string) ($lockedTicket['status'] ?? '')));
+
+    if ($currentHandler !== 'VPO' || !in_array($statusNow, ['open', 'accepted'], true)) {
+        throw new Exception('Ticket is no longer in VPO open queue.');
+    }
+
+    if ($assignedTo > 0) {
+        if ($assignedTo === (int) $userId) {
+            throw new Exception('You already accepted this ticket. Refreshing ticket list.');
+        }
+
+        $emailMap = st_get_user_emails_by_id_numbers($conn, [$assignedTo]);
+        $assigneeEmail = trim((string) ($emailMap[$assignedTo] ?? ''));
+        if ($assigneeEmail === '') {
+            $assigneeEmail = 'ID ' . $assignedTo;
+        }
+
+        throw new Exception('This ticket has already been accepted by ' . $assigneeEmail . '.');
+    }
 
     $updateSql = "UPDATE {$schema}.tickets
                   SET status = 'accepted',
@@ -60,5 +106,10 @@ try {
 } catch (Exception $e) {
     $conn->rollback();
     $conn->autocommit(true);
-    st_redirect_with_flash('vpo_ticket', 'danger', $e->getMessage(), $redirectBack);
+    $message = $e->getMessage();
+    $refreshBack = $redirectBack;
+    if (stripos($message, 'already been accepted by') !== false || stripos($message, 'already accepted this ticket') !== false) {
+        $refreshBack .= (strpos($refreshBack, '?') !== false ? '&' : '?') . 'st_refresh=1';
+    }
+    st_redirect_with_flash('vpo_ticket', 'danger', $message, $refreshBack);
 }

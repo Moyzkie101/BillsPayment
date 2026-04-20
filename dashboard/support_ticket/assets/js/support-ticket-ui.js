@@ -820,6 +820,20 @@
         if (!flash || !flash.message) return;
         var type = String(flash.type || 'success').toLowerCase();
         stShowToast(String(flash.message), type === 'danger' ? 'danger' : 'success');
+
+        if (window.supportTicketForceReloadOnce === true) {
+            try {
+                var url = new URL(window.location.href);
+                url.searchParams.delete('st_refresh');
+                window.history.replaceState(null, '', url.pathname + (url.search || ''));
+            } catch (e) {
+                // ignore URL rewrite failures
+            }
+
+            setTimeout(function () {
+                window.location.reload();
+            }, 1100);
+        }
     }
 
     function clearReplyFormUI(form) {

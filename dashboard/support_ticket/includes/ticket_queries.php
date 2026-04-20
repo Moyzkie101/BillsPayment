@@ -199,6 +199,59 @@ if (!function_exists('st_get_user_names_by_id_numbers')) {
     }
 }
 
+if (!function_exists('st_get_user_emails_by_id_numbers')) {
+    function st_get_user_emails_by_id_numbers($conn, $idNumbers)
+    {
+        $ids = [];
+        foreach ((array) $idNumbers as $id) {
+            if ($id === null || $id === '') {
+                continue;
+            }
+            if (is_numeric($id)) {
+                $ids[] = (int) $id;
+            }
+        }
+
+        $ids = array_values(array_unique($ids));
+        if (empty($ids)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $types = str_repeat('i', count($ids));
+        $sql = "SELECT id_number, email FROM mldb.user_form WHERE id_number IN ({$placeholders})";
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param($types, ...$ids);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
+
+        $res = $stmt->get_result();
+        $map = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $id = (int) ($row['id_number'] ?? 0);
+                if ($id <= 0) {
+                    continue;
+                }
+                $email = trim((string) ($row['email'] ?? ''));
+                if ($email !== '') {
+                    $map[$id] = $email;
+                }
+            }
+        }
+
+        $stmt->close();
+        return $map;
+    }
+}
+
 if (!function_exists('st_get_vpo_open_tickets')) {
     function st_get_vpo_open_tickets($conn)
     {
