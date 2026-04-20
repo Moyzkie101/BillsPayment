@@ -223,7 +223,7 @@ foreach ($cadActive as $ticket) {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($cadOpen as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="CAD">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="CAD">
                                 <?php $cadUnread = (int) ($ticketBadgeCountsCad[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($cadUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $cadUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
@@ -249,7 +249,7 @@ foreach ($cadActive as $ticket) {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($cadActive as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="CAD">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="CAD">
                                 <?php $cadUnread = (int) ($ticketBadgeCountsCad[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($cadUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $cadUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
@@ -275,7 +275,7 @@ foreach ($cadActive as $ticket) {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($cadClosed as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="CAD">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalCad-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="CAD">
                                 <?php $cadUnread = (int) ($ticketBadgeCountsCad[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($cadUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $cadUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) ($ticket['closed_at'] ?: $ticket['created_at'])); ?></span>
@@ -427,7 +427,7 @@ foreach ($cadActive as $ticket) {
                                                 $trailOwnerTooltip = $cadOwnerName;
                                             }
                                         ?>
-                                        <div class="tm-trail-item">
+                                        <div class="tm-trail-item" data-trail-id="<?php echo (int) $trailId; ?>">
                                             <div class="tm-trail-dot-wrap">
                                                 <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
                                                     <?php if ($trailIconAsset !== ''): ?>
@@ -715,6 +715,22 @@ foreach ($cadActive as $ticket) {
         window.supportTicketForceReloadOnce = true;
     </script>
     <?php endif; ?>
+
+    <script>
+        window.supportTicketOpenPoll = {
+            endpoint: 'controllers/cad/open-tickets-poll.php',
+            intervalMs: 5000,
+            role: 'CAD'
+        };
+    </script>
+
+    <script>
+        window.supportTicketLiveUpdates = {
+            endpoint: 'controllers/poll/live-updates.php',
+            scope: 'CAD',
+            intervalMs: 5000
+        };
+    </script>
 
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
 </body>

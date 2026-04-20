@@ -630,7 +630,7 @@ if ($searchTicketNumber !== '') {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($openTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>">
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) ($ticket['created_at'] ?? '')); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
@@ -655,7 +655,7 @@ if ($searchTicketNumber !== '') {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($activeTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>">
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) ($ticket['created_at'] ?? '')); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
@@ -680,7 +680,7 @@ if ($searchTicketNumber !== '') {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($closedTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>">
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) (($ticket['closed_at'] ?? '') !== '' ? $ticket['closed_at'] : ($ticket['created_at'] ?? ''))); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
@@ -792,7 +792,7 @@ if ($searchTicketNumber !== '') {
                                                 $trailOwnerTooltip = $cadOwnerName;
                                             }
                                         ?>
-                                        <div class="tm-trail-item">
+                                        <div class="tm-trail-item" data-trail-id="<?php echo (int) $trailId; ?>">
                                             <div class="tm-trail-dot-wrap">
                                                 <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
                                                     <?php if ($trailIconAsset !== ''): ?>
@@ -1019,6 +1019,14 @@ if ($searchTicketNumber !== '') {
 
         <?php include '../../templates/footer.php'; ?>
     </div>
+
+    <script>
+        window.supportTicketLiveUpdates = {
+            endpoint: 'controllers/poll/live-updates.php',
+            scope: 'REPORT',
+            intervalMs: 5000
+        };
+    </script>
 
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

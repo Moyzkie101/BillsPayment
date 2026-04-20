@@ -246,7 +246,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($openTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="BRANCH">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="BRANCH">
                                 <?php $branchUnread = (int) ($ticketBadgeCountsBranch[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($branchUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $branchUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
@@ -272,7 +272,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($closedTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="BRANCH">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="BRANCH">
                                 <?php $branchUnread = (int) ($ticketBadgeCountsBranch[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($branchUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $branchUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
@@ -432,7 +432,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                                 $trailOwnerTooltip = $cadOwnerName;
                                             }
                                         ?>
-                                        <div class="tm-trail-item">
+                                        <div class="tm-trail-item" data-trail-id="<?php echo (int) $trailId; ?>">
                                             <div class="tm-trail-dot-wrap">
                                                 <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
                                                     <?php if ($trailIconAsset !== ''): ?>
@@ -903,6 +903,14 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
         window.supportTicketInitialFlash = <?php echo json_encode(['type' => (string) ($flash['type'] ?? 'success'), 'message' => (string) ($flash['message'] ?? '')]); ?>;
     </script>
     <?php endif; ?>
+
+    <script>
+        window.supportTicketLiveUpdates = {
+            endpoint: 'controllers/poll/live-updates.php',
+            scope: 'BRANCH',
+            intervalMs: 5000
+        };
+    </script>
 
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
     <script>

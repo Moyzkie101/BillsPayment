@@ -80,6 +80,8 @@ try {
     $targetRole = (string) $ticket['current_handler_role'];
 
     // Branch reply on a resolved ticket should reopen it and hand back to VPO owner.
+    $trailMeta = null;
+
     if ($statusNow === 'resolved') {
         $vpoOwner = isset($ticket['vpo_owner']) && is_numeric($ticket['vpo_owner']) ? (int) $ticket['vpo_owner'] : 0;
         $reopenSql = "UPDATE {$schema}.tickets
@@ -102,11 +104,12 @@ try {
         }
         $reopenStmt->close();
         $targetRole = 'VPO';
+        $trailMeta = ['reopened' => true];
     } elseif ($targetRole !== 'VPO' && $targetRole !== 'CAD') {
         $targetRole = 'VPO';
     }
 
-    $trailId = st_insert_trail($conn, $ticketId, 'message', $userId, 'BRANCH', $targetRole, $message, null);
+    $trailId = st_insert_trail($conn, $ticketId, 'message', $userId, 'BRANCH', $targetRole, $message, $trailMeta);
 
     $attachments = st_uploads_to_array('attachments');
     foreach ($attachments as $file) {

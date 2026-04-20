@@ -172,6 +172,71 @@
             }
         }
 
+        function openModalFromRow(btn) {
+            if (!btn) return;
+
+            var targetId = btn.getAttribute('data-ticket-modal');
+            if (!targetId) return;
+            var targetModal = document.getElementById(targetId);
+            if (targetModal) {
+                targetModal.classList.add('open');
+
+                // Mark ticket badge as seen for the current page role.
+                var seenTicketId = btn.getAttribute('data-ticket-id');
+                var seenRole = btn.getAttribute('data-seen-role');
+                if (seenTicketId && seenRole) {
+                    var fd = new FormData();
+                    fd.append('ticket_id', seenTicketId);
+                    fd.append('role', seenRole);
+                    fetch('controllers/badges/mark-seen.php', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        body: fd
+                    }).then(function (res) {
+                        if (!res || !res.ok) return null;
+                        return res.json();
+                    }).then(function (json) {
+                        if (!json || !json.success) return;
+
+                        // Remove the per-ticket unread badge in the row we clicked
+                        try {
+                            var unread = btn.querySelector('.st-ticket-unread-badge');
+                            if (unread && unread.parentNode) unread.parentNode.removeChild(unread);
+                        } catch (e) {
+                            // ignore DOM update errors
+                        }
+
+                        // Decrement the mode-level active badge if present
+                        try {
+                            var modeCard = document.querySelector('.mode-card[data-mode="active"]');
+                            if (modeCard) {
+                                var modeBadge = modeCard.querySelector('.st-mode-count-badge');
+                                if (modeBadge) {
+                                    var n = parseInt(modeBadge.textContent.trim(), 10) || 0;
+                                    n = Math.max(0, n - 1);
+                                    if (n === 0) {
+                                        modeBadge.parentNode && modeBadge.parentNode.removeChild(modeBadge);
+                                    } else {
+                                        modeBadge.textContent = n;
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            // ignore DOM update errors
+                        }
+                    }).catch(function () {
+                        // no-op: badge sync failure should not block modal open
+                    });
+                }
+
+                // Ensure trail card bodies have correct heights when modal becomes visible
+                requestAnimationFrame(function () {
+                    adjustTrailCardHeights(targetModal);
+                    scrollModalToLatest(targetModal);
+                });
+            }
+        }
+
         function scrollModalToLatest(modalEl) {
             if (!modalEl) return;
             var body = modalEl.querySelector('.tm-body');
@@ -188,70 +253,11 @@
             });
         }
 
-        var triggers = document.querySelectorAll('[data-ticket-modal]');
-        triggers.forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var targetId = btn.getAttribute('data-ticket-modal');
-                if (!targetId) return;
-                var targetModal = document.getElementById(targetId);
-                if (targetModal) {
-                    targetModal.classList.add('open');
-
-                    // Mark ticket badge as seen for the current page role.
-                    var seenTicketId = btn.getAttribute('data-ticket-id');
-                    var seenRole = btn.getAttribute('data-seen-role');
-                    if (seenTicketId && seenRole) {
-                        var fd = new FormData();
-                        fd.append('ticket_id', seenTicketId);
-                        fd.append('role', seenRole);
-                        fetch('controllers/badges/mark-seen.php', {
-                            method: 'POST',
-                            credentials: 'same-origin',
-                            body: fd
-                        }).then(function (res) {
-                            if (!res || !res.ok) return null;
-                            return res.json();
-                        }).then(function (json) {
-                            if (!json || !json.success) return;
-
-                            // Remove the per-ticket unread badge in the row we clicked
-                            try {
-                                var unread = btn.querySelector('.st-ticket-unread-badge');
-                                if (unread && unread.parentNode) unread.parentNode.removeChild(unread);
-                            } catch (e) {
-                                // ignore DOM update errors
-                            }
-
-                            // Decrement the mode-level active badge if present
-                            try {
-                                var modeCard = document.querySelector('.mode-card[data-mode="active"]');
-                                if (modeCard) {
-                                    var modeBadge = modeCard.querySelector('.st-mode-count-badge');
-                                    if (modeBadge) {
-                                        var n = parseInt(modeBadge.textContent.trim(), 10) || 0;
-                                        n = Math.max(0, n - 1);
-                                        if (n === 0) {
-                                            modeBadge.parentNode && modeBadge.parentNode.removeChild(modeBadge);
-                                        } else {
-                                            modeBadge.textContent = n;
-                                        }
-                                    }
-                                }
-                            } catch (e) {
-                                // ignore DOM update errors
-                            }
-                        }).catch(function () {
-                            // no-op: badge sync failure should not block modal open
-                        });
-                    }
-
-                    // Ensure trail card bodies have correct heights when modal becomes visible
-                    requestAnimationFrame(function () {
-                        adjustTrailCardHeights(targetModal);
-                        scrollModalToLatest(targetModal);
-                    });
-                }
-            });
+        // Delegated click so newly-polled rows can open modals without rebinding.
+        document.addEventListener('click', function (e) {
+            var row = e.target && e.target.closest ? e.target.closest('[data-ticket-modal]') : null;
+            if (!row) return;
+            openModalFromRow(row);
         });
 
         var closers = document.querySelectorAll('[data-st-close-modal]');
@@ -788,6 +794,7 @@
         var existing = document.getElementById('st-copy-toast');
         if (existing) {
             existing.textContent = message;
+            existing.style.whiteSpace = 'pre-line';
             existing.classList.remove('st-copy-toast--hide', 'st-copy-toast--danger', 'st-copy-toast--success');
             existing.classList.add('st-copy-toast--show', klass);
             clearTimeout(existing._hideTimeout);
@@ -802,6 +809,7 @@
         var toast = document.createElement('div');
         toast.id = 'st-copy-toast';
         toast.className = 'st-copy-toast st-copy-toast--show ' + klass;
+        toast.style.whiteSpace = 'pre-line';
         toast.textContent = message;
         document.body.appendChild(toast);
         toast._hideTimeout = setTimeout(function () {
@@ -834,6 +842,409 @@
                 window.location.reload();
             }, 1100);
         }
+    }
+
+    function initOpenTicketsPolling() {
+        var cfg = window.supportTicketOpenPoll;
+        if (!cfg || !cfg.endpoint) return;
+
+        var panel = document.querySelector('[data-st-panel="open"]');
+        if (!panel) return;
+
+        var intervalMs = parseInt(cfg.intervalMs, 10);
+        if (!intervalMs || intervalMs < 3000) {
+            intervalMs = 7000;
+        }
+
+        var lastHash = null;
+        var isPolling = false;
+
+        function ensureRefreshHint() {
+            var existing = panel.querySelector('[data-st-open-refresh-hint]');
+            if (existing) return existing;
+
+            var hint = document.createElement('div');
+            hint.setAttribute('data-st-open-refresh-hint', '1');
+            hint.style.display = 'none';
+            hint.style.marginBottom = '8px';
+            hint.style.fontSize = '11px';
+            hint.style.color = '#6b7280';
+            hint.style.textAlign = 'right';
+            panel.insertBefore(hint, panel.firstChild);
+            return hint;
+        }
+
+        function showRefreshHint() {
+            var hint = ensureRefreshHint();
+            var now = new Date();
+            var hh = String(now.getHours()).padStart(2, '0');
+            var mm = String(now.getMinutes()).padStart(2, '0');
+            var ss = String(now.getSeconds()).padStart(2, '0');
+            hint.textContent = 'Open list updated ' + hh + ':' + mm + ':' + ss;
+            hint.style.display = 'block';
+        }
+
+        function shouldPollNow() {
+            if (document.hidden) return false;
+
+            var isOpenModeVisible = !panel.classList.contains('hidden');
+            if (!isOpenModeVisible) return false;
+
+            var hasOpenOverlay = !!document.querySelector('.tm-overlay.open');
+            if (hasOpenOverlay) return false;
+
+            return true;
+        }
+
+        function patchOpenPanel(openHtml) {
+            if (typeof openHtml !== 'string' || openHtml.trim() === '') return;
+            panel.innerHTML = openHtml;
+        }
+
+        function pollOnce() {
+            if (isPolling || !shouldPollNow()) return;
+            isPolling = true;
+
+            fetch(cfg.endpoint, {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (res) {
+                if (!res || !res.ok) return null;
+                return res.json();
+            }).then(function (json) {
+                if (!json || !json.success || !json.data) return;
+
+                var nextHash = String(json.data.hash || '');
+                if (!nextHash) return;
+
+                if (lastHash === null) {
+                    lastHash = nextHash;
+                    return;
+                }
+
+                if (nextHash !== lastHash) {
+                    patchOpenPanel(String(json.data.open_html || ''));
+                    lastHash = nextHash;
+                    showRefreshHint();
+                }
+            }).catch(function () {
+                // no-op: silent polling failure
+            }).finally(function () {
+                isPolling = false;
+            });
+        }
+
+        pollOnce();
+        setInterval(pollOnce, intervalMs);
+    }
+
+    function liveTypeLabel(type) {
+        var t = String(type || '').toLowerCase();
+        if (t === 'accept') return 'Accepted';
+        if (t === 'transfer') return 'Transferred';
+        if (t === 'resolve') return 'Resolved';
+        if (t === 'close') return 'Closed';
+        if (t === 'auto_close') return 'Auto Closed';
+        return 'Message';
+    }
+
+    function initLiveUpdatesPolling() {
+        var cfg = window.supportTicketLiveUpdates;
+        if (!cfg || !cfg.endpoint || !cfg.scope) return;
+
+        var intervalMs = parseInt(cfg.intervalMs, 10);
+        if (!intervalMs || intervalMs < 3000) {
+            intervalMs = 5000;
+        }
+
+        var cursor = 0;
+        var bootstrapped = false;
+        var inFlight = false;
+        var lastToastTrailId = 0;
+
+        function parseTicketIdFromModalId(id) {
+            var m = String(id || '').match(/-(\d+)$/);
+            if (!m) return 0;
+            return parseInt(m[1], 10) || 0;
+        }
+
+        function getTicketNumberFromRow(row) {
+            if (!row) return '';
+            var explicit = String(row.getAttribute('data-ticket-number') || '').trim().toUpperCase();
+            if (explicit) return explicit;
+
+            var numberCell = row.querySelector('.st-col-number');
+            var text = numberCell ? String(numberCell.textContent || '') : '';
+            text = text.trim().toUpperCase();
+            if (!text) return '';
+            var m = text.match(/[A-Z0-9_.-]+/);
+            return m ? m[0] : '';
+        }
+
+        function collectTicketNumbers() {
+            var map = {};
+            var scopeRoot = document.querySelector('[data-st-panel]:not(.hidden)') || document;
+            scopeRoot.querySelectorAll('.st-ticket-row[data-ticket-modal]').forEach(function (row) {
+                var tn = getTicketNumberFromRow(row);
+                if (tn) map[tn] = true;
+            });
+            return Object.keys(map).slice(0, 120);
+        }
+
+        function collectOpenModalState() {
+            var state = {};
+            document.querySelectorAll('.tm-overlay.open[id]').forEach(function (overlay) {
+                var ticketId = parseTicketIdFromModalId(overlay.id || '');
+                if (!ticketId) return;
+                var lastTrailId = 0;
+                overlay.querySelectorAll('.tm-trail-item[data-trail-id]').forEach(function (item) {
+                    var tid = parseInt(item.getAttribute('data-trail-id') || '0', 10) || 0;
+                    if (tid > lastTrailId) lastTrailId = tid;
+                });
+                state[ticketId] = lastTrailId;
+            });
+            return state;
+        }
+
+        function applyBadgeCounts(badgeCounts) {
+            if (!badgeCounts || typeof badgeCounts !== 'object') return;
+
+            document.querySelectorAll('.st-ticket-row[data-ticket-modal]').forEach(function (row) {
+                var ticketNo = getTicketNumberFromRow(row);
+                if (!ticketNo) return;
+
+                var count = parseInt(badgeCounts[ticketNo] || 0, 10) || 0;
+                var numberCell = row.querySelector('.st-col-number');
+                if (!numberCell) return;
+
+                var existingBadge = numberCell.querySelector('.st-ticket-unread-badge');
+                if (count > 0) {
+                    if (!existingBadge) {
+                        var badge = document.createElement('span');
+                        badge.className = 'st-ticket-unread-badge';
+                        badge.textContent = String(count);
+                        numberCell.appendChild(document.createTextNode(' '));
+                        numberCell.appendChild(badge);
+                    } else {
+                        existingBadge.textContent = String(count);
+                    }
+                } else if (existingBadge && existingBadge.parentNode) {
+                    existingBadge.parentNode.removeChild(existingBadge);
+                }
+            });
+
+            var activeCard = document.querySelector('.mode-card[data-mode="active"]');
+            if (!activeCard) return;
+
+            var activeRows = document.querySelectorAll('[data-st-panel="active"] .st-ticket-row[data-ticket-modal]');
+            var total = 0;
+            activeRows.forEach(function (row) {
+                var ticketNo = getTicketNumberFromRow(row);
+                if (!ticketNo) return;
+                total += parseInt(badgeCounts[ticketNo] || 0, 10) || 0;
+            });
+
+            var existingModeBadge = activeCard.querySelector('.st-mode-count-badge');
+            if (total > 0) {
+                if (!existingModeBadge) {
+                    var modeBadge = document.createElement('span');
+                    modeBadge.className = 'st-mode-count-badge';
+                    modeBadge.textContent = String(total);
+                    activeCard.appendChild(modeBadge);
+                } else {
+                    existingModeBadge.textContent = String(total);
+                }
+            } else if (existingModeBadge && existingModeBadge.parentNode) {
+                existingModeBadge.parentNode.removeChild(existingModeBadge);
+            }
+        }
+
+        function appendTrailDeltas(trailDeltas) {
+            if (!trailDeltas || typeof trailDeltas !== 'object') return;
+
+            Object.keys(trailDeltas).forEach(function (ticketIdKey) {
+                var deltas = trailDeltas[ticketIdKey];
+                if (!Array.isArray(deltas) || deltas.length === 0) return;
+
+                var overlay = document.querySelector('.tm-overlay.open[id$="-' + ticketIdKey + '"]');
+                if (!overlay) return;
+
+                var trailWrap = overlay.querySelector('.tm-trail');
+                if (!trailWrap) return;
+
+                var empty = trailWrap.querySelector('.tm-empty-trail');
+                if (empty && empty.parentNode) {
+                    empty.parentNode.removeChild(empty);
+                }
+
+                deltas.forEach(function (delta) {
+                    var trailId = parseInt(delta.trail_id || 0, 10) || 0;
+                    if (!trailId) return;
+                    if (trailWrap.querySelector('.tm-trail-item[data-trail-id="' + trailId + '"]')) return;
+
+                    var senderRole = String(delta.sender_role || 'SYSTEM').toUpperCase();
+                    var type = String(delta.type || 'message').toLowerCase();
+                    var message = String(delta.message || '');
+                    var dtText = String(delta.created_at || '');
+
+                    var avatarClass = 'tm-trail-avatar--system';
+                    var marker = 'S';
+                    if (senderRole === 'BRANCH') {
+                        avatarClass = 'tm-trail-avatar--branch';
+                        marker = 'B';
+                    } else if (senderRole === 'VPO') {
+                        avatarClass = 'tm-trail-avatar--vpo';
+                        marker = 'V';
+                    } else if (senderRole === 'CAD') {
+                        avatarClass = 'tm-trail-avatar--cad';
+                        marker = 'C';
+                    }
+
+                    var attachments = Array.isArray(delta.attachments) ? delta.attachments : [];
+                    var attachmentsHtml = '';
+                    if (attachments.length > 0) {
+                        var nodes = [];
+                        attachments.forEach(function (att) {
+                            var href = stEscapeHtml(String(att.download_url || '#'));
+                            var name = stEscapeHtml(String(att.file_name || 'Attachment'));
+                            var size = stEscapeHtml(String(att.file_size || ''));
+                            nodes.push(
+                                '<a class="tm-attachment" href="' + href + '">' +
+                                    '<span class="tm-attachment-icon"><i class="fa-solid fa-paperclip" aria-hidden="true"></i></span>' +
+                                    '<span class="tm-attachment-name">' + name + '</span>' +
+                                    '<span class="tm-attachment-size">' + size + '</span>' +
+                                '</a>'
+                            );
+                        });
+                        attachmentsHtml = '<div class="tm-attachments">' + nodes.join('') + '</div>';
+                    }
+
+                    var prevLatest = trailWrap.querySelector('.tm-trail-card[data-tm-latest]');
+                    if (prevLatest) {
+                        prevLatest.removeAttribute('data-tm-latest');
+                    }
+
+                    var item = document.createElement('div');
+                    item.className = 'tm-trail-item';
+                    item.setAttribute('data-trail-id', String(trailId));
+                    item.innerHTML =
+                        '<div class="tm-trail-dot-wrap">' +
+                            '<div class="tm-trail-avatar ' + avatarClass + '">' + stEscapeHtml(marker) + '</div>' +
+                        '</div>' +
+                        '<div class="tm-trail-card tm-expanded" data-tm-latest="1">' +
+                            '<div class="tm-trail-card-header">' +
+                                '<div class="tm-trail-avatar ' + avatarClass + '">' + stEscapeHtml(marker) + '</div>' +
+                                '<div class="tm-trail-meta">' +
+                                    '<div class="tm-trail-sender"><span>' + stEscapeHtml(senderRole) + '</span></div>' +
+                                    '<div class="tm-trail-datetime">' + stEscapeHtml(dtText) + '</div>' +
+                                '</div>' +
+                                '<div class="tm-trail-type-label tm-trail-type-label--' + stEscapeHtml(type) + '">' + stEscapeHtml(liveTypeLabel(type)) + '</div>' +
+                                '<div class="tm-trail-chevron">›</div>' +
+                            '</div>' +
+                            '<div class="tm-trail-card-body">' +
+                                '<div class="tm-trail-message">' + stEscapeHtml(message).replace(/\n/g, '<br>') + '</div>' +
+                                attachmentsHtml +
+                            '</div>' +
+                        '</div>';
+
+                    trailWrap.appendChild(item);
+                });
+
+                adjustTrailCardHeights(overlay);
+                var body = overlay.querySelector('.tm-body');
+                if (body) {
+                    requestAnimationFrame(function () {
+                        body.scrollTop = body.scrollHeight;
+                    });
+                }
+            });
+        }
+
+        function showNotifications(notifications) {
+            if (!Array.isArray(notifications) || notifications.length === 0) return;
+
+            notifications.forEach(function (n) {
+                var trailId = parseInt(n.trail_id || 0, 10) || 0;
+                if (!trailId || trailId <= lastToastTrailId) return;
+                var ticketNo = String(n.ticket_number || '').trim();
+                var text = String(n.text || '').trim();
+                if (!text) return;
+
+                var msg = ticketNo ? (ticketNo + '\n' + text) : text;
+                stShowToast(msg, 'success');
+                if (trailId > lastToastTrailId) {
+                    lastToastTrailId = trailId;
+                }
+            });
+        }
+
+        function shouldPoll() {
+            if (document.hidden) return false;
+            return true;
+        }
+
+        function pollOnce() {
+            if (inFlight || !shouldPoll()) return;
+            inFlight = true;
+
+            var params = new URLSearchParams();
+            params.set('scope', String(cfg.scope));
+            params.set('cursor', String(cursor));
+
+            var ticketNumbers = collectTicketNumbers();
+            if (ticketNumbers.length > 0) {
+                params.set('ticket_numbers', ticketNumbers.join(','));
+            }
+
+            var openState = collectOpenModalState();
+            params.set('open_state', JSON.stringify(openState));
+
+            if (!bootstrapped) {
+                params.set('bootstrap', '1');
+            }
+
+            fetch(cfg.endpoint + '?' + params.toString(), {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (res) {
+                if (!res || !res.ok) return null;
+                return res.json();
+            }).then(function (json) {
+                if (!json || !json.success || !json.data) return;
+
+                var data = json.data;
+                var nextCursor = parseInt(data.next_cursor || cursor, 10) || cursor;
+                if (nextCursor > cursor) {
+                    cursor = nextCursor;
+                }
+
+                applyBadgeCounts(data.badge_counts || {});
+
+                if (bootstrapped) {
+                    appendTrailDeltas(data.trail_deltas || {});
+                    showNotifications(data.notifications || []);
+                }
+
+                if (!bootstrapped) {
+                    bootstrapped = true;
+                }
+            }).catch(function () {
+                // no-op: silent polling failure
+            }).finally(function () {
+                inFlight = false;
+            });
+        }
+
+        pollOnce();
+        setInterval(pollOnce, intervalMs);
     }
 
     function clearReplyFormUI(form) {
@@ -1050,5 +1461,7 @@
         initTicketCopyButtons();
         initAjaxReplySubmits();
         initInitialFlashToast();
+        initOpenTicketsPolling();
+        initLiveUpdatesPolling();
     });
 })();

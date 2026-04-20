@@ -560,7 +560,7 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                                 $trailOwnerTooltip = $cadOwnerName;
                                             }
                                         ?>
-                                        <div class="tm-trail-item">
+                                        <div class="tm-trail-item" data-trail-id="<?php echo (int) $trailId; ?>">
                                             <div class="tm-trail-dot-wrap">
                                                 <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
                                                     <?php if ($trailIconAsset !== ''): ?>
@@ -788,6 +788,14 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
         window.supportTicketInitialFlash = <?php echo json_encode(['type' => (string) ($flash['type'] ?? 'success'), 'message' => (string) ($flash['message'] ?? '')]); ?>;
     </script>
     <?php endif; ?>
+
+    <script>
+        window.supportTicketLiveUpdates = {
+            endpoint: '../../support_ticket/controllers/poll/live-updates.php',
+            scope: 'MAINT',
+            intervalMs: 5000
+        };
+    </script>
 
     <script src="../../support_ticket/assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
     <script>

@@ -225,7 +225,7 @@ foreach ($vpoActive as $ticket) {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($vpoOpen as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="VPO">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="VPO">
                                 <?php $vpoUnread = (int) ($ticketBadgeCountsVpo[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($vpoUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $vpoUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
@@ -251,7 +251,7 @@ foreach ($vpoActive as $ticket) {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($vpoActive as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="VPO">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="VPO">
                                 <?php $vpoUnread = (int) ($ticketBadgeCountsVpo[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($vpoUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $vpoUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
@@ -277,7 +277,7 @@ foreach ($vpoActive as $ticket) {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($vpoClosed as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="VPO">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="VPO">
                                 <?php $vpoUnread = (int) ($ticketBadgeCountsVpo[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($vpoUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $vpoUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) ($ticket['closed_at'] ?: $ticket['created_at'])); ?></span>
@@ -455,7 +455,7 @@ foreach ($vpoActive as $ticket) {
                                                 $trailOwnerTooltip = $cadOwnerName;
                                             }
                                         ?>
-                                        <div class="tm-trail-item">
+                                        <div class="tm-trail-item" data-trail-id="<?php echo (int) $trailId; ?>">
                                             <div class="tm-trail-dot-wrap">
                                                 <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
                                                     <?php if ($trailIconAsset !== ''): ?>
@@ -721,6 +721,22 @@ foreach ($vpoActive as $ticket) {
         window.supportTicketForceReloadOnce = true;
     </script>
     <?php endif; ?>
+
+    <script>
+        window.supportTicketOpenPoll = {
+            endpoint: 'controllers/vpo/open-tickets-poll.php',
+            intervalMs: 5000,
+            role: 'VPO'
+        };
+    </script>
+
+    <script>
+        window.supportTicketLiveUpdates = {
+            endpoint: 'controllers/poll/live-updates.php',
+            scope: 'VPO',
+            intervalMs: 5000
+        };
+    </script>
 
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
 </body>
