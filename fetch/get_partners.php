@@ -36,7 +36,8 @@ $sql = "
     SELECT 
         sub_billers_name AS partner_name
     FROM 
-        sub_biller;
+        sub_biller
+    ORDER BY partner_name
 ";
 
 $result = $conn->query($sql);

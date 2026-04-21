@@ -195,7 +195,7 @@ if (empty($consolidated_data)) {
                         <?php endif; ?> Records:</strong> <?php echo htmlspecialchars(number_format(count($consolidated_data)).''); ?></p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong><i class="fas fa-calendar text-success me-2"></i>Upload Date:</strong> <?php echo htmlspecialchars($consolidated_data[0]['uploaded_date'] ?? null); ?></p>
+                    <p><strong><i class="fas fa-calendar text-success me-2"></i>Upload Date:</strong> <?php echo !empty($consolidated_data[0]['uploaded_date']) ? htmlspecialchars(date('F d, Y', strtotime($consolidated_data[0]['uploaded_date']))) : ''; ?></p>
                     <p><strong><i class="fas fa-file-import text-danger me-2"></i>Uploaded By:</strong> <?php echo htmlspecialchars($consolidated_data[0]['uploaded_by']?? null); ?></p>
                 </div>
             </div>
@@ -287,11 +287,19 @@ if (empty($consolidated_data)) {
                                         <td class="text-end"><?= isset($row['amount_paid']) ? '₱ ' . number_format((float)$row['amount_paid'], 2) : null ?></td>
                                         <td class="text-end"><?= isset($row['amount_charge_customer']) ? '₱ ' . number_format((float)$row['amount_charge_customer'], 2) : null ?></td>
                                         <td class="text-end"><?= isset($row['amount_charge_partner']) ? '₱ ' . number_format((float)$row['amount_charge_partner'], 2) : null ?></td>
-                                        <td class="text-end"><?= htmlspecialchars($row['branch_id'] ?? null) ?></td>
+                                        <td class="text-end"><?php $branchVal = $row['branch_id'] ?? null; echo htmlspecialchars(($branchVal == 0 ? '' : $branchVal)); ?></td>
                                         <td class="text-end"><?= htmlspecialchars($row['ml_outlet'] ?? null) ?></td>
                                         <td class="text-end"><?= htmlspecialchars($row['region_code'] ?? null) ?></td>
                                         <td class="text-end"><?= htmlspecialchars($row['region'] ?? null) ?></td>
-                                        <td><?= htmlspecialchars($row['partner_id'] ?? '') ?></td>
+                                        <td><?php
+                                            $sourceType = $row['source_file_type'] ?? $consolidated_data[0]['source_file_type'] ?? '';
+                                            if (strtoupper($sourceType) === 'KPX') {
+                                                $displayPartnerId = $row['partner_id_kpx'] ?? $row['partner_id'] ?? '';
+                                            } else {
+                                                $displayPartnerId = $row['partner_id'] ?? $row['partner_id_kpx'] ?? '';
+                                            }
+                                            echo htmlspecialchars($displayPartnerId);
+                                        ?></td>
                                         <td><?= htmlspecialchars($row['partner_name'] ?? '') ?></td>
                                         <td class="text-center" data-error-remarks="<?= htmlspecialchars($row['error_remarks'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
                                             <?php

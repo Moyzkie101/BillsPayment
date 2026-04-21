@@ -96,30 +96,105 @@
                 $PartnerName = 'All';
                 $PartnerID_KPX = 'All';
                 $GLCode = 'All';
+                // Ensure these are defined for downstream usage
+                $SubBillersID = null;
+                $SubPartnerName = null;
             } else {
-                $partnerQuery = "SELECT partner_id, partner_id_kpx, gl_code, partner_name FROM masterdata.partner_masterfile where partner_name = ? LIMIT 1";
+                $partnerQuery = " WITH direct_biller AS (
+                    SELECT
+                        partner_id,
+                        partner_id_kpx,
+                        gl_code,
+                        partner_name AS direct_billers_name,
+                        NULL AS sub_billers_name,
+                        status
+                    FROM masterdata.partner_masterfile
+                ),
+
+                sub_biller AS (
+                    SELECT
+                        partner_id_kpx,
+                        sub_billers_id,
+                        partner_name AS direct_billers_name,
+                        sub_billers_name,
+                        NULL AS sub_gl_code
+                    FROM masterdata.subbiller
+                ),
+
+                merged_left AS (
+                    SELECT
+                        d.partner_id,
+                        COALESCE(d.partner_id_kpx, s.partner_id_kpx) AS partner_id_kpx,
+                        s.sub_billers_id,
+                        COALESCE(d.gl_code, s.sub_gl_code) AS gl_code,
+                        CASE WHEN d.direct_billers_name = s.sub_billers_name THEN s.direct_billers_name ELSE d.direct_billers_name END AS direct_billers_name,
+                        COALESCE(s.sub_billers_name, d.sub_billers_name) AS sub_billers_name
+                    FROM direct_biller d
+                    LEFT JOIN sub_biller s
+                        ON d.direct_billers_name = s.sub_billers_name
+                    WHERE COALESCE(d.status, '') = 'ACTIVE'
+                ),
+
+                unmatched_sub AS (
+                    SELECT
+                        NULL AS partner_id,
+                        s.partner_id_kpx AS partner_id_kpx,
+                        s.sub_billers_id,
+                        s.sub_gl_code AS gl_code,
+                        s.direct_billers_name AS direct_billers_name,
+                        s.sub_billers_name AS sub_billers_name
+                    FROM sub_biller s
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM direct_biller d WHERE d.direct_billers_name = s.sub_billers_name AND COALESCE(d.status,'') = 'ACTIVE'
+                    )
+                )
+
+                SELECT
+                    t.partner_id,
+                    t.partner_id_kpx,
+                    t.sub_billers_id,
+                    t.gl_code,
+                    t.direct_billers_name,
+                    t.sub_billers_name
+                FROM (
+                    SELECT * FROM merged_left WHERE CASE WHEN sub_billers_id IS NULL AND direct_billers_name = ? THEN direct_billers_name = ? ELSE sub_billers_name = ? END
+                    UNION ALL
+                    SELECT * FROM unmatched_sub WHERE CASE WHEN sub_billers_id IS NULL AND direct_billers_name = ? THEN direct_billers_name = ? ELSE sub_billers_name = ? END
+                ) t LIMIT 1";
                 // if ($fileType === 'KPX') {
                 //     $partnerQuery .= " WHERE partner_id_kpx = ? LIMIT 1";
                 // }elseif ($fileType === 'KP7') {
                 //     $partnerQuery .= " WHERE partner_id = ? LIMIT 1";
                 // }
                 $stmt = $conn->prepare($partnerQuery);
-                $stmt->bind_param("s", $partner);
+                if ($stmt) {
+                    // the query uses the same parameter multiple times; bind it for each placeholder
+                    $stmt->bind_param("ssssss", $partner, $partner, $partner, $partner, $partner, $partner);
+                }
                 $stmt->execute();
                 $partnerResult = $stmt->get_result();
                 if ($partnerResult && $partnerResult->num_rows > 0) {
                     $partnerData = $partnerResult->fetch_assoc();
                     $PartnerID = $partnerData['partner_id'];
                     $PartnerID_KPX = $partnerData['partner_id_kpx'];
+                    $SubBillersID = $partnerData['sub_billers_id'];
                     $GLCode = $partnerData['gl_code'];
-                    $PartnerName = $partnerData['partner_name'];
+                    if(!empty($SubBillersID)){
+                        $PartnerName = $partnerData['direct_billers_name'];
+                        $SubPartnerName = $partnerData['sub_billers_name'];
+                    }else{
+                        $PartnerName = $partnerData['partner_name'];
+                        $SubPartnerName = null;
+                    }
                 }
             }
 
             $partnerselection[] = [
                 'partners_id' => $PartnerID,
                 'partners_id_kpx' => $PartnerID_KPX,
+                'subbillers_id' => $SubBillersID,
                 'gl_code' => $GLCode,
+                'sub_billers_name' => $SubPartnerName,
                 'companys_name' => $PartnerName
 
             ];
@@ -193,9 +268,9 @@
                         $isValidRegion = false;
 
                         if ($fileType === 'KP7') {
-                            $query = "SELECT COUNT(*) as count FROM masterdata.region_masterfile WHERE (gl_region = ? OR region_desc_kp7 = ?) LIMIT 1";
+                            $query = "SELECT COUNT(*) as count FROM masterdata.region_masterfile WHERE (gl_region = ? OR region_desc_kp7 = ?) AND NOT zone_code IN ('VISMIN-MANCOMM', 'LNCR-MANCOMM', 'VISMIN-SUPPORT', 'LNCR-SUPPORT') LIMIT 1";
                         } else {
-                            $query = "SELECT COUNT(*) as count FROM masterdata.region_masterfile WHERE (gl_region = ? OR region_desc_kpx = ?) LIMIT 1";
+                            $query = "SELECT COUNT(*) as count FROM masterdata.region_masterfile WHERE (gl_region = ? OR region_desc_kpx = ?) AND NOT zone_code IN ('VISMIN-MANCOMM', 'LNCR-MANCOMM', 'VISMIN-SUPPORT', 'LNCR-SUPPORT') LIMIT 1";
                         }
 
                         $stmt = $conn->prepare($query);
@@ -213,15 +288,72 @@
                         return !$isValidRegion;
                     }
 
-                    function checkhadPartnerID($conn, $fileType, $partner, $partnerIds_kp7, $partnerIds_kpx) {
+                    function checkhadPartnerID($conn, $fileType, $partner, $partnerIds_kp7, $sub_billers_id, $partnerIds_kpx) {
                         $partnerExists = false;
                         
                         if($fileType === 'KP7') {
                             if($partner === 'All') {
                                 // Check if the partner ID from the Excel file exists in the database
-                                $sql = "SELECT COUNT(*) as count FROM masterdata.partner_masterfile WHERE partner_id = ? LIMIT 1";
+                                $sql = "WITH direct_biller AS (
+                                        SELECT
+                                            partner_id,
+                                            partner_id_kpx,
+                                            gl_code,
+                                            partner_name AS direct_billers_name,
+                                            NULL AS sub_billers_name,
+                                            status
+                                        FROM masterdata.partner_masterfile
+                                    ),
+
+                                    sub_biller AS (
+                                        SELECT
+                                            partner_id_kpx,
+                                            sub_billers_id,
+                                            partner_name AS direct_billers_name,
+                                            sub_billers_name,
+                                            NULL AS sub_gl_code
+                                        FROM masterdata.subbiller
+                                    ),
+
+                                    merged_left AS (
+                                        SELECT
+                                            d.partner_id,
+                                            COALESCE(d.partner_id_kpx, s.partner_id_kpx) AS partner_id_kpx,
+                                            s.sub_billers_id,
+                                            COALESCE(d.gl_code, s.sub_gl_code) AS gl_code,
+                                            CASE WHEN d.direct_billers_name = s.sub_billers_name THEN s.direct_billers_name ELSE d.direct_billers_name END AS direct_billers_name,
+                                            COALESCE(s.sub_billers_name, d.sub_billers_name) AS sub_billers_name
+                                        FROM direct_biller d
+                                        LEFT JOIN sub_biller s
+                                            ON d.direct_billers_name = s.sub_billers_name
+                                        WHERE COALESCE(d.status, '') = 'ACTIVE'
+                                    ),
+
+                                    unmatched_sub AS (
+                                        SELECT
+                                            NULL AS partner_id,
+                                            s.partner_id_kpx AS partner_id_kpx,
+                                            s.sub_billers_id,
+                                            s.sub_gl_code AS gl_code,
+                                            s.direct_billers_name AS direct_billers_name,
+                                            s.sub_billers_name AS sub_billers_name
+                                        FROM sub_biller s
+                                        WHERE NOT EXISTS (
+                                            SELECT 1 FROM direct_biller d WHERE d.direct_billers_name = s.sub_billers_name AND COALESCE(d.status,'') = 'ACTIVE'
+                                        )
+                                    )
+
+                                    SELECT
+                                        COUNT(*) OVER (PARTITION BY COALESCE(t.partner_id_kpx, t.partner_id, t.direct_billers_name, t.sub_billers_name)) AS count
+                                    FROM (
+                                        SELECT * FROM merged_left WHERE partner_id = ?
+                                        UNION ALL
+                                        SELECT * FROM unmatched_sub WHERE partner_id = ?
+                                    ) t LIMIT 1";
                                 $stmt = $conn->prepare($sql);
-                                $stmt->bind_param("s", $partnerIds_kp7);
+                                if ($stmt) {
+                                    $stmt->bind_param("ss", $partnerIds_kp7, $partnerIds_kp7);
+                                }
                                 $stmt->execute();
                                 $result = $stmt->get_result();
                                 
@@ -240,9 +372,128 @@
                         elseif($fileType === 'KPX') {
                             if($partner === 'All') {
                                 // KPX "All" has no stable partner id in-row, so do not block valid rows on partner lookup.
-                                $sql = "SELECT COUNT(*) as count FROM masterdata.partner_masterfile WHERE partner_id_kpx = ? LIMIT 1";
+                                $kpx_value = null;
+                                if (!empty($sub_billers_id)){
+                                    $sql = "WITH direct_biller AS (
+                                        SELECT
+                                            partner_id,
+                                            partner_id_kpx,
+                                            gl_code,
+                                            partner_name AS direct_billers_name,
+                                            NULL AS sub_billers_name,
+                                            status
+                                        FROM masterdata.partner_masterfile
+                                    ),
+
+                                    sub_biller AS (
+                                        SELECT
+                                            partner_id_kpx,
+                                            sub_billers_id,
+                                            partner_name AS direct_billers_name,
+                                            sub_billers_name,
+                                            NULL AS sub_gl_code
+                                        FROM masterdata.subbiller
+                                    ),
+
+                                    merged_left AS (
+                                        SELECT
+                                            d.partner_id,
+                                            COALESCE(d.partner_id_kpx, s.partner_id_kpx) AS partner_id_kpx,
+                                            s.sub_billers_id,
+                                            COALESCE(d.gl_code, s.sub_gl_code) AS gl_code,
+                                            CASE WHEN d.direct_billers_name = s.sub_billers_name THEN s.direct_billers_name ELSE d.direct_billers_name END AS direct_billers_name,
+                                            COALESCE(s.sub_billers_name, d.sub_billers_name) AS sub_billers_name
+                                        FROM direct_biller d
+                                        LEFT JOIN sub_biller s
+                                            ON d.direct_billers_name = s.sub_billers_name
+                                        WHERE COALESCE(d.status, '') = 'ACTIVE'
+                                    ),
+
+                                    unmatched_sub AS (
+                                        SELECT
+                                            NULL AS partner_id,
+                                            s.partner_id_kpx AS partner_id_kpx,
+                                            s.sub_billers_id,
+                                            s.sub_gl_code AS gl_code,
+                                            s.direct_billers_name AS direct_billers_name,
+                                            s.sub_billers_name AS sub_billers_name
+                                        FROM sub_biller s
+                                        WHERE NOT EXISTS (
+                                            SELECT 1 FROM direct_biller d WHERE d.direct_billers_name = s.sub_billers_name AND COALESCE(d.status,'') = 'ACTIVE'
+                                        )
+                                    )
+
+                                    SELECT
+                                        COUNT(*) OVER (PARTITION BY COALESCE(t.partner_id_kpx, t.partner_id, t.direct_billers_name, t.sub_billers_name)) AS count
+                                    FROM (
+                                        SELECT * FROM merged_left WHERE sub_billers_id = ?
+                                        UNION ALL
+                                        SELECT * FROM unmatched_sub WHERE sub_billers_id = ?
+                                    ) t LIMIT 1";
+                                        
+                                    $kpx_value = $sub_billers_id;
+                                } elseif (!empty($partnerIds_kpx)) {
+                                    $sql = "WITH direct_biller AS (
+                                        SELECT
+                                            partner_id,
+                                            partner_id_kpx,
+                                            gl_code,
+                                            partner_name AS direct_billers_name,
+                                            NULL AS sub_billers_name,
+                                            status
+                                        FROM masterdata.partner_masterfile
+                                    ),
+
+                                    sub_biller AS (
+                                        SELECT
+                                            partner_id_kpx,
+                                            sub_billers_id,
+                                            partner_name AS direct_billers_name,
+                                            sub_billers_name,
+                                            NULL AS sub_gl_code
+                                        FROM masterdata.subbiller
+                                    ),
+
+                                    merged_left AS (
+                                        SELECT
+                                            d.partner_id,
+                                            COALESCE(d.partner_id_kpx, s.partner_id_kpx) AS partner_id_kpx,
+                                            s.sub_billers_id,
+                                            COALESCE(d.gl_code, s.sub_gl_code) AS gl_code,
+                                            CASE WHEN d.direct_billers_name = s.sub_billers_name THEN s.direct_billers_name ELSE d.direct_billers_name END AS direct_billers_name,
+                                            COALESCE(s.sub_billers_name, d.sub_billers_name) AS sub_billers_name
+                                        FROM direct_biller d
+                                        LEFT JOIN sub_biller s
+                                            ON d.direct_billers_name = s.sub_billers_name
+                                        WHERE COALESCE(d.status, '') = 'ACTIVE'
+                                    ),
+
+                                    unmatched_sub AS (
+                                        SELECT
+                                            NULL AS partner_id,
+                                            s.partner_id_kpx AS partner_id_kpx,
+                                            s.sub_billers_id,
+                                            s.sub_gl_code AS gl_code,
+                                            s.direct_billers_name AS direct_billers_name,
+                                            s.sub_billers_name AS sub_billers_name
+                                        FROM sub_biller s
+                                        WHERE NOT EXISTS (
+                                            SELECT 1 FROM direct_biller d WHERE d.direct_billers_name = s.sub_billers_name AND COALESCE(d.status,'') = 'ACTIVE'
+                                        )
+                                    )
+
+                                    SELECT
+                                        COUNT(*) OVER (PARTITION BY COALESCE(t.partner_id_kpx, t.partner_id, t.direct_billers_name, t.sub_billers_name)) AS count
+                                    FROM (
+                                        SELECT * FROM merged_left WHERE partner_id_kpx = ?
+                                        UNION ALL
+                                        SELECT * FROM unmatched_sub WHERE partner_id_kpx = ?
+                                    ) t LIMIT 1";
+                                    
+                                    $kpx_value = $partnerIds_kpx;
+                                }
                                 $stmt = $conn->prepare($sql);
-                                $stmt->bind_param("s", $partnerIds_kpx);
+                                $stmt->bind_param("ss", $kpx_value, $kpx_value);
                                 $stmt->execute();
                                 $result = $stmt->get_result();
                                 
@@ -263,6 +514,7 @@
                         // Return true if partner is NOT found (indicating an error)
                         return !$partnerExists;
                     }
+                    
 
                     // function checkhadpartnerGLCode($conn, $fileType, $partner, $GLCode) {
                     //     $partnerGLCodeExists = false;
@@ -575,36 +827,111 @@
                                 $person_operator = $conn->real_escape_string(strval($worksheet->getCell('Q' . $row)->getValue()));
     
                                 if($partner === 'All'){
-                                    $partnerName = $conn->real_escape_string(strval($worksheet->getCell('R' . $row)->getValue()));
+                                    $partnerName_raw = $conn->real_escape_string(strval($worksheet->getCell('R' . $row)->getValue()));
                                     $partnerIds_kp7 = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
 
-                                    $getGLCode_partner_kpx = "SELECT partner_id_kpx, gl_code FROM masterdata.partner_masterfile where partner_id = ? LIMIT 1";
+                                    $getGLCode_partner_kpx = "WITH direct_biller AS (
+                                        SELECT
+                                            partner_id,
+                                            partner_id_kpx,
+                                            gl_code,
+                                            partner_name AS direct_billers_name,
+                                            NULL AS sub_billers_name,
+                                            status
+                                        FROM masterdata.partner_masterfile
+                                    ),
+
+                                    sub_biller AS (
+                                        SELECT
+                                            partner_id_kpx,
+                                            sub_billers_id,
+                                            partner_name AS direct_billers_name,
+                                            sub_billers_name,
+                                            NULL AS sub_gl_code
+                                        FROM masterdata.subbiller
+                                    ),
+
+                                    merged_left AS (
+                                        SELECT
+                                            d.partner_id,
+                                            COALESCE(d.partner_id_kpx, s.partner_id_kpx) AS partner_id_kpx,
+                                            s.sub_billers_id,
+                                            COALESCE(d.gl_code, s.sub_gl_code) AS gl_code,
+                                            CASE WHEN d.direct_billers_name = s.sub_billers_name THEN s.direct_billers_name ELSE d.direct_billers_name END AS direct_billers_name,
+                                            COALESCE(s.sub_billers_name, d.sub_billers_name) AS sub_billers_name
+                                        FROM direct_biller d
+                                        LEFT JOIN sub_biller s
+                                            ON d.direct_billers_name = s.sub_billers_name
+                                        WHERE COALESCE(d.status, '') = 'ACTIVE'
+                                    ),
+
+                                    unmatched_sub AS (
+                                        SELECT
+                                            NULL AS partner_id,
+                                            s.partner_id_kpx AS partner_id_kpx,
+                                            s.sub_billers_id,
+                                            s.sub_gl_code AS gl_code,
+                                            s.direct_billers_name AS direct_billers_name,
+                                            s.sub_billers_name AS sub_billers_name
+                                        FROM sub_biller s
+                                        WHERE NOT EXISTS (
+                                            SELECT 1 FROM direct_biller d WHERE d.direct_billers_name = s.sub_billers_name AND COALESCE(d.status,'') = 'ACTIVE'
+                                        )
+                                    )
+
+                                    SELECT
+                                        t.partner_id_kpx,
+                                        t.sub_billers_id,
+                                        t.gl_code,
+                                        t.direct_billers_name,
+                                        t.sub_billers_name
+                                    FROM (
+                                        SELECT * FROM merged_left WHERE partner_id = ?
+                                        UNION ALL
+                                        SELECT * FROM unmatched_sub WHERE partner_id = ?
+                                    ) t LIMIT 1";
                                     $stmt = $conn->prepare($getGLCode_partner_kpx);
                                     if ($stmt) {
-                                        $stmt->bind_param("s", $partnerIds_kp7);
+                                        // query contains two placeholders for partner_id
+                                        $stmt->bind_param("ss", $partnerIds_kp7, $partnerIds_kp7);
                                         $stmt->execute();
                                         $result = $stmt->get_result();
                                         if ($result && $result->num_rows > 0) {
                                             $GLCodeData = $result->fetch_assoc();
                                             if ($GLCodeData) {
                                                 $partnerIds_kpx = $conn->real_escape_string(strval($GLCodeData['partner_id_kpx']));
+                                                $sub_billers_id = $conn->real_escape_string(strval($GLCodeData['sub_billers_id']));
                                                 $GLCode = $conn->real_escape_string(strval($GLCodeData['gl_code']));
+                                                if(!empty($sub_billers_id)){
+                                                    $partnerName = $conn->real_escape_string(strval($GLCodeData['direct_billers_name']));
+                                                }else{
+                                                    $partnerName = $partnerName_raw;
+                                                }
+                                                $SubBillersName = $conn->real_escape_string(strval($GLCodeData['sub_billers_name']));
                                             }else{
                                                 $partnerIds_kpx = null;
+                                                $sub_billers_id = null;
                                                 $GLCode = null;
+                                                $SubBillersName = null;
+                                                $partnerName = $partnerName_raw;
                                             }
                                         }else{
                                             $partnerIds_kpx = null;
+                                            $sub_billers_id = null;
                                             $GLCode = null;
+                                            $SubBillersName = null;
+                                            $partnerName = $partnerName_raw;
                                         }
                                         $stmt->close();
                                     }
                                 }
                                 else{
-                                    $partnerName = $conn->real_escape_string(strval($PartnerName));
                                     $partnerIds_kp7 = $conn->real_escape_string(strval($PartnerID));
                                     $partnerIds_kpx = $conn->real_escape_string(strval($PartnerID_KPX));
+                                    $sub_billers_id = $conn->real_escape_string(strval($SubBillersID));
                                     $GLCode = $conn->real_escape_string(strval($GLCode));
+                                    $SubBillersName = $conn->real_escape_string(strval($SubPartnerName));
+                                    $partnerName = $conn->real_escape_string(strval($PartnerName));
                                 }
     
                                 $remote_branch = null;
@@ -674,6 +1001,8 @@
                                                 $cntl_num_for_region = intval(2607);
                                             } elseif ($branch_id_raw === 'CEBU HEAD OFFICE' || $branch_id_raw === 'ML CEBU HEAD OFFICE') {
                                                 $cntl_num_for_region = intval(581);
+                                            }else{
+                                                $cntl_num_for_region = intval($branch_id_raw);
                                             }
 
                                             if($branch_outlet_raw === 'HEAD OFFICE' || $branch_outlet_raw === 'ML HEAD OFFICE'){
@@ -1130,38 +1459,166 @@
                                 if ($partner === 'All'){ // CONSOLIDATED
                                     if($getColumnLabels[12] === 'Branch ID'){
                                         $partnerIds_kpx = $conn->real_escape_string(strval($worksheet->getCell('U' . $row)->getValue()));
-                                        $partnerName = $conn->real_escape_string(strval($worksheet->getCell('V' . $row)->getValue()));
+                                        $partnerName_raw = $conn->real_escape_string(strval($worksheet->getCell('V' . $row)->getValue()));
                                     }else { // WITHOUT BRANCH ID COLUMN AND REGION CODE COLUMN
                                         $partnerIds_kpx = $conn->real_escape_string(strval($worksheet->getCell('S' . $row)->getValue()));
-                                        $partnerName = $conn->real_escape_string(strval($worksheet->getCell('T' . $row)->getValue()));
+                                        $partnerName_raw = $conn->real_escape_string(strval($worksheet->getCell('T' . $row)->getValue()));
                                     }
 
-                                    $getGLCode_partner_ID = "SELECT partner_id, gl_code FROM masterdata.partner_masterfile where partner_id_kpx = ? LIMIT 1";
-                                    $stmt = $conn->prepare($getGLCode_partner_ID);
-                                    if ($stmt) {
-                                        $stmt->bind_param("s", $partnerIds_kpx);
-                                        $stmt->execute();
-                                        $result = $stmt->get_result();
+                                    $mainpartnerNameQuery = "SELECT partner_name FROM masterdata.subbiller GROUP BY partner_name";
+                                    $validPartnerNames = [];
+                                    $stmt1 = $conn->prepare($mainpartnerNameQuery);
+                                    if ($stmt1) {
+                                        $stmt1->execute();
+                                        $result = $stmt1->get_result();
                                         if ($result && $result->num_rows > 0) {
-                                            $GLCodeData = $result->fetch_assoc();
-                                            if ($GLCodeData) {
-                                                $partnerIds_kp7 = $conn->real_escape_string(strval($GLCodeData['partner_id']));
-                                                $GLCode = $conn->real_escape_string(strval($GLCodeData['gl_code']));
+                                            while ($rowData = $result->fetch_assoc()) {
+                                                if (isset($rowData['partner_name'])) {
+                                                    $validPartnerNames[] = $conn->real_escape_string(strval($rowData['partner_name']));
+                                                }
+                                            }
+                                        }
+                                        $stmt1->close();
+                                    }
+
+                                    if(in_array($partnerName_raw, $validPartnerNames, true)){
+                                        $getGLCode_partner_ID = "SELECT partner_id, gl_code FROM masterdata.partner_masterfile WHERE partner_id_kpx = ? LIMIT 1";
+                                        $GLCodeData['direct_billers_name'] = $partnerName_raw;
+                                        $GLCodeData['sub_billers_id'] = null;
+                                        $GLCodeData['sub_billers_name'] = null;
+
+                                        $stmt = $conn->prepare($getGLCode_partner_ID);
+                                        if ($stmt) {
+                                            $stmt->bind_param("s", $partnerIds_kpx);
+                                            $stmt->execute();
+                                            $result = $stmt->get_result();
+                                            if ($result && $result->num_rows > 0) {
+                                                $GLCodeData = $result->fetch_assoc();
+                                                if ($GLCodeData) {
+                                                    $partnerIds_kp7 = isset($GLCodeData['partner_id']) ? $conn->real_escape_string(strval($GLCodeData['partner_id'])) : null;
+                                                    $sub_billers_id = isset($GLCodeData['sub_billers_id']) ? $conn->real_escape_string(strval($GLCodeData['sub_billers_id'])) : null;
+                                                    $GLCode = isset($GLCodeData['gl_code']) ? $conn->real_escape_string(strval($GLCodeData['gl_code'])) : null;
+                                                    $SubBillersName = isset($GLCodeData['sub_billers_name']) ? $conn->real_escape_string(strval($GLCodeData['sub_billers_name'])) : null;
+                                                    $partnerName = isset($GLCodeData['direct_billers_name']) ? $conn->real_escape_string(strval($GLCodeData['direct_billers_name'])) : $partnerName_raw;
+                                                }else{
+                                                    $partnerIds_kp7 = null;
+                                                    $sub_billers_id = null;
+                                                    $GLCode = null;
+                                                    $SubBillersName = null;
+                                                    $partnerName = $partnerName_raw;
+                                                }
                                             }else{
                                                 $partnerIds_kp7 = null;
+                                                $sub_billers_id = null;
                                                 $GLCode = null;
+                                                $SubBillersName = null;
+                                                $partnerName = $partnerName_raw;
                                             }
-                                        }else{
-                                            $partnerIds_kp7 = null;
-                                            $GLCode = null;
+                                            $stmt->close();
                                         }
-                                        $stmt->close();
+                                    }else {
+                                        $getGLCode_partner_ID = "WITH direct_biller AS (
+                                            SELECT
+                                                partner_id,
+                                                partner_id_kpx,
+                                                gl_code,
+                                                partner_name AS direct_billers_name,
+                                                NULL AS sub_billers_name,
+                                                status
+                                            FROM masterdata.partner_masterfile
+                                        ),
+
+                                        sub_biller AS (
+                                            SELECT
+                                                partner_id_kpx,
+                                                sub_billers_id,
+                                                partner_name AS direct_billers_name,
+                                                sub_billers_name,
+                                                NULL AS sub_gl_code
+                                            FROM masterdata.subbiller
+                                        ),
+
+                                        merged_left AS (
+                                            SELECT
+                                                d.partner_id,
+                                                COALESCE(d.partner_id_kpx, s.partner_id_kpx) AS partner_id_kpx,
+                                                s.sub_billers_id,
+                                                COALESCE(d.gl_code, s.sub_gl_code) AS gl_code,
+                                                CASE WHEN d.direct_billers_name = s.sub_billers_name THEN s.direct_billers_name ELSE d.direct_billers_name END AS direct_billers_name,
+                                                COALESCE(s.sub_billers_name, d.sub_billers_name) AS sub_billers_name
+                                            FROM direct_biller d
+                                            LEFT JOIN sub_biller s
+                                                ON d.direct_billers_name = s.sub_billers_name
+                                            WHERE COALESCE(d.status, '') = 'ACTIVE'
+                                        ),
+
+                                        unmatched_sub AS (
+                                            SELECT
+                                                NULL AS partner_id,
+                                                s.partner_id_kpx AS partner_id_kpx,
+                                                s.sub_billers_id,
+                                                s.sub_gl_code AS gl_code,
+                                                s.direct_billers_name AS direct_billers_name,
+                                                s.sub_billers_name AS sub_billers_name
+                                            FROM sub_biller s
+                                            WHERE NOT EXISTS (
+                                                SELECT 1 FROM direct_biller d WHERE d.direct_billers_name = s.sub_billers_name AND COALESCE(d.status,'') = 'ACTIVE'
+                                            )
+                                        )
+
+                                        SELECT
+                                            t.partner_id,
+                                            t.sub_billers_id,
+                                            t.gl_code,
+                                            t.direct_billers_name,
+                                            t.sub_billers_name
+                                        FROM (
+                                            SELECT * FROM merged_left WHERE sub_billers_name = ?
+                                            UNION ALL
+                                            SELECT * FROM unmatched_sub WHERE sub_billers_name = ?
+                                        ) t LIMIT 1";
+
+                                        // prepare and bind on the same statement object
+
+                                        $stmt = $conn->prepare($getGLCode_partner_ID);
+                                        if ($stmt) {
+                                            $stmt->bind_param("ss", $partnerName_raw, $partnerName_raw);
+                                            $stmt->execute();
+                                            $result = $stmt->get_result();
+                                            if ($result && $result->num_rows > 0) {
+                                                $GLCodeData = $result->fetch_assoc();
+                                                if ($GLCodeData) {
+                                                    $partnerIds_kp7 = $conn->real_escape_string(strval($GLCodeData['partner_id']));
+                                                    $sub_billers_id = $conn->real_escape_string(strval($GLCodeData['sub_billers_id']));
+                                                    $GLCode = $conn->real_escape_string(strval($GLCodeData['gl_code']));
+                                                    $SubBillersName = $conn->real_escape_string(strval($GLCodeData['sub_billers_name']));
+                                                    $partnerName = $conn->real_escape_string(strval($GLCodeData['direct_billers_name']));
+                                                }else{
+                                                    $partnerIds_kp7 = null;
+                                                    $sub_billers_id = null;
+                                                    $GLCode = null;
+                                                    $SubBillersName = null;
+                                                    $partnerName = $partnerName_raw;
+                                                }
+                                            }else{
+                                                $partnerIds_kp7 = null;
+                                                $sub_billers_id = null;
+                                                $GLCode = null;
+                                                $SubBillersName = null;
+                                                $partnerName = $partnerName_raw;
+                                            }
+                                            $stmt->close();
+                                        }
                                     }
+
+                                    
                                 }else { // Per Partner
-                                    $partnerName = $conn->real_escape_string(strval($PartnerName));
                                     $partnerIds_kp7 = $conn->real_escape_string(strval($PartnerID));
                                     $partnerIds_kpx = $conn->real_escape_string(strval($PartnerID_KPX));
+                                    $sub_billers_id = $conn->real_escape_string(strval($SubBillersID));
                                     $GLCode = $conn->real_escape_string(strval($GLCode));
+                                    $SubBillersName = $conn->real_escape_string(strval($SubPartnerName));
+                                    $partnerName = $conn->real_escape_string(strval($PartnerName));
                                 }
                             }else {
                                 echo '<script>
@@ -1180,7 +1637,7 @@
                             }
                         }
 
-                        $settle_unsettle = null;
+                        $settle_unsettle = 'Unsettle';
                         $claim_unclaim = null;
                         $rfp_no = null;
                         $cad_no = null;
@@ -1190,7 +1647,7 @@
                         $date_uploaded = date('Y-m-d');
 
                         $is_duplicate = checkDuplicateData($conn, $reference_number, $datetime);
-                        $is_partner_not_found = checkhadPartnerID($conn, $fileType, $partner, $partnerIds_kp7, $partnerIds_kpx);
+                        $is_partner_not_found = checkhadPartnerID($conn, $fileType, $partner, $partnerIds_kp7, $sub_billers_id, $partnerIds_kpx);
                         $is_region_not_found = checkSpelledRegionName($conn, $fileType, $region_description, $region_code);
                         $is_branch_not_found = checkHadBranchID($conn, $branch_id);
 
@@ -1207,94 +1664,6 @@
                         }
                         if ($is_branch_not_found) {
                             $row_error_modules[] = 'branch_id_not_found';
-                        }
-
-                        if ($is_duplicate) {
-                                $duplicate_data[] = [
-                                    'datetime' => $datetime,
-                                    'reference_number' => $reference_number,
-                                    'amount_paid' => $amount_paid,
-                                    'amount_charge_customer' => $amount_charge_customer,
-                                    'amount_charge_partner' => $amount_charge_partner,
-                                    'payor_name' => $payor_name,
-                                    'row' => $row,
-                                    'is_cancellation' => $is_cancellation,
-                                    'control_number' => $control_number, // Add this for completeness
-                                    'branch_id' => $branch_id,
-                                    'branch_outlet' => $branch_outlet,
-                                    'region_code' => $region_code,
-                                    'region_description' => $region_description,
-                                    'person_operator' => $person_operator,
-                                    'partner_name' => $partnerName,
-                                    'partner_id' => $partnerIds_kp7,
-                                    'partner_id_kpx' => $partnerIds_kpx,
-                                    'account_number' => $account_number,
-                                    'account_name' => $account_name,
-                                    'contact_number' => $contact_number,
-                                    'other_details' => $other_details
-                                ];
-                        }
-
-                        if ($is_partner_not_found) {
-                            $partner_not_found_data[] = [
-                                'row' => $row,
-                                'partner_id' => $partnerIds_kp7,
-                                'partner_id_kpx' => $partnerIds_kpx,
-                                'partner_name' => $partnerName
-                            ];
-                        }
-
-                        if ($is_region_not_found) {
-                            $region_not_found_data[] = [
-                                'row' => $row,
-                                'branch_outlet' => $branch_outlet,
-                                'region_description' => $region_description,
-                                'reference_number' => $reference_number,
-                                'payor_name' => $payor_name,
-                                'amount_paid' => $amount_paid,
-                                'amount_charge_customer' => $amount_charge_customer,
-                                'amount_charge_partner' => $amount_charge_partner,
-                                'datetime' => $datetime,
-                                'control_number' => $control_number,
-                                'branch_id' => $branch_id,
-                                'region_code' => $region_code,
-                                'person_operator' => $person_operator,
-                                'partner_name' => $partnerName,
-                                'partner_id' => $partnerIds_kp7,
-                                'partner_id_kpx' => $partnerIds_kpx,
-                                'account_number' => $account_number,
-                                'account_name' => $account_name,
-                                'contact_number' => $contact_number,
-                                'other_details' => $other_details,
-                                'payor_address' => $payor_address,
-                                'remote_branch' => $remote_branch,
-                                'remote_operator' => $remote_operator
-                            ];
-                        }
-
-                        if ($is_branch_not_found) {
-                            $branchID_notFoundData[] = [
-                                'row' => $row,
-                                'branch_id' => $branch_id,
-                                'region_description' => $region_description,
-                                'reference_number' => $reference_number,
-                                'payor_name' => $payor_name,
-                                'amount_paid' => $amount_paid,
-                                'amount_charge_customer' => $amount_charge_customer,
-                                'amount_charge_partner' => $amount_charge_partner,
-                                'datetime' => $datetime,
-                                'control_number' => $control_number,
-                                'region_code' => $region_code,
-                                'person_operator' => $person_operator,
-                                'partner_name' => $partnerName,
-                                'partner_id' => $partnerIds_kp7,
-                                'partner_id_kpx' => $partnerIds_kpx,
-                                'account_number' => $account_number,
-                                'account_name' => $account_name,
-                                'contact_number' => $contact_number,
-                                'other_details' => $other_details,
-                                'branch_outlet' => $branch_outlet
-                            ];
                         }
 
                         if (!empty($row_error_modules)) {
@@ -1351,6 +1720,8 @@
                                     'partner_name' => $partnerName,
                                     'partner_id' => $partnerIds_kp7,
                                     'partner_id_kpx' => $partnerIds_kpx,
+                                    'sub_billers_id' => $sub_billers_id,
+                                    'sub_billers_name' => $SubBillersName,
                                     'GLCode' => $GLCode,
                                     'remote_branch' => $remote_branch,
                                     'remote_operator' => $remote_operator,
@@ -1390,6 +1761,8 @@
                                     'partner_name' => $partnerName,
                                     'partner_id' => $partnerIds_kp7,
                                     'partner_id_kpx' => $partnerIds_kpx,
+                                    'sub_billers_id' => $sub_billers_id,
+                                    'sub_billers_name' => $SubBillersName,
                                     'GLCode' => $GLCode,
                                     'remote_branch' => $remote_branch,
                                     'remote_operator' => $remote_operator,
@@ -1412,12 +1785,7 @@
                     $_SESSION['original_file_name'] = $file_name;
                     $_SESSION['source_file_type'] = $fileType;
                     $_SESSION['transactionDate'] = $selectedDate;
-                    $_SESSION['duplicate_data'] = $duplicate_data;
                     $_SESSION['ready_to_override_data'] = $ready_to_override_data;
-                    $_SESSION['region_not_found_data'] = $region_not_found_data; // Add this line
-                    $_SESSION['partner_not_found_data'] = $partner_not_found_data;
-                    $_SESSION['partner_GLCode_not_found_data'] = $partner_GLCode_not_found_data; // Add this line
-                    $_SESSION['missing_branch_ids'] = $branchID_notFoundData;
                     $_SESSION['Matched_BranchID_data'] = $rawData; // Store non-duplicate data
                     $_SESSION['cancellation_BranchID_data'] = $cancellation_BranchID_data;
                     $_SESSION['consolidated_data'] = $consolidated_error_data;
@@ -1581,8 +1949,10 @@
                 $zone_code = $row['zone_code'];
                 $region_description = $row['region_description'];
                 $person_operator = $row['person_operator'];
+                $sub_billers_id = $row['sub_billers_id'] ?? null;
+                $sub_billers_name = $row['sub_billers_name'] ?? null;
                 $partner_name = $row['partner_name'];
-                $partner_id = $row['partner_id_kp7'] ?? null;
+                $partner_id = $row['partner_id'] ?? null;
                 $partner_ID_KPX = $row['partner_id_kpx'] ?? null;
                 $GLCode = $row['GLCode'] ?? null;
                 $imported_by = $row['imported_by'];
@@ -1615,7 +1985,7 @@
                     $cancellation_date = null;
                 }
 
-                $settle_unsettle = null;
+                $settle_unsettle = 'Unsettle';
                 $claim_unclaim = null;
                 $rfp_no = null;
                 $cad_no = null;
@@ -1661,6 +2031,8 @@
                     remote_branch, 
                     remote_operator,
                     `2nd_approver`,
+                    sub_billers_id,
+                    sub_billers_name,
                     post_transaction
                 ) VALUES (
                     " . ($status ? "'$status'" : "NULL") . ",
@@ -1700,6 +2072,8 @@
                     '$remote_branch',
                     '$remote_operator',
                     " . ($second_approver ? "'$second_approver'" : "NULL") . ",
+                    " . ($sub_billers_id ? "'$sub_billers_id'" : "NULL") . ",
+                    " . ($sub_billers_name ? "'$sub_billers_name'" : "NULL") . ",
                     '$post_transaction'
                 )";
 
@@ -1726,9 +2100,6 @@
                 // Clear session data after successful import
                 unset($_SESSION['Matched_BranchID_data']);
                 unset($_SESSION['cancellation_BranchID_data']);
-                unset($_SESSION['missing_branch_ids']);
-                unset($_SESSION['region_not_found_data']);
-                unset($_SESSION['duplicate_data']);
                 unset($_SESSION['ready_to_override_data']);
                 unset($_SESSION['original_file_name']);
                 unset($_SESSION['source_file_type']);
@@ -2014,8 +2385,9 @@
 
                 // Normalize nullable fields so DB accepts NULLs (allow branch_id to be NULL)
                 $row['branch_id'] = isset($row['branch_id']) && $row['branch_id'] !== '' ? $row['branch_id'] : null;
-                $row['partner_id'] = isset($row['partner_id']) && $row['partner_id'] !== '' ? $row['partner_id'] : null;
-                $row['PartnerID_KPX'] = isset($row['PartnerID_KPX']) && $row['PartnerID_KPX'] !== '' ? $row['PartnerID_KPX'] : null;
+                $row['partner_ID_KP7'] = isset($row['partner_id']) && $row['partner_id'] !== '' ? $row['partner_id'] : null;
+                $row['PartnerID_KPX'] = isset($row['partner_id_kpx']) && $row['partner_id_kpx'] !== '' ? $row['partner_id_kpx'] : null;
+                $row['sub_billers_id'] = isset($row['sub_billers_id']) && $row['sub_billers_id'] !== '' ? $row['sub_billers_id'] : null;
                 $row['second_approver'] = $row['second_approver'] ?? null;
                 $row['post_transaction'] = $row['post_transaction'] ?? 'unposted';
                 $row['datetime'] = $row['datetime'] ?? null;
@@ -2035,14 +2407,26 @@
                     &$row['datetime']
                 ];
 
-                if ($source_file === 'KP7' && !empty($row['partner_id'])) {
-                    $deleteSQL .= " AND partner_id = ?";
-                    $types .= "s";
-                    $params[] = &$row['partner_id'];
+                if ($source_file === 'KP7' && !empty($row['partner_ID_KP7'])) {
+                    if(!empty($row['sub_billers_id'])){
+                        $deleteSQL .= " AND sub_billers_id = ?";
+                        $types .= "s";
+                        $params[] = &$row['sub_billers_id'];
+                    }else{
+                        $deleteSQL .= " AND partner_id = ?";
+                        $types .= "s";
+                        $params[] = &$row['partner_ID_KP7'];
+                    }
                 } elseif ($source_file === 'KPX' && !empty($row['PartnerID_KPX'])) {
-                    $deleteSQL .= " AND partner_id_kpx = ?";
-                    $types .= "s";
-                    $params[] = &$row['PartnerID_KPX'];
+                    if(!empty($row['sub_billers_id'])){
+                        $deleteSQL .= " AND sub_billers_id = ?";
+                        $types .= "s";
+                        $params[] = &$row['sub_billers_id'];
+                    }else{
+                        $deleteSQL .= " AND partner_id_kpx = ?";
+                        $types .= "s";
+                        $params[] = &$row['PartnerID_KPX'];
+                    }
                 }
 
                 $deleteStmt = $conn->prepare($deleteSQL);
@@ -2153,8 +2537,10 @@
                             remote_branch, 
                             remote_operator,
                             `2nd_approver`,
+                            sub_billers_id,
+                            sub_billers_name,
                             post_transaction
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 $insertStmt = $conn->prepare($insertSQL);
                 if (!$insertStmt) {
@@ -2162,7 +2548,7 @@
                 }
 
                 // Bind params; nulls in $row will be sent as SQL NULL
-                $insertStmt->bind_param("sssssssssssdddssisssssssssssssssssssss",
+                $insertStmt->bind_param("sssssssssssdddssisssssssssssssssssssssss",
                     $status,
                     $datetime_value,
                     $cancellation_date,
@@ -2187,7 +2573,7 @@
                     $row['region_description'],
                     $row['person_operator'],
                     $row['partner_name'],
-                    $row['partner_id'],
+                    $row['partner_ID_KP7'],
                     $row['PartnerID_KPX'],
                     $row['GLCode'],
                     $row['settle_unsettle'],
@@ -2200,6 +2586,8 @@
                     $row['remote_branch'],
                     $row['remote_operator'],
                     $row['second_approver'],
+                    $row['sub_billers_id'],
+                    $row['sub_billers_name'],
                     $row['post_transaction']
                 );
                 
@@ -2317,15 +2705,17 @@
                     remote_branch, 
                     remote_operator,
                     `2nd_approver`,
+                    sub_billers_id,
+                    sub_billers_name,
                     post_transaction
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 $insertStmt = $conn->prepare($insertSQL);
                 
                 // Get source file from session or use default
                 $source_file = $_SESSION['source_file_type'] ?? 'Unknown';
 
-                $insertStmt->bind_param("sssssssssssdddssiissssssssssssssssssss", //38
+                $insertStmt->bind_param("sssssssssssdddssiissssssssssssssssssssss", //40
                     $status,
                     $datetime_value,
                     $cancellation_date,
@@ -2350,7 +2740,7 @@
                     $row['region_description'],
                     $row['person_operator'],
                     $row['partner_name'],
-                    $row['partner_id'],
+                    $row['partner_ID_KP7'],
                     $row['PartnerID_KPX'],
                     $row['GLCode'],
                     $row['settle_unsettle'],
@@ -2363,6 +2753,8 @@
                     $row['remote_branch'],
                     $row['remote_operator'],
                     $row['second_approver'],
+                    $row['sub_billers_id'],
+                    $row['sub_billers_name'],
                     $row['post_transaction']
                 );
                 
@@ -2855,8 +3247,30 @@
                                                             <tr>
                                                                 <td><i class="fas fa-id-card text-primary me-2"></i>GL Code</td>
                                                                 <td class="fw-semibold">' . $displayData['GLCodes'] . '</td>
-                                                            </tr>
-                                                            <tr>
+                                                            </tr>'?>
+                                                            <?php 
+                                                                if(!empty($displayData['subbillers_id'])) {
+                                                                    echo '<tr>
+                                                                        <td><i class="fas fa-id-card text-primary me-2"></i>Sub-Biller ID</td>
+                                                                        <td class="fw-semibold">' . htmlspecialchars($displayData['subbillers_id']) . '</td>
+                                                                    </tr>
+                                                                    <tr>
+                                                                        <td><i class="fas fa-id-card text-primary me-2"></i>Sub-Biller Name</td>
+                                                                        <td class="fw-semibold">' . htmlspecialchars($displayData['subbillers_name']) . '</td>
+                                                                    </tr>
+                                                                    ';
+                                                                }else {
+                                                                    echo '<tr>
+                                                                        <td><i class="fas fa-id-card text-primary me-2"></i>Sub-Biller ID</td>
+                                                                        <td class="fw-semibold">N/A</td>
+                                                                    </tr>
+                                                                    <tr>
+                                                                        <td><i class="fas fa-id-card text-primary me-2"></i>Sub-Biller Name</td>
+                                                                        <td class="fw-semibold">N/A</td>
+                                                                    </tr>';
+                                                                }
+                                                            ?>
+                                                            <?php echo '<tr>
                                                                 <td><i class="fas fa-building text-primary me-2"></i>Partner Name</td>
                                                                 <td class="fw-semibold">'?>
                                                                 <?php 

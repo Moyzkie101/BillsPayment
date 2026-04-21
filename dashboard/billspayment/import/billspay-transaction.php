@@ -754,6 +754,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     <p class="text-muted">or click to browse</p>
                     <p class="text-muted"><small>Supports multiple Excel files (.xls, .xlsx)</small></p>
                     <input type="file" id="fileInput" accept=".xls,.xlsx" multiple style="display: none;">
+                    
                 </div>
 
                 <!-- Manual Import Area (hidden by default) -->
@@ -1045,15 +1046,39 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                                     partnerId: partnerId,
                                     partnerName: partnerName,
                                     billersName: isSpecial1074 ? billersName : '',
+                                    subBillersId: null,
                                     sourceType: sourceType,
                                     report_date_raw: reportDateRaw,
                                     report_date: reportDate,
                                     id: Date.now() + Math.random()
                                 };
 
-                                uploadedFiles.push(fileData);
-                                renderFileCards();
-                                finishFileRead();
+                                // If we have a billersName, attempt server-side resolve of sub_billers_id
+                                if (fileData.billersName) {
+                                    $.ajax({
+                                        url: '../../../fetch/resolve_subbiller.php',
+                                        method: 'POST',
+                                        data: { sub_billers_name: fileData.billersName },
+                                        dataType: 'json'
+                                    }).always(function(resp) {
+                                        try {
+                                            if (resp && resp.success && resp.sub_billers_id) {
+                                                fileData.subBillersId = resp.sub_billers_id;
+                                                // if partner_id is empty, adopt resolved partner_id when available
+                                                if ((!fileData.partnerId || fileData.partnerId === '') && resp.partner_id) {
+                                                    fileData.partnerId = resp.partner_id;
+                                                }
+                                            }
+                                        } catch (e) {}
+                                        uploadedFiles.push(fileData);
+                                        renderFileCards();
+                                        finishFileRead();
+                                    });
+                                } else {
+                                    uploadedFiles.push(fileData);
+                                    renderFileCards();
+                                    finishFileRead();
+                                }
                             },
                             error: function() {
                                 const fileData = {
@@ -1062,13 +1087,35 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                                     partnerId: partnerId,
                                     partnerName: isSpecial1074 ? 'SECURITY BANK' : 'Unknown Partner',
                                     billersName: isSpecial1074 ? billersName : '',
+                                    subBillersId: null,
                                     sourceType: sourceType,
                                     id: Date.now() + Math.random()
                                 };
 
-                                uploadedFiles.push(fileData);
-                                renderFileCards();
-                                finishFileRead();
+                                if (fileData.billersName) {
+                                    $.ajax({
+                                        url: '../../../fetch/resolve_subbiller.php',
+                                        method: 'POST',
+                                        data: { sub_billers_name: fileData.billersName },
+                                        dataType: 'json'
+                                    }).always(function(resp) {
+                                        try {
+                                            if (resp && resp.success && resp.sub_billers_id) {
+                                                fileData.subBillersId = resp.sub_billers_id;
+                                                if ((!fileData.partnerId || fileData.partnerId === '') && resp.partner_id) {
+                                                    fileData.partnerId = resp.partner_id;
+                                                }
+                                            }
+                                        } catch (e) {}
+                                        uploadedFiles.push(fileData);
+                                        renderFileCards();
+                                        finishFileRead();
+                                    });
+                                } else {
+                                    uploadedFiles.push(fileData);
+                                    renderFileCards();
+                                    finishFileRead();
+                                }
                             }
                         });
 
@@ -1124,10 +1171,16 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                             <div class="file-card-body"></div>
                             <div class="file-card-footer">
                                 <div class="file-card-detail">
+                                    <div class="file-card-label">Sub Billers ID</div>
+                                    <div class="file-card-value">
+                                        ${fileData.subBillersId !== undefined && fileData.subBillersId !== null ? fileData.subBillersId : null}
+                                    </div>
+                                </div>
+                                <div class="file-card-detail">
                                     <div class="file-card-label">Partner ID</div>
                                     <div class="file-card-value partner-tooltip">
                                         ${fileData.partnerId}
-                                        <span class="tooltip-text">${fileData.billersName ? ('Partner Name: ' + fileData.partnerName + '<br>Billers Name: ' + fileData.billersName) : fileData.partnerName}</span>
+                                        <span class="tooltip-text">${fileData.billersName ? ('Partner Name: ' + fileData.partnerName + '<br>Sub Billers Name: ' + fileData.billersName) : fileData.partnerName}</span>
                                     </div>
                                 </div>
                                 <div class="file-card-detail">
@@ -1292,6 +1345,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                         formData.append('partner_ids[]', fileData.partnerId);
                         formData.append('source_types[]', fileData.sourceType);
                         formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
+                        formData.append('sub_billers_ids[]', (fileData.subBillersId !== undefined && fileData.subBillersId !== null) ? fileData.subBillersId : '');
                     });
                     formData.append('check_duplicates', '1');
 
@@ -1613,6 +1667,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     formData.append('source_types[]', fileData.sourceType);
                     formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
                     formData.append('billers_names[]', fileData.billersName || '');
+                    formData.append('sub_billers_ids[]', (fileData.subBillersId !== undefined && fileData.subBillersId !== null) ? fileData.subBillersId : '');
                 });
                 formData.append('upload', '1');
                 formData.append('user_decision', userDecision); // Pass user decision

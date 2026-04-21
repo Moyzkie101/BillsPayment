@@ -86,6 +86,7 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
             $fileName = $_FILES['files']['name'][$i];
             $partnerId = $_POST['partner_ids'][$i] ?? '';
             $sourceType = $_POST['source_types'][$i] ?? '';
+            $subBillersId = $_POST['sub_billers_ids'][$i] ?? '';
             
             try {
                 // Load and parse Excel file
@@ -159,7 +160,12 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                     $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
                             WHERE reference_no = ? 
                             AND (`datetime` = ? OR cancellation_date = ?)";
-                    if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
+                    // Prefer sub_billers_id when supplied from the frontend
+                    if (!empty($subBillersId)) {
+                        $sql .= " AND sub_billers_id = ? GROUP BY post_transaction";
+                        $stmt = $conn->prepare($sql);
+                        $stmt->bind_param("ssss", $reference_number, $datetime, $datetime, $subBillersId);
+                    } elseif (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
                         // Accept either partner_id or partner_id_kpx to be tolerant of client-supplied id form
                         $sql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
                         $sql .= " GROUP BY post_transaction";
@@ -648,13 +654,14 @@ if (isset($_POST['upload']) && isset($_POST['company']) && isset($_FILES['import
         if (move_uploaded_file($tmpPath, $tempPath)) {
             $partnerName = ($company === 'All') ? 'All' : $company;
             
-            $uploadedFiles[] = [
+                $uploadedFiles[] = [
                 'id' => $fileId,
                 'name' => $fileName,
                 'path' => $tempPath,
                 'partner_id' => $partnerId,
                 'partner_name' => $partnerName,
-                'source_type' => $fileType,
+                    'source_type' => $fileType,
+                    'sub_billers_id' => null,
                 'status' => 'pending',
                 'validation_result' => null,
                 'uploaded_by' => $current_user_email,
@@ -688,6 +695,7 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
             $partnerId = $_POST['partner_ids'][$i] ?? '';
             $sourceType = $_POST['source_types'][$i] ?? '';
             $billersName = $_POST['billers_names'][$i] ?? '';
+            $subBillersId = $_POST['sub_billers_ids'][$i] ?? null;
             
             // Generate unique ID for temp storage
             $fileId = uniqid('file_', true);
@@ -713,6 +721,7 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
                     'partner_id' => $partnerId,
                     'partner_name' => $partnerName,
                     'billers_name' => $billersName,
+                    'sub_billers_id' => $subBillersId,
                     'source_type' => $sourceType,
                     'report_date_raw' => $reportDateRaw,
                     'report_date' => $reportDate,
@@ -1804,8 +1813,15 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         $GLCode = $partnerData['gl_code'];
         $PartnerName = $isKpx1074 ? 'SECURITY BANK' : $partnerData['partner_name'];
         $BillersName = '';
+        $sub_billers_id = null;
         if ($isKpx1074 && is_array($fileMeta) && !empty($fileMeta['billers_name'])) {
             $BillersName = trim((string)$fileMeta['billers_name']);
+        }
+        if (is_array($fileMeta) && array_key_exists('sub_billers_id', $fileMeta)) {
+            $tmpSubBillersId = trim((string)$fileMeta['sub_billers_id']);
+            if ($tmpSubBillersId !== '') {
+                $sub_billers_id = $tmpSubBillersId;
+            }
         }
 
         // Read row 9 column headers
@@ -1843,12 +1859,19 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         // $reportDateCandidate may remain null; downstream logic will decide per-row fallback.
 
         // Helper functions (duplicate and override checks)
-        $checkDuplicateData = function($referenceNumber, $datetime, $partnerIdParam = null) use ($conn) {
+        $checkDuplicateData = function($referenceNumber, $datetime, $partnerIdParam = null, $subBillersIdParam = null) use ($conn) {
             $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
                     WHERE post_transaction='posted' AND reference_no = ? 
                     AND (`datetime` = ? OR cancellation_date = ?) LIMIT 1";
             // If a partner id is provided, require either partner_id or partner_id_kpx to match
-            if (!empty($partnerIdParam) && strtoupper($partnerIdParam) !== 'ALL') {
+            if (!empty($subBillersIdParam)) {
+            $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
+                WHERE post_transaction='posted' AND reference_no = ? 
+                AND (`datetime` = ? OR cancellation_date = ?) 
+                AND sub_billers_id = ? LIMIT 1";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssss", $referenceNumber, $datetime, $datetime, $subBillersIdParam);
+            } elseif (!empty($partnerIdParam) && strtoupper($partnerIdParam) !== 'ALL') {
                 $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
                         WHERE post_transaction='posted' AND reference_no = ? 
                         AND (`datetime` = ? OR cancellation_date = ?) 
@@ -1870,11 +1893,18 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             return $duplicate;
         };
 
-        $checkHasAlreadyDataReadyToOverride = function($referenceNumber, $datetime, $partnerIdParam = null) use ($conn) {
+        $checkHasAlreadyDataReadyToOverride = function($referenceNumber, $datetime, $partnerIdParam = null, $subBillersIdParam = null) use ($conn) {
             $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
                     WHERE post_transaction='unposted' AND reference_no = ? 
                     AND (`datetime` = ? OR cancellation_date = ?) LIMIT 1";
-            if (!empty($partnerIdParam) && strtoupper($partnerIdParam) !== 'ALL') {
+            if (!empty($subBillersIdParam)) {
+            $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
+                WHERE post_transaction='unposted' AND reference_no = ? 
+                AND (`datetime` = ? OR cancellation_date = ?) 
+                AND sub_billers_id = ? LIMIT 1";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssss", $referenceNumber, $datetime, $datetime, $subBillersIdParam);
+            } elseif (!empty($partnerIdParam) && strtoupper($partnerIdParam) !== 'ALL') {
                 $sql = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction 
                         WHERE post_transaction='unposted' AND reference_no = ? 
                         AND (`datetime` = ? OR cancellation_date = ?) 
@@ -2177,11 +2207,11 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
 
             // Check for duplicates and overrides but don't skip - just log warnings
             // The delete-then-insert logic below will handle these cases
-            if ($checkDuplicateData($reference_number, $datetime, $partnerId)) {
+            if ($checkDuplicateData($reference_number, $datetime, $partnerId, $sub_billers_id)) {
                 $errors[] = "Warning: Duplicate found for reference {$reference_number} - will be handled by delete-then-insert";
             }
 
-            if ($checkHasAlreadyDataReadyToOverride($reference_number, $datetime, $partnerId)) {
+            if ($checkHasAlreadyDataReadyToOverride($reference_number, $datetime, $partnerId, $sub_billers_id)) {
                 $errors[] = "Warning: Unposted data exists for reference {$reference_number} - will be overridden";
             }
 
@@ -2209,6 +2239,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 'person_operator' => $person_operator,
                 'partner_name' => $PartnerName,
                 'billers_name' => $BillersName,
+                'sub_billers_id' => $sub_billers_id,
                 'partner_id' => $PartnerID,
                 'PartnerID_KPX' => $PartnerID_KPX,
                 'GLCode' => $GLCode,
@@ -2311,7 +2342,8 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             region_code, 
             region, 
             operator, 
-            partner_name, 
+            partner_name,
+            sub_billers_id, 
             sub_billers_name,
             partner_id, 
             partner_id_kpx,
@@ -2326,7 +2358,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             remote_branch, 
             remote_operator, 
             post_transaction
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         $insertStmt = $conn->prepare($insertSQL);
         
@@ -2381,7 +2413,18 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 // Skip mode: Check if record exists, and if it does, skip insertion
                 // First check if a matching record exists
                 $checkSQL = "SELECT COUNT(*) as count FROM mldb.billspayment_transaction WHERE reference_no = ? AND (`datetime` = ? OR cancellation_date = ?) AND status <=> ?";
-                if (strtoupper($sourceType) === 'KP7') {
+                if (!empty($row['sub_billers_id'])) {
+                    $checkSQL .= " AND sub_billers_id = ?";
+                    $checkStmt = $conn->prepare($checkSQL);
+                    if ($checkStmt) {
+                        $c_reference = $row['reference_number'];
+                        $c_datetime = $datetime_value ?? '';
+                        $c_cancellation = $cancellation_date ?? '';
+                        $c_status = $status;
+                        $c_sub_billers_id = $row['sub_billers_id'];
+                        $checkStmt->bind_param("sssss", $c_reference, $c_datetime, $c_cancellation, $c_status, $c_sub_billers_id);
+                    }
+                } elseif (strtoupper($sourceType) === 'KP7') {
                     $checkSQL .= " AND partner_id = ?";
                     $checkStmt = $conn->prepare($checkSQL);
                     if ($checkStmt) {
@@ -2432,46 +2475,64 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 // IMPORTANT: Also match status so we don't delete regular transactions when inserting cancellations (or vice versa)
                 $deleteSQL = "DELETE FROM mldb.billspayment_transaction WHERE post_transaction = ? AND reference_no = ? AND (`datetime` = ? OR cancellation_date = ? ) AND status <=> ?";
                 
-                if (strtoupper($sourceType) === 'KP7') {
-                $deleteSQL .= " AND partner_id = ?";
-                $deleteStmt = $conn->prepare($deleteSQL);
-                if ($deleteStmt) {
-                    $d_post_trans = $post_trans;
-                    $d_reference = $row['reference_number'];
-                    $d_datetime = $datetime_value ?? '';
-                    $d_cancellation = $cancellation_date ?? '';
-                    $d_status = $status;
-                    $d_partner = $row['partner_id'];
-                    $deleteStmt->bind_param("ssssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status, $d_partner);
+                if (!empty($row['sub_billers_id'])) {
+                    $deleteSQL .= " AND sub_billers_id = ?";
+                    $deleteStmt = $conn->prepare($deleteSQL);
+                    if ($deleteStmt) {
+                        $d_post_trans = $post_trans;
+                        $d_reference = $row['reference_number'];
+                        $d_datetime = $datetime_value ?? '';
+                        $d_cancellation = $cancellation_date ?? '';
+                        $d_status = $status;
+                        $d_sub_billers_id = $row['sub_billers_id'];
+                        $deleteStmt->bind_param("ssssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status, $d_sub_billers_id);
+                    }
+                } elseif (strtoupper($sourceType) === 'KP7') {
+                    $deleteSQL .= " AND partner_id = ?";
+                    $deleteStmt = $conn->prepare($deleteSQL);
+                    if ($deleteStmt) {
+                        $d_post_trans = $post_trans;
+                        $d_reference = $row['reference_number'];
+                        $d_datetime = $datetime_value ?? '';
+                        $d_cancellation = $cancellation_date ?? '';
+                        $d_status = $status;
+                        $d_partner = $row['partner_id'];
+                        $deleteStmt->bind_param("ssssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status, $d_partner);
+                    }
+                } elseif (strtoupper($sourceType) === 'KPX') {
+                    $deleteSQL .= " AND partner_id_kpx = ?";
+                    $deleteStmt = $conn->prepare($deleteSQL);
+                    if ($deleteStmt) {
+                        $d_post_trans = $post_trans;
+                        $d_reference = $row['reference_number'];
+                        $d_datetime = $datetime_value ?? '';
+                        $d_cancellation = $cancellation_date ?? '';
+                        $d_status = $status;
+                        $d_partner_kpx = $row['PartnerID_KPX'];
+                        $deleteStmt->bind_param("ssssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status, $d_partner_kpx);
+                    }
+                } else {
+                    $deleteStmt = $conn->prepare($deleteSQL);
+                    if ($deleteStmt) {
+                        $d_post_trans = $post_trans;
+                        $d_reference = $row['reference_number'];
+                        $d_datetime = $datetime_value ?? '';
+                        $d_cancellation = $cancellation_date ?? '';
+                        $d_status = $status;
+                        $deleteStmt->bind_param("sssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status);
+                    }
                 }
-            } elseif (strtoupper($sourceType) === 'KPX') {
-                $deleteSQL .= " AND partner_id_kpx = ?";
-                $deleteStmt = $conn->prepare($deleteSQL);
-                if ($deleteStmt) {
-                    $d_post_trans = $post_trans;
-                    $d_reference = $row['reference_number'];
-                    $d_datetime = $datetime_value ?? '';
-                    $d_cancellation = $cancellation_date ?? '';
-                    $d_status = $status;
-                    $d_partner_kpx = $row['PartnerID_KPX'];
-                    $deleteStmt->bind_param("ssssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status, $d_partner_kpx);
-                }
-            } else {
-                $deleteStmt = $conn->prepare($deleteSQL);
-                if ($deleteStmt) {
-                    $d_post_trans = $post_trans;
-                    $d_reference = $row['reference_number'];
-                    $d_datetime = $datetime_value ?? '';
-                    $d_cancellation = $cancellation_date ?? '';
-                    $d_status = $status;
-                    $deleteStmt->bind_param("sssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status);
-                }
-            }
 
             if (isset($deleteStmt) && $deleteStmt) {
                 // Debug: fetch and log existing rows that will be deleted so we can verify in DB
                 $selectSQL = "SELECT id, reference_no, status, `datetime`, cancellation_date, partner_id, partner_id_kpx, post_transaction FROM mldb.billspayment_transaction WHERE post_transaction = ? AND reference_no = ? AND (`datetime` = ? OR cancellation_date = ? ) AND status <=> ?";
-                if (strtoupper($sourceType) === 'KP7') {
+                if (!empty($row['sub_billers_id'])) {
+                    $selectSQL .= " AND sub_billers_id = ?";
+                    $selectStmt = $conn->prepare($selectSQL);
+                    if ($selectStmt) {
+                        $selectStmt->bind_param("ssssss", $d_post_trans, $d_reference, $d_datetime, $d_cancellation, $d_status, $d_sub_billers_id);
+                    }
+                } elseif (strtoupper($sourceType) === 'KP7') {
                     $selectSQL .= " AND partner_id = ?";
                     $selectStmt = $conn->prepare($selectSQL);
                     if ($selectStmt) {
@@ -2577,6 +2638,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $b_region_description = $row['region_description'] ?? null;
             $b_person_operator = $row['person_operator'] ?? null;
             $b_partner_name = $row['partner_name'] ?? null;
+            $b_sub_billers_id = $row['sub_billers_id'] ?? null;
             $b_billers_name = $row['billers_name'] ?? null;
             $b_partner_id = $row['partner_id'] ?? null;
             $b_partner_id_kpx = $row['PartnerID_KPX'] ?? null;
@@ -2617,6 +2679,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 $b_region_description,
                 $b_person_operator,
                 $b_partner_name,
+                $b_sub_billers_id,
                 $b_billers_name,
                 $b_partner_id,
                 $b_partner_id_kpx,
@@ -3045,6 +3108,14 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                     </div>
                                 </div>
                             </div>
+                            <div class="mb-2">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Sub Billers ID</small>
+                                        <strong><?php echo isset($file['sub_billers_id']) && $file['sub_billers_id'] !== null ? $file['sub_billers_id'] : '-'; ?></strong>
+                                    </div>
+                                </div>
+                            </div>
                             
                             <?php if ($file['validation_result']): ?>
                                 <div class="mb-2">
@@ -3284,6 +3355,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <tr><th>KP7 Partner ID:</th><td>${partnerData.partner_id || 'N/A'}</td></tr>
                             <tr><th>KPX Partner ID:</th><td>${partnerData.partner_id_kpx || 'N/A'}</td></tr>
                             <tr><th>GL Code:</th><td>${partnerData.gl_code || 'N/A'}</td></tr>
+                            <tr><th>Sub Billers ID:</th><td>${fileData.sub_billers_id || fileData.sub_billers_id === 0 ? fileData.sub_billers_id : (fileData.sub_billers_id === null ? 'N/A' : fileData.sub_billers_id)}</td></tr>
                             <tr><th>Source Type:</th><td><span class="badge badge-${(sourceType || 'unknown').toLowerCase()}">${sourceType}</span></td></tr>
                             ${((sourceType || '').toUpperCase() === 'KPX' && String(partnerData.partner_id_kpx || fileData.partner_id || '') === '1074' && (fileData.billers_name || '').trim() !== '') ? `<tr><th>Billers Name:</th><td>${fileData.billers_name}</td></tr>` : ''}
                             <tr><th>Report Date:</th><td>${(validation && (validation.report_date || validation.report_date_raw)) ? (validation.report_date || validation.report_date_raw) : (fileData.report_date || fileData.report_date_raw || '')}</td></tr>
