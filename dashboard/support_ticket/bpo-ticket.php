@@ -340,7 +340,7 @@ foreach ($vpoActive as $ticket) {
                                     <div class="tm-ticket-meta-grid">
                                         <div class="tm-meta-item">
                                             <div class="tm-meta-label">Reference No.</div>
-                                            <div class="tm-meta-value"><?php echo htmlspecialchars($hdrReference); ?></div>
+                                            <div class="tm-meta-value tm-meta-value--ref"><?php echo htmlspecialchars($hdrReference); ?></div>
                                         </div>
                                         <div class="tm-meta-item">
                                             <div class="tm-meta-label">Transaction D/T</div>

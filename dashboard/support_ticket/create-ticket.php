@@ -331,7 +331,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                     <div class="tm-ticket-meta-grid">
                                         <div class="tm-meta-item">
                                             <div class="tm-meta-label">Reference No.</div>
-                                            <div class="tm-meta-value"><?php echo htmlspecialchars($hdrReference); ?></div>
+                                            <div class="tm-meta-value tm-meta-value--ref"><?php echo htmlspecialchars($hdrReference); ?></div>
                                         </div>
                                         <div class="tm-meta-item">
                                             <div class="tm-meta-label">Transaction D/T</div>

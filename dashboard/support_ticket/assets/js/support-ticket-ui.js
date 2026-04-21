@@ -994,6 +994,52 @@
         });
     }
 
+    function initReferenceCopyHandler() {
+        // Delegated click handler for Reference No. meta values
+        document.addEventListener('click', function (e) {
+            var el = e.target && e.target.closest ? e.target.closest('.tm-meta-value--ref') : null;
+            if (!el) return;
+            e.preventDefault();
+
+            var refText = String(el.textContent || '').trim();
+            if (!refText) {
+                stShowToast('Reference number is empty', 'danger');
+                return;
+            }
+
+            function fallbackCopy(text) {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    var ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (ok) {
+                        stShowToast('Reference No. ' + text + ' has been copied to clipboard', 'success');
+                    } else {
+                        stShowToast('Unable to copy reference number', 'danger');
+                    }
+                } catch (err) {
+                    document.body.removeChild(ta);
+                    stShowToast('Unable to copy reference number', 'danger');
+                }
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(refText).then(function () {
+                    stShowToast('Reference No. ' + refText + ' has been copied to clipboard', 'success');
+                }).catch(function () {
+                    fallbackCopy(refText);
+                });
+            } else {
+                fallbackCopy(refText);
+            }
+        });
+    }
+
     function stShowToast(message, type) {
         if (!message) return;
         var tone = (type || 'success').toLowerCase();
@@ -2061,6 +2107,7 @@
         initAttachmentPreviews();
         initReplyAttachmentPreviews();
         initTicketCopyButtons();
+        initReferenceCopyHandler();
         initAjaxReplySubmits();
         initInitialFlashToast();
         initOpenTicketsPolling();

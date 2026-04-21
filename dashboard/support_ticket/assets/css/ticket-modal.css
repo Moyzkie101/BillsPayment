@@ -236,6 +236,14 @@
   display: block;
 }
 
+/* Reference number specific: indicate interactivity and provide hover affordance */
+.tm-meta-value--ref {
+  cursor: pointer;
+}
+.tm-meta-value--ref:hover {
+  text-decoration: underline;
+}
+
 .tm-header-right {
   display: flex;
   align-items: stretch;

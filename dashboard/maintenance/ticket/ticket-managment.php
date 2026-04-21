@@ -503,7 +503,7 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
                                         <button type="button" class="tm-copy-ticket" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" title="Copy ticket number" aria-label="Copy ticket number"><i class="fa-solid fa-clipboard" aria-hidden="true"></i></button>
                                     </div>
                                     <div class="tm-ticket-meta-grid">
-                                        <div class="tm-meta-item"><div class="tm-meta-label">Reference No.</div><div class="tm-meta-value"><?php echo htmlspecialchars($hdrReference); ?></div></div>
+                                        <div class="tm-meta-item"><div class="tm-meta-label">Reference No.</div><div class="tm-meta-value tm-meta-value--ref"><?php echo htmlspecialchars($hdrReference); ?></div></div>
                                         <div class="tm-meta-item"><div class="tm-meta-label">Transaction D/T</div><div class="tm-meta-value"><?php echo htmlspecialchars($hdrTransfer); ?></div></div>
                                         <div class="tm-meta-item"><div class="tm-meta-label">Account No.</div><div class="tm-meta-value"><?php echo htmlspecialchars($hdrAccount); ?></div></div>
                                         <div class="tm-meta-item"><div class="tm-meta-label">Payment Branch</div><div class="tm-meta-value"><?php echo htmlspecialchars($hdrPaymentBranch); ?></div></div>
