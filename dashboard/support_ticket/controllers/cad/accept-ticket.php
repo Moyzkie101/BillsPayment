@@ -105,7 +105,7 @@ try {
         null,
         'SYSTEM',
         null,
-        'Ticket has been accepted by CAD and is now being resolved.',
+        'The ticket has been accepted by CAD and is currently being resolved.',
         ['automation' => true]
     );
 
