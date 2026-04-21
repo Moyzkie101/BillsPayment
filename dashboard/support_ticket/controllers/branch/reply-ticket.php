@@ -1,5 +1,6 @@
 <?php
 include_once __DIR__ . '/../../includes/bootstrap.php';
+include_once __DIR__ . '/../../includes/ticket_queries.php';
 
 st_require_login('../../../../login_form.php');
 st_require_permission_page(['Support Ticket Create'], '../../../home.php');
@@ -46,7 +47,7 @@ $conn->autocommit(false);
 try {
     $schema = st_schema();
 
-    $lockSql = "SELECT id, status, current_handler_role, created_by, vpo_owner
+    $lockSql = "SELECT id, ticket_number, status, current_handler_role, created_by, vpo_owner
                 FROM {$schema}.tickets
                 WHERE id = ? FOR UPDATE";
     $lockStmt = $conn->prepare($lockSql);
@@ -107,6 +108,29 @@ try {
             throw new Exception('Unable to reopen resolved ticket.');
         }
         $reopenStmt->close();
+
+        $emailMap = st_get_user_emails_by_id_numbers($conn, [$userId]);
+        $branchEmail = trim((string) ($emailMap[$userId] ?? ''));
+        if ($branchEmail === '') {
+            $branchEmail = 'ID ' . (string) $userId;
+        }
+
+        $ticketNumber = trim((string) ($ticket['ticket_number'] ?? ''));
+        if ($ticketNumber === '') {
+            $ticketNumber = 'ID ' . (string) $ticketId;
+        }
+
+        st_insert_trail(
+            $conn,
+            $ticketId,
+            'message',
+            null,
+            'SYSTEM',
+            null,
+            'Ticket: ' . $ticketNumber . ' has been reopened by BRANCH: ' . $branchEmail,
+            ['automation' => true, 'reopened' => true]
+        );
+
         $targetRole = 'VPO';
         $trailMeta = ['reopened' => true];
     } elseif ($targetRole !== 'VPO' && $targetRole !== 'CAD') {

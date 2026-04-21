@@ -98,6 +98,16 @@ try {
     $stmt->close();
 
     st_insert_trail($conn, $ticketId, 'accept', $userId, 'VPO', 'BRANCH', 'Ticket accepted by VPO.', null);
+    st_insert_trail(
+        $conn,
+        $ticketId,
+        'message',
+        null,
+        'SYSTEM',
+        null,
+        'Ticket has been accepted by VPO and is now under investigation.',
+        ['automation' => true]
+    );
 
     $conn->commit();
     $conn->autocommit(true);

@@ -142,25 +142,40 @@
         }
     }
 
+    function prepareTrailCardHeader(header) {
+        if (!header) return;
+        var card = header.closest('.tm-trail-card');
+        if (!card) return;
+        header.setAttribute('role', 'button');
+        header.setAttribute('tabindex', '0');
+        header.setAttribute('aria-expanded', card.classList.contains('tm-expanded') ? 'true' : 'false');
+    }
+
     function initTrailCardToggles() {
         var headers = document.querySelectorAll('.tm-trail-card-header');
         headers.forEach(function (header) {
-            var card = header.closest('.tm-trail-card');
-            if (!card) return;
-            header.setAttribute('role', 'button');
-            header.setAttribute('tabindex', '0');
-            header.setAttribute('aria-expanded', card.classList.contains('tm-expanded') ? 'true' : 'false');
+            prepareTrailCardHeader(header);
+        });
 
-            header.addEventListener('click', function (e) {
-                toggleTrailCard(card);
-            });
+        if (document.documentElement.getAttribute('data-st-trail-toggle-bound') === '1') {
+            return;
+        }
+        document.documentElement.setAttribute('data-st-trail-toggle-bound', '1');
 
-            header.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggleTrailCard(card);
-                }
-            });
+        document.addEventListener('click', function (e) {
+            var header = e.target && e.target.closest ? e.target.closest('.tm-trail-card-header') : null;
+            if (!header) return;
+            prepareTrailCardHeader(header);
+            toggleTrailCard(header.closest('.tm-trail-card'));
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            var header = e.target && e.target.closest ? e.target.closest('.tm-trail-card-header') : null;
+            if (!header) return;
+            e.preventDefault();
+            prepareTrailCardHeader(header);
+            toggleTrailCard(header.closest('.tm-trail-card'));
         });
     }
 
@@ -1159,6 +1174,7 @@
                     '</div>';
 
                 trailWrap.appendChild(item);
+                prepareTrailCardHeader(item.querySelector('.tm-trail-card-header'));
             });
 
             adjustTrailCardHeights(overlay);
@@ -1187,6 +1203,7 @@
         var inFlight = false;
         var lastToastTrailId = 0;
         var requestedTicketSet = {};
+        var modalRefreshPromises = {};
 
         function parseTicketIdFromModalId(id) {
             var m = String(id || '').match(/-(\d+)$/);
@@ -1230,6 +1247,16 @@
             if (explicit) return explicit;
             var node = row.querySelector('.st-col-status .st-status');
             return node ? String(node.textContent || '').trim() : '';
+        }
+
+        function readRowHandlerRole(row) {
+            if (!row) return '';
+            return String(row.getAttribute('data-handler-role') || '').trim().toUpperCase();
+        }
+
+        function readRowAssignedTo(row) {
+            if (!row) return 0;
+            return parseInt(row.getAttribute('data-assigned-to') || '0', 10) || 0;
         }
 
         function getPanelElement(panelName) {
@@ -1299,13 +1326,93 @@
             updatePanelEmptyState(targetPanel);
         }
 
-        function applyRowStatus(row, nextStatus) {
+        function refreshModalMarkup(modalId) {
+            var id = String(modalId || '').trim();
+            if (!id) {
+                return Promise.resolve(null);
+            }
+
+            if (modalRefreshPromises[id]) {
+                return modalRefreshPromises[id];
+            }
+
+            var existing = document.getElementById(id);
+            if (!existing) {
+                return Promise.resolve(null);
+            }
+
+            var wasOpen = existing.classList.contains('open');
+            var prevBody = existing.querySelector('.tm-body');
+            var prevScrollTop = prevBody ? prevBody.scrollTop : 0;
+
+            modalRefreshPromises[id] = fetch(window.location.href, {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (res) {
+                if (!res || !res.ok) return null;
+                return res.text();
+            }).then(function (html) {
+                if (!html) return null;
+
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(html, 'text/html');
+                var fresh = doc.getElementById(id);
+                if (!fresh || !existing.parentNode) return null;
+
+                var imported = document.importNode(fresh, true);
+                if (wasOpen) {
+                    imported.classList.add('open');
+                }
+
+                existing.parentNode.replaceChild(imported, existing);
+                adjustTrailCardHeights(imported);
+
+                if (wasOpen) {
+                    var newBody = imported.querySelector('.tm-body');
+                    if (newBody) {
+                        newBody.scrollTop = prevScrollTop;
+                    }
+                }
+
+                return imported;
+            }).catch(function () {
+                return null;
+            }).finally(function () {
+                delete modalRefreshPromises[id];
+            });
+
+            return modalRefreshPromises[id];
+        }
+
+        function syncRoleModalFooterState(overlay) {
+            if (!overlay) return;
+
+            var scope = String(cfg.scope || '').toUpperCase();
+            if (scope !== 'VPO' && scope !== 'CAD') {
+                return;
+            }
+
+            var modalId = String(overlay.id || '').trim();
+            if (!modalId) return;
+
+            refreshModalMarkup(modalId);
+        }
+
+        function applyRowStatus(row, nextStatus, state) {
             if (!row) return;
             var clean = String(nextStatus || '').trim();
             if (!clean) return;
 
             var lower = normalizeStatusText(clean);
             row.setAttribute('data-status', clean);
+            if (state && typeof state === 'object') {
+                row.setAttribute('data-handler-role', String(state.handler_role || '').toUpperCase());
+                row.setAttribute('data-assigned-to', String(parseInt(state.assigned_to || 0, 10) || 0));
+            }
 
             var statusCell = row.querySelector('.st-col-status');
             if (!statusCell) return;
@@ -1331,6 +1438,51 @@
 
             modalStatus.className = 'tm-status tm-status--' + lower;
             modalStatus.textContent = clean;
+
+            syncBranchReplyFooterState(overlay, lower);
+            syncRoleModalFooterState(overlay);
+        }
+
+        function syncBranchReplyFooterState(overlay, statusLower) {
+            if (!overlay) return;
+
+            var branchReplyForm = overlay.querySelector('form[action*="controllers/branch/reply-ticket.php"]');
+            if (!branchReplyForm) return;
+
+            var lower = normalizeStatusText(statusLower);
+            var controls = branchReplyForm.querySelectorAll('textarea, input, select, button');
+            var liveClosedNotice = overlay.querySelector('.tm-footer.tm-footer--closed[data-st-live-closed="1"]');
+
+            if (lower === 'closed') {
+                branchReplyForm.style.display = 'none';
+                branchReplyForm.setAttribute('data-st-live-closed', '1');
+                controls.forEach(function (node) {
+                    node.disabled = true;
+                });
+
+                if (!liveClosedNotice) {
+                    liveClosedNotice = document.createElement('div');
+                    liveClosedNotice.className = 'tm-footer tm-footer--closed';
+                    liveClosedNotice.setAttribute('data-st-live-closed', '1');
+                    liveClosedNotice.textContent = 'This ticket is already closed!';
+                    if (branchReplyForm.parentNode) {
+                        branchReplyForm.parentNode.insertBefore(liveClosedNotice, branchReplyForm.nextSibling);
+                    }
+                }
+                return;
+            }
+
+            if (branchReplyForm.getAttribute('data-st-live-closed') === '1') {
+                branchReplyForm.style.display = '';
+                branchReplyForm.removeAttribute('data-st-live-closed');
+                controls.forEach(function (node) {
+                    node.disabled = false;
+                });
+            }
+
+            if (liveClosedNotice && liveClosedNotice.parentNode) {
+                liveClosedNotice.parentNode.removeChild(liveClosedNotice);
+            }
         }
 
         function applyTicketStatuses(ticketStatuses) {
@@ -1350,11 +1502,20 @@
                 }
 
                 var nextStatus = (typeof state === 'object') ? String(state.status || '') : String(state || '');
+                var nextHandler = (typeof state === 'object') ? String(state.handler_role || '').trim().toUpperCase() : '';
+                var nextAssigned = (typeof state === 'object') ? (parseInt(state.assigned_to || 0, 10) || 0) : 0;
                 var prevStatus = readRowStatus(row);
+                var prevHandler = readRowHandlerRole(row);
+                var prevAssigned = readRowAssignedTo(row);
                 if (!nextStatus) return;
 
-                if (normalizeStatusText(prevStatus) !== normalizeStatusText(nextStatus)) {
-                    applyRowStatus(row, nextStatus);
+                var statusChanged = normalizeStatusText(prevStatus) !== normalizeStatusText(nextStatus);
+                var routingChanged = prevHandler !== nextHandler || prevAssigned !== nextAssigned;
+                if (statusChanged || routingChanged) {
+                    applyRowStatus(row, nextStatus, (typeof state === 'object') ? state : null);
+                }
+
+                if (statusChanged) {
                     relocateRowByStatus(row, nextStatus);
                 }
             });
@@ -1754,6 +1915,7 @@
             '</div>';
 
         trail.appendChild(item);
+        prepareTrailCardHeader(item.querySelector('.tm-trail-card-header'));
         adjustTrailCardHeights(modal);
 
         var body = modal.querySelector('.tm-body');
