@@ -1384,6 +1384,9 @@
                     }
                 }
 
+                // Rebind AJAX reply submit handlers for freshly imported forms.
+                bindAjaxReplySubmitsInScope(imported);
+
                 return imported;
             }).catch(function () {
                 return null;
@@ -1516,7 +1519,12 @@
                 if (!nextStatus) return;
 
                 var statusChanged = normalizeStatusText(prevStatus) !== normalizeStatusText(nextStatus);
-                var routingChanged = prevHandler !== nextHandler || prevAssigned !== nextAssigned;
+                var hasRoutingSnapshot = row.hasAttribute('data-handler-role') || row.hasAttribute('data-assigned-to');
+                if (!hasRoutingSnapshot && typeof state === 'object') {
+                    row.setAttribute('data-handler-role', nextHandler);
+                    row.setAttribute('data-assigned-to', String(nextAssigned));
+                }
+                var routingChanged = hasRoutingSnapshot && (prevHandler !== nextHandler || prevAssigned !== nextAssigned);
                 if (statusChanged || routingChanged) {
                     applyRowStatus(row, nextStatus, (typeof state === 'object') ? state : null);
                 }
@@ -1933,46 +1941,58 @@
     }
 
     function initAjaxReplySubmits() {
-        var forms = document.querySelectorAll('form[method="post"], form[method="POST"]');
+        bindAjaxReplySubmitsInScope(document);
+    }
+
+    function bindAjaxReplySubmitsInScope(scopeRoot) {
+        var root = scopeRoot || document;
+        var forms = root.querySelectorAll('form[method="post"], form[method="POST"]');
         forms.forEach(function (form) {
-            if (!shouldHandleAjaxReply(form)) return;
+            bindAjaxReplySubmitForm(form);
+        });
+    }
 
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
+    function bindAjaxReplySubmitForm(form) {
+        if (!form || !shouldHandleAjaxReply(form)) return;
+        if (form.getAttribute('data-st-ajax-reply-bound') === '1') return;
 
-                var formData = new FormData(form);
-                var submittedMessage = String(formData.get('message') || '').trim();
-                var fileInput = form.querySelector('input[type="file"][id^="reply_attachments_"]');
-                var submittedAttachments = fileInput && fileInput.files ? Array.prototype.slice.call(fileInput.files) : [];
-                var submitBtn = form.querySelector('button[type="submit"]');
-                if (submitBtn) submitBtn.disabled = true;
+        form.setAttribute('data-st-ajax-reply-bound', '1');
 
-                fetch(form.getAttribute('action') || window.location.href, {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: formData
-                }).then(function (res) {
-                    return res.json().catch(function () {
-                        return { success: false, message: 'Unexpected server response.' };
-                    });
-                }).then(function (json) {
-                    if (!json || !json.success) {
-                        stShowToast((json && json.message) ? json.message : 'Unable to submit reply.', 'danger');
-                        return;
-                    }
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
 
-                    var serverTrailId = json && json.data ? parseInt(json.data.trail_id || 0, 10) || 0 : 0;
-                    appendRealtimeReplyToTrail(form, submittedMessage, submittedAttachments, serverTrailId);
-                    clearReplyFormUI(form);
-                    stShowToast(json.message || 'Reply submitted successfully.', 'success');
-                }).catch(function () {
-                    stShowToast('Network error while submitting reply.', 'danger');
-                }).finally(function () {
-                    if (submitBtn) submitBtn.disabled = false;
+            var formData = new FormData(form);
+            var submittedMessage = String(formData.get('message') || '').trim();
+            var fileInput = form.querySelector('input[type="file"][id^="reply_attachments_"]');
+            var submittedAttachments = fileInput && fileInput.files ? Array.prototype.slice.call(fileInput.files) : [];
+            var submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            fetch(form.getAttribute('action') || window.location.href, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            }).then(function (res) {
+                return res.json().catch(function () {
+                    return { success: false, message: 'Unexpected server response.' };
                 });
+            }).then(function (json) {
+                if (!json || !json.success) {
+                    stShowToast((json && json.message) ? json.message : 'Unable to submit reply.', 'danger');
+                    return;
+                }
+
+                var serverTrailId = json && json.data ? parseInt(json.data.trail_id || 0, 10) || 0 : 0;
+                appendRealtimeReplyToTrail(form, submittedMessage, submittedAttachments, serverTrailId);
+                clearReplyFormUI(form);
+                stShowToast(json.message || 'Reply submitted successfully.', 'success');
+            }).catch(function () {
+                stShowToast('Network error while submitting reply.', 'danger');
+            }).finally(function () {
+                if (submitBtn) submitBtn.disabled = false;
             });
         });
     }
