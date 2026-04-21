@@ -507,6 +507,62 @@
     }
 
     function initClosePickerModals() {
+        // Delegated handlers ensure dynamically imported or refreshed modal markup still responds.
+        if (document.documentElement.getAttribute('data-st-close-picker-delegation-bound') !== '1') {
+            document.documentElement.setAttribute('data-st-close-picker-delegation-bound', '1');
+
+            document.addEventListener('click', function (e) {
+                var btn = e.target && e.target.closest ? e.target.closest('[data-close-picker-open]') : null;
+                if (!btn) return;
+                var modalId = btn.getAttribute('data-close-picker-open');
+                if (!modalId) return;
+
+                var modalIdLower = String(modalId || '').toLowerCase();
+                var isDeleteModal = modalIdLower.indexOf('delete') !== -1;
+
+                if (!isDeleteModal) {
+                    var parent = (btn.closest && (btn.closest('.tm-overlay') || btn.closest('.tm-modal'))) || document;
+                    var statusEl = parent ? parent.querySelector('.tm-status') : null;
+                    var statusText = statusEl ? String(statusEl.textContent || '').trim().toLowerCase() : '';
+                    if (statusText.indexOf('resolved') !== -1 || statusText.indexOf('auto') !== -1) {
+                        stShowToast('Ticket has already been resolved and will Close within 24 hours.', 'danger');
+                        return;
+                    }
+                }
+
+                var modal = document.getElementById(modalId);
+                if (modal) {
+                    modal.style.display = 'flex';
+                    modal.setAttribute('aria-hidden', 'false');
+                }
+            });
+
+            document.addEventListener('click', function (e) {
+                var btn = e.target && e.target.closest ? e.target.closest('[data-close-picker-cancel]') : null;
+                if (!btn) return;
+                var modalId = btn.getAttribute('data-close-picker-cancel');
+                if (!modalId) return;
+                var modal = document.getElementById(modalId);
+                if (modal) {
+                    modal.style.display = 'none';
+                    modal.setAttribute('aria-hidden', 'true');
+                }
+            });
+
+            document.addEventListener('click', function (e) {
+                var target = e.target;
+                if (!target || !target.classList) return;
+                if (!target.classList.contains('tm-submodal-overlay')) return;
+                var id = String(target.id || '');
+                if (id.indexOf('stClosePicker') !== 0) return;
+                if (e.target === target) {
+                    target.style.display = 'none';
+                    target.setAttribute('aria-hidden', 'true');
+                }
+            });
+        }
+
+        // Also bind existing elements for immediate responsiveness on initial load.
         var openButtons = document.querySelectorAll('[data-close-picker-open]');
         openButtons.forEach(function (btn) {
             btn.addEventListener('click', function () {
@@ -516,9 +572,6 @@
                 var modalIdLower = String(modalId || '').toLowerCase();
                 var isDeleteModal = modalIdLower.indexOf('delete') !== -1;
 
-                // For non-delete modals, check ticket status on the parent modal. If already resolved/auto-close,
-                // show an informational toast and do not open the close picker. Delete modals should be
-                // allowed to open from maintenance pages regardless of resolved/auto status.
                 if (!isDeleteModal) {
                     var parent = (btn.closest && (btn.closest('.tm-overlay') || btn.closest('.tm-modal'))) || document;
                     var statusEl = parent ? parent.querySelector('.tm-status') : null;
