@@ -948,6 +948,19 @@
             var btn = e.target.closest ? e.target.closest('.tm-copy-ticket') : null;
             if (!btn) return;
             e.preventDefault();
+
+            // Block copying while ticket is still in open/accept state.
+            var modal = btn.closest ? btn.closest('.tm-overlay') : null;
+            var isOpenUnaccepted = false;
+            if (modal) {
+                var acceptForm = modal.querySelector('form[action*="accept-ticket.php"]');
+                isOpenUnaccepted = !!acceptForm;
+            }
+            if (isOpenUnaccepted) {
+                stShowToast('Error: You need to accept the ticket first.', 'danger');
+                return;
+            }
+
             var ticket = btn.getAttribute('data-ticket-number') || '';
             if (!ticket) return;
 

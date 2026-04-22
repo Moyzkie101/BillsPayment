@@ -169,6 +169,20 @@ foreach ($vpoActive as $ticket) {
             width: 100%;
         }
 
+        .tm-ticket-id-value--copy-locked {
+            user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+        }
+
+        .tm-ticket-id-value--copy-locked::selection {
+            background: transparent;
+        }
+
+        .tm-ticket-id-value--copy-locked::-moz-selection {
+            background: transparent;
+        }
+
         .tm-header-branch-close > button {
             display: inline-flex;
             margin: 0;
@@ -333,7 +347,7 @@ foreach ($vpoActive as $ticket) {
                                         <div class="tm-ticket-number-main">
                                             <span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
                                             <span class="tm-ticket-number-label">Ticket</span>
-                                            <span class="tm-ticket-id-value"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
+                                            <span class="tm-ticket-id-value <?php echo $isOpen ? 'tm-ticket-id-value--copy-locked' : ''; ?>"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
                                         </div>
                                         <button type="button" class="tm-copy-ticket" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" title="Copy ticket number" aria-label="Copy ticket number"><i class="fa-solid fa-clipboard" aria-hidden="true"></i></button>
                                     </div>

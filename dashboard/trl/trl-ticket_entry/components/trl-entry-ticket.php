@@ -5,11 +5,13 @@ $ticketWrongBiller = null;
 $ticketOverstated = null;
 $ticketCancelled = null;
 $ticketError = '';
+$ticketGuardToast = '';
 
 if ($searchTicket !== '') {
     $sql = "SELECT
                 t.ticket_number,
                 t.reference_number,
+                t.vpo_owner,
                 ti.reason,
                 ti.transfer_datetime,
                 ti.wrong_biller_id,
@@ -34,37 +36,43 @@ if ($searchTicket !== '') {
             if ($res && $res->num_rows > 0) {
                 $ticketFound = $res->fetch_assoc();
 
-                $wbSql = "SELECT correct_biller_id, correct_biller_name FROM support_ticket.ticket_info_wrongbiller WHERE ticket_number = ? ORDER BY id DESC LIMIT 1";
-                $wbStmt = $conn->prepare($wbSql);
-                if ($wbStmt) {
-                    $wbStmt->bind_param('s', $searchTicket);
-                    if ($wbStmt->execute()) {
-                        $wbRes = $wbStmt->get_result();
-                        $ticketWrongBiller = $wbRes ? $wbRes->fetch_assoc() : null;
+                $vpoOwner = isset($ticketFound['vpo_owner']) && is_numeric($ticketFound['vpo_owner']) ? (int) $ticketFound['vpo_owner'] : 0;
+                if ($vpoOwner <= 0) {
+                    $ticketFound = null;
+                    $ticketGuardToast = 'Error: This ticket has not yet been invistaged by VPO';
+                } else {
+                    $wbSql = "SELECT correct_biller_id, correct_biller_name FROM support_ticket.ticket_info_wrongbiller WHERE ticket_number = ? ORDER BY id DESC LIMIT 1";
+                    $wbStmt = $conn->prepare($wbSql);
+                    if ($wbStmt) {
+                        $wbStmt->bind_param('s', $searchTicket);
+                        if ($wbStmt->execute()) {
+                            $wbRes = $wbStmt->get_result();
+                            $ticketWrongBiller = $wbRes ? $wbRes->fetch_assoc() : null;
+                        }
+                        $wbStmt->close();
                     }
-                    $wbStmt->close();
-                }
 
-                $oaSql = "SELECT wrong_amount, correct_amount, difference FROM support_ticket.ticket_info_overstatedamount WHERE ticket_number = ? ORDER BY id DESC LIMIT 1";
-                $oaStmt = $conn->prepare($oaSql);
-                if ($oaStmt) {
-                    $oaStmt->bind_param('s', $searchTicket);
-                    if ($oaStmt->execute()) {
-                        $oaRes = $oaStmt->get_result();
-                        $ticketOverstated = $oaRes ? $oaRes->fetch_assoc() : null;
+                    $oaSql = "SELECT wrong_amount, correct_amount, difference FROM support_ticket.ticket_info_overstatedamount WHERE ticket_number = ? ORDER BY id DESC LIMIT 1";
+                    $oaStmt = $conn->prepare($oaSql);
+                    if ($oaStmt) {
+                        $oaStmt->bind_param('s', $searchTicket);
+                        if ($oaStmt->execute()) {
+                            $oaRes = $oaStmt->get_result();
+                            $ticketOverstated = $oaRes ? $oaRes->fetch_assoc() : null;
+                        }
+                        $oaStmt->close();
                     }
-                    $oaStmt->close();
-                }
 
-                $ctSql = "SELECT wrong_amount, correct_amount FROM support_ticket.ticket_info_cancelledtransaction WHERE ticket_number = ? ORDER BY id DESC LIMIT 1";
-                $ctStmt = $conn->prepare($ctSql);
-                if ($ctStmt) {
-                    $ctStmt->bind_param('s', $searchTicket);
-                    if ($ctStmt->execute()) {
-                        $ctRes = $ctStmt->get_result();
-                        $ticketCancelled = $ctRes ? $ctRes->fetch_assoc() : null;
+                    $ctSql = "SELECT wrong_amount, correct_amount FROM support_ticket.ticket_info_cancelledtransaction WHERE ticket_number = ? ORDER BY id DESC LIMIT 1";
+                    $ctStmt = $conn->prepare($ctSql);
+                    if ($ctStmt) {
+                        $ctStmt->bind_param('s', $searchTicket);
+                        if ($ctStmt->execute()) {
+                            $ctRes = $ctStmt->get_result();
+                            $ticketCancelled = $ctRes ? $ctRes->fetch_assoc() : null;
+                        }
+                        $ctStmt->close();
                     }
-                    $ctStmt->close();
                 }
             } else {
                 $ticketError = 'Ticket number not found';
@@ -119,6 +127,25 @@ if ($isOverstated && !empty($ticketOverstated)) {
                 <p><?php echo htmlspecialchars($ticketError); ?></p>
             </div>
         </div>
+    <?php endif; ?>
+
+    <?php if ($ticketGuardToast !== ''): ?>
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                if (typeof Swal === 'undefined') {
+                    return;
+                }
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'error',
+                    title: <?php echo json_encode($ticketGuardToast); ?>,
+                    showConfirmButton: false,
+                    timer: 3200,
+                    timerProgressBar: true
+                });
+            });
+        </script>
     <?php endif; ?>
 
     <?php if ($ticketFound): ?>
