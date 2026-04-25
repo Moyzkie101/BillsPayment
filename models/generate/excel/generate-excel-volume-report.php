@@ -77,136 +77,190 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
                     )";
     }
 
-    // Build transaction-level partner filter so owner attribution is based on sub_billers_name rules
-    $txPartnerFilter = '';
+    // Use normalized partner_key and aggregate to avoid duplicate rows
+    // Ensure date condition variable used by queries is available
+    $dateCondition = $sqlDATE;
+
+    // Build main WHERE clause for final query (filter by partner at final_merged level)
+    $mainWhereClause = '1=1';
     if ($partner !== 'All') {
         $partnerEsc = mysqli_real_escape_string($conn, $partner);
-        if ($partner === 'SECURITY BANK') {
-            $txPartnerFilter = " AND bt.partner_name = '{$partnerEsc}' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '')";
-        } elseif ($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING') {
-            $txPartnerFilter = " AND bt.sub_billers_name = '{$partnerEsc}'";
-        } else {
-            $txPartnerFilter = " AND bt.partner_name = '{$partnerEsc}'";
-        }
+        $mainWhereClause .= " AND (fm.direct_billers_name = '{$partnerEsc}' OR fm.sub_billers_name = '{$partnerEsc}')";
     }
+    $DataQuery = "WITH bank_clean AS (
+        SELECT 
+            bank_name,
+            MAX(bank_abbreviation) AS bank_abbreviation
+        FROM masterdata.bank_table
+        GROUP BY bank_name
+    ),
+    direct_biller AS (
+        SELECT
+            pm.partner_id,
+            pm.partner_id_kpx,
+            pm.gl_code,
+            pm.partner_name AS direct_billers_name,
+            NULL AS sub_billers_name,
+            b.bank_abbreviation,
+            pm.settled_online_check,
+            pm.charge_to,
+            pm.status
+        FROM masterdata.partner_masterfile pm
+        LEFT JOIN bank_clean b
+            ON pm.bank = b.bank_name
+    ),
 
-    // Use normalized partner_key and aggregate to avoid duplicate rows
-    $DataQuery = "WITH summary_vol AS (
-                SELECT
-                    CASE 
-                        WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                        WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                        ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                    END COLLATE utf8mb4_general_ci AS partner_key,
-                    CASE 
-                        WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                        ELSE bt.partner_name
-                    END AS partner_name,
-                    MAX(bt.sub_billers_name) AS sub_billers_name,
-                    COUNT(*) AS vol1,
-                    SUM(bt.amount_paid) AS principal1,
-                    SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
-                FROM
-                    mldb.billspayment_transaction AS bt 
-                WHERE
-                    $sqlDATE
-                    AND bt.status IS NULL 
-                    AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                    $txPartnerFilter
-                GROUP BY
-                    CASE 
-                        WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                        WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                        ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                    END COLLATE utf8mb4_general_ci,
-                    CASE 
-                        WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                        ELSE bt.partner_name
-                    END
-        ),
-        adjustment_vol AS (
-            SELECT
-                CASE 
-                    WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                    WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                    ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                END COLLATE utf8mb4_general_ci AS partner_key,
-                CASE 
-                    WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                    ELSE bt.partner_name
-                END AS partner_name,
-                MAX(bt.sub_billers_name) AS sub_billers_name,
-                COUNT(*) AS vol2,
-                SUM(bt.amount_paid) AS principal2,
-                SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
-            FROM
-                mldb.billspayment_transaction AS bt 
-            WHERE
-                $sqlDATE
-                AND bt.status = '*' 
-                AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                $txPartnerFilter
-            GROUP BY
-                CASE 
-                    WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                    WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                    ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                END COLLATE utf8mb4_general_ci,
-                CASE 
-                    WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                    ELSE bt.partner_name
-                END
-        ),
-        all_partners AS (
-            -- Partners from master file
-            SELECT 
-                COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
-                mpm.partner_name
-            FROM masterdata.partner_masterfile AS mpm
-            WHERE mpm.status = 'ACTIVE'
-            
-            UNION
-            
-            -- Partners from summary transactions
-            SELECT partner_key, partner_name FROM summary_vol
-            
-            UNION
-            
-            -- Partners from adjustment transactions
-            SELECT partner_key, partner_name FROM adjustment_vol
+    sub_biller AS (
+        SELECT
+            partner_id_kpx,
+            sub_billers_id,
+            partner_name AS direct_billers_name,
+            sub_billers_name,
+            NULL AS sub_gl_code
+        FROM masterdata.subbiller
+    ),
+
+    merged_left AS (
+        SELECT
+            d.partner_id,
+            COALESCE(d.partner_id_kpx, s.partner_id_kpx) AS partner_id_kpx,
+            s.sub_billers_id,
+            COALESCE(d.gl_code, s.sub_gl_code) AS gl_code,
+
+            CASE 
+                WHEN d.direct_billers_name = s.sub_billers_name 
+                THEN s.direct_billers_name 
+                ELSE d.direct_billers_name 
+            END AS direct_billers_name,
+
+            COALESCE(s.sub_billers_name, d.sub_billers_name) AS sub_billers_name,
+
+            d.bank_abbreviation,
+            d.settled_online_check,
+            d.charge_to
+
+        FROM direct_biller d
+        LEFT JOIN sub_biller s
+            ON d.direct_billers_name = s.sub_billers_name
+        WHERE COALESCE(d.status, '') = 'ACTIVE'
+    ),
+
+    unmatched_sub AS (
+        SELECT
+            NULL AS partner_id,
+            s.partner_id_kpx,
+            s.sub_billers_id,
+            s.sub_gl_code AS gl_code,
+            s.direct_billers_name,
+            s.sub_billers_name,
+
+            NULL AS bank_abbreviation,
+            NULL AS settled_online_check,
+            NULL AS charge_to
+
+        FROM sub_biller s
+        WHERE NOT EXISTS (
+            SELECT 1 
+            FROM direct_biller d 
+            WHERE d.direct_billers_name = s.sub_billers_name 
+            AND COALESCE(d.status,'') = 'ACTIVE'
+        )
+    ),
+
+    final_merged AS (
+        SELECT * FROM merged_left
+        UNION ALL
+        SELECT * FROM unmatched_sub
+    ),
+
+    summary_vol AS (
+        SELECT
+            bt.sub_billers_id,
+            bt.partner_id,
+            bt.partner_id_kpx,
+            COUNT(*) AS vol1,
+            SUM(bt.amount_paid) AS principal1,
+            SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
+        FROM mldb.billspayment_transaction bt
+        WHERE 
+            $dateCondition
+        AND bt.status IS NULL 
+        AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+        GROUP BY bt.sub_billers_id, bt.partner_id, bt.partner_id_kpx
+    ),
+
+    adjustment_vol AS (
+        SELECT
+            bt.sub_billers_id,
+            bt.partner_id,
+            bt.partner_id_kpx,
+            COUNT(*) AS vol2,
+            SUM(bt.amount_paid) AS principal2,
+            SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
+        FROM mldb.billspayment_transaction bt
+        WHERE 
+            $dateCondition
+        AND bt.status='*' 
+        AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+        GROUP BY bt.sub_billers_id, bt.partner_id, bt.partner_id_kpx
+    )
+
+    -- FINAL RESULT
+    SELECT
+        fm.partner_id,
+        fm.partner_id_kpx,
+        fm.sub_billers_id,
+        fm.gl_code,
+
+        CASE 
+            WHEN fm.sub_billers_id IS NOT NULL 
+            THEN fm.sub_billers_name 
+            ELSE fm.direct_billers_name 
+        END AS partner_name,
+
+        CASE 
+            WHEN fm.sub_billers_id IS NOT NULL 
+            THEN fm.direct_billers_name 
+            ELSE NULL 
+        END AS billers_name,
+
+        CONCAT(fm.bank_abbreviation, ' ', fm.settled_online_check) AS bank_abbreviation,
+        fm.charge_to AS charging_type,
+
+        COALESCE(sv.vol1, 0) AS summary_vol,
+        COALESCE(sv.principal1, 0) AS summary_principal,
+        COALESCE(sv.charge1, 0) AS summary_charge,
+
+        COALESCE(av.vol2, 0) AS adjustment_vol,
+        COALESCE(ABS(av.principal2), 0) AS adjustment_principal,
+        COALESCE(ABS(av.charge2), 0) AS adjustment_charge,
+
+        (COALESCE(sv.vol1,0) - COALESCE(av.vol2,0)) AS net_vol,
+        (COALESCE(sv.principal1,0) - COALESCE(ABS(av.principal2),0)) AS net_principal,
+        (COALESCE(sv.charge1,0) - COALESCE(ABS(av.charge2),0)) AS net_charge
+
+    FROM final_merged fm
+
+    LEFT JOIN summary_vol sv
+        ON (
+            (fm.sub_billers_id IS NOT NULL AND fm.sub_billers_id = sv.sub_billers_id)
+            OR
+            (fm.sub_billers_id IS NULL 
+                AND fm.partner_id = sv.partner_id 
+                AND fm.partner_id_kpx = sv.partner_id_kpx)
         )
 
-        SELECT
-            ap.partner_name,
-            COALESCE(MAX(sv.sub_billers_name), MAX(av.sub_billers_name)) AS sub_billers_name,
-            SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
-            SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
-            SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
-
-            SUM(COALESCE(av.vol2, 0)) AS adjustment_vol,
-            SUM(COALESCE(ABS(av.principal2), 0)) AS adjustment_principal,
-            SUM(COALESCE(ABS(av.charge2), 0)) AS adjustment_charges,
-
-            (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
-            (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
-            (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
-        FROM
-            all_partners AS ap
-        LEFT JOIN
-            summary_vol AS sv ON ap.partner_name = sv.partner_name
-        LEFT JOIN
-            adjustment_vol AS av ON ap.partner_name = av.partner_name
-        LEFT JOIN
-            masterdata.partner_masterfile AS mpm ON (
-                ap.partner_name = mpm.partner_name
-            )
-        WHERE
-            (mpm.status = 'ACTIVE' OR mpm.status IS NULL)";
-    
-    // Aggregate by partner_name to collapse any duplicate masterfile rows
-    $DataQuery .= " GROUP BY ap.partner_name";
-    $DataQuery .= " HAVING ap.partner_name IS NOT NULL";
-    $DataQuery .= " ORDER BY ap.partner_name";
+    LEFT JOIN adjustment_vol av
+        ON (
+            (fm.sub_billers_id IS NOT NULL AND fm.sub_billers_id = av.sub_billers_id)
+            OR
+            (fm.sub_billers_id IS NULL 
+                AND fm.partner_id = av.partner_id 
+                AND fm.partner_id_kpx = av.partner_id_kpx)
+        )
+    WHERE 
+        $mainWhereClause
+    ORDER BY partner_name";
 
     try {
         $DataResult = $conn->query($DataQuery);
@@ -313,31 +367,33 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             $sheet->mergeCells('A10:A11');
             $sheet->setCellValue('B' . ($headerRow-1), 'Partner Name');
             $sheet->mergeCells('B10:B11');
-            $sheet->setCellValue('C' . ($headerRow-1), 'Bank');
+            $sheet->setCellValue('C' . ($headerRow-1), 'Biller\'s Name');
             $sheet->mergeCells('C10:C11');
-            $sheet->setCellValue('D' . ($headerRow-1), 'Biller\'s Name');
+            $sheet->setCellValue('D' . ($headerRow-1), 'Bank');
             $sheet->mergeCells('D10:D11');
+            $sheet->setCellValue('E' . ($headerRow-1), 'Charging Type');
+            $sheet->mergeCells('E10:E11');
             
             // KP7 / KPX headers
-            $sheet->setCellValue('E' . ($headerRow - 1), 'KP7 / KPX');
-            $sheet->mergeCells('E' . ($headerRow - 1) . ':G' . ($headerRow - 1));
-            $sheet->setCellValue('E' . $headerRow, 'Vol.');
-            $sheet->setCellValue('F' . $headerRow, 'Principal');
-            $sheet->setCellValue('G' . $headerRow, 'Charge');
+            $sheet->setCellValue('F' . ($headerRow - 1), 'KP7 / KPX');
+            $sheet->mergeCells('F' . ($headerRow - 1) . ':H' . ($headerRow - 1));
+            $sheet->setCellValue('F' . $headerRow, 'Vol.');
+            $sheet->setCellValue('G' . $headerRow, 'Principal');
+            $sheet->setCellValue('H' . $headerRow, 'Charge');
             
             // Adjustment headers
-            $sheet->setCellValue('H' . ($headerRow - 1), 'Adjustment');
-            $sheet->mergeCells('H' . ($headerRow - 1) . ':J' . ($headerRow - 1));
-            $sheet->setCellValue('H' . $headerRow, 'Vol.');
-            $sheet->setCellValue('I' . $headerRow, 'Principal');
-            $sheet->setCellValue('J' . $headerRow, 'Charge');
+            $sheet->setCellValue('I' . ($headerRow - 1), 'Adjustment');
+            $sheet->mergeCells('I' . ($headerRow - 1) . ':K' . ($headerRow - 1));
+            $sheet->setCellValue('I' . $headerRow, 'Vol.');
+            $sheet->setCellValue('J' . $headerRow, 'Principal');
+            $sheet->setCellValue('K' . $headerRow, 'Charge');
             
             // Net headers
-            $sheet->setCellValue('K' . ($headerRow - 1), 'Net');
-            $sheet->mergeCells('K' . ($headerRow - 1) . ':M' . ($headerRow - 1));
-            $sheet->setCellValue('K' . $headerRow, 'Vol.');
-            $sheet->setCellValue('L' . $headerRow, 'Principal');
-            $sheet->setCellValue('M' . $headerRow, 'Charge');
+            $sheet->setCellValue('L' . ($headerRow - 1), 'Net');
+            $sheet->mergeCells('L' . ($headerRow - 1) . ':N' . ($headerRow - 1));
+            $sheet->setCellValue('L' . $headerRow, 'Vol.');
+            $sheet->setCellValue('M' . $headerRow, 'Principal');
+            $sheet->setCellValue('N' . $headerRow, 'Charge');
             
             // Style the headers
             $headerStyle = [
@@ -346,7 +402,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
             ];
             
-            $sheet->getStyle('A10:M11')->applyFromArray($headerStyle);
+            $sheet->getStyle('A10:N11')->applyFromArray($headerStyle);
             
             // Initialize totals
             $totals = [
@@ -364,65 +420,58 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             // Populate data
             $row = 12; // Changed from 8 to 12
             foreach ($data as $index => $rowData) {
-                $subBiller = trim((string)($rowData['sub_billers_name'] ?? ''));
-                $partnerName = trim((string)($rowData['partner_name'] ?? ''));
-                $partnerNameRaw = $partnerName;
-
-                if ($subBiller === 'MYLORA CORPORATION' || $subBiller === 'JUNANS MARKETING') {
-                    $partnerNameRaw = $subBiller;
-                } elseif ($subBiller === '' && $partnerName === 'SECURITY BANK') {
-                    $partnerNameRaw = $partnerName;
-                }
 
                 $sheet->setCellValue('A' . $row, $index + 1);
-                $sheet->setCellValue('B' . $row, $partnerNameRaw);
-                $sheet->setCellValue('C' . $row, ''); // Bank - empty as per original
-                $sheet->setCellValue('D' . $row, ''); // Biller's Name - empty as per original
-                $sheet->setCellValue('E' . $row, (int)$rowData['summary_vol']);
-                $sheet->setCellValue('F' . $row, (float)$rowData['summary_principal']);
-                $sheet->setCellValue('G' . $row, (float)$rowData['summary_charges']);
-                $sheet->setCellValue('H' . $row, (int)$rowData['adjustment_vol']);
-                $sheet->setCellValue('I' . $row, (float)$rowData['adjustment_principal']);
-                $sheet->setCellValue('J' . $row, (float)$rowData['adjustment_charges']);
-                $sheet->setCellValue('K' . $row, (int)$rowData['net_vol']);
-                $sheet->setCellValue('L' . $row, (float)$rowData['net_principal']);
-                $sheet->setCellValue('M' . $row, (float)$rowData['net_charges']);
-                
+                $sheet->setCellValue('B' . $row, $rowData['partner_name']); // Partner Name - use partner_name for main display
+                $sheet->setCellValue('C' . $row, $rowData['billers_name']); // Bank - empty as per original
+                $sheet->setCellValue('D' . $row, $rowData['bank_abbreviation']); // Biller's Name - empty as per original
+                $sheet->setCellValue('E' . $row, $rowData['charging_type']); // Biller's Name - empty as per original
+                $sheet->setCellValue('F' . $row, (int)$rowData['summary_vol']);
+                $sheet->setCellValue('G' . $row, (float)$rowData['summary_principal']);
+                $sheet->setCellValue('H' . $row, (float)($rowData['summary_charge'] ?? $rowData['summary_charges'] ?? 0));
+                $sheet->setCellValue('I' . $row, (int)$rowData['adjustment_vol']);
+                $sheet->setCellValue('J' . $row, (float)$rowData['adjustment_principal']);
+                $sheet->setCellValue('K' . $row, (float)($rowData['adjustment_charge'] ?? $rowData['adjustment_charges'] ?? 0));
+                $sheet->setCellValue('L' . $row, (int)$rowData['net_vol']);
+                $sheet->setCellValue('M' . $row, (float)$rowData['net_principal']);
+                $sheet->setCellValue('N' . $row, (float)($rowData['net_charge'] ?? $rowData['net_charges'] ?? 0));
+
                 // Add to totals
                 $totals['summaryVol'] += $rowData['summary_vol'];
                 $totals['summaryPrincipal'] += $rowData['summary_principal'];
-                $totals['summaryCharge'] += $rowData['summary_charges'];
+                $totals['summaryCharge'] += ($rowData['summary_charge'] ?? $rowData['summary_charges'] ?? 0);
                 $totals['adjustmentVol'] += $rowData['adjustment_vol'];
                 $totals['adjustmentPrincipal'] += $rowData['adjustment_principal'];
-                $totals['adjustmentCharge'] += $rowData['adjustment_charges'];
+                $totals['adjustmentCharge'] += ($rowData['adjustment_charge'] ?? $rowData['adjustment_charges'] ?? 0);
                 $totals['netVol'] += $rowData['net_vol'];
                 $totals['netPrincipal'] += $rowData['net_principal'];
-                $totals['netCharge'] += $rowData['net_charges'];
+                $totals['netCharge'] += ($rowData['net_charge'] ?? $rowData['net_charges'] ?? 0);
                 
                 $row++;
             }
             
             // Add totals row
             $sheet->setCellValue('A' . $row, 'Total:');
-            $sheet->mergeCells('A' . $row . ':D' . $row); // Merge A to D for "Total:" label
-            $sheet->setCellValue('E' . $row, (int)$totals['summaryVol']);
-            $sheet->setCellValue('F' . $row, (float)$totals['summaryPrincipal']);
-            $sheet->setCellValue('G' . $row, (float)$totals['summaryCharge']);
-            $sheet->setCellValue('H' . $row, (int)$totals['adjustmentVol']);
-            $sheet->setCellValue('I' . $row, (float)$totals['adjustmentPrincipal']);
-            $sheet->setCellValue('J' . $row, (float)$totals['adjustmentCharge']);
-            $sheet->setCellValue('K' . $row, (int)$totals['netVol']);
-            $sheet->setCellValue('L' . $row, (float)$totals['netPrincipal']);
-            $sheet->setCellValue('M' . $row, (float)$totals['netCharge']);
+            $sheet->mergeCells('A' . $row . ':E' . $row); // Merge A to E for "Total:" label
+            $sheet->setCellValue('F' . $row, (int)$totals['summaryVol']);
+            $sheet->setCellValue('G' . $row, (float)$totals['summaryPrincipal']);
+            $sheet->setCellValue('H' . $row, (float)$totals['summaryCharge']);
+            
+            $sheet->setCellValue('J' . $row, (float)$totals['adjustmentPrincipal']);
+            $sheet->setCellValue('K' . $row, (float)$totals['adjustmentCharge']);
+        
+            $sheet->setCellValue('M' . $row, (float)$totals['netPrincipal']);
+            $sheet->setCellValue('N' . $row, (float)$totals['netCharge']);
 
             // Apply number formatting to volume columns (whole numbers)
-            $volumeColumns = ['E', 'H', 'K'];
+            $volumeColumns = ['F', 'I', 'L'];
             foreach ($volumeColumns as $col) {
                 $sheet->getStyle($col . '12:' . $col . $row)->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle($col . '12:' . $col . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             }
 
             // Apply number formatting to amount columns (2 decimal places)
-            $amountColumns = ['F', 'G', 'I', 'J', 'L', 'M'];
+            $amountColumns = ['G', 'H', 'J', 'K', 'M', 'N'];
             foreach ($amountColumns as $col) {
                 $sheet->getStyle($col . '12:' . $col . $row)->getNumberFormat()->setFormatCode('#,##0.00');
             }
@@ -434,10 +483,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT, 'vertical' => Alignment::VERTICAL_CENTER]
             ];
-            $sheet->getStyle('A' . $row . ':M' . $row)->applyFromArray($totalStyle);
+            $sheet->getStyle('A' . $row . ':N' . $row)->applyFromArray($totalStyle);
             
             // Auto-fit columns
-            foreach (range('A', 'M') as $column) {
+            foreach (range('A', 'N') as $column) {
                 $sheet->getColumnDimension($column)->setAutoSize(true);
             }
             
@@ -445,7 +494,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             $dataStyle = [
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
             ];
-            $sheet->getStyle('A11:M' . $row)->applyFromArray($dataStyle);
+            $sheet->getStyle('A11:N' . $row)->applyFromArray($dataStyle);
             
             // Generate filename
             $filename = 'Volume_Report_' . date('Y-m-d_H-i-s') . '.xlsx';
