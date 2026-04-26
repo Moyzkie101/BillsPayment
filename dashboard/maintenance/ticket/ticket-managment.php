@@ -158,30 +158,51 @@ $ownerNamesById = st_get_user_names_by_id_numbers($conn, $ownerIds);
         .st-search-wrap--panel {
             margin-bottom: 8px;
         }
-        .st-search-wrap {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        .st-search-wrap input#stGlobalTicketSearch {
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
-            padding: 8px 10px;
-            font-size: 13px;
-            background: #fff;
-            color: #111827;
-            min-width: 220px;
-        }
-        .st-search-wrap button {
-            border: 0;
-            background: #dc3545;
-            color: #fff;
-            border-radius: 8px;
-            padding: 8px 12px;
-            font-weight: 700;
-            cursor: pointer;
-        }
+   .st-search-wrap {
+    display: flex;
+    width: 100%;               /* ensure full container width */
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.st-search-wrap input#stGlobalTicketSearch {
+    flex: 1;                   /* takes all remaining space */
+    min-width: 0;              /* override any min-width that prevents shrinking */
+    width: auto;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    background: #fff;
+    color: #111827;
+}
+
+.st-search-wrap button {
+    flex-shrink: 0;            /* button stays at its natural width */
+    border: 0;
+    background: #dc3545;
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+/* Search button hover */
+.st-search-wrap button:hover {
+    background: #b02a37;  /* darker red */
+    transform: scale(1.02);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+/* Clear Filters button hover */
+.st-clear-filters:hover {
+    background: #b02a37;
+    transform: scale(1.02);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
         /* Clear link removed — no styles required */
         @media (max-width: 760px) {
             .st-search-wrap { flex-direction: column; align-items: stretch; gap:6px; }
