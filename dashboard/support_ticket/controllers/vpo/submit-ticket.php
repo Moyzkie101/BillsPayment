@@ -1,6 +1,6 @@
 <?php
 include_once __DIR__ . '/../../includes/bootstrap.php';
-
+global $conn;
 st_require_login('../../../../login_form.php');
 st_require_permission_page(['Support Ticket VPO'], '../../../home.php');
 

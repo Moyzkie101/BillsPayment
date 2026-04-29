@@ -1,6 +1,6 @@
 <?php
 include_once __DIR__ . '/../../includes/bootstrap.php';
-
+global $conn;
 $runByCli = php_sapi_name() === 'cli';
 if (!$runByCli) {
     st_require_login('../../../../login_form.php');

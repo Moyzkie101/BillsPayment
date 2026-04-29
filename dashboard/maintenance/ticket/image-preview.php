@@ -1,6 +1,8 @@
 <?php
 include_once __DIR__ . '/../../support_ticket/includes/bootstrap.php';
 
+global $conn;
+
 st_require_login('../../../login_form.php');
 if (!function_exists('has_any_permission') || !has_any_permission(['Support Ticket Report', 'Maintenance Support Ticket'])) {
     http_response_code(403);

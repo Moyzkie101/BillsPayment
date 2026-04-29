@@ -1,6 +1,6 @@
 <?php
 include_once __DIR__ . '/../../includes/bootstrap.php';
-
+global $conn;
 st_require_login('../../../../login_form.php');
 $returnMode = strtolower(trim((string) ($_POST['return_mode'] ?? '')));
 $redirectBack = '../../create-ticket.php';

@@ -3,6 +3,8 @@ include_once __DIR__ . '/includes/bootstrap.php';
 include_once __DIR__ . '/includes/ticket_queries.php';
 include_once __DIR__ . '/includes/ticket-report.php';
 
+global $conn;
+
 st_require_login('../../login_form.php');
 
 $hasReportPermission = function_exists('has_permission') && has_permission('Support Ticket Report');

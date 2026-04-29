@@ -2,6 +2,8 @@
 include_once __DIR__ . '/includes/bootstrap.php';
 include_once __DIR__ . '/includes/ticket_queries.php';
 
+global $conn;
+
 st_require_login('../../login_form.php');
 st_require_permission_page(['Support Ticket CAD'], '../home.php');
 
