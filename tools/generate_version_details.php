@@ -32,17 +32,44 @@
  *    Useful when you're confident the commits look right.
  *    Internally: saves preview, THEN applies it.
  *
- * 4. php generate_version_details.php --since=abc1234
- *    Reads commits from a specific hash up to HEAD (for catching up on missed releases).
+ * 4. php generate_version_details.php --from=abc1234
+ *    Reads commits FROM that hash UP TO HEAD (newest).
+ *    Think of it as: "start reading from this commit going forward."
+ *    Example commit list (newest first):
+ *      7th commit
+ *      6th commit  ← HEAD
+ *      5th commit
+ *      4th commit
+ *      3rd commit  ← --from=3rdcommit
+ *      2nd commit
+ *      1st commit
+ *    Result: reads 3rd, 4th, 5th, 6th, 7th commits (upward to HEAD).
  *    Find the hash: git log --oneline
- *    Copy the hash of the LAST commit already in version2.php.
- *    Use --since alone to preview, or --since --write to preview-and-write in one go.
+ *    ⚠️ Running without --write previews only. Use --from --write to apply:
+ *    php generate_version_details.php --write --from=abc1234
+ *    You can combine it with --v to set a specific version:
+ *    php generate_version_details.php --from=abc1234 --v=3.0.0
  *
- * 5. php generate_version_details.php --v=2.3.0
+ * 5. php generate_version_details.php --from=abc1234 --to=def5678
+ *    Reads commits in the range FROM → TO (both inclusive).
+ *    Useful when you want to scope a version to a specific commit window.
+ *    Example:
+ *      7th commit
+ *      6th commit  ← --to=6thcommit
+ *      5th commit
+ *      4th commit
+ *      3rd commit  ← --from=3rdcommit
+ *      2nd commit
+ *      1st commit
+ *    Result: reads 3rd, 4th, 5th, 6th commits only.
+ *    Combine with --v to set the version:
+ *    php generate_version_details.php --from=abc1234 --to=def5678 --v=2.3.0
+ *
+ * 6. php generate_version_details.php --v=2.3.0
  *    Override the auto-detected version number.
  *    By default it bumps patch version (e.g. 2.2.2 → 2.2.3).
  *
- * 6. php generate_version_details.php --help
+ * 7. php generate_version_details.php --help
  *    Show this guide in the terminal.
  *
  * COMMIT CONVENTIONS — how messages get categorized
@@ -60,12 +87,17 @@
  *   # Review preview.html in version-details/version-preview/
  *   php generate_version_details.php --write               # STEP 2: Write
  *
- * WORKFLOW — Catch up on missed releases
- * ---------------------------------------
- *   git log --oneline                                # Find last written hash
- *   # e.g. a297327
- *   php generate_version_details.php --since=a297327 --count=999  # Preview
- *   php generate_version_details.php --write               # Write
+ * WORKFLOW — From a commit up to HEAD
+ * ------------------------------------
+ *   git log --oneline                              # Find the starting hash
+ *   php generate_version_details.php --from=abc1234 --v=3.0.0
+ *   php generate_version_details.php --write
+ *
+ * WORKFLOW — Specific commit range
+ * ---------------------------------
+ *   git log --oneline                              # Find from and to hashes
+ *   php generate_version_details.php --from=abc1234 --to=def5678 --v=2.3.0
+ *   php generate_version_details.php --write
  *
  * WORKFLOW — One-liner (when you're confident)
  * ---------------------------------------------
@@ -90,7 +122,7 @@ $defaultCount  = 20;
 // CLI Arguments
 // ——————————————————————————————————————————————————————
 
-$opts = getopt('', ['write', 'v::', 'since::', 'count::', 'help']);
+$opts = getopt('', ['write', 'v::', 'from::', 'to::', 'count::', 'help']);
 
 if (isset($opts['help'])) {
     echo <<<HELP
@@ -100,30 +132,43 @@ USAGE:
   php generate_version_details.php [options]
 
 OPTIONS:
-  --write            Apply the saved preview to version2.php
-  --v=VERSION        Set version number (e.g. 2.3.0)
-  --since=HASH       Start from a specific commit hash (inclusive)
-  --count=N          Number of commits to read (default: $defaultCount)
-  --help             Show this help message
+  --write             Apply the saved preview to version2.php
+  --v=VERSION         Set version to any number (e.g. 2.2.3, 3.0.0)
+  --from=HASH         Start reading from this commit going UP toward HEAD
+  --to=HASH           Stop reading at this commit (used with --from)
+  --count=N           Number of recent commits to read (default: 20)
+  --help              Show this help message
 
-WORKFLOW:
-  Step 1 (preview):  php generate_version_details.php --count=40
-  Step 2 (write):    php generate_version_details.php --write
+EXAMPLES:
+  # Last 40 commits up to HEAD:
+  php generate_version_details.php --count=40
 
-  Or combine in one: php generate_version_details.php --write --count=40
+  # From a specific commit up to HEAD:
+  php generate_version_details.php --from=abc1234
+
+  # A specific commit range (from → to, both inclusive):
+  php generate_version_details.php --from=abc1234 --to=def5678
+
+  # Range with version override:
+  php generate_version_details.php --from=abc1234 --to=def5678 --v=2.3.0
+
+  # Apply last preview:
+  php generate_version_details.php --write
 
 COMMIT CONVENTIONS:
-  feat: / fix:                                  → New Features / Bug Fixes
-  improvement / refactor / docs / chore:        → Improvements
-  breaking:                                     → Breaking Changes
+  feat: / feature:                               → New Features
+  fix: / bugfix:                                  → Bug Fixes
+  improvement / refactor / docs / chore:         → Improvements
+  breaking:                                       → Breaking Changes
 
 HELP;
     exit(0);
 }
 
 $writeMode = isset($opts['write']);
-$version   = $opts['v']     ?? null;
-$sinceHash = $opts['since'] ?? null;
+$version   = $opts['v']    ?? null;
+$fromHash  = $opts['from'] ?? null;
+$toHash    = $opts['to']   ?? null;
 $count     = isset($opts['count']) ? (int) $opts['count'] : $defaultCount;
 
 // ——————————————————————————————————————————————————————
@@ -134,7 +179,7 @@ if ($writeMode) {
     writeFromPreview($sourceFile, $previewFile);
 } else {
     generatePreview($repoPath, $sourceFile, $previewFile, $previewDir,
-                    $version, $sinceHash, $count);
+                    $version, $fromHash, $toHash, $count);
 }
 
 // ——————————————————————————————————————————————————————
@@ -146,11 +191,11 @@ function writeFromPreview(string $sourceFile, string $previewFile): void {
         echo "❌  No preview found at:\n   $previewFile\n\n";
         echo "   Run without --write first to generate a preview:\n";
         echo "   php generate_version_details.php --count=40\n";
-        echo "   php generate_version_details.php --since=abc1234\n";
+        echo "   php generate_version_details.php --from=abc1234\n";
         exit(1);
     }
 
-    $preview = file_get_contents($previewFile);
+    $preview  = file_get_contents($previewFile);
     $existing = file_exists($sourceFile) ? file_get_contents($sourceFile) : '';
     $backup   = $sourceFile . '.backup.' . date('Ymd_His');
 
@@ -175,23 +220,41 @@ function writeFromPreview(string $sourceFile, string $previewFile): void {
 
 function generatePreview(string $repoPath, string $sourceFile,
                          string $previewFile, string $previewDir,
-                         ?string $version, ?string $sinceHash,
-                         int $count): void {
+                         ?string $version, ?string $fromHash,
+                         ?string $toHash, int $count): void {
 
-    $gitArgs = "--first-parent --author-date-order " .
-               "-n $count " .
-               "--format=%H%n%an%n%aI%n%s%n---BODY---%n%b%n---END---";
+    $format  = "--format=%H%n%an%n%aI%n%s%n---BODY---%n%b%n---END---";
+    $baseArgs = "--first-parent --author-date-order";
 
-    if ($sinceHash) {
-        $gitArgs = "$sinceHash --first-parent --author-date-order " .
-                   "--format=%H%n%an%n%aI%n%s%n---BODY---%n%b%n---END---";
+    if ($fromHash && $toHash) {
+        // Range: from commit X up to commit Y (both inclusive)
+        // git log <from>^..<to> gives commits after fromHash up to toHash.
+        // Adding the ^ excludes fromHash's parent, making fromHash itself included.
+        $range   = escapeshellarg("{$fromHash}^") . ".." . escapeshellarg($toHash);
+        $gitArgs = "$baseArgs $range $format";
+        $rangeLabel = "$fromHash → $toHash";
+    } elseif ($fromHash) {
+        // From commit X upward to HEAD (inclusive of fromHash)
+        $range   = escapeshellarg("{$fromHash}^") . "..HEAD";
+        $gitArgs = "$baseArgs $range $format";
+        $rangeLabel = "$fromHash → HEAD";
+    } else {
+        // Plain count from HEAD going back
+        $gitArgs    = "$baseArgs -n $count $format";
+        $rangeLabel = "HEAD, last $count commits";
     }
 
-    $raw    = runGitLog($repoPath, $gitArgs);
+    $raw     = runGitLog($repoPath, $gitArgs);
     $commits = parseCommits($raw);
 
     if (empty($commits)) {
-        echo "❌  No commits found. Check --since or --count values.\n";
+        echo "❌  No commits found.\n";
+        if ($fromHash) {
+            echo "   Check that the hash exists: git log --oneline | grep $fromHash\n";
+            if ($toHash) {
+                echo "   Also check --to hash: git log --oneline | grep $toHash\n";
+            }
+        }
         exit(1);
     }
 
@@ -202,13 +265,15 @@ function generatePreview(string $repoPath, string $sourceFile,
         echo "📦  Version: $version\n";
     }
 
-    $versionId    = str_replace('.', '', $version);
-    $displayDate  = formatDisplayDate($commits[0]['date'] ?? date('Y-m-d'));
-    $changelog    = buildChangelog($commits);
-    $hasFeatures   = !empty($changelog['feature']);
+    $versionId   = str_replace('.', '', $version);
+    // Use the newest commit's date (commits are newest-first)
+    $displayDate = formatDisplayDate($commits[0]['date'] ?? date('Y-m-d'));
+    $changelog   = buildChangelog($commits);
+
+    $hasFeatures     = !empty($changelog['feature']);
     $hasImprovements = !empty($changelog['improvement']);
-    $hasFixes      = !empty($changelog['fix']);
-    $hasBreaking   = !empty($changelog['breaking']);
+    $hasFixes        = !empty($changelog['fix']);
+    $hasBreaking     = !empty($changelog['breaking']);
 
     // Build HTML
     $entries = buildVersionHtml($version, $versionId, $displayDate,
@@ -225,7 +290,7 @@ function generatePreview(string $repoPath, string $sourceFile,
     // Print full preview to terminal
     printPreview($version, $displayDate, $commits, $changelog,
                  $hasFeatures, $hasImprovements, $hasFixes, $hasBreaking,
-                 $sinceHash, $count, $entries);
+                 $rangeLabel, $entries);
 }
 
 // ——————————————————————————————————————————————————————
@@ -251,10 +316,10 @@ function buildVersionHtml(string $version, string $versionId, string $displayDat
     $entries[] = "            <span class=\"text-muted me-2\">Updated: $displayDate</span>";
     $entries[] = "            <span class=\"badge bg-success\">Latest</span>";
     $entries[] = "        </div>";
-    if ($hasFeatures)     $entries[] = renderSection('new features',     'fa-plus-circle',        'success', $changelog['feature']);
-    if ($hasImprovements) $entries[] = renderSection('improvements',       'fa-wrench',             'warning', $changelog['improvement']);
-    if ($hasBreaking)    $entries[] = renderSection('breaking changes',   'fa-exclamation-triangle','info',   $changelog['breaking']);
-    if ($hasFixes)       $entries[] = renderSection('bug fixes',           'fa-bug',               'danger',  $changelog['fix']);
+    if ($hasFeatures)     $entries[] = renderSection('new features',      'fa-plus-circle',         'success', $changelog['feature']);
+    if ($hasImprovements) $entries[] = renderSection('improvements',        'fa-wrench',              'warning', $changelog['improvement']);
+    if ($hasBreaking)     $entries[] = renderSection('breaking changes',    'fa-exclamation-triangle','info',    $changelog['breaking']);
+    if ($hasFixes)        $entries[] = renderSection('bug fixes',           'fa-bug',                'danger',  $changelog['fix']);
     $entries[] = "    </div>";
     $entries[] = "    </div>";
     $entries[] = "</div>";
@@ -274,7 +339,7 @@ function renderSection(string $label, string $faIcon, string $color, array $item
             'improvements'    => 'fa-arrow-up',
             'bug fixes'       => 'fa-times',
             'breaking changes'=> 'fa-exclamation',
-            default => 'fa-circle',
+            default           => 'fa-circle',
         };
         $html .= "            <li class=\"mb-2\"><i class=\"fas $arrowIcon text-$color me-2\"></i>$item</li>\n";
     }
@@ -288,8 +353,8 @@ function renderSection(string $label, string $faIcon, string $color, array $item
 
 function printPreview(string $version, string $displayDate, array $commits,
                        array $changelog, bool $hasFeatures, bool $hasImprovements,
-                       bool $hasFixes, bool $hasBreaking, ?string $sinceHash,
-                       int $count, string $generated): void {
+                       bool $hasFixes, bool $hasBreaking,
+                       string $rangeLabel, string $generated): void {
 
     echo border(70, '=');
     echo "  PREVIEW\n";
@@ -298,7 +363,7 @@ function printPreview(string $version, string $displayDate, array $commits,
     echo "📦  Version  : $version\n";
     echo "📅  Date     : $displayDate\n";
     echo "📂  Commits  : " . count($commits) . "\n";
-    echo "🔀  Source   : " . ($sinceHash ? "$sinceHash → HEAD" : "HEAD, last $count commits") . "\n\n";
+    echo "🔀  Source   : $rangeLabel\n\n";
 
     echo border(70, '-');
     echo "  CHANGELOG SUMMARY\n";
@@ -318,11 +383,11 @@ function printPreview(string $version, string $displayDate, array $commits,
     foreach ($commits as $idx => $c) {
         [$type, ] = categorizeCommit($c['subject'], $c['body'] ?? '');
         $tag = match ($type) {
-            'feature'    => '📦',
-            'fix'        => '🐛',
-            'improvement'=> '🔧',
-            'breaking'   => '⚠️ ',
-            default      => '• ',
+            'feature'     => '📦',
+            'fix'         => '🐛',
+            'improvement' => '🔧',
+            'breaking'    => '⚠️ ',
+            default       => '• ',
         };
         $num  = sprintf("%2d", $idx + 1);
         $date = substr($c['date'], 0, 10);
@@ -360,10 +425,10 @@ function parseCommits(string $raw): array {
     $chunks  = array_filter(array_map('trim', explode('---END---', $raw)), fn($s) => $s !== '');
     $commits = [];
     foreach ($chunks as $chunk) {
-        $parts = explode("---BODY---", $chunk);
-        $header = trim($parts[0] ?? '');
-        $body   = trim($parts[1] ?? '');
-        $lines  = explode("\n", $header);
+        $parts   = explode("---BODY---", $chunk);
+        $header  = trim($parts[0] ?? '');
+        $body    = trim($parts[1] ?? '');
+        $lines   = explode("\n", $header);
         if (count($lines) < 4) continue;
         $hash    = trim($lines[0] ?? '');
         $author  = trim($lines[1] ?? '');
@@ -371,11 +436,11 @@ function parseCommits(string $raw): array {
         $subject = trim($lines[3] ?? '');
         if ($hash && $subject) {
             $commits[] = [
-                'hash'   => substr($hash, 0, 7),
-                'author' => $author,
-                'date'   => $date,
-                'subject'=> $subject,
-                'body'   => $body,
+                'hash'    => substr($hash, 0, 7),
+                'author'  => $author,
+                'date'    => $date,
+                'subject' => $subject,
+                'body'    => $body,
             ];
         }
     }
@@ -414,7 +479,7 @@ function buildChangelog(array $commits): array {
         [$type, $text] = categorizeCommit($subject, $c['body'] ?? '');
         if ($text) $groups[$type][] = $text;
     }
-    foreach ($groups as $type => &$items) {
+    foreach ($groups as &$items) {
         $items = array_values(array_unique($items));
     }
     unset($items);
@@ -434,7 +499,7 @@ function detectAndBumpVersion(string $filePath): string {
         $versions = $m[1];
         usort($versions, fn($a, $b) => version_compare($b, $a));
         if ($versions[0]) {
-            $p = explode('.', $versions[0]);
+            $p    = explode('.', $versions[0]);
             $p[2] = (int)$p[2] + 1;
             return implode('.', $p);
         }
