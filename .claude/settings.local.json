@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php tools/generate_version_details.php --count=10)",
+      "Bash(php tools/generate_version_details.php --count=5)"
+    ]
+  }
+}
