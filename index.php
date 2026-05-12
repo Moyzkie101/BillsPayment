@@ -585,14 +585,7 @@
             <img src="images/ml.png" alt="Logo" style="height:30px;">
          </div>
          <ul class="nav-links">
-            <li>
-               <a href="#" class="version-details d-flex align-items-center position-relative" data-bs-toggle="modal" data-bs-target="#versionModal">
-                  Version Details
-                  <span class="spinner-grow spinner-grow-sm position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle">
-                     <span class="visually-hidden">New alerts</span>
-                  </span>
-               </a>
-            </li>
+            <?php include 'version-details/version-details-link.php'; ?>
          </ul>
          <button class="mobile-menu">☰</button>
       </nav>
@@ -960,32 +953,11 @@
                   </div>
                </div>
             </div>
-         </section>
-      </main>
-      
-      <!-- Version Details Modal -->
-      <div class="modal fade" id="versionModal" tabindex="-1" aria-labelledby="versionModalLabel" aria-hidden="false" data-bs-backdrop="static" data-bs-keyboard="false">
-         <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-               <div class="modal-header bg-danger text-white">
-                  <h5 class="modal-title" id="versionModalLabel">
-                     <i class="fas fa-code-branch me-2"></i>Version Details
-                  </h5>
-                  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-               </div>
-               <div class="modal-body">
-                  <div class="accordion" id="versionAccordion">
-                     <?php include 'models/semantic-versioning/version2.php';?>
-                  </div>
-               </div>
-               <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                     <i class="fas fa-times me-1"></i>Close
-                  </button>
-               </div>
-            </div>
          </div>
-      </div>
+      </section>
+   </main>
+   
+   <?php include 'version-details/version-details-modal.php'; ?>
 
    <footer class="footer">
       <div class="footer-container">

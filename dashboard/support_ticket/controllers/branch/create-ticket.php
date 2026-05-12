@@ -1,6 +1,6 @@
 <?php
 include_once __DIR__ . '/../../includes/bootstrap.php';
-
+global $conn;
 st_require_login('../../../../login_form.php');
 $returnMode = strtolower(trim((string) ($_POST['return_mode'] ?? '')));
 $redirectBack = '../../create-ticket.php';
@@ -8,15 +8,32 @@ if (in_array($returnMode, ['open', 'closed'], true)) {
     $redirectBack .= '?mode=' . $returnMode;
 }
 
+$isAjax = st_is_ajax_request();
+$fail = function ($message, $statusCode = 400) use ($isAjax, $redirectBack) {
+    if ($isAjax) {
+        st_json(false, $message, [], $statusCode);
+    }
+    st_redirect_with_flash('create_ticket', 'danger', $message, $redirectBack);
+};
+
+$ok = function ($message, $data = []) use ($isAjax, $redirectBack) {
+    if ($isAjax) {
+        st_json(true, $message, $data, 200);
+    }
+    st_flash_set('create_ticket', 'success', $message);
+    header('Location: ' . $redirectBack);
+    exit;
+};
+
 st_require_permission_page(['Support Ticket Create'], '../../../home.php');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    st_redirect_with_flash('create_ticket', 'danger', 'Invalid request method.', $redirectBack);
+    $fail('Invalid request method.', 405);
 }
 
 $userId = st_user_id_or_null();
 if ($userId === null) {
-    st_redirect_with_flash('create_ticket', 'danger', 'Unable to resolve current user ID.', $redirectBack);
+    $fail('Unable to resolve current user ID.', 401);
 }
 
 $referenceNumber = trim((string) ($_POST['reference_number'] ?? ''));
@@ -47,7 +64,7 @@ if ($correctAmount === null) {
 
 $allowedSources = ['KPX', 'KP7'];
 if (!in_array($source, $allowedSources, true)) {
-    st_redirect_with_flash('create_ticket', 'danger', 'Invalid source selected.', $redirectBack);
+    $fail('Invalid source selected.');
 }
 
 if (
@@ -62,30 +79,30 @@ if (
     $paymentBranchName === '' ||
     $amount === null
 ) {
-    st_redirect_with_flash('create_ticket', 'danger', 'Please complete all required fields before submitting.', $redirectBack);
+    $fail('Please complete all required fields before submitting.');
 }
 
 if ($typeOfRequest === 'WRONG BILLER') {
     if ($correctBillerId === '' || $correctBillerName === '') {
-        st_redirect_with_flash('create_ticket', 'danger', 'Correct biller details are required for WRONG BILLER request.', $redirectBack);
+        $fail('Correct biller details are required for WRONG BILLER request.');
     }
 }
 
 if ($typeOfRequest === 'OVERSTATED AMOUNT' || $typeOfRequest === 'CANCELLED TRANSACTION') {
     if ($wrongAmount === null || $correctAmount === null) {
-        st_redirect_with_flash('create_ticket', 'danger', 'Wrong and correct amounts are required for this request type.', $redirectBack);
+        $fail('Wrong and correct amounts are required for this request type.');
     }
 }
 
 $subbiller = st_get_subbiller_by_ext_id($conn, $subbillerExtId);
 if (!$subbiller) {
-    st_redirect_with_flash('create_ticket', 'danger', 'Selected subbiller is invalid or not found in mldb.subbiller.', $redirectBack);
+    $fail('Selected subbiller is invalid or not found in mldb.subbiller.');
 }
 
 $billerName = trim((string) ($subbiller['subbiller_name'] ?? ''));
 $partnerExtId = trim((string) ($subbiller['partner_ext_id'] ?? ''));
 if ($billerName === '') {
-    st_redirect_with_flash('create_ticket', 'danger', 'Selected subbiller has no canonical name.', $redirectBack);
+    $fail('Selected subbiller has no canonical name.');
 }
 
 $conn->autocommit(false);
@@ -248,11 +265,11 @@ try {
     $conn->commit();
     $conn->autocommit(true);
 
-    st_flash_set('create_ticket', 'success', 'Ticket ' . $ticketNumber . ' created successfully.');
-    header('Location: ' . $redirectBack);
-    exit;
+    $ok('Ticket ' . $ticketNumber . ' created successfully.', [
+        'ticket_number' => $ticketNumber,
+    ]);
 } catch (Exception $e) {
     $conn->rollback();
     $conn->autocommit(true);
-    st_redirect_with_flash('create_ticket', 'danger', $e->getMessage(), $redirectBack);
+    $fail($e->getMessage(), 500);
 }

@@ -3,6 +3,8 @@ include_once __DIR__ . '/includes/bootstrap.php';
 include_once __DIR__ . '/includes/ticket_queries.php';
 include_once __DIR__ . '/includes/ticket-report.php';
 
+global $conn;
+
 st_require_login('../../login_form.php');
 
 $hasReportPermission = function_exists('has_permission') && has_permission('Support Ticket Report');
@@ -14,6 +16,15 @@ if (!$hasReportPermission) {
 $mode = strtolower(trim((string) ($_GET['mode'] ?? 'open')));
 if (!in_array($mode, ['open', 'active', 'closed'], true)) {
     $mode = 'open';
+}
+
+function st_trail_role_icon_asset_report_page($role)
+{
+    $r = strtoupper(trim((string) $role));
+    if ($r === 'BRANCH') return '../../assets/images/icons/branch-icon.svg';
+    if ($r === 'VPO') return '../../assets/images/icons/vpo-icon.svg';
+    if ($r === 'CAD') return '../../assets/images/icons/cad-icon.svg';
+    return '';
 }
 
 $searchTicketNumber = strtoupper(trim((string) ($_GET['ticket_number'] ?? '')));
@@ -70,6 +81,13 @@ foreach ($allTickets as $ticket) {
     $partnerName = trim((string) ($ticket['partner_name'] ?? ''));
     if ($partnerName === '') {
         $partnerName = $partnerId;
+    }
+
+    // For Support Ticket report, exclude only tickets with status == 'closed'.
+    // Tickets with any other status should be counted in the receivable summary.
+    $status = isset($ticket['status']) ? strtolower(trim((string) $ticket['status'])) : '';
+    if ($status === 'closed') {
+        continue;
     }
 
     if ($partnerId === '' || $partnerName === '') {
@@ -237,15 +255,14 @@ if ($searchTicketNumber !== '') {
 
         .st-search-wrap {
             display: flex;
-            flex-wrap: wrap;
             gap: 8px;
             align-items: center;
             margin-bottom: 12px;
         }
 
         .st-search-wrap input[type="text"] {
-            width: 280px;
-            max-width: 100%;
+            flex: 1 1 auto;
+            min-width: 0;
             border: 1px solid #d1d5db;
             border-radius: 8px;
             padding: 8px 10px;
@@ -428,6 +445,10 @@ if ($searchTicketNumber !== '') {
             background: #fff;
         }
 
+        .st-summary-table col.col-name { width: 280px; }
+        .st-summary-table col.col-year { width: 130px; }
+        .st-summary-table col.col-total { width: 170px; }
+
         .st-summary-table th,
         .st-summary-table td {
             border-bottom: 1px solid #f1f5f9;
@@ -443,10 +464,58 @@ if ($searchTicketNumber !== '') {
             color: #334155;
         }
 
+        .st-summary-table thead th.partner-col-head {
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        .st-summary-table thead th.partner-col-head span {
+            font-weight: 700;
+        }
+
+        .st-summary-table thead th:not(.partner-col-head),
+        .st-summary-table td:not(:first-child) {
+            text-align: right;
+        }
+
         .st-summary-table td.amt,
         .st-summary-table th.amt {
             text-align: right;
             font-variant-numeric: tabular-nums;
+        }
+
+        .st-summary-table td.total,
+        .st-summary-table tfoot th {
+            font-weight: 800;
+        }
+
+        .st-summary-table td.total {
+            color: #d9534f;
+        }
+
+        .st-summary-table tfoot th {
+            background: #fff7ed;
+            border-top: 2px solid #fed7aa;
+        }
+
+        .st-summary-table tfoot th.overall-total,
+        .st-summary-table tfoot th.grand-total {
+            background: #fff59d;
+            color: #000;
+        }
+
+        .st-summary-table tfoot th.grand-label {
+            text-align: right;
+            font-weight: 800;
+            background: #fff59d;
+            color: #000;
+        }
+
+        .st-summary-table tfoot tr.spacer-row th {
+            border: 0;
+            background: transparent;
+            height: 10px;
+            padding: 0;
         }
     </style>
 </head>
@@ -528,7 +597,6 @@ if ($searchTicketNumber !== '') {
                 <input type="hidden" name="mode" value="<?php echo htmlspecialchars($mode); ?>">
                 <input type="text" name="ticket_number" value="<?php echo htmlspecialchars($searchTicketNumber); ?>" placeholder="Search Ticket Number">
                 <button type="submit"><i class="fa-solid fa-magnifying-glass"></i> Search Ticket</button>
-                <a href="ticket-report.php?mode=<?php echo urlencode($mode); ?>">Clear Search</a>
             </form>
 
             <div class="mode-cards" data-st-mode-group data-st-param="mode">
@@ -536,21 +604,18 @@ if ($searchTicketNumber !== '') {
                     <input type="radio" name="reportMode" value="open" <?php echo $mode === 'open' ? 'checked' : ''; ?>>
                     <div class="mode-icon"><i class="fa-solid fa-inbox"></i></div>
                     <div class="mode-text"><p class="mode-label">OPEN</p><small>Unresolved queue</small></div>
-                    <span class="st-mode-count-badge"><?php echo count($openTickets); ?></span>
                 </label>
 
                 <label class="mode-card <?php echo $mode === 'active' ? 'selected' : ''; ?>" data-mode="active">
                     <input type="radio" name="reportMode" value="active" <?php echo $mode === 'active' ? 'checked' : ''; ?>>
                     <div class="mode-icon"><i class="fa-solid fa-bolt"></i></div>
                     <div class="mode-text"><p class="mode-label">ACTIVE</p><small>In-progress tickets</small></div>
-                    <span class="st-mode-count-badge"><?php echo count($activeTickets); ?></span>
                 </label>
 
                 <label class="mode-card <?php echo $mode === 'closed' ? 'selected' : ''; ?>" data-mode="closed">
                     <input type="radio" name="reportMode" value="closed" <?php echo $mode === 'closed' ? 'checked' : ''; ?>>
                     <div class="mode-icon"><i class="fa-solid fa-box-archive"></i></div>
                     <div class="mode-text"><p class="mode-label">CLOSED</p><small>Resolved and closed</small></div>
-                    <span class="st-mode-count-badge"><?php echo count($closedTickets); ?></span>
                 </label>
             </div>
 
@@ -567,7 +632,7 @@ if ($searchTicketNumber !== '') {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($openTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>">
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) ($ticket['created_at'] ?? '')); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
@@ -592,7 +657,7 @@ if ($searchTicketNumber !== '') {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($activeTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>">
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) ($ticket['created_at'] ?? '')); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
@@ -617,7 +682,7 @@ if ($searchTicketNumber !== '') {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($closedTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalReport-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>">
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) (($ticket['closed_at'] ?? '') !== '' ? $ticket['closed_at'] : ($ticket['created_at'] ?? ''))); ?></span>
                                 <span class="st-ticket-col st-col-type"><?php echo htmlspecialchars((string) ($ticket['ticket_type_label'] ?: $ticket['type_of_request'])); ?></span>
@@ -663,9 +728,16 @@ if ($searchTicketNumber !== '') {
                         <div class="tm-header">
                             <div class="tm-header-top">
                                 <div class="tm-header-left">
-                                    <div class="tm-ticket-number"><span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>Ticket #: <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
+                                    <div class="tm-ticket-number tm-ticket-number--card">
+                                        <div class="tm-ticket-number-main">
+                                            <span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
+                                            <span class="tm-ticket-number-label">Ticket</span>
+                                            <span class="tm-ticket-id-value"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
+                                        </div>
+                                        <button type="button" class="tm-copy-ticket" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" title="Copy ticket number" aria-label="Copy ticket number"><i class="fa-solid fa-clipboard" aria-hidden="true"></i></button>
+                                    </div>
                                     <div class="tm-ticket-meta-grid">
-                                        <div class="tm-meta-item"><div class="tm-meta-label">Reference No.</div><div class="tm-meta-value"><?php echo htmlspecialchars($hdrReference); ?></div></div>
+                                        <div class="tm-meta-item"><div class="tm-meta-label">Reference No.</div><div class="tm-meta-value tm-meta-value--ref"><?php echo htmlspecialchars($hdrReference); ?></div></div>
                                         <div class="tm-meta-item"><div class="tm-meta-label">Transaction D/T</div><div class="tm-meta-value"><?php echo htmlspecialchars($hdrTransfer); ?></div></div>
                                         <div class="tm-meta-item"><div class="tm-meta-label">Account No.</div><div class="tm-meta-value"><?php echo htmlspecialchars($hdrAccount); ?></div></div>
                                         <div class="tm-meta-item"><div class="tm-meta-label">Payment Branch</div><div class="tm-meta-value"><?php echo htmlspecialchars($hdrPaymentBranch); ?></div></div>
@@ -677,7 +749,7 @@ if ($searchTicketNumber !== '') {
                                     </div>
                                 </div>
                                 <div class="tm-header-right">
-                                    <div class="tm-header-actions">
+                                    <div class="tm-header-actions tm-header-actions--card">
                                         <div class="tm-header-actions-top">
                                             <div class="tm-status tm-status--<?php echo htmlspecialchars($statusLower); ?>"><?php echo htmlspecialchars((string) $ticket['status']); ?></div>
                                             <button type="button" class="tm-close-btn" data-st-close-modal="stTicketTrailModalReport-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
@@ -710,6 +782,8 @@ if ($searchTicketNumber !== '') {
                                             if ($trailRole === 'BRANCH') $avatarClass = 'tm-trail-avatar--branch';
                                             elseif ($trailRole === 'VPO') $avatarClass = 'tm-trail-avatar--vpo';
                                             elseif ($trailRole === 'CAD') $avatarClass = 'tm-trail-avatar--cad';
+                                            $trailIconAsset = st_trail_role_icon_asset_report_page($trailRole);
+                                            $trailRoleClass = strtolower($trailRole);
 
                                             $trailOwnerTooltip = '';
                                             if ($trailRole === 'BRANCH') {
@@ -720,13 +794,25 @@ if ($searchTicketNumber !== '') {
                                                 $trailOwnerTooltip = $cadOwnerName;
                                             }
                                         ?>
-                                        <div class="tm-trail-item">
+                                        <div class="tm-trail-item" data-trail-id="<?php echo (int) $trailId; ?>">
                                             <div class="tm-trail-dot-wrap">
-                                                <div class="tm-trail-avatar <?php echo $avatarClass; ?>"><?php echo htmlspecialchars(st_trail_role_icon_report($trailRole)); ?></div>
+                                                <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
+                                                    <?php if ($trailIconAsset !== ''): ?>
+                                                        <img class="tm-trail-avatar-icon tm-trail-avatar-icon--<?php echo htmlspecialchars($trailRoleClass); ?>" src="<?php echo htmlspecialchars($trailIconAsset, ENT_QUOTES); ?>" alt="" aria-hidden="true">
+                                                    <?php else: ?>
+                                                        <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                                                    <?php endif; ?>
+                                                </div>
                                             </div>
                                             <div class="tm-trail-card <?php echo $trailRole === 'SYSTEM' ? 'tm-trail-card--system' : ''; ?> <?php echo $trailIndex === $lastTrailIndex ? 'tm-expanded' : ''; ?>" <?php echo $trailIndex === $lastTrailIndex ? 'data-tm-latest="1"' : ''; ?>>
                                                 <div class="tm-trail-card-header">
-                                                    <div class="tm-trail-avatar <?php echo $avatarClass; ?>"><?php echo htmlspecialchars(st_trail_role_icon_report($trailRole)); ?></div>
+                                                    <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
+                                                        <?php if ($trailIconAsset !== ''): ?>
+                                                            <img class="tm-trail-avatar-icon tm-trail-avatar-icon--<?php echo htmlspecialchars($trailRoleClass); ?>" src="<?php echo htmlspecialchars($trailIconAsset, ENT_QUOTES); ?>" alt="" aria-hidden="true">
+                                                        <?php else: ?>
+                                                            <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                                                        <?php endif; ?>
+                                                    </div>
                                                     <div class="tm-trail-meta">
                                                         <div class="tm-trail-sender">
                                                             <span><?php echo htmlspecialchars($trailRole); ?></span>
@@ -936,6 +1022,14 @@ if ($searchTicketNumber !== '') {
         <?php include '../../templates/footer.php'; ?>
     </div>
 
+    <script>
+        window.supportTicketLiveUpdates = {
+            endpoint: 'controllers/poll/live-updates.php',
+            scope: 'REPORT',
+            intervalMs: 5000
+        };
+    </script>
+
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
@@ -1034,6 +1128,76 @@ if ($searchTicketNumber !== '') {
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        // copy ticket number on click
+                        onClick: function (evt, activeEls) {
+                            try {
+                                if (!activeEls || !activeEls.length) return;
+                                var idx = activeEls[0].index;
+                                var ticket = (agingTickets && agingTickets[idx]) ? agingTickets[idx] : (agingLabels && agingLabels[idx] ? agingLabels[idx] : '');
+                                if (!ticket) return;
+
+                                function showToast(msg, type) {
+                                    if (window.stShowToast) {
+                                        window.stShowToast(msg, type === 'danger' ? 'danger' : 'success');
+                                        return;
+                                    }
+                                    var existing = document.getElementById('st-copy-toast');
+                                    var klass = (type === 'danger') ? 'st-copy-toast--danger' : 'st-copy-toast--success';
+                                    if (existing) {
+                                        existing.textContent = msg;
+                                        existing.classList.remove('st-copy-toast--hide', 'st-copy-toast--danger', 'st-copy-toast--success');
+                                        existing.classList.add('st-copy-toast--show', klass);
+                                        clearTimeout(existing._hideTimeout);
+                                        existing._hideTimeout = setTimeout(function () {
+                                            existing.classList.remove('st-copy-toast--show');
+                                            existing.classList.add('st-copy-toast--hide');
+                                            setTimeout(function () { try { existing.remove(); } catch (e) {} }, 260);
+                                        }, 2200);
+                                        return;
+                                    }
+                                    var toast = document.createElement('div');
+                                    toast.id = 'st-copy-toast';
+                                    toast.className = 'st-copy-toast st-copy-toast--show ' + klass;
+                                    toast.textContent = msg;
+                                    document.body.appendChild(toast);
+                                    toast._hideTimeout = setTimeout(function () {
+                                        toast.classList.remove('st-copy-toast--show');
+                                        toast.classList.add('st-copy-toast--hide');
+                                        setTimeout(function () { try { toast.remove(); } catch (e) {} }, 260);
+                                    }, 2200);
+                                }
+
+                                function fallbackCopy(text) {
+                                    var ta = document.createElement('textarea');
+                                    ta.value = String(text || '');
+                                    ta.style.position = 'fixed';
+                                    ta.style.left = '-9999px';
+                                    document.body.appendChild(ta);
+                                    ta.select();
+                                    try {
+                                        var ok = document.execCommand('copy');
+                                        document.body.removeChild(ta);
+                                        if (ok) showToast('Ticket number copied to clipboard');
+                                        else showToast('Unable to copy ticket number', 'danger');
+                                    } catch (err) {
+                                        document.body.removeChild(ta);
+                                        showToast('Unable to copy ticket number', 'danger');
+                                    }
+                                }
+
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    navigator.clipboard.writeText(ticket).then(function () {
+                                        showToast('Ticket number copied to clipboard');
+                                    }).catch(function () {
+                                        fallbackCopy(ticket);
+                                    });
+                                } else {
+                                    fallbackCopy(ticket);
+                                }
+                            } catch (e) {
+                                // ignore click errors
+                            }
+                        },
                         indexAxis: 'y',
                         scales: {
                             x: { beginAtZero: true, title: { display: true, text: 'Hours' } },
@@ -1128,12 +1292,13 @@ if ($searchTicketNumber !== '') {
                 }
 
                 var headCols = years.map(function (y) { return '<th>' + y + '</th>'; }).join('');
+                var colGroup = '<colgroup><col class="col-name" />' + years.map(function () { return '<col class="col-year" />'; }).join('') + '<col class="col-total" /></colgroup>';
                 var bodyRows = rows.map(function (row) {
                     var yearCells = years.map(function (y) {
                         var v = row.years && row.years[y] ? row.years[y] : null;
                         return '<td class="amt">' + (v !== null ? formatAmount(v) : '-') + '</td>';
                     }).join('');
-                    return '<tr><td>' + escapeHtml(row.name || 'UNKNOWN BILLER') + '</td>' + yearCells + '<td class="amt"><strong>' + formatAmount(row.total || 0) + '</strong></td></tr>';
+                    return '<tr><td>' + escapeHtml(row.name || 'UNKNOWN BILLER') + '</td>' + yearCells + '<td class="amt total">' + formatAmount(row.total || 0) + '</td></tr>';
                 }).join('');
 
                 var footYearCells = years.map(function (y) {
@@ -1141,13 +1306,21 @@ if ($searchTicketNumber !== '') {
                     return '<th class="amt">' + formatAmount(tv) + '</th>';
                 }).join('');
 
+                var blankCells = years.map(function () { return '<th></th>'; }).join('');
+                var spanCols = 1 + years.length;
+
                 container.innerHTML =
                     '<div style="margin-bottom:8px;font-weight:800;color:#111827;">' + escapeHtml(String((summary.partner_name || partnerId)).toUpperCase()) + ' SUB BILLERS</div>' +
                     '<div class="st-summary-table-wrap">' +
                         '<table class="st-summary-table">' +
-                            '<thead><tr><th>Sub Biller</th>' + headCols + '<th>Total Receivable</th></tr></thead>' +
+                            colGroup +
+                            '<thead><tr><th class="partner-col-head">' + escapeHtml(String((summary.partner_name || partnerId)).toUpperCase()) + '<br><span>SUB BILLERS</span></th>' + headCols + '<th>Total Receivable</th></tr></thead>' +
                             '<tbody>' + bodyRows + '</tbody>' +
-                            '<tfoot><tr><th>Total</th>' + footYearCells + '<th class="amt">' + formatAmount(summary.grand_total || 0) + '</th></tr></tfoot>' +
+                            '<tfoot>' +
+                                '<tr><th></th>' + footYearCells + '<th class="amt overall-total">' + formatAmount(summary.grand_total || 0) + '</th></tr>' +
+                                '<tr class="spacer-row"><th colspan="' + spanCols + '"></th><th></th></tr>' +
+                                '<tr>' + blankCells + '<th class="grand-label">Grand Total</th><th class="amt grand-total">' + formatAmount(summary.grand_total || 0) + '</th></tr>' +
+                            '</tfoot>' +
                         '</table>' +
                     '</div>';
             }

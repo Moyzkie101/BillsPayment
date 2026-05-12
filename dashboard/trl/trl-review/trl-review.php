@@ -87,7 +87,7 @@ if ($searchRef !== '') {
     $params[] = '%' . $searchRef . '%';
 }
 
-$sql .= " ORDER BY t.type_of_request ASC, t.transfer_datetime DESC, t.trl_no DESC";
+$sql .= " ORDER BY t.transfer_datetime DESC, t.trl_no DESC, t.type_of_request ASC";
 
 $stmt = $conn->prepare($sql);
 if ($stmt) {

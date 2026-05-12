@@ -2,8 +2,10 @@
 // Returns a small HTML snippet for insertion into the page to preview an attachment
 include_once __DIR__ . '/includes/bootstrap.php';
 
+global $conn;
+
 st_require_login('../../login_form.php');
-if (!function_exists('has_any_permission') || !has_any_permission(['Support Ticket Create', 'Support Ticket BPO', 'Support Ticket CAD'])) {
+if (!function_exists('has_any_permission') || !has_any_permission(['Support Ticket Create', 'Support Ticket VPO', 'Support Ticket CAD'])) {
     http_response_code(403);
     echo '<div class="ip-error">Forbidden</div>';
     exit;

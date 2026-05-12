@@ -266,7 +266,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         <?php endif; ?>
         <?php endif; ?>
 
-        <?php if (has_any_permission(['TRL Import','TRL Entry','TRL Review','TRL Report'])): ?>
+        <?php if (has_any_permission(['TRL Import','TRL Entry','TRL Review','TRL Report','TRL Ticket Entry'])): ?>
         <!-- Billspayment - TRL (Transaction Request Log) - top-level menu -->
         <div class="onetab" id="bp-trl-btn">
             <h6><i class="fa-solid fa-list"></i> Billspayment - TRL</h6>
@@ -284,6 +284,12 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <?php if (has_permission('TRL Entry')): ?>
             <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-entry/trl-entry.php'">
                 <a href="<?php echo $auth_url; ?>dashboard/trl/trl-entry/trl-entry.php"><i class="fa-solid fa-pen-to-square"></i> TRL - Entry</a>
+            </div>
+            <?php endif; ?>
+
+            <?php if (has_permission('TRL Ticket Entry')): ?>
+            <div class="sub" onclick="parent.location='<?php echo $auth_url; ?>dashboard/trl/trl-ticket_entry/trl-entry_ticket.php'">
+                <a href="<?php echo $auth_url; ?>dashboard/trl/trl-ticket_entry/trl-entry_ticket.php"><i class="fa-solid fa-ticket"></i> TRL - Ticket Entry</a>
             </div>
             <?php endif; ?>
 
@@ -435,7 +441,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             <?php endif; ?>
         </div>
         <?php endif; ?>
-        <?php if (has_any_permission(['Support Ticket Create','Support Ticket BPO','Support Ticket CAD','Support Ticket Report'])): ?>
+        <?php if (has_any_permission(['Support Ticket Create','Support Ticket VPO','Support Ticket CAD','Support Ticket Report'])): ?>
             <div class="onetab" id="support-ticket-btn">
                 <h6><i class="fa-solid fa-ticket-simple"></i> Support Ticket</h6>
                 <i class="fa-solid fa-chevron-right" id="closed-support-ticket" style="display: block"></i>
@@ -448,7 +454,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     <a href="<?php echo $base_url; ?>support_ticket/create-ticket.php"><i class="fa-solid fa-plus"></i> Create Ticket</a>
                 </div>
                 <?php endif; ?>
-                <?php if (has_permission('Support Ticket BPO')): ?>
+                <?php if (has_permission('Support Ticket VPO')): ?>
                 <div class="sub" onclick="parent.location='<?php echo $base_url; ?>support_ticket/bpo-ticket.php'">
                     <a href="<?php echo $base_url; ?>support_ticket/bpo-ticket.php"><i class="fa-solid fa-headset"></i> VPO Ticket</a>
                 </div>
@@ -467,7 +473,7 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
             </div>
         <?php endif; ?>
 
-        <?php if (has_any_permission(['Accounts','Maintenance Accounts User Management','Maintenance Accounts Access Levels','Maintenance Duplicate Transaction','Maintenance Masterfiles Partner List','Maintenance Masterfiles Bank List'])): ?>
+        <?php if (has_any_permission(['Accounts','Maintenance Accounts User Management','Maintenance Accounts Access Levels','Maintenance Duplicate Transaction','Maintenance Masterfiles Partner List','Maintenance Masterfiles Bank List','Support Ticket Report','Maintenance Support Ticket'])): ?>
             <!-- Show/Hide Set Maintenance Main-menu -->
             <div class="onetab" id="set-btn">
             <h6><i class="fa-solid fa-wrench"></i> Maintenance</h6>
@@ -539,6 +545,23 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                     <a href="<?php echo $base_url; ?>maintenance/masterfiles/masterfile-bank-list.php"><i class="fa-solid fa-receipt"></i> Bank List</a>
                 </div>
                 <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            <?php endif; ?>
+
+            <?php if (has_any_permission(['Support Ticket Report','Maintenance Support Ticket'])): ?>
+            <!-- Show/Hide Set support ticket Sub-menu -->
+            <div class="tabcat" id="set-support-ticket-btn" style="display: none;">
+                <h6><i class="fa-solid fa-ticket-simple"></i> Support Ticket</h6>
+                <i class="fa-solid fa-chevron-right" id="closed-set-support-ticket" style="display: block"></i>
+                <i class="fa-solid fa-chevron-down" id="open-set-support-ticket" style="display: none"></i>
+            </div>
+
+            <!-- Set Support Ticket Buttons -->
+            <div class="onetab-sub" id="set-support-ticket-nav" style="display: none;">
+                <div class="sub" onclick="parent.location='<?php echo $base_url; ?>maintenance/ticket/ticket-managment.php'">
+                    <a href="<?php echo $base_url; ?>maintenance/ticket/ticket-managment.php"><i class="fa-solid fa-ticket"></i> Tickets</a>
+                </div>
             </div>
             <?php endif; ?>
         <?php endif; ?>

@@ -124,6 +124,11 @@
                     "key": "TRL Review",
                     "label": "TRL Review",
                     "icon": "check_circle"
+                },
+                {
+                    "key": "TRL Ticket Entry",
+                    "label": "TRL Ticket Entry",
+                    "icon": "check_circle"
                 }
             ]
         },
@@ -182,11 +187,6 @@
             "icon": "check_circle",
             "children": [
                 {
-                    "key": "Support Ticket BPO",
-                    "label": "Support Ticket BPO",
-                    "icon": "check_circle"
-                },
-                {
                     "key": "Support Ticket CAD",
                     "label": "Support Ticket CAD",
                     "icon": "check_circle"
@@ -199,6 +199,11 @@
                 {
                     "key": "Support Ticket Report",
                     "label": "Support Ticket Report",
+                    "icon": "check_circle"
+                },
+                {
+                    "key": "Support Ticket VPO",
+                    "label": "Support Ticket VPO",
                     "icon": "check_circle"
                 }
             ]
@@ -241,6 +246,11 @@
                 {
                     "key": "Maintenance Masterfiles Partner List",
                     "label": "Maintenance Masterfiles Partner List",
+                    "icon": "check_circle"
+                },
+                {
+                    "key": "Maintenance Support Ticket",
+                    "label": "Maintenance Support Ticket",
                     "icon": "check_circle"
                 }
             ]
@@ -329,7 +339,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -340,7 +351,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -364,7 +376,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -390,7 +403,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -478,7 +492,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -494,7 +509,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -523,7 +539,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -554,7 +571,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -627,7 +645,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -640,7 +659,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -666,7 +686,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -694,7 +715,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -792,7 +814,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -810,7 +833,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -841,7 +865,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -874,16 +899,17 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
             "access_level": 32,
             "permissions": [
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -891,10 +917,10 @@
             "permissions": [
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -915,10 +941,10 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -941,23 +967,24 @@
                 "Bills Payment",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
             "access_level": 36,
             "permissions": [
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -965,14 +992,15 @@
             "permissions": [
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -993,14 +1021,15 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1023,14 +1052,15 @@
                 "Bills Payment",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1041,10 +1071,10 @@
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1057,10 +1087,10 @@
                 "Invoice Review",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1086,10 +1116,10 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1117,10 +1147,10 @@
                 "Invoice Review",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1131,14 +1161,15 @@
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1151,14 +1182,15 @@
                 "Invoice Review",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1184,14 +1216,15 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1219,14 +1252,15 @@
                 "Invoice Review",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1234,10 +1268,10 @@
             "permissions": [
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1247,10 +1281,10 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1273,10 +1307,10 @@
                 "Bills Payment",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1301,10 +1335,10 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1312,14 +1346,15 @@
             "permissions": [
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1329,14 +1364,15 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1359,14 +1395,15 @@
                 "Bills Payment",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1391,14 +1428,15 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1411,10 +1449,10 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1429,10 +1467,10 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1460,10 +1498,10 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1493,10 +1531,10 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -1509,14 +1547,15 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1531,14 +1570,15 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1566,14 +1606,15 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1603,14 +1644,15 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1622,7 +1664,8 @@
                 "Maintenance Accounts User Signature",
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List"
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket"
             ]
         },
         {
@@ -1635,6 +1678,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -1663,7 +1707,8 @@
                 "Maintenance Accounts User Signature",
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List"
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket"
             ]
         },
         {
@@ -1691,6 +1736,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -1705,10 +1751,12 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1721,12 +1769,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1754,10 +1804,12 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1785,12 +1837,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1807,7 +1861,8 @@
                 "Maintenance Accounts User Signature",
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List"
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket"
             ]
         },
         {
@@ -1825,6 +1880,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -1858,7 +1914,8 @@
                 "Maintenance Accounts User Signature",
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
-                "Maintenance Masterfiles Partner List"
+                "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket"
             ]
         },
         {
@@ -1891,6 +1948,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View"
             ]
@@ -1910,10 +1968,12 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1931,12 +1991,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -1969,10 +2031,12 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2005,12 +2069,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2023,6 +2089,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List"
             ]
@@ -2037,6 +2104,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -2068,6 +2136,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List"
             ]
@@ -2097,6 +2166,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -2113,12 +2183,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2131,6 +2203,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -2138,7 +2211,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2166,12 +2240,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2199,6 +2275,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -2206,7 +2283,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2224,6 +2302,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List"
             ]
@@ -2243,6 +2322,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -2279,6 +2359,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List"
             ]
@@ -2313,6 +2394,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -2334,12 +2416,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2357,6 +2441,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -2364,7 +2449,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2397,12 +2483,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2435,6 +2523,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -2442,7 +2531,8 @@
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2455,10 +2545,11 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -2471,12 +2562,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -2504,10 +2596,11 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -2535,12 +2628,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -2553,14 +2647,16 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2573,16 +2669,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2610,14 +2708,16 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2645,16 +2745,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2672,10 +2774,11 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -2693,12 +2796,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -2731,10 +2835,11 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -2767,12 +2872,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -2790,14 +2896,16 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2815,16 +2923,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2857,14 +2967,16 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2897,16 +3009,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -2919,12 +3033,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -2937,14 +3052,15 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -2972,12 +3088,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -3005,14 +3122,15 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -3025,16 +3143,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -3047,18 +3167,20 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -3086,16 +3208,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -3123,18 +3247,20 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -3152,12 +3278,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -3175,14 +3302,15 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -3215,12 +3343,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -3253,14 +3382,15 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
-                "Support Ticket Report"
+                "Support Ticket Report",
+                "Support Ticket VPO"
             ]
         },
         {
@@ -3278,16 +3408,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -3305,18 +3437,20 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -3349,16 +3483,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -3391,18 +3527,20 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
-                "TRL Review"
+                "TRL Review",
+                "TRL Ticket Entry"
             ]
         },
         {
@@ -3482,6 +3620,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3497,6 +3636,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3525,6 +3665,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3555,6 +3696,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3663,6 +3805,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3683,6 +3826,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3716,6 +3860,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3751,6 +3896,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3844,6 +3990,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3861,6 +4008,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3891,6 +4039,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -3923,6 +4072,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4041,6 +4191,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4063,6 +4214,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4098,6 +4250,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4135,6 +4288,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4144,10 +4298,10 @@
         {
             "access_level": 160,
             "permissions": [
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4159,10 +4313,10 @@
             "permissions": [
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4187,10 +4341,10 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4217,10 +4371,10 @@
                 "Bills Payment",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4230,14 +4384,15 @@
         {
             "access_level": 164,
             "permissions": [
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4249,14 +4404,15 @@
             "permissions": [
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4281,14 +4437,15 @@
                 "BP Settlement Adjustment Entry",
                 "BP Settlement Per Bank",
                 "Bills Payment",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4315,14 +4472,15 @@
                 "Bills Payment",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4337,10 +4495,10 @@
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4357,10 +4515,10 @@
                 "Invoice Review",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4390,10 +4548,10 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4425,10 +4583,10 @@
                 "Invoice Review",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4443,14 +4601,15 @@
                 "BI Report Billing Invoice",
                 "Invoice Approval",
                 "Invoice Review",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4467,14 +4626,15 @@
                 "Invoice Review",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4504,14 +4664,15 @@
                 "Bills Payment",
                 "Invoice Approval",
                 "Invoice Review",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4543,14 +4704,15 @@
                 "Invoice Review",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4562,10 +4724,10 @@
             "permissions": [
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4579,10 +4741,10 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4609,10 +4771,10 @@
                 "Bills Payment",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4641,10 +4803,10 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4656,14 +4818,15 @@
             "permissions": [
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4677,14 +4840,15 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4711,14 +4875,15 @@
                 "Bills Payment",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4747,14 +4912,15 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4771,10 +4937,10 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4793,10 +4959,10 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4828,10 +4994,10 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4865,10 +5031,10 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4885,14 +5051,15 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4911,14 +5078,15 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4950,14 +5118,15 @@
                 "Invoice Review",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -4991,14 +5160,15 @@
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5015,6 +5185,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5031,6 +5202,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -5064,6 +5236,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5095,6 +5268,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -5113,10 +5287,12 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5133,12 +5309,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5170,10 +5348,12 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5205,12 +5385,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5232,6 +5414,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5253,6 +5436,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -5291,6 +5475,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5327,6 +5512,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "Tools Branch Maker",
@@ -5350,10 +5536,12 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5375,12 +5563,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5417,10 +5607,12 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5457,12 +5649,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5479,6 +5673,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Tools Branch Maker",
@@ -5497,6 +5692,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -5532,6 +5728,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Tools Branch Maker",
@@ -5565,6 +5762,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -5585,12 +5783,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5607,6 +5807,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -5615,6 +5816,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5646,12 +5848,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5683,6 +5887,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -5691,6 +5896,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5712,6 +5918,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Tools Branch Maker",
@@ -5735,6 +5942,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -5775,6 +5983,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Tools Branch Maker",
@@ -5813,6 +6022,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -5838,12 +6048,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5865,6 +6077,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -5873,6 +6086,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5909,12 +6123,14 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5951,6 +6167,7 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
@@ -5959,6 +6176,7 @@
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5975,10 +6193,11 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -5995,12 +6214,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6032,10 +6252,11 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6067,12 +6288,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6089,14 +6311,16 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6113,16 +6337,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6154,14 +6380,16 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6193,16 +6421,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6224,10 +6454,11 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6249,12 +6480,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6291,10 +6523,11 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6331,12 +6564,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6358,14 +6592,16 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6387,16 +6623,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6433,14 +6671,16 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
-                "Support Ticket BPO",
+                "Maintenance Support Ticket",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6477,16 +6717,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6503,12 +6745,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6525,14 +6768,15 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6564,12 +6808,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6601,14 +6846,15 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6625,16 +6871,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6651,18 +6899,20 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6694,16 +6944,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6735,18 +6987,20 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6768,12 +7022,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6795,14 +7050,15 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6839,12 +7095,13 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6881,14 +7138,15 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6910,16 +7168,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6941,18 +7201,20 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -6989,16 +7251,18 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -7035,18 +7299,20 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",
@@ -7083,18 +7349,20 @@
                 "Maintenance Duplicate Transaction",
                 "Maintenance Masterfiles Bank List",
                 "Maintenance Masterfiles Partner List",
+                "Maintenance Support Ticket",
                 "Masterfiles View Bank List",
                 "Masterfiles View Partner List",
                 "Profile Signature",
                 "Profile View",
-                "Support Ticket BPO",
                 "Support Ticket CAD",
                 "Support Ticket Create",
                 "Support Ticket Report",
+                "Support Ticket VPO",
                 "TRL Entry",
                 "TRL Import",
                 "TRL Report",
                 "TRL Review",
+                "TRL Ticket Entry",
                 "Tools Branch Maker",
                 "Tools Excel Unlock Password",
                 "Tools File Fetch",

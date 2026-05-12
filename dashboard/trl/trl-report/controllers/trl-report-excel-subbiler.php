@@ -271,6 +271,7 @@ foreach ($selected as $sid) {
     $sbSheet->setCellValue('I' . $totalRow, 'Total Amount');
     $sbSheet->setCellValue('J' . $totalRow, $totalAmount);
     $sbSheet->getStyle('I' . $totalRow . ':J' . $totalRow)->getFont()->setBold(true);
+    $sbSheet->getStyle('I' . $totalRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFF00');
     $sbSheet->getStyle('J' . $totalRow)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFF00');
 
     $bodyEnd = max(2, $lastDataRow);

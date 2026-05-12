@@ -2,12 +2,23 @@
 include_once __DIR__ . '/includes/bootstrap.php';
 include_once __DIR__ . '/includes/ticket_queries.php';
 
+global $conn;
+
 st_require_login('../../login_form.php');
 st_require_permission_page(['Support Ticket Create'], '../home.php');
 
 $userId = st_user_id_or_null();
 $ticketTypes = st_get_ticket_types($conn);
 $subbillers = st_get_subbillers($conn, 2500);
+// Load branches for Payment Branch dropdown (masterdata.branch_profile)
+$branches = [];
+$branchSql = "SELECT branch_id, branch_name FROM masterdata.branch_profile WHERE branch_name IS NOT NULL AND TRIM(branch_name) <> '' ORDER BY branch_name ASC";
+$branchRes = $conn->query($branchSql);
+if ($branchRes) {
+    while ($br = $branchRes->fetch_assoc()) {
+        $branches[] = $br;
+    }
+}
 $flash = st_flash_get('create_ticket');
 $mode = strtolower(trim((string) ($_GET['mode'] ?? 'open')));
 if ($mode !== 'open' && $mode !== 'closed') {
@@ -56,13 +67,13 @@ function st_trail_type_label($type)
     return 'Message';
 }
 
-function st_trail_role_icon($role)
+function st_trail_role_icon_asset($role)
 {
     $r = strtoupper(trim((string) $role));
-    if ($r === 'BRANCH') return '🟢';
-    if ($r === 'VPO') return '🔵';
-    if ($r === 'CAD') return '🔴';
-    return '⚙️';
+    if ($r === 'BRANCH') return '../../assets/images/icons/branch-icon.svg';
+    if ($r === 'VPO') return '../../assets/images/icons/vpo-icon.svg';
+    if ($r === 'CAD') return '../../assets/images/icons/cad-icon.svg';
+    return '';
 }
 
 function st_get_ticket_attachments_grouped_by_trail($conn, $ticketId)
@@ -162,6 +173,27 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
     <link rel="stylesheet" href="../trl/trl-report/components/trl-report-subbillers.css?v=<?php echo time(); ?>">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
+    <style>
+        /* Keep branch close action visible in ticket modal header */
+        .tm-header-branch-close {
+            display: flex;
+            justify-content: stretch;
+            margin-top: 8px;
+            width: 100%;
+        }
+
+        .tm-header-branch-close .tm-inline-form {
+            display: flex;
+            margin: 0;
+            width: 100%;
+            justify-content: stretch;
+        }
+
+        .tm-header-branch-close .tm-btn-close-ticket {
+            width: 100%;
+            justify-content: center;
+        }
+    </style>
 </head>
 <body>
     <div class="main-container">
@@ -175,11 +207,6 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
         <?php endif; ?>
 
         <div class="container-fluid st-wrapper">
-            <?php if ($flash): ?>
-                <div class="alert alert-<?php echo htmlspecialchars($flash['type']); ?>" role="alert">
-                    <?php echo htmlspecialchars($flash['message']); ?>
-                </div>
-            <?php endif; ?>
 
             <div class="st-toolbar">
                 <div class="st-small">Select mode to view your tickets.</div>
@@ -221,7 +248,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($openTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="BRANCH">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="BRANCH">
                                 <?php $branchUnread = (int) ($ticketBadgeCountsBranch[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($branchUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $branchUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
@@ -247,7 +274,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($closedTickets as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="BRANCH">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModal-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="BRANCH">
                                 <?php $branchUnread = (int) ($ticketBadgeCountsBranch[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($branchUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $branchUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
@@ -295,11 +322,18 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                         <div class="tm-header">
                             <div class="tm-header-top">
                                 <div class="tm-header-left">
-                                    <div class="tm-ticket-number"><span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>Ticket #: <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
+                                    <div class="tm-ticket-number tm-ticket-number--card">
+                                        <div class="tm-ticket-number-main">
+                                            <span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
+                                            <span class="tm-ticket-number-label">Ticket</span>
+                                            <span class="tm-ticket-id-value"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
+                                        </div>
+                                        <button type="button" class="tm-copy-ticket" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" title="Copy ticket number" aria-label="Copy ticket number"><i class="fa-solid fa-clipboard" aria-hidden="true"></i></button>
+                                    </div>
                                     <div class="tm-ticket-meta-grid">
                                         <div class="tm-meta-item">
                                             <div class="tm-meta-label">Reference No.</div>
-                                            <div class="tm-meta-value"><?php echo htmlspecialchars($hdrReference); ?></div>
+                                            <div class="tm-meta-value tm-meta-value--ref"><?php echo htmlspecialchars($hdrReference); ?></div>
                                         </div>
                                         <div class="tm-meta-item">
                                             <div class="tm-meta-label">Transaction D/T</div>
@@ -333,34 +367,36 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                     </div>
                                 </div>
                                 <div class="tm-header-right">
-                                        <div class="tm-header-actions">
+                                        <div class="tm-header-actions tm-header-actions--card">
                                             <div class="tm-header-actions-top">
                                                 <div class="tm-status tm-status--<?php echo htmlspecialchars($ticketStatusLower); ?>"><?php echo htmlspecialchars((string) $ticket['status']); ?></div>
                                                 <button type="button" class="tm-close-btn" data-st-close-modal="stTicketTrailModal-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
                                             </div>
-
-                                            <?php if ($isOpen): ?>
-                                                <form id="stCloseForm-<?php echo $ticketId; ?>" method="post" action="controllers/branch/close-ticket.php" class="tm-inline-form tm-header-actions-bottom">
-                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
-                                                    <input type="hidden" name="return_mode" value="<?php echo htmlspecialchars($mode); ?>">
-                                                    <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-confirm-transfer-open="stCloseConfirm-<?php echo $ticketId; ?>">Close Ticket</button>
-                                                </form>
-
-                                                <div class="tm-submodal-overlay" id="stCloseConfirm-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
-                                                    <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Close ticket confirmation">
-                                                        <div class="tm-submodal-title">Close Ticket Immediately?</div>
-                                                        <div class="tm-submodal-ticket-info">Are you sure you want to close ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?> now?</div>
-                                                        <hr class="tm-submodal-divider">
-                                                        <div class="tm-submodal-footer">
-                                                            <button type="button" class="tm-btn tm-btn--outline" data-confirm-transfer-cancel="stCloseConfirm-<?php echo $ticketId; ?>">Cancel</button>
-                                                            <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-submit="stCloseConfirm-<?php echo $ticketId; ?>" data-transfer-form="stCloseForm-<?php echo $ticketId; ?>">Close Ticket</button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            <?php endif; ?>
                                         </div>
                                 </div>
                             </div>
+
+                            <?php if ($isOpen): ?>
+                                <div class="tm-header-branch-close">
+                                    <form id="stCloseForm-<?php echo $ticketId; ?>" method="post" action="controllers/branch/close-ticket.php" class="tm-inline-form">
+                                        <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                        <input type="hidden" name="return_mode" value="<?php echo htmlspecialchars($mode); ?>">
+                                        <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-confirm-transfer-open="stCloseConfirm-<?php echo $ticketId; ?>">Close Ticket</button>
+                                    </form>
+                                </div>
+
+                                <div class="tm-submodal-overlay" id="stCloseConfirm-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
+                                    <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Close ticket confirmation">
+                                        <div class="tm-submodal-title">Close Ticket Immediately?</div>
+                                        <div class="tm-submodal-ticket-info">Are you sure you want to close ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?> now?</div>
+                                        <hr class="tm-submodal-divider">
+                                        <div class="tm-submodal-footer">
+                                            <button type="button" class="tm-btn tm-btn--outline" data-confirm-transfer-cancel="stCloseConfirm-<?php echo $ticketId; ?>">Cancel</button>
+                                            <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-submit="stCloseConfirm-<?php echo $ticketId; ?>" data-transfer-form="stCloseForm-<?php echo $ticketId; ?>">Close Ticket</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         </div>
 
                         <div class="tm-body">
@@ -386,6 +422,8 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                             if ($trailRole === 'BRANCH') $avatarClass = 'tm-trail-avatar--branch';
                                             else if ($trailRole === 'VPO') $avatarClass = 'tm-trail-avatar--vpo';
                                             else if ($trailRole === 'CAD') $avatarClass = 'tm-trail-avatar--cad';
+                                            $trailIconAsset = st_trail_role_icon_asset($trailRole);
+                                            $trailRoleClass = strtolower($trailRole);
 
                                             $trailOwnerTooltip = '';
                                             if ($trailRole === 'BRANCH') {
@@ -396,14 +434,26 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                                 $trailOwnerTooltip = $cadOwnerName;
                                             }
                                         ?>
-                                        <div class="tm-trail-item">
+                                        <div class="tm-trail-item" data-trail-id="<?php echo (int) $trailId; ?>">
                                             <div class="tm-trail-dot-wrap">
-                                                <div class="tm-trail-avatar <?php echo $avatarClass; ?>"><?php echo htmlspecialchars(st_trail_role_icon($trailRole)); ?></div>
+                                                <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
+                                                    <?php if ($trailIconAsset !== ''): ?>
+                                                        <img class="tm-trail-avatar-icon tm-trail-avatar-icon--<?php echo htmlspecialchars($trailRoleClass); ?>" src="<?php echo htmlspecialchars($trailIconAsset, ENT_QUOTES); ?>" alt="" aria-hidden="true">
+                                                    <?php else: ?>
+                                                        <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                                                    <?php endif; ?>
+                                                </div>
                                             </div>
 
                                             <div class="tm-trail-card <?php echo $trailRole === 'SYSTEM' ? 'tm-trail-card--system' : ''; ?> <?php echo $trailIndex === $lastTrailIndex ? 'tm-expanded' : ''; ?>" <?php echo $trailIndex === $lastTrailIndex ? 'data-tm-latest="1"' : ''; ?>>
                                                 <div class="tm-trail-card-header">
-                                                    <div class="tm-trail-avatar <?php echo $avatarClass; ?>"><?php echo htmlspecialchars(st_trail_role_icon($trailRole)); ?></div>
+                                                    <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
+                                                        <?php if ($trailIconAsset !== ''): ?>
+                                                            <img class="tm-trail-avatar-icon tm-trail-avatar-icon--<?php echo htmlspecialchars($trailRoleClass); ?>" src="<?php echo htmlspecialchars($trailIconAsset, ENT_QUOTES); ?>" alt="" aria-hidden="true">
+                                                        <?php else: ?>
+                                                            <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                                                        <?php endif; ?>
+                                                    </div>
                                                     <div class="tm-trail-meta">
                                                         <div class="tm-trail-sender">
                                                             <span><?php echo htmlspecialchars($trailRole); ?></span>
@@ -629,7 +679,7 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                         <div class="toggle-wrapper" style="display:flex;align-items:center;gap:8px;font-weight:600;">
                                             <span style="font-size:13px;color:#334155">Include Reference No.</span>
                                             <label class="switch" aria-label="Include Reference No.">
-                                                <input id="mRefToggle" name="include_ref_no" type="checkbox" value="1">
+                                                <input id="mRefToggle" name="include_ref_no" type="checkbox" value="1" checked>
                                                 <span class="slider"></span>
                                             </label>
                                         </div>
@@ -685,45 +735,45 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
 
                                     <div class="data-group group-2">
                                         <div class="data-item">
-                                            <div class="data-icon"><span class="material-icons">business</span></div>
+                                            <div class="data-icon"><span class="material-icons">store</span></div>
                                             <div class="data-content">
-                                                <span class="data-label">Branch ID</span>
-                                                <input id="payment_branch_id" name="payment_branch_id" class="data-value field-input required-field" type="text" placeholder="Enter branch ID" required>
+                                                <span class="data-label">Payment Branch</span>
+                                                <input id="payment_branch_input" name="payment_branch_name" class="data-value field-input required-field" list="paymentBranchDatalist" placeholder="Search branch or select..." required>
+                                                <datalist id="paymentBranchDatalist">
+                                                    <?php foreach ($branches as $b): ?>
+                                                        <option value="<?php echo htmlspecialchars((string) $b['branch_name']); ?>"></option>
+                                                    <?php endforeach; ?>
+                                                </datalist>
                                             </div>
                                         </div>
 
                                         <div class="data-item">
-                                            <div class="data-icon"><span class="material-icons">store</span></div>
+                                            <div class="data-icon"><span class="material-icons">business</span></div>
                                             <div class="data-content">
-                                                <span class="data-label">Payment Branch</span>
-                                                <input id="payment_branch_name" name="payment_branch_name" class="data-value field-input required-field" type="text" placeholder="Enter branch name" required>
+                                                <span class="data-label">Branch ID</span>
+                                                <input id="payment_branch_id" name="payment_branch_id" class="data-value field-input required-field" type="text" placeholder="Branch ID" readonly required>
                                             </div>
                                         </div>
 
                                         <div class="data-item">
                                             <div class="data-icon"><span class="material-icons">warning</span></div>
                                             <div class="data-content">
-                                                <span class="data-label">Biller ID</span>
-                                                <select id="subbiller_ext_id" name="subbiller_ext_id" class="data-value field-input required-field">
-                                                    <option value="">Select Subbiller</option>
+                                                <span class="data-label">Biller Name</span>
+                                                <input id="subbiller_input" name="subbiller_name_display" class="data-value field-input required-field" list="subbillerDatalist" placeholder="Search subbiller or select...">
+                                                <datalist id="subbillerDatalist">
                                                     <?php foreach ($subbillers as $sb): ?>
-                                                        <option
-                                                            value="<?php echo htmlspecialchars((string) $sb['subbiller_ext_id']); ?>"
-                                                            data-subbiller-name="<?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>"
-                                                            data-partner-ext-id="<?php echo htmlspecialchars((string) $sb['partner_ext_id']); ?>"
-                                                        >
-                                                            <?php echo htmlspecialchars((string) $sb['subbiller_name']); ?> (<?php echo htmlspecialchars((string) $sb['subbiller_ext_id']); ?>)
-                                                        </option>
+                                                        <option value="<?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>"></option>
                                                     <?php endforeach; ?>
-                                                </select>
+                                                </datalist>
                                             </div>
                                         </div>
 
                                         <div class="data-item">
                                             <div class="data-icon"><span class="material-icons">business</span></div>
                                             <div class="data-content">
-                                                <span class="data-label">Biller Name</span>
-                                                <input id="biller_name" name="biller_name" class="data-value field-input" type="text" placeholder="Biller name" readonly>
+                                                <span class="data-label">Biller ID</span>
+                                                <input id="biller_id" class="data-value field-input" type="text" placeholder="Biller ID" readonly>
+                                                <input type="hidden" id="subbiller_ext_id" name="subbiller_ext_id">
                                                 <input type="hidden" name="partner_ext_id" id="partner_ext_id">
                                             </div>
                                         </div>
@@ -770,12 +820,12 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                     </div>
 
                                     <div class="field-group overstated-group" style="display:none;">
-                                        <label for="wrong_amount"><span class="material-icons">payments</span> Amount</label>
+                                        <label for="wrong_amount"><span class="material-icons">payments</span> Wrong Amount</label>
                                         <input id="wrong_amount" name="wrong_amount" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
                                     </div>
 
                                     <div class="field-group overstated-group" style="display:none;">
-                                        <label for="correct_amount"><span class="material-icons">payments</span> Amount</label>
+                                        <label for="correct_amount"><span class="material-icons">payments</span> Correct Amount</label>
                                         <input id="correct_amount" name="correct_amount" class="field-input currency-input" type="text" inputmode="decimal" pattern="[0-9,\.\-]*" placeholder="0.00">
                                     </div>
 
@@ -785,13 +835,18 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
                                     </div>
 
                                     <div class="field-group">
-                                        <label for="correct_biller_id"><span class="material-icons">check_circle</span> Correct Biller ID</label>
-                                        <input id="correct_biller_id" name="correct_biller_id" class="field-input required-field" type="text" placeholder="Enter correct biller ID" required>
+                                        <label for="correct_biller_name"><span class="material-icons">business</span> Correct Biller Name</label>
+                                        <input id="correct_biller_name" name="correct_biller_name" class="field-input required-field" type="text" list="correctBillerDatalist" placeholder="Search subbiller or select..." required>
+                                        <datalist id="correctBillerDatalist">
+                                            <?php foreach ($subbillers as $sb): ?>
+                                                <option value="<?php echo htmlspecialchars((string) $sb['subbiller_name']); ?>"></option>
+                                            <?php endforeach; ?>
+                                        </datalist>
                                     </div>
 
                                     <div class="field-group">
-                                        <label for="correct_biller_name"><span class="material-icons">business</span> Correct Biller Name</label>
-                                        <input id="correct_biller_name" name="correct_biller_name" class="field-input required-field" type="text" placeholder="Enter correct biller name" required>
+                                        <label for="correct_biller_id"><span class="material-icons">check_circle</span> Correct Biller ID</label>
+                                        <input id="correct_biller_id" name="correct_biller_id" class="field-input required-field" type="text" placeholder="Auto-filled from biller name" readonly required>
                                     </div>
 
                                     <div class="field-group field-fullwidth">
@@ -845,7 +900,46 @@ $ticketBadgeCountsBranch = st_get_ticket_badge_counts($conn, $ticketNumbersBranc
         <?php include '../../templates/footer.php'; ?>
     </div>
 
+    <?php if ($flash): ?>
+    <script>
+        window.supportTicketInitialFlash = <?php echo json_encode(['type' => (string) ($flash['type'] ?? 'success'), 'message' => (string) ($flash['message'] ?? '')]); ?>;
+    </script>
+    <?php endif; ?>
+
+    <script>
+        window.supportTicketLiveUpdates = {
+            endpoint: 'controllers/poll/live-updates.php',
+            scope: 'BRANCH',
+            intervalMs: 5000
+        };
+    </script>
+
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
+    <script>
+        // Create maps for client-side searchable datalists
+        window.createTicketBranchMap = <?php
+            $bmap = [];
+            foreach ($branches as $b) {
+                $name = strtolower(trim((string) ($b['branch_name'] ?? '')));
+                if ($name === '') continue;
+                $bmap[$name] = (string) ($b['branch_id'] ?? '');
+            }
+            echo json_encode($bmap);
+        ?>;
+
+        window.createTicketSubbillerMap = <?php
+            $smap = [];
+            foreach ($subbillers as $sb) {
+                $name = strtolower(trim((string) ($sb['subbiller_name'] ?? '')));
+                if ($name === '') continue;
+                $smap[$name] = [
+                    'id' => (string) ($sb['subbiller_ext_id'] ?? ''),
+                    'partner_ext_id' => (string) ($sb['partner_ext_id'] ?? '')
+                ];
+            }
+            echo json_encode($smap);
+        ?>;
+    </script>
     <script src="assets/js/create-ticket.js?v=<?php echo time(); ?>"></script>
     <script>
         (function () {

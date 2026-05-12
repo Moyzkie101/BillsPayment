@@ -9,7 +9,7 @@ session_start();
 $id = resolve_user_identifier();
 if (empty($id)) { header('Location: ../../../login_form.php'); exit; }
 
-if (!function_exists('has_any_permission') || !has_any_permission(['Maintenance Accounts User Management', 'User Management'])) { header('Location: ../../home.php'); exit; }
+if (!function_exists('has_permission') || !has_permission('Maintenance Accounts User Management')) { header('Location: ../../home.php'); exit; }
 
 // prefer explicit session values for current user email
 $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';

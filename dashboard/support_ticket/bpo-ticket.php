@@ -2,8 +2,10 @@
 include_once __DIR__ . '/includes/bootstrap.php';
 include_once __DIR__ . '/includes/ticket_queries.php';
 
+global $conn;
+
 st_require_login('../../login_form.php');
-st_require_permission_page(['Support Ticket BPO'], '../home.php');
+st_require_permission_page(['Support Ticket VPO'], '../home.php');
 
 $userId = st_user_id_or_null();
 $flash = st_flash_get('vpo_ticket');
@@ -45,10 +47,10 @@ function st_trail_type_label_vpo($type)
 function st_trail_role_icon_vpo($role)
 {
     $r = strtoupper(trim((string) $role));
-    if ($r === 'BRANCH') return '🟢';
-    if ($r === 'VPO') return '🔵';
-    if ($r === 'CAD') return '🔴';
-    return '⚙️';
+    if ($r === 'BRANCH') return '../../assets/images/icons/branch-icon.svg';
+    if ($r === 'VPO') return '../../assets/images/icons/vpo-icon.svg';
+    if ($r === 'CAD') return '../../assets/images/icons/cad-icon.svg';
+    return '';
 }
 
 $schema = st_schema();
@@ -160,6 +162,37 @@ foreach ($vpoActive as $ticket) {
     <link rel="stylesheet" href="assets/css/ticket-modal.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="assets/css/image-preview.css?v=<?php echo time(); ?>">
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
+    <style>
+        /* Match create-ticket placement: full-width header close action */
+        .tm-header-branch-close {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            width: 100%;
+        }
+
+        .tm-ticket-id-value--copy-locked {
+            user-select: none;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+        }
+
+        .tm-ticket-id-value--copy-locked::selection {
+            background: transparent;
+        }
+
+        .tm-ticket-id-value--copy-locked::-moz-selection {
+            background: transparent;
+        }
+
+        .tm-header-branch-close > button {
+            display: inline-flex;
+            margin: 0;
+            width: calc(50% - 4px);
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
 </head>
 <body>
     <div class="main-container">
@@ -173,11 +206,6 @@ foreach ($vpoActive as $ticket) {
         <?php endif; ?>
 
         <div class="container-fluid st-wrapper">
-            <?php if ($flash): ?>
-                <div class="alert alert-<?php echo htmlspecialchars($flash['type']); ?>" role="alert">
-                    <?php echo htmlspecialchars($flash['message']); ?>
-                </div>
-            <?php endif; ?>
 
             <div class="mode-cards" data-st-mode-group data-st-param="mode">
                 <label class="mode-card <?php echo $mode === 'open' ? 'selected' : ''; ?>" data-mode="open">
@@ -213,7 +241,7 @@ foreach ($vpoActive as $ticket) {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($vpoOpen as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="VPO">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="VPO">
                                 <?php $vpoUnread = (int) ($ticketBadgeCountsVpo[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($vpoUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $vpoUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
@@ -239,7 +267,7 @@ foreach ($vpoActive as $ticket) {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($vpoActive as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="VPO">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="VPO">
                                 <?php $vpoUnread = (int) ($ticketBadgeCountsVpo[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($vpoUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $vpoUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) $ticket['created_at']); ?></span>
@@ -265,7 +293,7 @@ foreach ($vpoActive as $ticket) {
                             <span class="st-ticket-col st-col-status">Status</span>
                         </div>
                         <?php foreach ($vpoClosed as $ticket): ?>
-                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-seen-role="VPO">
+                            <button type="button" class="st-ticket-row" role="row" data-ticket-modal="stTicketTrailModalVpo-<?php echo (int) $ticket['id']; ?>" data-ticket-id="<?php echo (int) $ticket['id']; ?>" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" data-seen-role="VPO">
                                 <?php $vpoUnread = (int) ($ticketBadgeCountsVpo[(string) ($ticket['ticket_number'] ?? '')] ?? 0); ?>
                                 <span class="st-ticket-col st-col-number"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?><?php if ($vpoUnread > 0): ?> <span class="st-ticket-unread-badge"><?php echo $vpoUnread; ?></span><?php endif; ?></span>
                                 <span class="st-ticket-col st-col-date"><?php echo htmlspecialchars((string) ($ticket['closed_at'] ?: $ticket['created_at'])); ?></span>
@@ -317,11 +345,18 @@ foreach ($vpoActive as $ticket) {
                         <div class="tm-header">
                             <div class="tm-header-top">
                                 <div class="tm-header-left">
-                                    <div class="tm-ticket-number"><span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>Ticket #: <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
+                                    <div class="tm-ticket-number tm-ticket-number--card">
+                                        <div class="tm-ticket-number-main">
+                                            <span class="tm-ticket-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
+                                            <span class="tm-ticket-number-label">Ticket</span>
+                                            <span class="tm-ticket-id-value <?php echo $isOpen ? 'tm-ticket-id-value--copy-locked' : ''; ?>"><?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></span>
+                                        </div>
+                                        <button type="button" class="tm-copy-ticket" data-ticket-number="<?php echo htmlspecialchars((string) $ticket['ticket_number']); ?>" title="Copy ticket number" aria-label="Copy ticket number"><i class="fa-solid fa-clipboard" aria-hidden="true"></i></button>
+                                    </div>
                                     <div class="tm-ticket-meta-grid">
                                         <div class="tm-meta-item">
                                             <div class="tm-meta-label">Reference No.</div>
-                                            <div class="tm-meta-value"><?php echo htmlspecialchars($hdrReference); ?></div>
+                                            <div class="tm-meta-value tm-meta-value--ref"><?php echo htmlspecialchars($hdrReference); ?></div>
                                         </div>
                                         <div class="tm-meta-item">
                                             <div class="tm-meta-label">Transaction D/T</div>
@@ -358,7 +393,7 @@ foreach ($vpoActive as $ticket) {
                                     </div>
                                 </div>
                                 <div class="tm-header-right">
-                                    <div class="tm-header-actions">
+                                    <div class="tm-header-actions tm-header-actions--card">
                                         <div class="tm-header-actions-top">
                                             <div class="tm-status tm-status--<?php echo htmlspecialchars($statusLower); ?>"><?php echo htmlspecialchars((string) $ticket['status']); ?></div>
                                             <button type="button" class="tm-close-btn" data-st-close-modal="stTicketTrailModalVpo-<?php echo $ticketId; ?>" aria-label="Close">&times;</button>
@@ -366,9 +401,42 @@ foreach ($vpoActive as $ticket) {
                                     </div>
                                 </div>
                             </div>
+
+                                <?php if ($isVpoActionable): ?>
+                                    <div class="tm-header-branch-close">
+                                        <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-open="stTransferToCadConfirm-<?php echo $ticketId; ?>">Transfer to CAD</button>
+                                        <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-close-picker-open="stClosePickerVpo-<?php echo $ticketId; ?>"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Close Ticket</button>
+                                    </div>
+
+                                    <div class="tm-submodal-overlay" id="stClosePickerVpo-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
+                                        <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Close ticket options">
+                                            <div class="tm-submodal-title">Close Ticket</div>
+                                            <div class="tm-submodal-ticket-info">Choose how to close Ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
+                                            <hr class="tm-submodal-divider">
+                                            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+                                                <form method="post" action="controllers/vpo/close-ticket.php">
+                                                    <input type="hidden" name="close_mode" value="auto">
+                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                                    <input type="hidden" name="return_mode" value="active">
+                                                    <button class="tm-btn tm-btn--transfer" type="submit">Auto Close</button>
+                                                </form>
+                                                <form method="post" action="controllers/vpo/close-ticket.php">
+                                                    <input type="hidden" name="close_mode" value="immediate">
+                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
+                                                    <input type="hidden" name="return_mode" value="active">
+                                                    <button class="tm-btn tm-btn--danger" type="submit">Close Immediately</button>
+                                                </form>
+                                            </div>
+                                            <div class="tm-submodal-footer" style="margin-top:10px;">
+                                                <button type="button" class="tm-btn tm-btn--outline" data-close-picker-cancel="stClosePickerVpo-<?php echo $ticketId; ?>">Cancel</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+
                         </div>
 
-                        <div class="tm-body">
+                            <div class="tm-body">
                             <div class="tm-trail">
                                 <?php if (empty($trails)): ?>
                                     <div class="tm-empty-trail">No trail entries yet.</div>
@@ -391,6 +459,8 @@ foreach ($vpoActive as $ticket) {
                                             if ($trailRole === 'BRANCH') $avatarClass = 'tm-trail-avatar--branch';
                                             else if ($trailRole === 'VPO') $avatarClass = 'tm-trail-avatar--vpo';
                                             else if ($trailRole === 'CAD') $avatarClass = 'tm-trail-avatar--cad';
+                                            $trailIconAsset = st_trail_role_icon_vpo($trailRole);
+                                            $trailRoleClass = strtolower($trailRole);
 
                                             $trailOwnerTooltip = '';
                                             if ($trailRole === 'BRANCH') {
@@ -401,13 +471,25 @@ foreach ($vpoActive as $ticket) {
                                                 $trailOwnerTooltip = $cadOwnerName;
                                             }
                                         ?>
-                                        <div class="tm-trail-item">
+                                        <div class="tm-trail-item" data-trail-id="<?php echo (int) $trailId; ?>">
                                             <div class="tm-trail-dot-wrap">
-                                                <div class="tm-trail-avatar <?php echo $avatarClass; ?>"><?php echo htmlspecialchars(st_trail_role_icon_vpo($trailRole)); ?></div>
+                                                <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
+                                                    <?php if ($trailIconAsset !== ''): ?>
+                                                        <img class="tm-trail-avatar-icon tm-trail-avatar-icon--<?php echo htmlspecialchars($trailRoleClass); ?>" src="<?php echo htmlspecialchars($trailIconAsset, ENT_QUOTES); ?>" alt="" aria-hidden="true">
+                                                    <?php else: ?>
+                                                        <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                                                    <?php endif; ?>
+                                                </div>
                                             </div>
                                             <div class="tm-trail-card <?php echo $trailRole === 'SYSTEM' ? 'tm-trail-card--system' : ''; ?> <?php echo $trailIndex === $lastTrailIndex ? 'tm-expanded' : ''; ?>" <?php echo $trailIndex === $lastTrailIndex ? 'data-tm-latest="1"' : ''; ?>>
                                                 <div class="tm-trail-card-header">
-                                                    <div class="tm-trail-avatar <?php echo $avatarClass; ?>"><?php echo htmlspecialchars(st_trail_role_icon_vpo($trailRole)); ?></div>
+                                                    <div class="tm-trail-avatar <?php echo $avatarClass; ?>">
+                                                        <?php if ($trailIconAsset !== ''): ?>
+                                                            <img class="tm-trail-avatar-icon tm-trail-avatar-icon--<?php echo htmlspecialchars($trailRoleClass); ?>" src="<?php echo htmlspecialchars($trailIconAsset, ENT_QUOTES); ?>" alt="" aria-hidden="true">
+                                                        <?php else: ?>
+                                                            <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                                                        <?php endif; ?>
+                                                    </div>
                                                     <div class="tm-trail-meta">
                                                         <div class="tm-trail-sender">
                                                             <span><?php echo htmlspecialchars($trailRole); ?></span>
@@ -594,16 +676,15 @@ foreach ($vpoActive as $ticket) {
                             <div class="tm-footer tm-footer--open">
                                 <?php if ($isVpoActionable): ?>
                                 <div class="tm-footer-inner" style="display:block;">
-                                    <form method="post" action="controllers/vpo/submit-ticket.php" style="display:flex;gap:8px;align-items:stretch;margin-bottom:8px;width:100%;">
+                                    <form method="post" action="controllers/vpo/submit-ticket.php" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;width:100%;">
                                         <input type="hidden" name="action" value="reply">
                                         <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
                                         <input type="hidden" name="return_mode" value="active">
                                         <div class="tm-textarea-container" style="flex:1;min-width:0;">
                                             <textarea name="message" class="tm-textarea" placeholder="Type your reply..." required></textarea>
                                         </div>
-                                        <div style="display:flex;gap:8px;align-items:stretch;flex:0 0 auto;">
+                                        <div style="display:flex;gap:8px;align-items:center;flex:0 0 auto;">
                                             <button type="submit" class="tm-btn tm-btn--red">Submit</button>
-                                            <button type="button" class="tm-btn tm-btn--transfer" data-confirm-transfer-open="stTransferToCadConfirm-<?php echo $ticketId; ?>">Transfer to CAD</button>
                                         </div>
                                     </form>
 
@@ -626,34 +707,7 @@ foreach ($vpoActive as $ticket) {
                                         </div>
                                     </div>
 
-                                    <div style="margin-top:4px;display:flex;justify-content:flex-end;">
-                                        <button type="button" class="tm-btn tm-btn--red tm-btn-close-ticket" data-close-picker-open="stClosePickerVpo-<?php echo $ticketId; ?>"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Close Ticket</button>
-                                    </div>
-
-                                    <div class="tm-submodal-overlay" id="stClosePickerVpo-<?php echo $ticketId; ?>" style="display:none;" aria-hidden="true">
-                                        <div class="tm-submodal" role="dialog" aria-modal="true" aria-label="Close ticket options">
-                                            <div class="tm-submodal-title">Close Ticket</div>
-                                            <div class="tm-submodal-ticket-info">Choose how to close Ticket <?php echo htmlspecialchars((string) $ticket['ticket_number']); ?></div>
-                                            <hr class="tm-submodal-divider">
-                                            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-                                                <form method="post" action="controllers/vpo/close-ticket.php">
-                                                    <input type="hidden" name="close_mode" value="auto">
-                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
-                                                    <input type="hidden" name="return_mode" value="active">
-                                                    <button class="tm-btn tm-btn--transfer" type="submit">Auto Close</button>
-                                                </form>
-                                                <form method="post" action="controllers/vpo/close-ticket.php">
-                                                    <input type="hidden" name="close_mode" value="immediate">
-                                                    <input type="hidden" name="ticket_id" value="<?php echo $ticketId; ?>">
-                                                    <input type="hidden" name="return_mode" value="active">
-                                                    <button class="tm-btn tm-btn--danger" type="submit">Close Immediately</button>
-                                                </form>
-                                            </div>
-                                            <div class="tm-submodal-footer" style="margin-top:10px;">
-                                                <button type="button" class="tm-btn tm-btn--outline" data-close-picker-cancel="stClosePickerVpo-<?php echo $ticketId; ?>">Cancel</button>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    
                                 </div>
                                 <?php else: ?>
                                 <div class="tm-footer tm-footer--closed">Ticket is currently handled by CAD. You can still view the conversation timeline.</div>
@@ -671,6 +725,34 @@ foreach ($vpoActive as $ticket) {
 
         <?php include '../../templates/footer.php'; ?>
     </div>
+
+    <?php if ($flash): ?>
+    <script>
+        window.supportTicketInitialFlash = <?php echo json_encode(['type' => (string) ($flash['type'] ?? 'success'), 'message' => (string) ($flash['message'] ?? '')]); ?>;
+    </script>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['st_refresh']) && (string) $_GET['st_refresh'] === '1'): ?>
+    <script>
+        window.supportTicketForceReloadOnce = true;
+    </script>
+    <?php endif; ?>
+
+    <script>
+        window.supportTicketOpenPoll = {
+            endpoint: 'controllers/vpo/open-tickets-poll.php',
+            intervalMs: 5000,
+            role: 'VPO'
+        };
+    </script>
+
+    <script>
+        window.supportTicketLiveUpdates = {
+            endpoint: 'controllers/poll/live-updates.php',
+            scope: 'VPO',
+            intervalMs: 5000
+        };
+    </script>
 
     <script src="assets/js/support-ticket-ui.js?v=<?php echo time(); ?>"></script>
 </body>

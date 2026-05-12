@@ -49,20 +49,74 @@
     }
 
     function bindSubbillerSelect() {
-        var select = byId('subbiller_ext_id');
-        var billerName = byId('biller_name');
+        var select = byId('subbiller_ext_id'); // may be a hidden input now
+        var input = byId('subbiller_input'); // datalist input
+        var hiddenSelect = byId('subbiller_ext_id'); // hidden field for submission (if present)
+        var billerId = byId('biller_id');
         var partnerExt = byId('partner_ext_id');
 
-        if (!select) return;
+        // If original <select> exists, keep previous behavior
+        if (select && select.tagName === 'SELECT') {
+            function updateFromOption() {
+                var opt = select.options[select.selectedIndex];
+                var sbId = opt ? (opt.value || '') : '';
+                var ptExt = opt ? (opt.getAttribute('data-partner-ext-id') || '') : '';
 
-        select.addEventListener('change', function () {
-            var opt = select.options[select.selectedIndex];
-            var sbName = opt ? (opt.getAttribute('data-subbiller-name') || '') : '';
-            var ptExt = opt ? (opt.getAttribute('data-partner-ext-id') || '') : '';
+                if (billerId) billerId.value = sbId;
+                if (partnerExt) partnerExt.value = ptExt;
+            }
+            select.addEventListener('change', updateFromOption);
+            updateFromOption();
+            return;
+        }
 
-            if (billerName) billerName.value = sbName;
-            if (partnerExt) partnerExt.value = ptExt;
-        });
+        // If using datalist input, use prebuilt map exposed on the page
+        if (input) {
+            var map = window.createTicketSubbillerMap || {};
+            function updateFromInput() {
+                var val = (input.value || '').trim();
+                var key = val.toLowerCase();
+                var info = map[key] || null;
+                if (info) {
+                    if (billerId) billerId.value = info.id || '';
+                    if (partnerExt) partnerExt.value = info.partner_ext_id || '';
+                    if (hiddenSelect) hiddenSelect.value = info.id || '';
+                } else {
+                    if (billerId) billerId.value = '';
+                    if (partnerExt) partnerExt.value = '';
+                    if (hiddenSelect) hiddenSelect.value = '';
+                }
+            }
+            input.addEventListener('input', updateFromInput);
+            input.addEventListener('change', updateFromInput);
+            updateFromInput();
+            return;
+        }
+
+        // otherwise nothing to bind
+    }
+
+    function bindCorrectBillerLookup() {
+        var correctName = byId('correct_biller_name');
+        var correctId = byId('correct_biller_id');
+        if (!correctName || !correctId) return;
+
+        var map = window.createTicketSubbillerMap || {};
+
+        function syncCorrectBiller() {
+            var val = (correctName.value || '').trim();
+            var key = val.toLowerCase();
+            var info = map[key] || null;
+            if (info) {
+                correctId.value = info.id || '';
+            } else {
+                correctId.value = '';
+            }
+        }
+
+        correctName.addEventListener('input', syncCorrectBiller);
+        correctName.addEventListener('change', syncCorrectBiller);
+        syncCorrectBiller();
     }
 
     function bindRefToggle(form) {
@@ -286,21 +340,164 @@
     }
 
     function bindAmountInputs(form) {
+        var amountInput = byId('amount');
         var wrongAmount = byId('wrong_amount');
         var correctAmount = byId('correct_amount');
 
+        // track whether the user manually edited the wrong amount
+        var userEditedWrong = false;
+        // last synced numeric amount from the transaction details
+        var lastSyncedAmount = NaN;
+
+        function updateWrongMismatchIndicator() {
+            if (!wrongAmount) return;
+            var amt = amountInput ? parseCurrencyToNumber(amountInput.value) : NaN;
+            var wrong = parseCurrencyToNumber(wrongAmount.value);
+            var mismatch = false;
+            if (isNaN(amt) && isNaN(wrong)) mismatch = false;
+            else if (isNaN(amt) && !isNaN(wrong)) mismatch = true;
+            else if (!isNaN(amt) && isNaN(wrong)) mismatch = true;
+            else mismatch = Math.abs(amt - wrong) > 0.00001;
+
+            if (mismatch) {
+                wrongAmount.style.borderColor = '#dc2626';
+                wrongAmount.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.06)';
+            } else {
+                wrongAmount.style.borderColor = '';
+                wrongAmount.style.boxShadow = '';
+            }
+        }
+
+        // wrong amount bindings
         if (wrongAmount) {
-            wrongAmount.addEventListener('input', function () { computeTypeReason(form); });
-            wrongAmount.addEventListener('blur', function () { formatInputCurrency(wrongAmount); computeTypeReason(form); });
+            wrongAmount.addEventListener('input', function () {
+                userEditedWrong = true;
+                computeTypeReason(form);
+                updateWrongMismatchIndicator();
+            });
+            wrongAmount.addEventListener('blur', function () {
+                formatInputCurrency(wrongAmount);
+                computeTypeReason(form);
+                updateWrongMismatchIndicator();
+            });
             wrongAmount.addEventListener('focus', function () { unformatInputCurrency(wrongAmount); });
             if (wrongAmount.value) formatInputCurrency(wrongAmount);
         }
 
+        // correct amount bindings
         if (correctAmount) {
-            correctAmount.addEventListener('input', function () { computeTypeReason(form); });
-            correctAmount.addEventListener('blur', function () { formatInputCurrency(correctAmount); computeTypeReason(form); });
+            correctAmount.addEventListener('input', function () { computeTypeReason(form); updateWrongMismatchIndicator(); });
+            correctAmount.addEventListener('blur', function () { formatInputCurrency(correctAmount); computeTypeReason(form); updateWrongMismatchIndicator(); });
             correctAmount.addEventListener('focus', function () { unformatInputCurrency(correctAmount); });
             if (correctAmount.value) formatInputCurrency(correctAmount);
+        }
+
+        // amount (transaction details) bindings: auto-fill wrong_amount unless user edited it
+        if (amountInput) {
+            // initialize
+            var initAmt = parseCurrencyToNumber(amountInput.value);
+            if (!isNaN(initAmt)) {
+                lastSyncedAmount = initAmt;
+                if (wrongAmount && (wrongAmount.value === '' || parseCurrencyToNumber(wrongAmount.value) === lastSyncedAmount || !userEditedWrong)) {
+                    wrongAmount.value = formatCurrencyNumber(initAmt);
+                    userEditedWrong = false;
+                }
+                if (amountInput.value) formatInputCurrency(amountInput);
+            }
+
+            amountInput.addEventListener('input', function () {
+                var newAmt = parseCurrencyToNumber(amountInput.value);
+                if (!isNaN(newAmt)) {
+                    var wrongNum = wrongAmount ? parseCurrencyToNumber(wrongAmount.value) : NaN;
+                    // update wrong amount if user hasn't manually edited it or it matches last synced value
+                    if (!userEditedWrong || isNaN(wrongNum) || Math.abs((wrongNum || 0) - (lastSyncedAmount || 0)) < 0.00001) {
+                        if (wrongAmount) wrongAmount.value = formatCurrencyNumber(newAmt);
+                        userEditedWrong = false;
+                    }
+                    lastSyncedAmount = newAmt;
+                } else {
+                    if (!userEditedWrong && wrongAmount) wrongAmount.value = '';
+                    lastSyncedAmount = NaN;
+                }
+                computeTypeReason(form);
+                updateWrongMismatchIndicator();
+            });
+
+            amountInput.addEventListener('blur', function () { formatInputCurrency(amountInput); updateWrongMismatchIndicator(); });
+            amountInput.addEventListener('focus', function () { unformatInputCurrency(amountInput); });
+
+            if (amountInput.value) formatInputCurrency(amountInput);
+        }
+    }
+
+    function bindPaymentBranchLookup() {
+        var idInput = byId('payment_branch_id');
+        var displayInput = byId('payment_branch_input'); // datalist input
+        var select = byId('payment_branch_select'); // legacy select fallback
+        if (!idInput) return;
+
+        function lookupById() {
+            var id = (idInput.value || '').trim();
+            if (id === '') {
+                if (displayInput) displayInput.value = '';
+                return;
+            }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/fetch/get_branch.php', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) return;
+                if (xhr.status === 200) {
+                    try {
+                        var res = JSON.parse(xhr.responseText || '{}');
+                        if (res && res.success && res.branch_name) {
+                            if (displayInput) displayInput.value = res.branch_name;
+                        } else {
+                            if (displayInput) displayInput.value = '';
+                        }
+                    } catch (e) {
+                        if (displayInput) displayInput.value = '';
+                    }
+                } else {
+                    if (displayInput) displayInput.value = '';
+                }
+            };
+            xhr.send('branch_id=' + encodeURIComponent(id));
+        }
+
+        idInput.addEventListener('blur', lookupById);
+        idInput.addEventListener('change', lookupById);
+        lookupById();
+
+        // If using datalist input, use the map exposed on the page
+        if (displayInput) {
+            var map = window.createTicketBranchMap || {};
+            function syncFromDisplay() {
+                var val = (displayInput.value || '').trim();
+                var key = val.toLowerCase();
+                if (key && Object.prototype.hasOwnProperty.call(map, key)) {
+                    idInput.value = map[key] || '';
+                } else {
+                    // clear id if not matched
+                    // do not overwrite if user manually typed an id
+                    // idInput.value = '';
+                }
+            }
+            displayInput.addEventListener('input', syncFromDisplay);
+            displayInput.addEventListener('change', syncFromDisplay);
+            syncFromDisplay();
+        }
+
+        // legacy select handling (if present)
+        if (select) {
+            select.addEventListener('change', function () {
+                var opt = select.options[select.selectedIndex];
+                var bname = opt ? opt.value : '';
+                var bid = opt ? opt.getAttribute('data-branch-id') || '' : '';
+                idInput.value = bid;
+                if (displayInput) displayInput.value = bname;
+            });
         }
     }
 
@@ -369,6 +566,12 @@
             renderFiles();
         }
 
+        window.stResetCreateAttachments = function () {
+            files = [];
+            updateInputFiles();
+            renderFiles();
+        };
+
         area.addEventListener('click', function () { input.click(); });
         input.addEventListener('change', function () { addFiles(input.files); });
 
@@ -401,7 +604,9 @@
         if (!form) return;
 
         bindSubbillerSelect();
+        bindCorrectBillerLookup();
         bindRefToggle(form);
+        bindPaymentBranchLookup();
         bindTypeSelect(form);
         bindCustomTypeDropdown();
         bindAmountInputs(form);
@@ -412,9 +617,64 @@
         var confirmClose = byId('stCloseConfirmModal');
         var confirmCancel = byId('stCancelSubmitBtn');
         var confirmConfirm = byId('stConfirmSubmitBtn');
+        var createModal = byId('createTicketModal');
+        var submitBtn = form.querySelector('button[type="submit"]');
+
+        function showToast(message, type) {
+            if (window.stShowToast) {
+                window.stShowToast(message, type || 'success');
+            }
+        }
 
         function openConfirm() { if (confirmModal) confirmModal.classList.add('open'); }
         function closeConfirm() { if (confirmModal) confirmModal.classList.remove('open'); }
+        function closeCreateModal() { if (createModal) createModal.classList.remove('open'); }
+
+        function submitCreateTicketAjax() {
+            if (!form) return;
+
+            var formData = new FormData(form);
+            if (confirmConfirm) confirmConfirm.disabled = true;
+            if (submitBtn) submitBtn.disabled = true;
+
+            fetch(form.getAttribute('action') || window.location.href, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            }).then(function (res) {
+                return res.json().catch(function () {
+                    return { success: false, message: 'Unexpected server response.' };
+                });
+            }).then(function (json) {
+                if (!json || !json.success) {
+                    showToast((json && json.message) ? json.message : 'Unable to create ticket.', 'danger');
+                    return;
+                }
+
+                showToast(json.message || 'Ticket created successfully.', 'success');
+                closeCreateModal();
+                form.reset();
+                if (window.stResetCreateAttachments) {
+                    window.stResetCreateAttachments();
+                }
+
+                // Re-apply default visibility/requirements after reset.
+                manageRequestFields(form);
+
+                // Ensure newly created ticket appears immediately in the open list.
+                setTimeout(function () {
+                    window.location.reload();
+                }, 500);
+            }).catch(function () {
+                showToast('Network error while creating ticket.', 'danger');
+            }).finally(function () {
+                if (confirmConfirm) confirmConfirm.disabled = false;
+                if (submitBtn) submitBtn.disabled = false;
+            });
+        }
 
         if (confirmClose) confirmClose.addEventListener('click', closeConfirm);
         if (confirmCancel) confirmCancel.addEventListener('click', closeConfirm);
@@ -430,8 +690,7 @@
             confirmConfirm.addEventListener('click', function () {
                 if (!form) return;
                 closeConfirm();
-                // use native submit to bypass this submit handler
-                form.submit();
+                submitCreateTicketAjax();
             });
         }
     });
