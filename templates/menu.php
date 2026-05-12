@@ -564,7 +564,6 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 </div>
             </div>
             <?php endif; ?>
-        <?php endif; ?>
 
         <!-- Tools Menu -->
         <?php if (has_any_permission(['Tools KPX Generator','Tools Branch Maker','Tools File Fetch'])): ?>
