@@ -388,7 +388,7 @@ if (isset($_SESSION['user_type'])) {
             <div class="bp-section-title">
                 <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
                 <div>
-                    <h2>Import Partner Data - (UNDER MAINTENANCE)</h2>
+                    <h2>Import Partner Data - (UNDER CONSTRUCTION)</h2>
                     <!-- <p class="bp-section-sub">Import and manage partner data for bills payment transactions.</p> -->
                 </div>
             </div>

@@ -1,28 +1,28 @@
 <?php
     $host = "localhost";
+    // $host = ["localhost", "ho-cad-exactdb"];
     $username = "root";
+    // $username = ["root", "mlcad"];
     $password = "Password1";
-    $database = "mldb";
-    $database2 = "masterdata";
+    // $password = ["Password1", "CADMLhuillier2023"];
+    $database = ["mldb", "masterdata", "support_ticket"];
 
     date_default_timezone_set('Asia/Manila');
 
-    // Create DB Connection
-    $conn = mysqli_connect($host, $username, $password, $database);
-
-    // Check connection
-    if (!$conn) {
-        die("Connection failed: " . mysqli_connect_error());
+    $connections = [];
+    foreach ($database as $db) {
+        $connections[] = mysqli_connect($host, $username, $password, $db);
     }
 
-    // Create DB Connection for masterdata
-    $conn2 = mysqli_connect($host, $username, $password, $database2);
+    // keep original variable names for compatibility
+    list($conn, $conn1) = $connections;
 
-    if (!$conn2) {
-        die("Connection to masterdata failed: " . mysqli_connect_error());
+    // check connections
+    foreach ($connections as $i => $connection) {
+        if (!$connection) {
+            $failedDb = $database[$i];
+            die("Connection to '{$failedDb}' failed: " . mysqli_connect_error());
+        }
     }
-
-    // ini_set('memory_limit', '100000M');
-    // set_time_limit(300); // Increase the time limit to 300 seconds (5 minutes)
 
 ?>

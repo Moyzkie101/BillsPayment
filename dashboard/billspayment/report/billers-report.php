@@ -485,7 +485,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
             <div class="bp-section-title">
                 <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
                 <div>
-                    <h2>Billers Report</h2>
+                    <h2>Billers Report - (UNDER CONSTRUCTION)</h2>
                     <!-- <p class="bp-section-sub">Summary of transaction volumes by partner and period</p> -->
                 </div>
             </div>
@@ -502,8 +502,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'generate_report') {
                                     <select class="form-select" name="billerlist" required>
                                         <option value="">Select Biller Type</option>
                                         <option value="ALL">ALL</option>
-                                        <option value="main-biller">Biller</option>
-                                        <option value="child-biller">Child Biller</option>
+                                        <option value="biller">Biller</option>
+                                        <option value="sub-biller">Sub Biller</option>
                                     </select>
                                 </div>
 

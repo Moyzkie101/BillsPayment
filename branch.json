@@ -40,12 +40,20 @@
     "branch_name": "ML COMAWAS BISLIG"
   },
   {
+    "branch_id": 5042,
+    "branch_name": "ML GAISANO GRAND KALIBO"
+  },
+  {
     "branch_id": 5043,
     "branch_name": "ML PATAO"
   },
   {
     "branch_id": 5047,
     "branch_name": "ML PROGRESO SIATON"
+  },
+  {
+    "branch_id": 5049,
+    "branch_name": "ML CALAPAN 4"
   },
   {
     "branch_id": 4990,
@@ -3734,6 +3742,10 @@
   {
     "branch_id": 5037,
     "branch_name": "ML MEXICO 3 PAMPANGA"
+  },
+  {
+    "branch_id": 5038,
+    "branch_name": "ML BUENAVISTA USON"
   },
   {
     "branch_id": 2576,

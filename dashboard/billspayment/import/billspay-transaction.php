@@ -373,108 +373,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
         .bp-card { background:#ffffff; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.04); border:1px solid #f1f1f1; }
 
     </style>
-</head>
-
-<body>
-    <div class="main-container">
-        <?php include '../../../templates/header_ui.php'; ?>
-        <!-- Show and Hide Side Nav Menu -->
-        <?php include '../../../templates/sidebar.php'; ?>
-        <div id="loading-overlay">
-            <div class="loading-spinner"></div>
-        </div>
-        <div class="bp-section-header">
-            <div class="bp-section-title">
-                <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
-                <div>
-                    <h2>Import Transaction</h2>
-                    <p class="bp-section-sub">Upload Excel files (.xls, .xlsx) for processing</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="bp-card container-fluid mt-3 p-4">
-            <div class="bp-card-body">
-                <!-- Mode Toggle (Auto / Manual) + Proceed (moved to top-right) -->
-                <div class="mb-3 d-flex align-items-center justify-content-between" style="gap:12px;">
-                    <div class="d-flex align-items-center" style="gap:12px;">
-                        <label class="form-label me-2 mb-0">Import Mode:</label>
-                        <div class="mode-cards">
-                                <label class="mode-card selected" data-mode="auto">
-                                    <input type="radio" name="importMode" id="modeAuto" value="auto" checked style="display:none;">
-                                    <div class="mode-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-                                    <div class="mode-text">
-                                        <div class="mode-label">Auto</div>
-                                        <small>Drag & Drop</small>
-                                    </div>
-                                </label>
-                                <label class="mode-card" data-mode="manual">
-                                    <input type="radio" name="importMode" id="modeManual" value="manual" style="display:none;">
-                                    <div class="mode-icon"><i class="fa-solid fa-file-lines"></i></div>
-                                    <div class="mode-text">
-                                        <div class="mode-label">Manual</div>
-                                        <small>Form Upload</small>
-                                    </div>
-                                </label>
-                        </div>
-                    </div>
-
-                    <div id="proceedContainer" class="proceed-container" style="display: none;">
-                        <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
-                            <i class="fa-solid fa-paper-plane me-2" aria-hidden="true"></i>Proceed
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Drag and Drop Upload Area -->
-                <div class="file-upload-area" id="fileUploadArea">
-                    <div class="file-upload-icon">
-                        <i class="fa-solid fa-cloud-arrow-up"></i>
-                    </div>
-                    <h5>Drag & Drop Files Here</h5>
-                    <p class="text-muted">or click to browse</p>
-                    <p class="text-muted"><small>Supports multiple Excel files (.xls, .xlsx)</small></p>
-                    <input type="file" id="fileInput" accept=".xls,.xlsx" multiple style="display: none;">
-                </div>
-
-                <!-- Manual Import Area (hidden by default) -->
-                <div id="manualArea" style="display:none;">
-                    <form id="manualUploadForm" action="../../../models/saved/saved_billspaymentImportFile.php" method="post" enctype="multipart/form-data">
-                        <div class="row mt-3">
-                            <div class="col-md-5 mb-3">
-                                <div class="d-flex align-items-center">
-                                    <label class="form-label me-2 mb-0">Partners Name:</label>
-                                    <input list="manualCompanyList" id="manualCompanyInput" name="company" class="form-control" placeholder="Search or type company name" required />
-                                    <datalist id="manualCompanyList"></datalist>
-                                    <!-- hidden select kept for compatibility -->
-                                    <select id="manualCompanyDropdown" name="company_select" style="display:none;"></select>
-                                </div>
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <div class="d-flex align-items-center">
-                                    <label for="manualFileType" class="form-label me-2 mb-0">Source File Type:</label>
-                                    <select id="manualFileType" class="form-select" name="fileType" required>
-                                        <option value="">Select Source File Type</option>
-                                        <option value="KPX">KPX</option>
-                                        <option value="KP7">KP7</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-4 mb-3 d-flex">
-                                <input id="manualFileInput" type="file" name="import_file" accept=".xls,.xlsx" class="form-control me-2" />
-                                <input type="submit" class="btn btn-danger" id="manualProceed" value="Proceed" style="display:none;">
-                            </div>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Files Container -->
-                <div id="filesContainer" class="files-container"></div>
-
-                <!-- Removed bottom Proceed button; top button used instead -->
-            </div>
-        </div>
-    </div>
+    
     <style>
         /* Page header, card and upload area - M Lhuillier theme */
         .bp-section-header {
@@ -793,6 +692,109 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
             to { transform: rotate(360deg); }
         }
     </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <?php include '../../../templates/header_ui.php'; ?>
+        <!-- Show and Hide Side Nav Menu -->
+        <?php include '../../../templates/sidebar.php'; ?>
+        <div id="loading-overlay">
+            <div class="loading-spinner"></div>
+        </div>
+        <div class="bp-section-header">
+            <div class="bp-section-title">
+                <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+                <div>
+                    <h2>Import Transaction</h2>
+                    <p class="bp-section-sub">Upload Excel files (.xls, .xlsx) for processing</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bp-card container-fluid mt-3 p-4">
+            <div class="bp-card-body">
+                <!-- Mode Toggle (Auto / Manual) + Proceed (moved to top-right) -->
+                <div class="mb-3 d-flex align-items-center justify-content-between" style="gap:12px;">
+                    <div class="d-flex align-items-center" style="gap:12px;">
+                        <label class="form-label me-2 mb-0">Import Mode:</label>
+                        <div class="mode-cards">
+                                <label class="mode-card selected" data-mode="auto">
+                                    <input type="radio" name="importMode" id="modeAuto" value="auto" checked style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Auto</div>
+                                        <small>Drag & Drop</small>
+                                    </div>
+                                </label>
+                                <label class="mode-card" data-mode="manual">
+                                    <input type="radio" name="importMode" id="modeManual" value="manual" style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-file-lines"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Manual</div>
+                                        <small>Form Upload</small>
+                                    </div>
+                                </label>
+                        </div>
+                    </div>
+
+                    <div id="proceedContainer" class="proceed-container" style="display: none;">
+                        <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
+                            <i class="fa-solid fa-paper-plane me-2" aria-hidden="true"></i>Proceed
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Drag and Drop Upload Area -->
+                <div class="file-upload-area" id="fileUploadArea">
+                    <div class="file-upload-icon">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <h5>Drag & Drop Files Here</h5>
+                    <p class="text-muted">or click to browse</p>
+                    <p class="text-muted"><small>Supports multiple Excel files (.xls, .xlsx)</small></p>
+                    <input type="file" id="fileInput" accept=".xls,.xlsx" multiple style="display: none;">
+                    
+                </div>
+
+                <!-- Manual Import Area (hidden by default) -->
+                <div id="manualArea" style="display:none;">
+                    <form id="manualUploadForm" action="../../../models/saved/saved_billspaymentImportFile.php" method="post" enctype="multipart/form-data">
+                        <div class="row mt-3">
+                            <div class="col-md-5 mb-3">
+                                <div class="d-flex align-items-center">
+                                    <label class="form-label me-2 mb-0">Partners Name:</label>
+                                    <input list="manualCompanyList" id="manualCompanyInput" name="company" class="form-control" placeholder="Search or type company name" required />
+                                    <datalist id="manualCompanyList"></datalist>
+                                    <!-- hidden select kept for compatibility -->
+                                    <!-- <select id="manualCompanyDropdown" name="company_select" style="display:none;"></select> -->
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="d-flex align-items-center">
+                                    <label for="manualFileType" class="form-label me-2 mb-0">Source File Type:</label>
+                                    <select id="manualFileType" class="form-select" name="fileType" required>
+                                        <option value="">Select Source File Type</option>
+                                        <option value="KPX">KPX</option>
+                                        <option value="KP7">KP7</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3 d-flex">
+                                <input id="manualFileInput" type="file" name="import_file" accept=".xls,.xlsx" class="form-control me-2" />
+                                <input type="submit" class="btn btn-danger" id="manualProceed" value="Proceed" style="display:none;">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Files Container -->
+                <div id="filesContainer" class="files-container"></div>
+
+                <!-- Removed bottom Proceed button; top button used instead -->
+            </div>
+        </div>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1044,15 +1046,39 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                                     partnerId: partnerId,
                                     partnerName: partnerName,
                                     billersName: isSpecial1074 ? billersName : '',
+                                    subBillersId: null,
                                     sourceType: sourceType,
                                     report_date_raw: reportDateRaw,
                                     report_date: reportDate,
                                     id: Date.now() + Math.random()
                                 };
 
-                                uploadedFiles.push(fileData);
-                                renderFileCards();
-                                finishFileRead();
+                                // If we have a billersName, attempt server-side resolve of sub_billers_id
+                                if (fileData.billersName) {
+                                    $.ajax({
+                                        url: '../../../fetch/resolve_subbiller.php',
+                                        method: 'POST',
+                                        data: { sub_billers_name: fileData.billersName },
+                                        dataType: 'json'
+                                    }).always(function(resp) {
+                                        try {
+                                            if (resp && resp.success && resp.sub_billers_id) {
+                                                fileData.subBillersId = resp.sub_billers_id;
+                                                // if partner_id is empty, adopt resolved partner_id when available
+                                                if ((!fileData.partnerId || fileData.partnerId === '') && resp.partner_id) {
+                                                    fileData.partnerId = resp.partner_id;
+                                                }
+                                            }
+                                        } catch (e) {}
+                                        uploadedFiles.push(fileData);
+                                        renderFileCards();
+                                        finishFileRead();
+                                    });
+                                } else {
+                                    uploadedFiles.push(fileData);
+                                    renderFileCards();
+                                    finishFileRead();
+                                }
                             },
                             error: function() {
                                 const fileData = {
@@ -1061,13 +1087,35 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                                     partnerId: partnerId,
                                     partnerName: isSpecial1074 ? 'SECURITY BANK' : 'Unknown Partner',
                                     billersName: isSpecial1074 ? billersName : '',
+                                    subBillersId: null,
                                     sourceType: sourceType,
                                     id: Date.now() + Math.random()
                                 };
 
-                                uploadedFiles.push(fileData);
-                                renderFileCards();
-                                finishFileRead();
+                                if (fileData.billersName) {
+                                    $.ajax({
+                                        url: '../../../fetch/resolve_subbiller.php',
+                                        method: 'POST',
+                                        data: { sub_billers_name: fileData.billersName },
+                                        dataType: 'json'
+                                    }).always(function(resp) {
+                                        try {
+                                            if (resp && resp.success && resp.sub_billers_id) {
+                                                fileData.subBillersId = resp.sub_billers_id;
+                                                if ((!fileData.partnerId || fileData.partnerId === '') && resp.partner_id) {
+                                                    fileData.partnerId = resp.partner_id;
+                                                }
+                                            }
+                                        } catch (e) {}
+                                        uploadedFiles.push(fileData);
+                                        renderFileCards();
+                                        finishFileRead();
+                                    });
+                                } else {
+                                    uploadedFiles.push(fileData);
+                                    renderFileCards();
+                                    finishFileRead();
+                                }
                             }
                         });
 
@@ -1123,10 +1171,16 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                             <div class="file-card-body"></div>
                             <div class="file-card-footer">
                                 <div class="file-card-detail">
+                                    <div class="file-card-label">Sub Billers ID</div>
+                                    <div class="file-card-value">
+                                        ${fileData.subBillersId !== undefined && fileData.subBillersId !== null ? fileData.subBillersId : null}
+                                    </div>
+                                </div>
+                                <div class="file-card-detail">
                                     <div class="file-card-label">Partner ID</div>
                                     <div class="file-card-value partner-tooltip">
                                         ${fileData.partnerId}
-                                        <span class="tooltip-text">${fileData.billersName ? ('Partner Name: ' + fileData.partnerName + '<br>Billers Name: ' + fileData.billersName) : fileData.partnerName}</span>
+                                        <span class="tooltip-text">${fileData.billersName ? ('Partner Name: ' + fileData.partnerName + '<br>Sub Billers Name: ' + fileData.billersName) : fileData.partnerName}</span>
                                     </div>
                                 </div>
                                 <div class="file-card-detail">
@@ -1291,6 +1345,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                         formData.append('partner_ids[]', fileData.partnerId);
                         formData.append('source_types[]', fileData.sourceType);
                         formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
+                        formData.append('sub_billers_ids[]', (fileData.subBillersId !== undefined && fileData.subBillersId !== null) ? fileData.subBillersId : '');
                     });
                     formData.append('check_duplicates', '1');
 
@@ -1612,6 +1667,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     formData.append('source_types[]', fileData.sourceType);
                     formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
                     formData.append('billers_names[]', fileData.billersName || '');
+                    formData.append('sub_billers_ids[]', (fileData.subBillersId !== undefined && fileData.subBillersId !== null) ? fileData.subBillersId : '');
                 });
                 formData.append('upload', '1');
                 formData.append('user_decision', userDecision); // Pass user decision
@@ -1722,13 +1778,34 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                         if (!response) return;
                         if (response.success === false) return;
                         var list = Array.isArray(response.data) ? response.data : response;
+                        // Use a Set to avoid duplicate partner names. Normalize keys to lowercase.
+                        var seen = new Set();
+                        // Mark the default 'All' as seen to prevent duplicate if returned from server
+                        seen.add('all');
                         list.forEach(function(p) {
-                            var name = p.partner_name || '';
-                            if (name) {
+                            var rawName = p.partner_name || '';
+                            var name = rawName.toString().trim();
+                            if (!name) return;
+                            // Normalize unicode and collapse multiple spaces to a single space
+                            try {
+                                name = name.normalize ? name.normalize('NFC') : name;
+                            } catch (e) {
+                                // ignore if normalize not supported
+                            }
+                            name = name.replace(/\s+/g, ' ');
+                            var key = name.toLowerCase();
+                            if (seen.has(key)) return; // skip duplicates (normalized, case-insensitive)
+                            seen.add(key);
+                            // Defensive DOM check: only append if not already present in datalist/select
+                            var existsInDatalist = $datalist.find('option').filter(function() { return $(this).val() === name; }).length > 0;
+                            if (!existsInDatalist) {
                                 var opt = document.createElement('option');
                                 opt.value = name;
                                 $datalist.append(opt);
-                                if ($select.length) $select.append($('<option>', { value: name, text: name }));
+                            }
+                            if ($select.length) {
+                                var existsInSelect = $select.find('option').filter(function() { return $(this).val() === name; }).length > 0;
+                                if (!existsInSelect) $select.append($('<option>', { value: name, text: name }));
                             }
                         });
                         // keep input empty

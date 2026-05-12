@@ -19,7 +19,31 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 if (isset($_POST['action']) && $_POST['action'] === 'get_partner_list') {
     try {
-        $partnersQuery = "SELECT partner_name FROM masterdata.partner_masterfile WHERE status = 'ACTIVE' ORDER BY partner_name";
+        $partnersQuery = "WITH direct_biller AS (
+            SELECT
+                partner_name
+            FROM masterdata.partner_masterfile
+            WHERE status = 'ACTIVE'
+        ),
+
+        sub_biller AS (
+            SELECT
+                sub_billers_name
+            FROM masterdata.subbiller
+        )
+
+        SELECT 
+            partner_name AS partner_name
+        FROM 
+            direct_biller
+
+        UNION
+
+        SELECT 
+            sub_billers_name AS partner_name
+        FROM 
+            sub_biller
+        ORDER BY partner_name";
         $partnersResult = $conn->query($partnersQuery);
         
         $partners = array();
@@ -88,139 +112,196 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
     
     // Partner filter
     if (!empty($partner)) {
-        if($partner !== 'All'){
-            if($partner === 'SECURITY BANK') {
-                $whereConditions[] = "ap.partner_name = ?";
-            }elseif($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING'){
-                $whereConditions[] = "ap.partner_name = ?";
-            }else{
-                $whereConditions[] = "ap.partner_name = ?";
-            }
+        if ($partner !== 'All') {
+            // Filter by the merged partner name (sub_billers_name if present, else direct_billers_name)
+            $whereConditions[] = "COALESCE(fm.sub_billers_name, fm.direct_billers_name) = ?";
             $params[] = $partner;
             $types .= 's';
         }
     }
 
-    // Build WHERE clause for main query
-    $mainWhereClause = '';
+    // Build WHERE clause for main query. Ensure a valid default so SQL is syntactically correct
+    // Use '1=1' as the base condition and append any dynamic filters prefixed with AND
+    $mainWhereClause = '1=1';
     if (!empty($whereConditions)) {
-        $mainWhereClause = 'AND ' . implode(' AND ', $whereConditions);
+        $mainWhereClause .= ' AND ' . implode(' AND ', $whereConditions);
     }
 
     // Modified query to handle partners without partner_id/partner_id_kpx
-    $DataQuery = "WITH summary_vol AS (
-                        SELECT
-                            CASE 
-                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                                ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                            END COLLATE utf8mb4_general_ci AS partner_key,
-                            CASE 
-                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                                ELSE bt.partner_name
-                            END AS partner_name,
-                            MAX(bt.sub_billers_name) AS sub_billers_name,
-                            COUNT(*) AS vol1,
-                            SUM(bt.amount_paid) AS principal1,
-                            SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
-                        FROM
-                            mldb.billspayment_transaction AS bt 
-                        WHERE
-                            $dateCondition
-                            AND bt.status IS NULL 
-                            AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                        GROUP BY
-                            CASE 
-                                WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                                WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                                ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                            END COLLATE utf8mb4_general_ci,
-                            CASE 
-                                WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                                ELSE bt.partner_name
-                            END
-                ),
-                adjustment_vol AS (
-                    SELECT
-                        CASE 
-                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                        END COLLATE utf8mb4_general_ci AS partner_key,
-                        CASE 
-                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                            ELSE bt.partner_name
-                        END AS partner_name,
-                        MAX(bt.sub_billers_name) AS sub_billers_name,
-                        COUNT(*) AS vol2,
-                        SUM(bt.amount_paid) AS principal2,
-                        SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
-                    FROM
-                        mldb.billspayment_transaction AS bt 
-                    WHERE
-                        $dateCondition
-                        AND bt.status = '*' 
-                        AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
-                    GROUP BY
-                        CASE 
-                            WHEN bt.partner_id IS NOT NULL THEN bt.partner_id
-                            WHEN bt.partner_id_kpx IS NOT NULL THEN bt.partner_id_kpx
-                            ELSE CONCAT('temp_', CASE WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name ELSE bt.partner_name END)
-                        END COLLATE utf8mb4_general_ci,
-                        CASE 
-                            WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
-                            ELSE bt.partner_name
-                        END
-                ),
-                all_partners AS (
-                    -- Partners from master file
-                    SELECT 
-                        COALESCE(mpm.partner_id, mpm.partner_id_kpx, CONCAT('temp_', mpm.partner_name)) AS partner_key,
-                        mpm.partner_name
-                    FROM masterdata.partner_masterfile AS mpm
-                    WHERE mpm.status = 'ACTIVE'
-                    
-                    UNION
-                    
-                    -- Partners from summary transactions
-                    SELECT partner_key, partner_name FROM summary_vol
-                    
-                    UNION
-                    
-                    -- Partners from adjustment transactions
-                    SELECT partner_key, partner_name FROM adjustment_vol
-                )
+    $DataQuery = "WITH bank_clean AS (
+        SELECT 
+            bank_name,
+            MAX(bank_abbreviation) AS bank_abbreviation
+        FROM masterdata.bank_table
+        GROUP BY bank_name
+    ),
+    direct_biller AS (
+        SELECT
+            pm.partner_id,
+            pm.partner_id_kpx,
+            pm.gl_code,
+            pm.partner_name AS direct_billers_name,
+            NULL AS sub_billers_name,
+            b.bank_abbreviation,
+            pm.settled_online_check,
+            pm.charge_to,
+            pm.status
+        FROM masterdata.partner_masterfile pm
+        LEFT JOIN bank_clean b
+            ON pm.bank = b.bank_name
+    ),
 
-                SELECT
-                    ap.partner_name,
-                    COALESCE(MAX(sv.sub_billers_name), MAX(av.sub_billers_name)) AS sub_billers_name,
-                    SUM(COALESCE(sv.vol1, 0)) AS summary_vol,
-                    SUM(COALESCE(sv.principal1, 0)) AS summary_principal,
-                    SUM(COALESCE(sv.charge1, 0)) AS summary_charges,
+    sub_biller AS (
+        SELECT
+            partner_id_kpx,
+            sub_billers_id,
+            partner_name AS direct_billers_name,
+            sub_billers_name,
+            NULL AS sub_gl_code
+        FROM masterdata.subbiller
+    ),
 
-                    SUM(COALESCE(av.vol2, 0)) AS adjustment_vol,
-                    SUM(COALESCE(ABS(av.principal2), 0)) AS adjustment_principal,
-                    SUM(COALESCE(ABS(av.charge2), 0)) AS adjustment_charges,
+    merged_left AS (
+        SELECT
+            d.partner_id,
+            COALESCE(d.partner_id_kpx, s.partner_id_kpx) AS partner_id_kpx,
+            s.sub_billers_id,
+            COALESCE(d.gl_code, s.sub_gl_code) AS gl_code,
 
-                    (SUM(COALESCE(sv.vol1, 0)) - SUM(COALESCE(av.vol2, 0))) AS net_vol,
-                    (SUM(COALESCE(sv.principal1, 0)) - SUM(COALESCE(ABS(av.principal2), 0))) AS net_principal,
-                    (SUM(COALESCE(sv.charge1, 0)) - SUM(COALESCE(ABS(av.charge2), 0))) AS net_charges
-                FROM
-                    all_partners AS ap
-                LEFT JOIN
-                    summary_vol AS sv ON ap.partner_name = sv.partner_name
-                LEFT JOIN
-                    adjustment_vol AS av ON ap.partner_name = av.partner_name
-                LEFT JOIN
-                    masterdata.partner_masterfile AS mpm ON (
-                        ap.partner_name = mpm.partner_name
-                    )
-                WHERE
-                    (mpm.status = 'ACTIVE' OR mpm.status IS NULL)
-                    $mainWhereClause
-                GROUP BY ap.partner_name
-                HAVING ap.partner_name IS NOT NULL
-                ORDER BY ap.partner_name";
+            CASE 
+                WHEN d.direct_billers_name = s.sub_billers_name 
+                THEN s.direct_billers_name 
+                ELSE d.direct_billers_name 
+            END AS direct_billers_name,
+
+            COALESCE(s.sub_billers_name, d.sub_billers_name) AS sub_billers_name,
+
+            d.bank_abbreviation,
+            d.settled_online_check,
+            d.charge_to
+
+        FROM direct_biller d
+        LEFT JOIN sub_biller s
+            ON d.direct_billers_name = s.sub_billers_name
+        WHERE COALESCE(d.status, '') = 'ACTIVE'
+    ),
+
+    unmatched_sub AS (
+        SELECT
+            NULL AS partner_id,
+            s.partner_id_kpx,
+            s.sub_billers_id,
+            s.sub_gl_code AS gl_code,
+            s.direct_billers_name,
+            s.sub_billers_name,
+
+            NULL AS bank_abbreviation,
+            NULL AS settled_online_check,
+            NULL AS charge_to
+
+        FROM sub_biller s
+        WHERE NOT EXISTS (
+            SELECT 1 
+            FROM direct_biller d 
+            WHERE d.direct_billers_name = s.sub_billers_name 
+            AND COALESCE(d.status,'') = 'ACTIVE'
+        )
+    ),
+
+    final_merged AS (
+        SELECT * FROM merged_left
+        UNION ALL
+        SELECT * FROM unmatched_sub
+    ),
+
+    summary_vol AS (
+        SELECT
+            bt.sub_billers_id,
+            bt.partner_id,
+            bt.partner_id_kpx,
+            COUNT(*) AS vol1,
+            SUM(bt.amount_paid) AS principal1,
+            SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge1
+        FROM mldb.billspayment_transaction bt
+        WHERE 
+            $dateCondition
+        AND bt.status IS NULL 
+        AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+        GROUP BY bt.sub_billers_id, bt.partner_id, bt.partner_id_kpx
+    ),
+
+    adjustment_vol AS (
+        SELECT
+            bt.sub_billers_id,
+            bt.partner_id,
+            bt.partner_id_kpx,
+            COUNT(*) AS vol2,
+            SUM(bt.amount_paid) AS principal2,
+            SUM(bt.charge_to_partner + bt.charge_to_customer) AS charge2
+        FROM mldb.billspayment_transaction bt
+        WHERE 
+            $dateCondition
+        AND bt.status='*' 
+        AND bt.branch_id NOT IN ('1','2','4937','4938','4962','4987','4993','4944')
+        GROUP BY bt.sub_billers_id, bt.partner_id, bt.partner_id_kpx
+    )
+
+    -- FINAL RESULT
+    SELECT
+        fm.partner_id,
+        fm.partner_id_kpx,
+        fm.sub_billers_id,
+        fm.gl_code,
+
+        CASE 
+            WHEN fm.sub_billers_id IS NOT NULL 
+            THEN fm.sub_billers_name 
+            ELSE fm.direct_billers_name 
+        END AS partner_name,
+
+        CASE 
+            WHEN fm.sub_billers_id IS NOT NULL 
+            THEN fm.direct_billers_name 
+            ELSE NULL 
+        END AS billers_name,
+
+        CONCAT(fm.bank_abbreviation, ' ', fm.settled_online_check) AS bank_abbreviation,
+        fm.charge_to AS charging_type,
+
+        COALESCE(sv.vol1, 0) AS summary_vol,
+        COALESCE(sv.principal1, 0) AS summary_principal,
+        COALESCE(sv.charge1, 0) AS summary_charge,
+
+        COALESCE(av.vol2, 0) AS adjustment_vol,
+        COALESCE(ABS(av.principal2), 0) AS adjustment_principal,
+        COALESCE(ABS(av.charge2), 0) AS adjustment_charge,
+
+        (COALESCE(sv.vol1,0) - COALESCE(av.vol2,0)) AS net_vol,
+        (COALESCE(sv.principal1,0) - COALESCE(ABS(av.principal2),0)) AS net_principal,
+        (COALESCE(sv.charge1,0) - COALESCE(ABS(av.charge2),0)) AS net_charge
+
+    FROM final_merged fm
+
+    LEFT JOIN summary_vol sv
+        ON (
+            (fm.sub_billers_id IS NOT NULL AND fm.sub_billers_id = sv.sub_billers_id)
+            OR
+            (fm.sub_billers_id IS NULL 
+                AND fm.partner_id = sv.partner_id 
+                AND fm.partner_id_kpx = sv.partner_id_kpx)
+        )
+
+    LEFT JOIN adjustment_vol av
+        ON (
+            (fm.sub_billers_id IS NOT NULL AND fm.sub_billers_id = av.sub_billers_id)
+            OR
+            (fm.sub_billers_id IS NULL 
+                AND fm.partner_id = av.partner_id 
+                AND fm.partner_id_kpx = av.partner_id_kpx)
+        )
+    WHERE 
+        $mainWhereClause
+    ORDER BY partner_name";
 
     try {
         // Use prepared statement to execute the query
@@ -715,7 +796,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                     <div class="d-flex align-items-end flex-wrap" style="gap:8px;">
                                         <button type="button" class="btn btn-secondary" id="generateReport" disabled>Generate</button>
                                         <button class="btn btn-danger" id="exportButton" type="button" style="display:none;">Export to</button>
-                                        <button class="btn btn-warning" id="debugButton" type="button" style="display:none;">Debug Report</button>
+                                        <?php if (isset($_SESSION['id_number']) && (int)$_SESSION['id_number'] === 1): ?>
+                                            <button class="btn btn-warning" id="debugButton" type="button" style="display:none;">Debug Report</button>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -748,8 +831,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                         <tr>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>No.</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Partner Name</th>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>Bank</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Biller's Name</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>Bank</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>Charging Type</th>
                                             <th colspan="3" class='text-truncate text-center align-middle'>KP7 / KPX</th>
                                             <th colspan="3" class='text-truncate text-center align-middle'>Adjustment</th>
                                             <th colspan="3" class='text-truncate text-center align-middle'>Net</th>
@@ -787,11 +871,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                             <td></td>
                                             <td></td>
                                             <td></td>
+                                            <td></td>
                                         </tr>
                                     </tbody>
                                     <tfoot class="sticky-bottom table-dark">
                                         <tr>
-                                            <th colspan="4" class="text-end">Total : </th>
+                                            <th colspan="5" class="text-end">Total : </th>
                                             <th class="text-center" id="totalsummaryvolume">0</th>
                                             <th class="text-end" id="totalsummaryprincipal">0.00</th>
                                             <th class="text-end" id="totalsummarycharge">0.00</th>
@@ -1614,21 +1699,31 @@ $(document).ready(function() {
                     partner_name_raw = partner_name_value;
                 }
 
+                const billersName = (row.billers_name || '').toString().trim();
+                const bankAbbrev = (row.bank_abbreviation || '').toString().trim();
+                const chargingType = (row.charging_type || '').toString().trim();
+
+                // normalize field names (server uses singular names)
+                const summaryChargeVal = row.summary_charge ?? row.summary_charges ?? 0;
+                const adjustmentChargeVal = row.adjustment_charge ?? row.adjustment_charges ?? 0;
+                const netChargeVal = row.net_charge ?? row.net_charges ?? 0;
+
                 const tr = $(`
                 <tr>
                     <td>${index + 1}</td>
                     <td>${partner_name_raw}</td>
-                    <td></td>
-                    <td></td>
-                    <td class="text-end">${parseInt(row.summary_vol || 0).toLocaleString()}</td>
+                    <td>${billersName}</td>
+                    <td>${bankAbbrev}</td>
+                    <td>${chargingType}</td>
+                    <td class="text-center">${parseInt(row.summary_vol || 0).toLocaleString()}</td>
                     <td class="text-end">${parseFloat(row.summary_principal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                    <td class="text-end">${parseFloat(row.summary_charges || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                    <td class="text-end">${parseInt(row.adjustment_vol || 0).toLocaleString()}</td>
+                    <td class="text-end">${parseFloat(summaryChargeVal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                    <td class="text-center">${parseInt(row.adjustment_vol || 0).toLocaleString()}</td>
                     <td class="text-end">${parseFloat(row.adjustment_principal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                    <td class="text-end">${parseFloat(row.adjustment_charges || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                    <td class="text-end">${parseInt(row.net_vol || 0).toLocaleString()}</td>
+                    <td class="text-end">${parseFloat(adjustmentChargeVal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                    <td class="text-center">${parseInt(row.net_vol || 0).toLocaleString()}</td>
                     <td class="text-end">${parseFloat(row.net_principal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                    <td class="text-end">${parseFloat(row.net_charges || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                    <td class="text-end">${parseFloat(netChargeVal || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                 </tr>
             `);
                 tbody.append(tr);
