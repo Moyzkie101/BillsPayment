@@ -126,40 +126,52 @@ $opts = getopt('', ['write', 'v::', 'from::', 'to::', 'count::', 'help']);
 
 if (isset($opts['help'])) {
     echo <<<HELP
-Generate Version Details
 
-USAGE:
-  php generate_version_details.php [options]
+══════════════════════════════════════════════════════
+  GENERATE VERSION DETAILS
+══════════════════════════════════════════════════════
 
-OPTIONS:
-  --write             Apply the saved preview to version2.php
-  --v=VERSION         Set version to any number (e.g. 2.2.3, 3.0.0)
-  --from=HASH         Start reading from this commit going UP toward HEAD
-  --to=HASH           Stop reading at this commit (used with --from)
-  --count=N           Number of recent commits to read (default: 20)
-  --help              Show this help message
+  QUICK START
+  ────────────────────────────────────────────────────
+  No arguments → interactive prompt
+    php generate_version_details.php
 
-EXAMPLES:
-  # Last 40 commits up to HEAD:
-  php generate_version_details.php --count=40
+  Read last 40 commits (auto‑preview)
+    php generate_version_details.php --count=40
 
-  # From a specific commit up to HEAD:
-  php generate_version_details.php --from=abc1234
+  From a commit up to HEAD
+    php generate_version_details.php --from=abc1234
 
-  # A specific commit range (from → to, both inclusive):
-  php generate_version_details.php --from=abc1234 --to=def5678
+  Specific range (from → to, both inclusive)
+    php generate_version_details.php --from=abc1234 --to=def5678
 
-  # Range with version override:
-  php generate_version_details.php --from=abc1234 --to=def5678 --v=2.3.0
+  Override the version number
+    php generate_version_details.php --from=abc1234 --v=3.0.0
 
-  # Apply last preview:
-  php generate_version_details.php --write
+  Write the preview into version2.php
+    php generate_version_details.php --write
 
-COMMIT CONVENTIONS:
-  feat: / feature:                               → New Features
-  fix: / bugfix:                                  → Bug Fixes
-  improvement / refactor / docs / chore:         → Improvements
-  breaking:                                       → Breaking Changes
+  COMBINE EXAMPLES
+  ────────────────────────────────────────────────────
+  Range + version override + apply in one line
+    php generate_version_details.php --from=abc1234 --v=2.3.0 --write
+
+  COMMIT CONVENTIONS
+  ────────────────────────────────────────────────────
+  feat: / feature: / new:                     → New Features
+  fix: / bugfix: / hotfix:                    → Bug Fixes
+  improvement / perf / docs / refactor / chore → Improvements
+  breaking: / "breaking change"               → Breaking Changes
+  (no prefix)                                  → Improvements
+
+  OUTPUT DESCRIPTION
+  ────────────────────────────────────────────────────
+  Without --write → saves HTML preview to:
+    version-details/version-preview/preview.html
+  With --write     → reads that preview and pre‑pends it
+                      to version2.php (creates backup)
+
+══════════════════════════════════════════════════════
 
 HELP;
     exit(0);
@@ -175,8 +187,16 @@ $count     = isset($opts['count']) ? (int) $opts['count'] : $defaultCount;
 // Action
 // ——————————————————————————————————————————————————————
 
+// ——————————————————————————————————————————————————————
+// Action
+// ——————————————————————————————————————————————————————
+
+$interactive = !$writeMode && !$fromHash && !$toHash && !isset($opts['count']) && !isset($opts['help']);
+
 if ($writeMode) {
     writeFromPreview($sourceFile, $previewFile);
+} elseif ($interactive) {
+    runInteractive($repoPath, $sourceFile, $previewFile, $previewDir, $version);
 } else {
     generatePreview($repoPath, $sourceFile, $previewFile, $previewDir,
                     $version, $fromHash, $toHash, $count);
@@ -512,4 +532,88 @@ function formatDisplayDate(string $gitDate): string {
     $dt = DateTime::createFromFormat('Y-m-d\TH:i:sP', trim($gitDate));
     if (!$dt) $dt = DateTime::createFromFormat('Y-m-d', trim($gitDate));
     return $dt ? $dt->format('F j, Y') : trim($gitDate);
+}
+// ……… keep everything above ………
+
+function runInteractive(string $repoPath, string $sourceFile,
+                        string $previewFile, string $previewDir,
+                        ?string $version): void {
+    echo "\n";
+    echo border(70, '=');
+    echo "  COMMIT RANGE SELECTOR\n";
+    echo border(70, '=');
+    echo "\n";
+    echo "  To update the version, provide 2 commit hashes.\n\n";
+    echo "    → 1st Commit Hash – Where to START reading (older commit)\n";
+    echo "    → 2nd Commit Hash – Where to END reading (newer commit)\n";
+    echo "    ──────────────────────────────────────────────────────────\n";
+    echo "    Just press Enter for the 2nd commit to read through HEAD.\n\n";
+
+    // --- Read START hash ---
+    $start = promptLine('Start: ');
+    if ($start === null || trim($start) === '') {
+        echo "\n❌  No start hash entered. Exiting.\n\n";
+        exit(1);
+    }
+    $start = trim($start);
+
+    // --- Read END hash (optional) ---
+    $end = promptLine('End: ');
+    $end = ($end !== null && trim($end) !== '') ? trim($end) : null;
+
+    // --- Read VERSION ---
+    $currentVersion = detectCurrentVersion($sourceFile);
+    $autoNext       = detectAndBumpVersion($sourceFile);   // same as before
+
+    echo "\n  ───────────────\n";
+    echo "  Current Version : $currentVersion\n";
+    echo "  ───────────────\n";
+    $userVersion = promptLine("  Version (press Enter to use $autoNext): ");
+
+    if ($userVersion === null || trim($userVersion) === '') {
+        $version = $autoNext;
+    } else {
+        $version = trim($userVersion);
+        // simple validation – must look like X.Y.Z
+        if (!preg_match('/^\d+\.\d+\.\d+$/', $version)) {
+            echo "❌  Invalid version format. Exiting.\n";
+            exit(1);
+        }
+    }
+
+    echo "\n";
+
+    $from  = $start;
+    $to    = $end;            // null → reads up to HEAD
+    $count = 9999;            // large enough for a range
+
+    generatePreview($repoPath, $sourceFile, $previewFile, $previewDir,
+                    $version, $from, $to, $count);
+}
+/**
+ * Read the LATEST version already existing in version2.php.
+ * Returns the highest “Version X.Y.Z” found, or '0.0.0' if none.
+ */
+function detectCurrentVersion(string $filePath): string {
+    if (!file_exists($filePath)) return '0.0.0';
+    $content = file_get_contents($filePath);
+    if (preg_match_all('/<strong>Version\s+(\d+\.\d+\.\d+)/', $content, $m)) {
+        $versions = $m[1];
+        usort($versions, fn($a, $b) => version_compare($b, $a));
+        return $versions[0] ?? '0.0.0';
+    }
+    return '0.0.0';
+}
+
+/**
+ * Cross‑platform safe “read a line from the terminal” helper.
+ */
+function promptLine(string $prompt): ?string {
+    echo $prompt;
+    if (PHP_OS_FAMILY === 'Windows') {
+        $line = stream_get_line(STDIN, 1024, PHP_EOL);
+    } else {
+        $line = readline();
+    }
+    return ($line === false) ? null : trim($line);
 }
