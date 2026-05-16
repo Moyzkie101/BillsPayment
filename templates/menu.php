@@ -547,7 +547,6 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
                 <?php endif; ?>
             </div>
             <?php endif; ?>
-            <?php endif; ?>
 
             <?php if (has_any_permission(['Support Ticket Report','Maintenance Support Ticket'])): ?>
             <!-- Show/Hide Set support ticket Sub-menu -->
@@ -606,7 +605,10 @@ if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'admin' || $_SE
         </div>
     </div>
 <?php else: ?>
-    <?php header("Location:" . $auth_url); session_destroy(); exit(); ?>
+<script>
+    window.location.href = "<?php echo $auth_url; ?>";
+</script>
+<?php session_destroy(); exit(); ?>
 <?php endif; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
