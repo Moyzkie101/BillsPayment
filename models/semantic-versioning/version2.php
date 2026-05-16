@@ -1,3 +1,87 @@
+<!-- Version 2.2.3 -->
+<div class="accordion-item">
+    <h2 class="accordion-header">
+    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#version223" aria-expanded="true" aria-controls="version223">
+        <i class="fas fa-tag me-2 text-danger"></i>
+        <strong>Version 2.2.3</strong>
+        <span class="badge bg-success ms-2">Latest</span>
+    </button>
+    </h2>
+    <div id="version223" class="accordion-collapse collapse show" data-bs-parent="#versionAccordion">
+    <div class="accordion-body">
+        <div class="d-flex justify-content-start align-items-center mb-3">
+            <span class="text-muted me-2">Updated: April 30, 2026</span>
+            <span class="badge bg-success">Latest</span>
+        </div>
+        <!-- New features -->
+        <h6 class="text-success"><i class="fas fa-plus-circle me-1"></i> New features:</h6>
+        <ul class="list-unstyled ps-3">
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Refactor version details into separate files for improved modularity</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Add global connection variable to multiple ticket management files</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Add global connection variable to ticket management and VPO ticket files</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Enhance search input and button styles for improved UI responsiveness and interactivity</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Implement ticket copy lock and error notification for unaccepted tickets</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Adjust SQL query order for improved sorting of TRL review results</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Implement reference number copy functionality and enhance UI interactivity</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Enhance close picker modals with delegated event handling and status checks</li>
+        </ul>
+
+    </div>
+    </div>
+</div>
+
+<!-- Version 3.0.0 -->
+<div class="accordion-item">
+    <h2 class="accordion-header">
+    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#version300" aria-expanded="true" aria-controls="version300">
+        <i class="fas fa-tag me-2 text-danger"></i>
+        <strong>Version 3.0.0</strong>
+        <span class="badge bg-success ms-2">Latest</span>
+    </button>
+    </h2>
+    <div id="version300" class="accordion-collapse collapse show" data-bs-parent="#versionAccordion">
+    <div class="accordion-body">
+        <div class="d-flex justify-content-start align-items-center mb-3">
+            <span class="text-muted me-2">Updated: April 30, 2026</span>
+            <span class="badge bg-success">Latest</span>
+        </div>
+        <!-- New features -->
+        <h6 class="text-success"><i class="fas fa-plus-circle me-1"></i> New features:</h6>
+        <ul class="list-unstyled ps-3">
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Update version details generation script and enhance changelog options</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Add version details generation script and configuration for automated changelog creation</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Refactor version details into separate files for improved modularity</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Add global connection variable to multiple ticket management files</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Add global connection variable to ticket management and VPO ticket files</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Enhance search input and button styles for improved UI responsiveness and interactivity</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Implement ticket copy lock and error notification for unaccepted tickets</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Adjust SQL query order for improved sorting of TRL review results</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Implement reference number copy functionality and enhance UI interactivity</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Enhance close picker modals with delegated event handling and status checks</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Update acceptance message for clarity in ticket resolution status</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Improve AJAX reply handling by rebinding submit handlers and enhancing routing logic</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Enhance ticket handling by adding trail logging for reopened and accepted tickets</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Refactor ticket reopening logic to enforce VPO ownership and simplify error handling</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Enhance ticket reopening logic to include CAD owner and improve error handling</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Implement ticket locking mechanism and email retrieval for notifications</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Enhance ticket reopening UI with improved layout and dynamic button handling</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Include ticket_queries.php for enhanced ticket management functionality</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Add confirmation overlays and JavaScript handlers for ticket reopening functionality</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Implement ticket reopening functionality with modal and JavaScript handlers</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Prevent actions on resolved tickets in transfer and close modals</li>
+        </ul>
+
+        <!-- Improvements -->
+        <h6 class="text-warning"><i class="fas fa-wrench me-1"></i> Improvements:</h6>
+        <ul class="list-unstyled ps-3">
+            <li class="mb-2"><i class="fas fa-arrow-up text-warning me-2"></i>Enhance support ticket functionality with trail synchronization and status updates</li>
+            <li class="mb-2"><i class="fas fa-arrow-up text-warning me-2"></i>Enhance support ticket functionality with live updates and polling</li>
+        </ul>
+
+    </div>
+    </div>
+</div>
+
 <!-- Version 2.2.2 -->
 <div class="accordion-item">
     <h2 class="accordion-header">
