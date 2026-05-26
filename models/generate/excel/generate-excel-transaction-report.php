@@ -37,13 +37,13 @@ $whereConditions[] = "NOT (branch_id IN ('1', '2', '4937', '4938', '4962', '4987
 if (!empty($search)) {
     $whereConditions[] = "(reference_no LIKE ?)";
     $searchParam = "%$search%";
-    $params = array_merge($params, [$searchParam]);
+    $params[] = $searchParam;
     $types .= 's';
 }
 
 if (!empty($partner) && $partner !== 'All') {
     if($partner === 'SECURITY BANK') {
-        $whereConditions[] = "(partner_name = ? AND sub_billers_name IS NULL)";
+        $whereConditions[] = "(partner_name = ? AND sub_billers_id IS NULL)";
     }elseif($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING'){
         $whereConditions[] = "sub_billers_name = ?";
     }else{
@@ -67,25 +67,23 @@ if (!empty($end_date)) {
     $types .= 'ss';
 }
 
-if (!empty($post_transaction)) {
+if (!empty($post_transaction) && $post_transaction !== 'All') {
     $whereConditions[] = "post_transaction = ?";
     $params[] = $post_transaction;
     $types .= 's';
 }
 
-if (!empty($status)) {
+if (!empty($status) && $status !== 'All') {
     if ($status === 'active') {
         // Handle cases for Active status (NULL or empty values in database)
         $whereConditions[] = "status IS NULL";
     } else {
         // Handle other specific statuses
-        $whereConditions[] = "status = ?";
-        $params[] = $status;
-        $types .= 's';
+        $whereConditions[] = "status = '*'";
     }
 }
 
-if (!empty($source_file)) {
+if (!empty($source_file) && $source_file !== 'All') {
     $whereConditions[] = "source_file = ?";
     $params[] = $source_file;
     $types .= 's';
@@ -93,7 +91,7 @@ if (!empty($source_file)) {
 
 //for mainzone and zone filtering
 if($mainzone ==='VISMIN'){
-    if (!empty($zone)) {
+    if (!empty($zone) && $zone !== 'All') {
         $whereConditions[] = "zone_code = ?";
         $params[] = $zone;
         $types .= 's';
@@ -101,7 +99,7 @@ if($mainzone ==='VISMIN'){
         $whereConditions[] = "zone_code IN ('VIS', 'MIN')";
     }
 }elseif($mainzone ==='LNCR'){
-    if (!empty($zone)) {
+    if (!empty($zone) && $zone !== 'All') {
         $whereConditions[] = "zone_code = ?";
         $params[] = $zone;
         $types .= 's';
@@ -110,13 +108,13 @@ if($mainzone ==='VISMIN'){
     }
 }
 
-if (!empty($region)) {
+if (!empty($region) && $region !== 'All') {
     $whereConditions[] = "region_code = ?";
     $params[] = $region;
     $types .= 's';
 }
 
-if (!empty($branch)) {
+if (!empty($branch) && $branch !== 'All') {
     $whereConditions[] = "branch_id = ?";
     $params[] = $branch;
     $types .= 's';

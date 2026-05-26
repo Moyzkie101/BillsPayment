@@ -40,17 +40,49 @@ $params = [];
 $types = '';
 $sql = "SELECT DISTINCT branch_id, branch_name FROM masterdata.branch_profile WHERE ml_matic_status IN ('Active','Pending','Inactive') AND branch_id NOT IN $exclude_branch_id_list";
 
-if ($mainzone !== '') {
+// Apply mainzone filter (skip if empty or All)
+if ($mainzone !== '' && $mainzone !== 'All') {
     $sql .= " AND mainzone = ?";
     $where[] = $mainzone;
     $types .= 's';
 }
-if ($zone !== '') {
+
+// Apply zone filter (skip if empty, All, or Showroom — Showroom is handled separately)
+if ($zone !== '' && $zone !== 'All' && $zone !== 'Showroom') {
     $sql .= " AND zone = ?";
     $where[] = $zone;
     $types .= 's';
 }
-if ($region !== '') {
+
+// Special case: Showroom zone filters by ml_matic_region instead of zone
+if ($zone === 'Showroom') {
+    $showroomRegionMap = [
+        'LZN' => 'LNCR',
+        'NCR' => 'LNCR',
+        'VIS' => 'VISMIN',
+        'MIN' => 'VISMIN',
+    ];
+
+    if ($region !== '' && $region !== 'All' && isset($showroomRegionMap[$region])) {
+        $sql .= " AND zone = ? AND ml_matic_region = ?";
+        $where[] = $region;
+        $where[] = $showroomRegionMap[$region] . ' Showroom';
+        $types .= 'ss';
+    } elseif ($mainzone === 'VISMIN') {
+        $sql .= " AND ml_matic_region = ?";
+        $where[] = 'VISMIN Showroom';
+        $types .= 's';
+    } elseif ($mainzone === 'LNCR') {
+        $sql .= " AND ml_matic_region = ?";
+        $where[] = 'LNCR Showroom';
+        $types .= 's';
+    } else {
+        $sql .= " AND ml_matic_region IN ('VISMIN Showroom', 'LNCR Showroom')";
+    }
+}
+
+// Apply region filter (skip if empty, All, or Showroom zone)
+if ($region !== '' && $region !== 'All' && $zone !== 'Showroom') {
     $sql .= " AND region_code = ?";
     $where[] = $region;
     $types .= 's';
