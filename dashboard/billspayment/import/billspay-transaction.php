@@ -1383,7 +1383,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     formData.append('check_duplicates', '1');
 
                     return $.ajax({
-                        url: '../../../models/saved/saved_billspayImportFile_NEW-debug.php',
+                        url: '../../../models/saved/saved_billspayImportFile_NEW.php',
                         type: 'POST',
                         data: formData,
                         processData: false,
@@ -1584,7 +1584,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     }).then(() => {
                         if (allFiles.length === 1) {
                             // For single-file manual-like flows, treat confirm as cancel import (remove)
-                            window.location.href = '../../../models/saved/saved_billspayImportFile_NEW-debug.php?cancel=1';
+                            window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php?cancel=1';
                         } else {
                             // Remove files that had existing posted records and continue with the rest
                             filesWithDuplicates.forEach(f => {
@@ -1718,14 +1718,14 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
                 // Send to checker page
                 $.ajax({
-                    url: '../../../models/saved/saved_billspayImportFile_NEW-debug.php',
+                    url: '../../../models/saved/saved_billspayImportFile_NEW.php',
                     type: 'POST',
                     data: formData,
                     processData: false,
                     contentType: false,
                     success: function(response) {
                         // Redirect to validation page
-                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW-debug.php';
+                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php';
                     },
                     error: function(xhr, status, error) {
                         $('#loading-overlay').hide();
@@ -1909,7 +1909,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     batchData.append('check_duplicates', '1');
 
                     $.ajax({
-                        url: '../../../models/saved/saved_billspayImportFile_NEW-debug.php',
+                        url: '../../../models/saved/saved_billspayImportFile_NEW.php',
                         type: 'POST',
                         data: batchData,
                         processData: false,
@@ -2018,7 +2018,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                         width: '600px'
                     }).then(() => {
                         // Treat as cancel/remove for manual flow
-                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW-debug.php?cancel=1';
+                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php?cancel=1';
                     });
 
                     return;

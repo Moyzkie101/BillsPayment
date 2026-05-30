@@ -653,7 +653,7 @@ if (isset($_GET['cancel']) && $_GET['cancel'] == '1') {
                 text: 'All uploaded files have been removed.',
                 confirmButtonText: 'OK'
             }).then(() => {
-                window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction-debug.php';
+                window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
             });
         });
     </script>";
@@ -1000,7 +1000,7 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
     }
 
     // Use production upload page route explicitly
-    $returnUrl = '/billspayment/dashboard/billspayment/import/billspay-transaction-debug.php';
+    $returnUrl = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
     echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>';
     echo "<script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -3467,7 +3467,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 <div class="alert alert-info text-center mt-5">
                     <h4>No files uploaded</h4>
                     <p>Please go back to the upload page and select files to import.</p>
-                    <a href="/billspayment/dashboard/billspayment/import/billspay-transaction-debug.php" class="btn btn-primary">
+                    <a href="/billspayment/dashboard/billspayment/import/billspay-transaction.php" class="btn btn-primary">
                         Go to Upload Page
                     </a>
                 </div>
@@ -4376,10 +4376,10 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                 width: '85%',
                                 confirmButtonText: 'Close'
                             }).then(() => {
-                                window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction-debug.php';
+                                window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
                             });
                         } else {
-                            window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction-debug.php';
+                            window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
                         }
                     });
                 }).catch(error => {
