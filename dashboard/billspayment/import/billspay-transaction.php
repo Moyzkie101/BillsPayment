@@ -735,6 +735,14 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                                         <small>Form Upload</small>
                                     </div>
                                 </label>
+                                <label class="mode-card" data-mode="multiple">
+                                    <input type="radio" name="importMode" id="modeMultiple" value="multiple" style="display:none;">
+                                    <div class="mode-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                                    <div class="mode-text">
+                                        <div class="mode-label">Multiple</div>
+                                        <small>Drag & Drop</small>
+                                    </div>
+                                </label>
                         </div>
                     </div>
 
@@ -904,6 +912,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
             // Process individual file and auto-detect metadata
             function processFile(file) {
+                const selectedMode = $('input[name="importMode"]:checked').val();
                 // Indicate files are being read so UI can block Proceed
                 window._filesBeingRead = window._filesBeingRead || 0;
                 window._filesBeingRead++;
@@ -927,13 +936,18 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                         const workbook = XLSX.read(data, { type: 'array' });
                         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                         
-                        // Auto-detect Partner ID from Column G, Row 3 (G3)
-                        const partnerIdCell = firstSheet['G3'];
-                        const partnerId = partnerIdCell ? String(partnerIdCell.v).trim() : '';
-                        
-                        // Auto-detect Source Type from Column H, Row 3 (H3)
-                        const sourceTypeCell = firstSheet['H3'];
-                        let sourceType = sourceTypeCell ? String(sourceTypeCell.v).trim().toUpperCase() : '';
+                        let partnerId = '';
+                        let sourceType = '';
+                        if (selectedMode === 'multiple') {
+                            const firstDataPartnerCell = firstSheet['U10'];
+                            partnerId = firstDataPartnerCell ? String(firstDataPartnerCell.v).trim() : '';
+                            sourceType = 'KPX';
+                        } else {
+                            const partnerIdCell = firstSheet['G3'];
+                            partnerId = partnerIdCell ? String(partnerIdCell.v).trim() : '';
+                            const sourceTypeCell = firstSheet['H3'];
+                            sourceType = sourceTypeCell ? String(sourceTypeCell.v).trim().toUpperCase() : '';
+                        }
 
                         // For KPX partner_id_kpx=1074, extract billers name from B4.
                         const billersCell = firstSheet['B4'] || firstSheet['b4'];
@@ -970,6 +984,20 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                             }
                         }
                         
+                        if (selectedMode === 'multiple') {
+                            const minAllowedDate = '2026-05-25';
+                            if (!reportDate || reportDate < minAllowedDate) {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Invalid Upload Date',
+                                    html: `File: <strong>${file.name}</strong><br>Multiple mode only allows report date from <strong>May 25, 2026</strong> and above.`,
+                                    confirmButtonText: 'OK'
+                                });
+                                finishFileRead();
+                                return;
+                            }
+                        }
+
                         // Validate source type
                         if (sourceType !== 'KPX' && sourceType !== 'KP7') {
                             Swal.fire({
@@ -1050,6 +1078,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                                     sourceType: sourceType,
                                     report_date_raw: reportDateRaw,
                                     report_date: reportDate,
+                                    importMode: selectedMode,
                                     id: Date.now() + Math.random()
                                 };
 
@@ -1089,6 +1118,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                                     billersName: isSpecial1074 ? billersName : '',
                                     subBillersId: null,
                                     sourceType: sourceType,
+                                    importMode: selectedMode,
                                     id: Date.now() + Math.random()
                                 };
 
@@ -1147,6 +1177,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
                 uploadedFiles.forEach(fileData => {
                     let statusIcon = '';
+                    const isMultipleModeCard = String(fileData.importMode || '').toLowerCase() === 'multiple';
                     if (fileData.status === 'reading') {
                         statusIcon = '<i class="fa-solid fa-spinner fa-spin text-primary"></i>';
                     } else if (fileData.status === 'valid') {
@@ -1170,21 +1201,23 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                             </div>
                             <div class="file-card-body"></div>
                             <div class="file-card-footer">
-                                <div class="file-card-detail">
-                                    <div class="file-card-label">Sub Billers ID</div>
-                                    <div class="file-card-value">
-                                        ${fileData.subBillersId !== undefined && fileData.subBillersId !== null ? fileData.subBillersId : null}
+                                ${!isMultipleModeCard ? `
+                                    <div class="file-card-detail">
+                                        <div class="file-card-label">Sub Billers ID</div>
+                                        <div class="file-card-value">
+                                            ${fileData.subBillersId !== undefined && fileData.subBillersId !== null ? fileData.subBillersId : null}
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="file-card-detail">
-                                    <div class="file-card-label">Partner ID</div>
-                                    <div class="file-card-value partner-tooltip">
-                                        ${fileData.partnerId}
-                                        <span class="tooltip-text">${fileData.billersName ? ('Partner Name: ' + fileData.partnerName + '<br>Sub Billers Name: ' + fileData.billersName) : fileData.partnerName}</span>
+                                    <div class="file-card-detail">
+                                        <div class="file-card-label">Partner ID</div>
+                                        <div class="file-card-value partner-tooltip">
+                                            ${fileData.partnerId}
+                                            <span class="tooltip-text">${fileData.billersName ? ('Partner Name: ' + fileData.partnerName + '<br>Sub Billers Name: ' + fileData.billersName) : fileData.partnerName}</span>
+                                        </div>
                                     </div>
-                                </div>
+                                ` : ''}
                                 <div class="file-card-detail">
-                                    <div class="file-card-label">Source Type</div>
+                                    <div class="file-card-label">${isMultipleModeCard ? 'Source File' : 'Source Type'}</div>
                                     <div class="file-card-value">
                                         <span class="badge-source ${fileData.sourceType === 'KPX' ? 'badge-kpx' : 'badge-kp7'}">
                                             ${fileData.sourceType}
@@ -1350,7 +1383,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     formData.append('check_duplicates', '1');
 
                     return $.ajax({
-                        url: '../../../models/saved/saved_billspayImportFile_NEW.php',
+                        url: '../../../models/saved/saved_billspayImportFile_NEW-debug.php',
                         type: 'POST',
                         data: formData,
                         processData: false,
@@ -1551,7 +1584,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     }).then(() => {
                         if (allFiles.length === 1) {
                             // For single-file manual-like flows, treat confirm as cancel import (remove)
-                            window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php?cancel=1';
+                            window.location.href = '../../../models/saved/saved_billspayImportFile_NEW-debug.php?cancel=1';
                         } else {
                             // Remove files that had existing posted records and continue with the rest
                             filesWithDuplicates.forEach(f => {
@@ -1665,6 +1698,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     formData.append('files[]', fileData.file);
                     formData.append('partner_ids[]', fileData.partnerId);
                     formData.append('source_types[]', fileData.sourceType);
+                    formData.append('import_modes[]', fileData.importMode || 'auto');
                     formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
                     formData.append('billers_names[]', fileData.billersName || '');
                     formData.append('sub_billers_ids[]', (fileData.subBillersId !== undefined && fileData.subBillersId !== null) ? fileData.subBillersId : '');
@@ -1684,14 +1718,14 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
                 // Send to checker page
                 $.ajax({
-                    url: '../../../models/saved/saved_billspayImportFile_NEW.php',
+                    url: '../../../models/saved/saved_billspayImportFile_NEW-debug.php',
                     type: 'POST',
                     data: formData,
                     processData: false,
                     contentType: false,
                     success: function(response) {
                         // Redirect to validation page
-                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php';
+                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW-debug.php';
                     },
                     error: function(xhr, status, error) {
                         $('#loading-overlay').hide();
@@ -1875,7 +1909,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     batchData.append('check_duplicates', '1');
 
                     $.ajax({
-                        url: '../../../models/saved/saved_billspayImportFile_NEW.php',
+                        url: '../../../models/saved/saved_billspayImportFile_NEW-debug.php',
                         type: 'POST',
                         data: batchData,
                         processData: false,
@@ -1984,7 +2018,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                         width: '600px'
                     }).then(() => {
                         // Treat as cancel/remove for manual flow
-                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php?cancel=1';
+                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW-debug.php?cancel=1';
                     });
 
                     return;

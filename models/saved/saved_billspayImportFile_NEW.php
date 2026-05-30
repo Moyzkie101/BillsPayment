@@ -108,6 +108,8 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                 $newRows = 0;
                 $postedRows = 0;
                 $unpostedRows = 0;
+                $rowKeys = [];
+                $parsedRows = [];
                 
                 // Process rows starting from row 10 (data rows)
                 for ($row = 10; $row <= $highestRow; $row++) {
@@ -155,47 +157,79 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                         $newRows++;
                         continue;
                     }
-                    
-                    // Check for duplicates (posted or unposted) and count by post_transaction
-                    $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
-                            WHERE reference_no = ? 
-                            AND (`datetime` = ? OR cancellation_date = ?)";
-                    // Prefer sub_billers_id when supplied from the frontend
-                    if (!empty($subBillersId)) {
-                        $sql .= " AND sub_billers_id = ? GROUP BY post_transaction";
+
+                    $key = $reference_number . '||' . $datetime;
+                    $rowKeys[$key] = true;
+                    $parsedRows[] = ['key' => $key];
+                }
+
+                // Batch duplicate lookup per file (replaces per-row query loop)
+                $duplicateMap = [];
+                if (!empty($rowKeys)) {
+                    $keys = array_keys($rowKeys);
+                    $chunks = array_chunk($keys, 500);
+                    foreach ($chunks as $chunkKeys) {
+                        $orParts = [];
+                        $params = [];
+                        $types = '';
+                        foreach ($chunkKeys as $k) {
+                            $split = explode('||', $k, 2);
+                            $ref = $split[0] ?? '';
+                            $dt = $split[1] ?? '';
+                            $orParts[] = "(reference_no = ? AND (`datetime` = ? OR cancellation_date = ?))";
+                            $types .= "sss";
+                            $params[] = $ref;
+                            $params[] = $dt;
+                            $params[] = $dt;
+                        }
+
+                        $sql = "SELECT reference_no, `datetime`, cancellation_date, post_transaction, COUNT(*) as cnt
+                                FROM mldb.billspayment_transaction WHERE (" . implode(" OR ", $orParts) . ")";
+
+                        if (!empty($subBillersId)) {
+                            $sql .= " AND sub_billers_id = ?";
+                            $types .= "s";
+                            $params[] = $subBillersId;
+                        } elseif (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
+                            $sql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
+                            $types .= "ss";
+                            $params[] = $partnerId;
+                            $params[] = $partnerId;
+                        }
+
+                        $sql .= " GROUP BY reference_no, `datetime`, cancellation_date, post_transaction";
                         $stmt = $conn->prepare($sql);
-                        $stmt->bind_param("ssss", $reference_number, $datetime, $datetime, $subBillersId);
-                    } elseif (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
-                        // Accept either partner_id or partner_id_kpx to be tolerant of client-supplied id form
-                        $sql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
-                        $sql .= " GROUP BY post_transaction";
-                        $stmt = $conn->prepare($sql);
-                        $stmt->bind_param("sssss", $reference_number, $datetime, $datetime, $partnerId, $partnerId);
-                    } else {
-                        $sql .= " GROUP BY post_transaction";
-                        $stmt = $conn->prepare($sql);
-                        $stmt->bind_param("sss", $reference_number, $datetime, $datetime);
-                    }
-                    $stmt->execute();
-                    $result = $stmt->get_result();
-                    $row_count_total = 0;
-                    if ($result) {
-                        while ($r = $result->fetch_assoc()) {
-                            $cnt = intval($r['cnt']);
-                            $row_count_total += $cnt;
-                            $status = isset($r['post_transaction']) ? strtolower(trim($r['post_transaction'])) : '';
-                            if ($status === 'posted') {
-                                $postedRows += $cnt;
-                            } else {
-                                // treat any non-'posted' as unposted
-                                $unpostedRows += $cnt;
+                        $bind = [$types];
+                        foreach ($params as $idx => $val) { $bind[] = &$params[$idx]; }
+                        call_user_func_array([$stmt, 'bind_param'], $bind);
+                        $stmt->execute();
+                        $result = $stmt->get_result();
+                        if ($result) {
+                            while ($r = $result->fetch_assoc()) {
+                                $status = isset($r['post_transaction']) ? strtolower(trim($r['post_transaction'])) : '';
+                                $cnt = intval($r['cnt']);
+                                $k1 = ($r['reference_no'] ?? '') . '||' . ($r['datetime'] ?? '');
+                                $k2 = ($r['reference_no'] ?? '') . '||' . ($r['cancellation_date'] ?? '');
+                                if (!isset($duplicateMap[$k1])) $duplicateMap[$k1] = ['total' => 0, 'posted' => 0, 'unposted' => 0];
+                                $duplicateMap[$k1]['total'] += $cnt;
+                                if ($status === 'posted') { $duplicateMap[$k1]['posted'] += $cnt; } else { $duplicateMap[$k1]['unposted'] += $cnt; }
+                                if (!empty($r['cancellation_date'])) {
+                                    if (!isset($duplicateMap[$k2])) $duplicateMap[$k2] = ['total' => 0, 'posted' => 0, 'unposted' => 0];
+                                    $duplicateMap[$k2]['total'] += $cnt;
+                                    if ($status === 'posted') { $duplicateMap[$k2]['posted'] += $cnt; } else { $duplicateMap[$k2]['unposted'] += $cnt; }
+                                }
                             }
                         }
+                        $stmt->close();
                     }
-                    $stmt->close();
+                }
 
-                    if ($row_count_total > 0) {
+                foreach ($parsedRows as $pr) {
+                    $k = $pr['key'];
+                    if (isset($duplicateMap[$k]) && intval($duplicateMap[$k]['total']) > 0) {
                         $duplicateRows++;
+                        $postedRows += intval($duplicateMap[$k]['posted']);
+                        $unpostedRows += intval($duplicateMap[$k]['unposted']);
                     } else {
                         $newRows++;
                     }
@@ -283,7 +317,9 @@ if (isset($_POST['fix_head_office']) && !empty($_POST['file_id'])) {
                 // attempt to inspect outlet cell O for this row to infer proper head office
                 try {
                     $outlet = '';
-                    try { $outlet = trim(strval($worksheet->getCell('O' . $r)->getValue())); } catch (Exception $e) { $outlet = ''; }
+                    $modeNormFix = strtolower(trim((string)($found['import_mode'] ?? 'auto')));
+                    $outletCol = ($modeNormFix === 'auto') ? 'O' : 'N';
+                    try { $outlet = trim(strval($worksheet->getCell($outletCol . $r)->getValue())); } catch (Exception $e) { $outlet = ''; }
                     if ($v === '') {
                         $normalizedOutlet = strtoupper(preg_replace('/\s+/', ' ', $outlet));
                         if ($normalizedOutlet === 'ML CEBU HEAD OFFICE' || $normalizedOutlet === 'CEBU HEAD OFFICE') {
@@ -296,9 +332,12 @@ if (isset($_POST['fix_head_office']) && !empty($_POST['file_id'])) {
                     // keep explicit value only if provided; do not force fallback value
                 }
 
-                // Target branch id column: N
+                // Target branch id column depends on import mode:
+                // Auto Mode -> N, Multiple Mode -> M
                 if ($v !== '') {
-                    try { $worksheet->setCellValue('N' . $r, $v); } catch (Exception $e) {}
+                    $modeNormFix = strtolower(trim((string)($found['import_mode'] ?? 'auto')));
+                    $branchCol = ($modeNormFix === 'auto') ? 'N' : 'M';
+                    try { $worksheet->setCellValue($branchCol . $r, $v); } catch (Exception $e) {}
                 }
             }
         }
@@ -308,7 +347,7 @@ if (isset($_POST['fix_head_office']) && !empty($_POST['file_id'])) {
         $writer->save($path);
 
         // Re-run validation for this file and update session
-        $newValidation = validateFile($conn, $path, $found['source_type'] ?? '', $found['partner_id'] ?? '');
+        $newValidation = validateFile($conn, $path, $found['source_type'] ?? '', $found['partner_id'] ?? '', $found['import_mode'] ?? 'auto');
         $found['validation_result'] = $newValidation;
         // update status with Head Office priority
         if (!empty($newValidation['head_office_issues'])) {
@@ -354,7 +393,9 @@ if (isset($_POST['fix_head_office_all']) && isset($_SESSION['uploaded_files'])) 
                     if ($r > 0) {
                         try {
                             $outlet = '';
-                            try { $outlet = trim(strval($worksheet->getCell('O' . $r)->getValue())); } catch (Exception $e) { $outlet = ''; }
+                            $modeNormFixAll = strtolower(trim((string)($f['import_mode'] ?? 'auto')));
+                            $outletCol = ($modeNormFixAll === 'auto') ? 'O' : 'N';
+                            try { $outlet = trim(strval($worksheet->getCell($outletCol . $r)->getValue())); } catch (Exception $e) { $outlet = ''; }
                             if ($v === '') {
                                 $normalizedOutlet = strtoupper(preg_replace('/\s+/', ' ', $outlet));
                                 if ($normalizedOutlet === 'ML CEBU HEAD OFFICE' || $normalizedOutlet === 'CEBU HEAD OFFICE') {
@@ -368,7 +409,9 @@ if (isset($_POST['fix_head_office_all']) && isset($_SESSION['uploaded_files'])) 
                         }
 
                         if ($v !== '') {
-                            try { $worksheet->setCellValue('N' . $r, $v); } catch (Exception $e) {}
+                            $modeNormFixAll = strtolower(trim((string)($f['import_mode'] ?? 'auto')));
+                            $branchCol = ($modeNormFixAll === 'auto') ? 'N' : 'M';
+                            try { $worksheet->setCellValue($branchCol . $r, $v); } catch (Exception $e) {}
                         }
                     }
                 }
@@ -379,7 +422,7 @@ if (isset($_POST['fix_head_office_all']) && isset($_SESSION['uploaded_files'])) 
                 try { $spreadsheet->disconnectWorksheets(); } catch (Exception $e) {}
 
                 // Re-run validation
-                $newValidation = validateFile($conn, $path, $f['source_type'] ?? '', $f['partner_id'] ?? '');
+                $newValidation = validateFile($conn, $path, $f['source_type'] ?? '', $f['partner_id'] ?? '', $f['import_mode'] ?? 'auto');
                 $f['validation_result'] = $newValidation;
                 if (!empty($newValidation['head_office_issues'])) {
                     $f['status'] = 'head_office';
@@ -610,7 +653,7 @@ if (isset($_GET['cancel']) && $_GET['cancel'] == '1') {
                 text: 'All uploaded files have been removed.',
                 confirmButtonText: 'OK'
             }).then(() => {
-                window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
+                window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction-debug.php';
             });
         });
     </script>";
@@ -694,6 +737,7 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
             $fileName = $_FILES['files']['name'][$i];
             $partnerId = $_POST['partner_ids'][$i] ?? '';
             $sourceType = $_POST['source_types'][$i] ?? '';
+            $importMode = $_POST['import_modes'][$i] ?? 'auto';
             $billersName = $_POST['billers_names'][$i] ?? '';
             $subBillersId = $_POST['sub_billers_ids'][$i] ?? null;
             
@@ -723,6 +767,7 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
                     'billers_name' => $billersName,
                     'sub_billers_id' => $subBillersId,
                     'source_type' => $sourceType,
+                    'import_mode' => $importMode,
                     'report_date_raw' => $reportDateRaw,
                     'report_date' => $reportDate,
                     'status' => 'pending',
@@ -750,7 +795,14 @@ if (isset($_POST['upload']) && isset($_FILES['files'])) {
 if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
     // Run full validation on all files to get transaction summaries and previews
     foreach ($_SESSION['uploaded_files'] as &$file) {
-        if ($file['status'] === 'pending') {
+        $needsRefresh = (
+            !isset($file['validation_result']) ||
+            !is_array($file['validation_result']) ||
+            !array_key_exists('has_head_office_outlet', $file['validation_result']) ||
+            !array_key_exists('validation_rule_version', $file['validation_result']) ||
+            intval($file['validation_result']['validation_rule_version']) < 2
+        );
+        if (($file['status'] === 'pending') || $needsRefresh) {
             // Ensure stored path exists; attempt to resolve using helper
             $resolved = resolve_uploaded_path($file['path']);
             if ($resolved === null) {
@@ -770,7 +822,7 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
                 // update stored path and session
                 $file['path'] = $resolved;
                 $_SESSION['uploaded_files'] = $_SESSION['uploaded_files'];
-                $validationResult = validateFile($conn, $file['path'], $file['source_type'], $file['partner_id']);
+                $validationResult = validateFile($conn, $file['path'], $file['source_type'], $file['partner_id'], $file['import_mode'] ?? 'auto');
             }
             $file['validation_result'] = $validationResult;
             // Priority: Head Office (highest) -> Invalid -> Valid
@@ -948,7 +1000,7 @@ if (isset($_SESSION['uploaded_files']) && !isset($_POST['perform_import'])) {
     }
 
     // Use production upload page route explicitly
-    $returnUrl = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
+    $returnUrl = '/billspayment/dashboard/billspayment/import/billspay-transaction-debug.php';
     echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>';
     echo "<script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -1094,6 +1146,12 @@ function normalizeBranchId($value) {
     return $trimmed;
 }
 
+function normalizeBranchNameKey($value) {
+    $v = strtoupper(trim((string)$value));
+    if ($v === '') return '';
+    return preg_replace('/\s+/', ' ', $v);
+}
+
 function loadBranchIdSet() {
     static $cache = null;
     if ($cache !== null) {
@@ -1123,6 +1181,36 @@ function loadBranchIdSet() {
         }
     }
 
+    $cache = $set;
+    return $cache;
+}
+
+function loadBranchNameSet() {
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $branchFile = __DIR__ . '/../../branch.json';
+    if (!file_exists($branchFile)) {
+        $cache = [];
+        return $cache;
+    }
+
+    $json = @file_get_contents($branchFile);
+    $data = json_decode($json, true);
+    if (!is_array($data)) {
+        $cache = [];
+        return $cache;
+    }
+
+    $set = [];
+    foreach ($data as $row) {
+        if (isset($row['branch_name'])) {
+            $k = normalizeBranchNameKey($row['branch_name']);
+            if ($k !== '') $set[$k] = true;
+        }
+    }
     $cache = $set;
     return $cache;
 }
@@ -1339,11 +1427,12 @@ function calculateTransactionSummary($matchedRows, $cancellationRows) {
     return $summaries;
 }
 
-function validateFile($conn, $filePath, $sourceType, $partnerId) {
+function validateFile($conn, $filePath, $sourceType, $partnerId, $importMode = 'auto') {
     $errors = [];
     $warnings = [];
     $rowCount = 0;
     $headOfficeIssues = []; // collect head office specific issues
+    $hasHeadOfficeOutlet = false; // true if any row has a head-office outlet label
     $previewData = []; // Store sample rows for preview
     $matchedRows = [];
     $cancellationRows = [];
@@ -1352,9 +1441,11 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
     $transactionStartDate = null;
     $transactionEndDate = null;
     $cachedData = []; // Cache full data for import to avoid re-parsing Excel
+    $noPartnerIds = [];
     $spreadsheet = null;
     $worksheet = null;
     $branchIdSet = loadBranchIdSet();
+    $branchNameSet = loadBranchNameSet();
     
     try {
         $spreadsheet = loadSpreadsheet($filePath, true);
@@ -1436,8 +1527,34 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
             if (empty($cellA) && empty($cellB) && empty($cellC)) {
                 break; // End of data
             }
-            
+
             $rowCount++;
+            
+            // Multiple mode only: detect No Partner ID from Column U and reveal Partner Name from Column V
+            if (strtolower(trim((string)$importMode)) === 'multiple') {
+                $uRaw = $worksheet->getCell('U' . $row)->getValue();
+                $vRaw = $worksheet->getCell('V' . $row)->getValue();
+                if (isEffectivelyEmptyCell($uRaw)) {
+                    $partnerNameVal = trim((string)$vRaw) !== '' ? trim((string)$vRaw) : 'N/A';
+                    $noPartnerIds[] = [
+                        'row' => $row,
+                        'partner_id' => 'No Partner ID',
+                        'partner_name' => $partnerNameVal
+                    ];
+                    $missingRows[] = [
+                        'row' => $row,
+                        'missing' => ['No Partner ID'],
+                        'type' => 'no_partner_id',
+                        'value' => $partnerNameVal
+                    ];
+                    $errors[] = [
+                        'row' => $row,
+                        'type' => 'no_partner_id',
+                        'message' => 'No Partner ID',
+                        'value' => $partnerNameVal
+                    ];
+                }
+            }
             
             // Extract data for calculations and preview
             $rowData = [];
@@ -1572,35 +1689,72 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
                 }
             }
 
-            // Check for missing required location fields (Branch ID=N, ML Outlet=O, Region Code=P)
+            // Check for required location fields.
+            // Multiple mode rule: Branch ID is M, ML Outlet is N.
+            // Auto mode rule: Branch ID is N, ML Outlet is O.
             $branchIdCell = '';
+            $branchIdCellM = '';
+            $branchIdCellNForAuto = '';
             $mlOutletCell = '';
+            $mlOutletCellN = '';
+            $mlOutletCellOForAuto = '';
             $regionCodeCell = '';
             try {
-                $branchIdCell = trim(strval($worksheet->getCell('N' . $row)->getValue()));
-                $mlOutletCell = trim(strval($worksheet->getCell('O' . $row)->getValue()));
+                $branchIdCellM = trim(strval($worksheet->getCell('M' . $row)->getValue()));
+                $branchIdCellNForAuto = trim(strval($worksheet->getCell('N' . $row)->getValue()));
+                $mlOutletCellN = trim(strval($worksheet->getCell('N' . $row)->getValue()));
+                $mlOutletCellOForAuto = trim(strval($worksheet->getCell('O' . $row)->getValue()));
                 $regionCodeCell = trim(strval($worksheet->getCell('P' . $row)->getValue()));
+                $branchIdCell = (strtolower(trim((string)$importMode)) === 'auto') ? $branchIdCellNForAuto : $branchIdCellM;
+                $mlOutletCell = (strtolower(trim((string)$importMode)) === 'auto') ? $mlOutletCellOForAuto : $mlOutletCellN;
             } catch (Exception $e) {
                 // ignore missing columns — treat as empty
             }
 
             $missing = [];
-            if ($branchIdCell === '' || strtoupper($branchIdCell) === 'NAN') $missing[] = 'Branch ID';
-            if ($mlOutletCell === '' || strtoupper($mlOutletCell) === 'NAN') $missing[] = 'ML Outlet';
-            if ($regionCodeCell === '' || strtoupper($regionCodeCell) === 'NAN') $missing[] = 'Region Code';
+            $modeNorm = strtolower(trim((string)$importMode));
+            $isMultipleMode = ($modeNorm === 'multiple');
+            $branchIdForValidation = ($modeNorm === 'auto') ? $branchIdCellNForAuto : $branchIdCellM;
+            // Auto Mode-only: if branch field contains head-office labels, resolve to canonical branch IDs.
+            if ($modeNorm === 'auto') {
+                $autoBranchText = strtoupper(preg_replace('/\s+/', ' ', trim((string)$branchIdForValidation)));
+                if ($autoBranchText === 'ML CEBU HEAD OFFICE' || $autoBranchText === 'CEBU HEAD OFFICE') {
+                    $branchIdForValidation = '581';
+                } elseif ($autoBranchText === 'ML HEAD OFFICE' || $autoBranchText === 'HEAD OFFICE') {
+                    $branchIdForValidation = '2607';
+                }
+            }
+            $isBranchIdEmpty = isEffectivelyEmptyCell($branchIdForValidation) || strtoupper(trim((string)$branchIdForValidation)) === 'NAN';
+            if ($isBranchIdEmpty) {
+                $missingRows[] = [
+                    'row' => $row,
+                    'missing' => ['No Branch ID'],
+                    'type' => 'no_branch_id',
+                    'value' => $mlOutletCellN
+                ];
+                $errors[] = [
+                    'row' => $row,
+                    'type' => 'no_branch_id',
+                    'message' => 'No Branch ID',
+                    'value' => $mlOutletCellN
+                ];
+            }
+            if (isEffectivelyEmptyCell($mlOutletCell) || strtoupper(trim((string)$mlOutletCell)) === 'NAN') $missing[] = 'ML Outlet';
+            if (isEffectivelyEmptyCell($regionCodeCell) || strtoupper(trim((string)$regionCodeCell)) === 'NAN') $missing[] = 'Region Code';
 
             if (!empty($missing)) {
+                $missingValue = '';
                 $missingRows[] = [
                     'row' => $row,
                     'missing' => $missing,
                     'type' => 'missing_fields',
-                    'value' => ''
+                    'value' => $missingValue
                 ];
                 $errors[] = [
                     'row' => $row,
                     'type' => 'missing_fields',
                     'message' => 'Missing fields: ' . implode(', ', $missing),
-                    'value' => ''
+                    'value' => $missingValue
                 ];
             }
 
@@ -1611,8 +1765,29 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
             // and branch id MUST be 581. If outlet matches but branch id is missing/wrong,
             // flag this row as a Head Office issue (file-level Head Office status).
             try {
+                $normalizedOutletForDetect = strtoupper(preg_replace('/\s+/', ' ', $mlOutletCell));
+                if (
+                    $normalizedOutletForDetect === 'ML CEBU HEAD OFFICE' ||
+                    $normalizedOutletForDetect === 'CEBU HEAD OFFICE' ||
+                    $normalizedOutletForDetect === 'ML HEAD OFFICE' ||
+                    $normalizedOutletForDetect === 'HEAD OFFICE'
+                ) {
+                    // Mode-specific rule for showing Fix All Head Office Issues button.
+                    if ($isMultipleMode) {
+                        if ($isBranchIdEmpty) {
+                            $hasHeadOfficeOutlet = true;
+                        }
+                    } elseif ($modeNorm === 'auto') {
+                        if ($isBranchIdEmpty) {
+                            $hasHeadOfficeOutlet = true;
+                        }
+                    } else {
+                        $hasHeadOfficeOutlet = true;
+                    }
+                }
+
                 if (strtoupper($mlOutletCell) === 'ML CEBU HEAD OFFICE' || strtoupper($mlOutletCell) === 'CEBU HEAD OFFICE') {
-                    $normalizedBranch = normalizeBranchId($branchIdCell);
+                    $normalizedBranch = normalizeBranchId($branchIdForValidation);
                     if ($normalizedBranch === '' || strtoupper($normalizedBranch) === 'NAN' || $normalizedBranch !== '581') {
                         $headOfficeIssues[] = [
                             'row' => $row,
@@ -1629,7 +1804,7 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
                         ];
                     }
                 } else if (strtoupper($mlOutletCell) === 'ML HEAD OFFICE' || strtoupper($mlOutletCell) === 'HEAD OFFICE') {
-                    $normalizedBranch = normalizeBranchId($branchIdCell);
+                    $normalizedBranch = normalizeBranchId($branchIdForValidation);
                     if ($normalizedBranch === '' || strtoupper($normalizedBranch) === 'NAN' || $normalizedBranch !== '2607') {
                         $headOfficeIssues[] = [
                             'row' => $row,
@@ -1650,8 +1825,16 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
                 // ignore any unexpected issues here
             }
 
-            $normalizedBranchId = normalizeBranchId($branchIdCell);
-            if (!empty($branchIdSet) && $normalizedBranchId !== '' && !isset($branchIdSet[$normalizedBranchId])) {
+            $normalizedBranchId = normalizeBranchId($branchIdForValidation);
+            $normalizedBranchName = normalizeBranchNameKey($branchIdForValidation);
+            $isKnownBranch = false;
+            if (!empty($branchIdSet) && $normalizedBranchId !== '' && isset($branchIdSet[$normalizedBranchId])) {
+                $isKnownBranch = true;
+            }
+            if (!$isKnownBranch && !empty($branchNameSet) && $normalizedBranchName !== '' && isset($branchNameSet[$normalizedBranchName])) {
+                $isKnownBranch = true;
+            }
+            if (!$isBranchIdEmpty && !$isKnownBranch) {
                 $missingRows[] = [
                     'row' => $row,
                     'missing' => ['New Branch ID'],
@@ -1761,13 +1944,25 @@ function validateFile($conn, $filePath, $sourceType, $partnerId) {
         'preview_data' => $previewData,
         'missing_rows' => $missingRows,
         'head_office_issues' => $headOfficeIssues,
+        'has_head_office_outlet' => $hasHeadOfficeOutlet,
+        'validation_rule_version' => 2,
         'source_type' => $sourceType,
         'partner_data' => $partnerData,
         'transaction_date' => $transactionDate,
         'transaction_start_date' => $transactionStartDate,
         'transaction_end_date' => $transactionEndDate,
-        'transaction_summary' => $summaries
+        'transaction_summary' => $summaries,
+        'no_partner_ids' => $noPartnerIds
     ];
+}
+
+function isEffectivelyEmptyCell($value) {
+    if ($value === null) return true;
+    $v = trim((string)$value);
+    if ($v === '') return true;
+    if (strtoupper($v) === 'NULL') return true;
+    if ($v === "''") return true;
+    return false;
 }
 
 function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserEmail, $progressToken = null, $cachedData = null, $userDecision = 'skip', $fileMeta = null) {
@@ -1814,6 +2009,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
         $PartnerName = $isKpx1074 ? 'SECURITY BANK' : $partnerData['partner_name'];
         $BillersName = '';
         $sub_billers_id = null;
+        $importMode = is_array($fileMeta) && !empty($fileMeta['import_mode']) ? strtolower(trim((string)$fileMeta['import_mode'])) : 'auto';
         if ($isKpx1074 && is_array($fileMeta) && !empty($fileMeta['billers_name'])) {
             $BillersName = trim((string)$fileMeta['billers_name']);
         }
@@ -2079,10 +2275,13 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                     $amount_charge_customer = floatval(str_replace(',', '', $worksheet->getCell('J' . $row)->getValue()));
                     $amount_charge_partner = floatval(str_replace(',', '', $worksheet->getCell('K' . $row)->getValue()));
                     $contact_number = strval($worksheet->getCell('L' . $row)->getValue());
-                    $other_details = strval($worksheet->getCell('M' . $row)->getValue());
+                    $other_details = strval($worksheet->getCell('L' . $row)->getValue());
 
-                    $branch_id_raw = $worksheet->getCell('N' . $row)->getValue();
-                    $branch_outlet_raw = strval($worksheet->getCell('O' . $row)->getValue());
+                    // Auto Mode: read branch ID from column N (keep Multiple Mode behavior unchanged elsewhere)
+                    $branch_id_raw = (strtolower(trim((string)$importMode)) === 'auto')
+                        ? $worksheet->getCell('N' . $row)->getValue()
+                        : $worksheet->getCell('M' . $row)->getValue();
+                    $branch_outlet_raw = strval($worksheet->getCell('N' . $row)->getValue());
                     if (isset($getColumnLabels[13]) && $getColumnLabels[13] === 'Branch ID') {
                         if (is_numeric($branch_id_raw)) {
                             $cntl_num_for_region = ($branch_id_raw == 581) ? intval(2607) : intval($branch_id_raw);
@@ -2144,9 +2343,12 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                     $amount_charge_customer = floatval(str_replace(',', '', $worksheet->getCell('K' . $row)->getValue()));
                     $amount_charge_partner = floatval(str_replace(',', '', $worksheet->getCell('L' . $row)->getValue()));
                     $contact_number = strval($worksheet->getCell('M' . $row)->getValue());
-                    $other_details = strval($worksheet->getCell('N' . $row)->getValue());
+                    $other_details = strval($worksheet->getCell('L' . $row)->getValue());
 
-                    $branch_id_raw = $worksheet->getCell('O' . $row)->getValue();
+                    // Auto Mode: read branch ID from column N (keep Multiple Mode behavior unchanged elsewhere)
+                    $branch_id_raw = (strtolower(trim((string)$importMode)) === 'auto')
+                        ? $worksheet->getCell('N' . $row)->getValue()
+                        : $worksheet->getCell('M' . $row)->getValue();
                     if (isset($getColumnLabels[14]) && $getColumnLabels[14] === 'Branch ID') {
                         if (is_numeric($branch_id_raw)) {
                             $cntl_num_for_region = ($branch_id_raw == 581) ? intval(2607) : intval($branch_id_raw);
@@ -2205,6 +2407,30 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 $errors[] = "Warning: Row $row missing datetime - may fail during insert";
             }
 
+            // Multiple mode only: detect partner id in column U per-row.
+            // If missing (empty, '', null), mark as "No Partner ID" and reveal partner name from column V.
+            $rowPartnerId = $PartnerID;
+            $rowPartnerIdKpx = $PartnerID_KPX;
+            $rowPartnerName = $PartnerName;
+            if ($importMode === 'multiple') {
+                $rawPartnerIdU = $worksheet->getCell('U' . $row)->getValue();
+                $rowPartnerIdU = trim((string)$rawPartnerIdU);
+                $rowPartnerNameV = trim((string)$worksheet->getCell('V' . $row)->getValue());
+                if (isEffectivelyEmptyCell($rawPartnerIdU)) {
+                    $rowPartnerId = 'No Partner ID';
+                    $rowPartnerIdKpx = 'No Partner ID';
+                    if ($rowPartnerNameV !== '') {
+                        $rowPartnerName = $rowPartnerNameV;
+                    }
+                } else {
+                    $rowPartnerId = $rowPartnerIdU;
+                    $rowPartnerIdKpx = $rowPartnerIdU;
+                    if ($rowPartnerNameV !== '') {
+                        $rowPartnerName = $rowPartnerNameV;
+                    }
+                }
+            }
+
             // Check for duplicates and overrides but don't skip - just log warnings
             // The delete-then-insert logic below will handle these cases
             if ($checkDuplicateData($reference_number, $datetime, $partnerId, $sub_billers_id)) {
@@ -2213,6 +2439,19 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
 
             if ($checkHasAlreadyDataReadyToOverride($reference_number, $datetime, $partnerId, $sub_billers_id)) {
                 $errors[] = "Warning: Unposted data exists for reference {$reference_number} - will be overridden";
+            }
+
+            // Final Multiple Mode fallback for branch_id to prevent null inserts.
+            if ($importMode === 'multiple' && ($branch_id === null || $branch_id === '' || strtoupper(trim((string)$branch_id)) === 'NAN')) {
+                $branchIdCellM = trim((string)$worksheet->getCell('M' . $row)->getValue());
+                $mlOutletCellN = strtoupper(preg_replace('/\s+/', ' ', trim((string)$worksheet->getCell('N' . $row)->getValue())));
+                if (is_numeric($branchIdCellM)) {
+                    $branch_id = intval($branchIdCellM);
+                } elseif ($mlOutletCellN === 'ML CEBU HEAD OFFICE' || $mlOutletCellN === 'CEBU HEAD OFFICE') {
+                    $branch_id = 581;
+                } elseif ($mlOutletCellN === 'ML HEAD OFFICE' || $mlOutletCellN === 'HEAD OFFICE') {
+                    $branch_id = 2607;
+                }
             }
 
             $rowData = [
@@ -2237,11 +2476,11 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 'region_code' => $region_code,
                 'region_description' => $region_description,
                 'person_operator' => $person_operator,
-                'partner_name' => $PartnerName,
+                'partner_name' => $rowPartnerName,
                 'billers_name' => $BillersName,
                 'sub_billers_id' => $sub_billers_id,
-                'partner_id' => $PartnerID,
-                'PartnerID_KPX' => $PartnerID_KPX,
+                'partner_id' => $rowPartnerId,
+                'PartnerID_KPX' => $rowPartnerIdKpx,
                 'GLCode' => $GLCode,
                 'imported_by' => $_SESSION['admin_name'] ?? $_SESSION['user_name'] ?? $currentUserEmail,
                 'date_uploaded' => date('Y-m-d'),
@@ -2373,6 +2612,13 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
 
         foreach ($processed_data as $idx => $row) {
             $insertAttempts++;
+            if (
+                isset($row['partner_id']) &&
+                strtoupper(trim((string)$row['partner_id'])) === 'NO PARTNER ID'
+            ) {
+                $errors[] = "Skipped row {$idx}: No Partner ID";
+                continue;
+            }
             $is_cancellation = isset($row['numeric_number']) && $row['numeric_number'] === '*';
             
             // Log first 5 and last 5 insert attempts
@@ -2629,12 +2875,30 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $b_amount_charge_partner = $row['amount_charge_partner'] ?? 0;
             $b_amount_charge_customer = $row['amount_charge_customer'] ?? 0;
             $b_contact_number = $row['contact_number'] ?? null;
+            if ($b_contact_number !== null) {
+                $b_contact_number = trim((string)$b_contact_number);
+                // Guard for DB column length (prevents "Data too long for column 'contact_no'").
+                if (strlen($b_contact_number) > 20) {
+                    $b_contact_number = substr($b_contact_number, 0, 20);
+                }
+                if ($b_contact_number === '') {
+                    $b_contact_number = null;
+                }
+            }
             $b_other_details = $row['other_details'] ?? null;
             $b_branch_id = $row['branch_id'] ?? null;
             $b_branch_code = $row['branch_code'] ?? null;
             $b_branch_outlet = $row['branch_outlet'] ?? null;
             $b_zone_code = $row['zone_code'] ?? null;
             $b_region_code = $row['region_code'] ?? null;
+            if ($b_branch_id === null || $b_branch_id === '' || strtoupper(trim((string)$b_branch_id)) === 'NAN') {
+                $outletNorm = strtoupper(preg_replace('/\s+/', ' ', trim((string)$b_branch_outlet)));
+                if ($outletNorm === 'ML CEBU HEAD OFFICE' || $outletNorm === 'CEBU HEAD OFFICE') {
+                    $b_branch_id = 581;
+                } elseif ($outletNorm === 'ML HEAD OFFICE' || $outletNorm === 'HEAD OFFICE') {
+                    $b_branch_id = 2607;
+                }
+            }
             $b_region_description = $row['region_description'] ?? null;
             $b_person_operator = $row['person_operator'] ?? null;
             $b_partner_name = $row['partner_name'] ?? null;
@@ -2804,6 +3068,8 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
     <style>
         .validation-container {
             display: grid;
@@ -3041,12 +3307,50 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                     <?php if (isset($_SESSION['uploaded_files'])): ?>
                             <?php 
                                 $headOfficeCount = 0;
-                                foreach ($allUploaded as $af) { if (($af['status'] ?? '') === 'head_office') $headOfficeCount++; }
+                                foreach ($allUploaded as $af) {
+                                    $vr = $af['validation_result'] ?? [];
+                                    $hasHoFromMissingRows = false;
+                                    if (!empty($vr['missing_rows']) && is_array($vr['missing_rows'])) {
+                                        foreach ($vr['missing_rows'] as $mr) {
+                                            $mv = strtoupper(preg_replace('/\s+/', ' ', trim((string)($mr['value'] ?? ''))));
+                                            if (
+                                                $mv === 'ML CEBU HEAD OFFICE' ||
+                                                $mv === 'CEBU HEAD OFFICE' ||
+                                                $mv === 'ML HEAD OFFICE' ||
+                                                $mv === 'HEAD OFFICE'
+                                            ) {
+                                                $hasHoFromMissingRows = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (
+                                        ($af['status'] ?? '') === 'head_office' ||
+                                        !empty($vr['has_head_office_outlet']) ||
+                                        !empty($vr['head_office_issues']) ||
+                                        $hasHoFromMissingRows
+                                    ) {
+                                        $headOfficeCount++;
+                                    }
+                                }
+                                $errorDetectedCount = 0;
+                                foreach ($allUploaded as $af) {
+                                    $vr = $af['validation_result'] ?? [];
+                                    if (!empty($vr['missing_rows']) && is_array($vr['missing_rows'])) {
+                                        $errorDetectedCount++;
+                                    }
+                                }
                             ?>
                             <?php if ($headOfficeCount > 0): ?>
                                 <button type="button" id="fixAllHeadOfficeBtn" class="btn btn-warning btn-sm me-2">
                                     <i class="fa-solid fa-wrench me-1"></i>
                                     Fix All Head Office Issues (<?php echo $headOfficeCount; ?>)
+                                </button>
+                            <?php endif; ?>
+                            <?php if ($headOfficeCount === 0 && $errorDetectedCount > 0): ?>
+                                <button type="button" id="exportAllErrorsBtn" class="btn btn-danger btn-sm me-2">
+                                    <i class="fa-solid fa-file-pdf me-1"></i>
+                                    Export All Error Detected in PDF Format (<?php echo $errorDetectedCount; ?>)
                                 </button>
                             <?php endif; ?>
                             <?php if ($validCount > 0): ?>
@@ -3082,11 +3386,14 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 
                 <div class="validation-container">
                     <?php foreach ($renderFiles as $file): ?>
+                        <?php $isMultipleMode = (strtolower((string)($file['import_mode'] ?? 'auto')) === 'multiple'); ?>
                         <div class="file-validation-card <?php echo htmlspecialchars($file['status']); ?>" data-status="<?php echo htmlspecialchars($file['status']); ?>" data-name="<?php echo htmlspecialchars($file['name']); ?>">
                             <div class="d-flex justify-content-between align-items-start mb-3">
                                 <div>
                                     <h5 class="mb-1"><?php echo htmlspecialchars($file['name']); ?></h5>
-                                    <small class="text-muted"><?php echo $file['partner_name']; ?></small>
+                                    <?php if (!$isMultipleMode): ?>
+                                        <small class="text-muted"><?php echo $file['partner_name']; ?></small>
+                                    <?php endif; ?>
                                 </div>
                                 <span class="status-badge status-<?php echo $file['status']; ?>">
                                     <?php echo ucwords(str_replace('_', ' ', $file['status'])); ?>
@@ -3096,10 +3403,12 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             
                             <div class="mb-3">
                                 <div class="row">
-                                    <div class="col-6">
-                                        <small class="text-muted d-block">Partner ID</small>
-                                        <strong><?php echo $file['partner_id']; ?></strong>
-                                    </div>
+                                    <?php if (!$isMultipleMode): ?>
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Partner ID</small>
+                                            <strong><?php echo $file['partner_id']; ?></strong>
+                                        </div>
+                                    <?php endif; ?>
                                     <div class="col-6">
                                         <small class="text-muted d-block">Source Type</small>
                                         <span class="badge-source badge-<?php echo strtolower($file['source_type']); ?>">
@@ -3108,19 +3417,21 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                     </div>
                                 </div>
                             </div>
-                            <div class="mb-2">
-                                <div class="row">
-                                    <div class="col-6">
-                                        <small class="text-muted d-block">Sub Billers ID</small>
-                                        <strong><?php echo isset($file['sub_billers_id']) && $file['sub_billers_id'] !== null ? $file['sub_billers_id'] : '-'; ?></strong>
+                            <?php if (!$isMultipleMode): ?>
+                                <div class="mb-2">
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Sub Billers ID</small>
+                                            <strong><?php echo isset($file['sub_billers_id']) && $file['sub_billers_id'] !== null ? $file['sub_billers_id'] : '-'; ?></strong>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            <?php endif; ?>
                             
                             <?php if ($file['validation_result']): ?>
                                 <div class="mb-2">
                                     <small class="text-muted">Rows Found:</small>
-                                    <strong><?php echo $file['validation_result']['row_count']; ?></strong>
+                                    <strong><?php echo number_format((int)($file['validation_result']['row_count'] ?? 0), 0, '.', ','); ?></strong>
                                 </div>
                                 
                                 <!-- Validation errors/warnings are shown per-row via the Missing Data modal;
@@ -3156,7 +3467,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 <div class="alert alert-info text-center mt-5">
                     <h4>No files uploaded</h4>
                     <p>Please go back to the upload page and select files to import.</p>
-                    <a href="/billspayment/dashboard/billspayment/import/billspay-transaction.php" class="btn btn-primary">
+                    <a href="/billspayment/dashboard/billspayment/import/billspay-transaction-debug.php" class="btn btn-primary">
                         Go to Upload Page
                     </a>
                 </div>
@@ -3234,6 +3545,75 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             }
                         }, 'json').fail(function() { Swal.fire('Error','Request failed','error'); });
                     });
+                });
+            }
+
+            const exportAllErrorsBtn = document.getElementById('exportAllErrorsBtn');
+            if (exportAllErrorsBtn) {
+                exportAllErrorsBtn.addEventListener('click', function() {
+                    const jsPDFRef = window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : null;
+                    if (!jsPDFRef) {
+                        Swal.fire('Error', 'PDF library is not available.', 'error');
+                        return;
+                    }
+
+                    const bodyRows = [];
+                    (filesData || []).forEach((fileItem) => {
+                        const missing = (fileItem && fileItem.validation_result && Array.isArray(fileItem.validation_result.missing_rows))
+                            ? fileItem.validation_result.missing_rows
+                            : [];
+                        missing.forEach((m) => {
+                            const issueType = m.type || 'missing_fields';
+                            const issueText = issueType === 'new_branch_id'
+                                ? 'New Branch ID'
+                                : (m.missing ? ('Missing Fields: ' + m.missing.join(', ')) : 'Missing Fields');
+                            const valueText = (m.value !== undefined && m.value !== null && String(m.value).trim() !== '')
+                                ? String(m.value)
+                                : '-';
+                            bodyRows.push([
+                                String(fileItem.name || 'N/A'),
+                                String(m.row ?? ''),
+                                issueText,
+                                valueText
+                            ]);
+                        });
+                    });
+
+                    if (!bodyRows.length) {
+                        Swal.fire('No Errors Found', 'There are no detected errors to export.', 'info');
+                        return;
+                    }
+
+                    const doc = new jsPDFRef({ orientation: 'landscape' });
+                    let y = 15;
+                    doc.setFontSize(12);
+                    doc.text('All Detected Errors', 14, y);
+                    y += 7;
+                    doc.setFontSize(10);
+                    doc.text('Generated: ' + new Date().toLocaleString(), 14, y);
+                    y += 8;
+
+                    if (typeof doc.autoTable === 'function') {
+                        doc.autoTable({
+                            startY: y,
+                            head: [['File', 'Row', 'Issue', 'Value']],
+                            body: bodyRows,
+                            styles: { fontSize: 8, cellPadding: 2 },
+                            headStyles: { fillColor: [220, 53, 69] },
+                            columnStyles: {
+                                0: { cellWidth: 80 },
+                                1: { cellWidth: 20 },
+                                2: { cellWidth: 70 },
+                                3: { cellWidth: 110 }
+                            }
+                        });
+                    }
+
+                    const now = new Date();
+                    const yyyy = now.getFullYear();
+                    const mm = String(now.getMonth() + 1).padStart(2, '0');
+                    const dd = String(now.getDate()).padStart(2, '0');
+                    doc.save(`all_error_detected_${yyyy}-${mm}-${dd}.pdf`);
                 });
             }
             // Delegated click handler for Head Office and Missing buttons
@@ -3364,20 +3744,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                             <tr><th>Status:</th><td><span class="badge badge-${fileData.status || 'pending'}">${formatStatusLabel(fileData.status || 'pending')}</span></td></tr>
                         </table>
                     </div>`;
-            
-            // Show errors if any
-            if (validation.errors && validation.errors.length > 0) {
-                html += `
-                    <div class="mb-3">
-                        <h5 class="text-danger"><i class="fa-solid fa-exclamation-circle"></i> Errors (${validation.errors.length})</h5>
-                        <div class="alert alert-danger" style="max-height: 200px; overflow-y: auto;">
-                            <ul class="mb-0">`;
-                validation.errors.forEach(err => {
-                    html += `<li><strong>Row ${err.row}:</strong> ${err.message} ${err.value ? '(Value: ' + err.value + ')' : ''}</li>`;
-                });
-                html += `</ul></div></div>`;
-            }
-            
+
             // Show warnings if any
             if (validation.warnings && validation.warnings.length > 0) {
                 html += `
@@ -3769,35 +4136,80 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
 
             const missing = fileData.validation_result.missing_rows || [];
             if (!missing.length) {
-                Swal.fire({ title: 'No Missing Data', text: 'No missing Branch ID / ML Outlet / Region Code or New Branch ID found.', icon: 'success' });
+                Swal.fire({ title: 'No Missing Data', text: 'No missing Branch ID / ML Outlet / Region Code / New Branch ID / No Partner ID found.', icon: 'success' });
                 return;
             }
 
             let html = `<div style="text-align:left; max-height:60vh; overflow:auto;">
-                <p class="text-danger"><strong>Rows with missing data</strong></p>
-                <table class="table table-sm table-bordered table-striped">
+                <p class="text-danger"><strong>Rows with missing data</strong></p>`;
+
+            if (missing.length) {
+                html += `<table class="table table-sm table-bordered table-striped">
                     <thead><tr><th>Row</th><th>Issue</th><th>Value</th></tr></thead>
                     <tbody>`;
+                missing.forEach(m => {
+                    const issueType = m.type || 'missing_fields';
+                    const issueText = issueType === 'new_branch_id'
+                        ? 'New Branch ID'
+                        : (m.missing ? ('Missing Fields: ' + m.missing.join(', ')) : 'Missing Fields');
+                    const valueText = (m.value !== undefined && m.value !== null && String(m.value).trim() !== '')
+                        ? m.value
+                        : '-';
+                    html += `<tr><td>${m.row}</td><td>${issueText}</td><td>${valueText}</td></tr>`;
+                });
+                html += `</tbody></table>`;
+            }
 
-            missing.forEach(m => {
-                const issueType = m.type || 'missing_fields';
-                const issueText = issueType === 'new_branch_id'
-                    ? 'New Branch ID'
-                    : (m.missing ? ('Missing Fields: ' + m.missing.join(', ')) : 'Missing Fields');
-                const valueText = (m.value !== undefined && m.value !== null && String(m.value).trim() !== '')
-                    ? m.value
-                    : '-';
-                html += `<tr><td>${m.row}</td><td>${issueText}</td><td>${valueText}</td></tr>`;
-            });
-
-            html += `</tbody></table></div>`;
+            html += `</div>`;
 
             Swal.fire({
                 title: '<strong>Missing Data Details: ' + (fileData.name || '') + '</strong>',
                 html: html,
                 width: '70%',
                 showCloseButton: true,
-                confirmButtonText: 'Close'
+                showDenyButton: true,
+                denyButtonText: 'Export to PDF',
+                confirmButtonText: 'Close',
+                customClass: { denyButton: 'btn btn-danger' }
+            })
+            .then((result) => {
+                if (!result.isDenied) return;
+                const jsPDFRef = window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : null;
+                if (!jsPDFRef) return;
+                const doc = new jsPDFRef();
+                let y = 15;
+                doc.setFontSize(12);
+                doc.text('Missing Data Details', 14, y);
+                y += 7;
+                doc.setFontSize(10);
+                doc.text('File: ' + (fileData.name || 'N/A'), 14, y);
+                y += 8;
+
+                const bodyRows = missing.map((m) => {
+                    const issueType = m.type || 'missing_fields';
+                    const issueText = issueType === 'new_branch_id'
+                        ? 'New Branch ID'
+                        : (m.missing ? ('Missing Fields: ' + m.missing.join(', ')) : 'Missing Fields');
+                    const valueText = (m.value !== undefined && m.value !== null && String(m.value).trim() !== '') ? String(m.value) : '-';
+                    return [String(m.row ?? ''), issueText, valueText];
+                });
+
+                if (typeof doc.autoTable === 'function') {
+                    doc.autoTable({
+                        startY: y,
+                        head: [['Row', 'Issue', 'Value']],
+                        body: bodyRows,
+                        styles: { fontSize: 9, cellPadding: 2 },
+                        headStyles: { fillColor: [220, 53, 69] },
+                        columnStyles: {
+                            0: { cellWidth: 18 },
+                            1: { cellWidth: 55 },
+                            2: { cellWidth: 110 }
+                        }
+                    });
+                }
+                const safeName = (fileData.name || 'missing-data').replace(/[^a-zA-Z0-9._-]/g, '_');
+                doc.save(`missing_data_${safeName}.pdf`);
             });
         }
         
@@ -3964,10 +4376,10 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                                 width: '85%',
                                 confirmButtonText: 'Close'
                             }).then(() => {
-                                window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
+                                window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction-debug.php';
                             });
                         } else {
-                            window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction.php';
+                            window.location.href = '/billspayment/dashboard/billspayment/import/billspay-transaction-debug.php';
                         }
                     });
                 }).catch(error => {
