@@ -86,6 +86,7 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
             $fileName = $_FILES['files']['name'][$i];
             $partnerId = $_POST['partner_ids'][$i] ?? '';
             $sourceType = $_POST['source_types'][$i] ?? '';
+            $importMode = strtolower(trim((string)($_POST['import_modes'][$i] ?? 'auto')));
             $subBillersId = $_POST['sub_billers_ids'][$i] ?? '';
             
             try {
@@ -158,7 +159,15 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                         continue;
                     }
 
-                    $key = $reference_number . '||' . $datetime;
+                    $rowPartnerIdForDup = $partnerId;
+                    if ($importMode === 'multiple' && strtoupper((string)$sourceType) === 'KPX') {
+                        $partnerIdU = trim((string)$worksheet->getCell('U' . $row)->getValue());
+                        if ($partnerIdU !== '' && strtoupper($partnerIdU) !== 'NAN') {
+                            $rowPartnerIdForDup = $partnerIdU;
+                        }
+                    }
+
+                    $key = $reference_number . '||' . $datetime . '||' . $rowPartnerIdForDup;
                     $rowKeys[$key] = true;
                     $parsedRows[] = ['key' => $key];
                 }
@@ -173,31 +182,31 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                         $params = [];
                         $types = '';
                         foreach ($chunkKeys as $k) {
-                            $split = explode('||', $k, 2);
+                            $split = explode('||', $k, 3);
                             $ref = $split[0] ?? '';
                             $dt = $split[1] ?? '';
+                            $pRow = $split[2] ?? '';
                             $orParts[] = "(reference_no = ? AND (`datetime` = ? OR cancellation_date = ?))";
                             $types .= "sss";
                             $params[] = $ref;
                             $params[] = $dt;
                             $params[] = $dt;
+                            $orParts[count($orParts)-1] .= " AND (partner_id = ? OR partner_id_kpx = ?)";
+                            $types .= "ss";
+                            $params[] = $pRow;
+                            $params[] = $pRow;
                         }
 
-                        $sql = "SELECT reference_no, `datetime`, cancellation_date, post_transaction, COUNT(*) as cnt
+                        $sql = "SELECT reference_no, `datetime`, cancellation_date, partner_id, partner_id_kpx, post_transaction, COUNT(*) as cnt
                                 FROM mldb.billspayment_transaction WHERE (" . implode(" OR ", $orParts) . ")";
 
                         if (!empty($subBillersId)) {
                             $sql .= " AND sub_billers_id = ?";
                             $types .= "s";
                             $params[] = $subBillersId;
-                        } elseif (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
-                            $sql .= " AND (partner_id = ? OR partner_id_kpx = ?)";
-                            $types .= "ss";
-                            $params[] = $partnerId;
-                            $params[] = $partnerId;
                         }
 
-                        $sql .= " GROUP BY reference_no, `datetime`, cancellation_date, post_transaction";
+                        $sql .= " GROUP BY reference_no, `datetime`, cancellation_date, partner_id, partner_id_kpx, post_transaction";
                         $stmt = $conn->prepare($sql);
                         $bind = [$types];
                         foreach ($params as $idx => $val) { $bind[] = &$params[$idx]; }
@@ -208,8 +217,9 @@ if (isset($_POST['check_duplicates']) && isset($_FILES['files'])) {
                             while ($r = $result->fetch_assoc()) {
                                 $status = isset($r['post_transaction']) ? strtolower(trim($r['post_transaction'])) : '';
                                 $cnt = intval($r['cnt']);
-                                $k1 = ($r['reference_no'] ?? '') . '||' . ($r['datetime'] ?? '');
-                                $k2 = ($r['reference_no'] ?? '') . '||' . ($r['cancellation_date'] ?? '');
+                                $dbPartner = ($r['partner_id_kpx'] !== null && $r['partner_id_kpx'] !== '') ? $r['partner_id_kpx'] : ($r['partner_id'] ?? '');
+                                $k1 = ($r['reference_no'] ?? '') . '||' . ($r['datetime'] ?? '') . '||' . $dbPartner;
+                                $k2 = ($r['reference_no'] ?? '') . '||' . ($r['cancellation_date'] ?? '') . '||' . $dbPartner;
                                 if (!isset($duplicateMap[$k1])) $duplicateMap[$k1] = ['total' => 0, 'posted' => 0, 'unposted' => 0];
                                 $duplicateMap[$k1]['total'] += $cnt;
                                 if ($status === 'posted') { $duplicateMap[$k1]['posted'] += $cnt; } else { $duplicateMap[$k1]['unposted'] += $cnt; }
@@ -459,6 +469,7 @@ if (isset($_POST['check_single_duplicate']) && isset($_FILES['import_file'])) {
         $fileName = $_FILES['import_file']['name'];
         $partnerId = $_POST['partner_id'] ?? '';
         $sourceType = $_POST['source_type'] ?? '';
+        $importMode = strtolower(trim((string)($_POST['import_mode'] ?? 'auto')));
         
         try {
             // Load and parse Excel file
@@ -509,15 +520,22 @@ if (isset($_POST['check_single_duplicate']) && isset($_FILES['import_file'])) {
                     }
                 }
                 
+                $rowPartnerIdForDup = $partnerId;
+                if ($importMode === 'multiple' && strtoupper((string)$sourceType) === 'KPX') {
+                    $partnerIdU = trim((string)$worksheet->getCell('U' . $row)->getValue());
+                    if ($partnerIdU !== '' && strtoupper($partnerIdU) !== 'NAN') {
+                        $rowPartnerIdForDup = $partnerIdU;
+                    }
+                }
+
                 // Check for duplicates (posted or unposted) with partner filter
-                // Use tolerant partner matching: check both partner_id and partner_id_kpx against the provided id
-                if (!empty($partnerId) && strtoupper($partnerId) !== 'ALL') {
+                if (!empty($rowPartnerIdForDup) && strtoupper($rowPartnerIdForDup) !== 'ALL') {
                     $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
                             WHERE reference_no = ? 
                             AND (partner_id = ? OR partner_id_kpx = ?)
                             AND (`datetime` = ? OR cancellation_date = ?) GROUP BY post_transaction";
                     $stmt = $conn->prepare($sql);
-                    $stmt->bind_param("sssss", $reference_number, $partnerId, $partnerId, $datetime, $datetime);
+                    $stmt->bind_param("sssss", $reference_number, $rowPartnerIdForDup, $rowPartnerIdForDup, $datetime, $datetime);
                 } else {
                     $sql = "SELECT post_transaction, COUNT(*) as cnt FROM mldb.billspayment_transaction 
                             WHERE reference_no = ? 
@@ -2412,6 +2430,10 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
             $rowPartnerId = $PartnerID;
             $rowPartnerIdKpx = $PartnerID_KPX;
             $rowPartnerName = $PartnerName;
+            $rowGLCode = $GLCode;
+            if ($importMode === 'multiple') {
+                $rowGLCode = null;
+            }
             if ($importMode === 'multiple') {
                 $rawPartnerIdU = $worksheet->getCell('U' . $row)->getValue();
                 $rowPartnerIdU = trim((string)$rawPartnerIdU);
@@ -2425,7 +2447,31 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 } else {
                     $rowPartnerId = $rowPartnerIdU;
                     $rowPartnerIdKpx = $rowPartnerIdU;
-                    if ($rowPartnerNameV !== '') {
+                    // Multiple Mode: resolve row partner using partner_id_kpx (Auto concept applied per-row)
+                    $rowPartnerQuery = "SELECT partner_id, partner_id_kpx, partner_name, gl_code
+                                        FROM masterdata.partner_masterfile
+                                        WHERE partner_id_kpx = ? LIMIT 1";
+                    $rowStmt = $conn->prepare($rowPartnerQuery);
+                    if ($rowStmt) {
+                        $rowStmt->bind_param("s", $rowPartnerIdU);
+                        $rowStmt->execute();
+                        $rowRes = $rowStmt->get_result();
+                        if ($rowRes && $rowRes->num_rows > 0) {
+                            $rowP = $rowRes->fetch_assoc();
+                            $dbPartnerId = isset($rowP['partner_id']) ? trim((string)$rowP['partner_id']) : '';
+                            $dbPartnerIdKpx = isset($rowP['partner_id_kpx']) ? trim((string)$rowP['partner_id_kpx']) : '';
+                            $rowPartnerId = ($dbPartnerId === '') ? null : $dbPartnerId;
+                            $rowPartnerIdKpx = ($dbPartnerIdKpx === '') ? $rowPartnerIdU : $dbPartnerIdKpx;
+                            if (!empty($rowP['partner_name'])) {
+                                $rowPartnerName = $rowP['partner_name'];
+                            }
+                            $dbGlCode = isset($rowP['gl_code']) ? trim((string)$rowP['gl_code']) : '';
+                            $rowGLCode = ($dbGlCode === '') ? null : $dbGlCode;
+                        } elseif ($rowPartnerNameV !== '') {
+                            $rowPartnerName = $rowPartnerNameV;
+                        }
+                        $rowStmt->close();
+                    } elseif ($rowPartnerNameV !== '') {
                         $rowPartnerName = $rowPartnerNameV;
                     }
                 }
@@ -2433,11 +2479,12 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
 
             // Check for duplicates and overrides but don't skip - just log warnings
             // The delete-then-insert logic below will handle these cases
-            if ($checkDuplicateData($reference_number, $datetime, $partnerId, $sub_billers_id)) {
+            $dupCheckPartnerId = ($importMode === 'multiple') ? $rowPartnerId : $partnerId;
+            if ($checkDuplicateData($reference_number, $datetime, $dupCheckPartnerId, $sub_billers_id)) {
                 $errors[] = "Warning: Duplicate found for reference {$reference_number} - will be handled by delete-then-insert";
             }
 
-            if ($checkHasAlreadyDataReadyToOverride($reference_number, $datetime, $partnerId, $sub_billers_id)) {
+            if ($checkHasAlreadyDataReadyToOverride($reference_number, $datetime, $dupCheckPartnerId, $sub_billers_id)) {
                 $errors[] = "Warning: Unposted data exists for reference {$reference_number} - will be overridden";
             }
 
@@ -2451,6 +2498,24 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                     $branch_id = 581;
                 } elseif ($mlOutletCellN === 'ML HEAD OFFICE' || $mlOutletCellN === 'HEAD OFFICE') {
                     $branch_id = 2607;
+                }
+            }
+
+            // Multiple Mode: if region/zone missing, derive from resolved branch_id via branch_profile (same core lookup idea)
+            if ($importMode === 'multiple' && is_numeric($branch_id) && (empty($region_code) || empty($zone_code))) {
+                $bpSql = "SELECT region_code, zone FROM masterdata.branch_profile WHERE branch_id = ? LIMIT 1";
+                $bpStmt = $conn->prepare($bpSql);
+                if ($bpStmt) {
+                    $bpid = intval($branch_id);
+                    $bpStmt->bind_param("i", $bpid);
+                    $bpStmt->execute();
+                    $bpRes = $bpStmt->get_result();
+                    if ($bpRes && $bpRes->num_rows > 0) {
+                        $bpRow = $bpRes->fetch_assoc();
+                        if (empty($region_code) && !empty($bpRow['region_code'])) $region_code = $bpRow['region_code'];
+                        if (empty($zone_code) && !empty($bpRow['zone'])) $zone_code = $bpRow['zone'];
+                    }
+                    $bpStmt->close();
                 }
             }
 
@@ -2481,7 +2546,7 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 'sub_billers_id' => $sub_billers_id,
                 'partner_id' => $rowPartnerId,
                 'PartnerID_KPX' => $rowPartnerIdKpx,
-                'GLCode' => $GLCode,
+                'GLCode' => $rowGLCode,
                 'imported_by' => $_SESSION['admin_name'] ?? $_SESSION['user_name'] ?? $currentUserEmail,
                 'date_uploaded' => date('Y-m-d'),
                 'remote_branch' => $remote_branch,
@@ -2528,18 +2593,20 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 }
             }
 
-            foreach ($cancellation_refs as $ref_no => $cancellation_row) {
-                if (isset($regular_refs[$ref_no])) {
-                    $merged_row = $cancellation_row;
-                    $merged_row['regular_datetime'] = $regular_refs[$ref_no]['datetime'];
-                    $processed_data[] = $merged_row;
-                } else {
-                    $processed_data[] = $cancellation_row;
+            // Insert regular rows first; if cancelled partner exists on same reference,
+            // attach cancellation datetime to regular row, then insert cancellation row.
+            foreach ($regular_refs as $ref_no => $regular_row) {
+                if (isset($cancellation_refs[$ref_no]) && !empty($cancellation_refs[$ref_no]['datetime'])) {
+                    $regular_row['cancellation_date_override'] = $cancellation_refs[$ref_no]['datetime'];
                 }
+                $processed_data[] = $regular_row;
             }
 
-            foreach ($regular_refs as $regular_row) {
-                $processed_data[] = $regular_row;
+            foreach ($cancellation_refs as $ref_no => $cancellation_row) {
+                if (isset($regular_refs[$ref_no])) {
+                    $cancellation_row['regular_datetime'] = $regular_refs[$ref_no]['datetime'];
+                }
+                $processed_data[] = $cancellation_row;
             }
         }
 
@@ -2643,12 +2710,49 @@ function importFileData($conn, $filePath, $sourceType, $partnerId, $currentUserE
                 }
             } else {
                 $datetime_value = $row['datetime'];
-                $cancellation_date = null;
+                $cancellation_date = $row['cancellation_date_override'] ?? null;
             }
 
             // If cancellation missing regular datetime, try to resolve from map
             if ($is_cancellation && empty($datetime_value) && isset($reference_datetime_map[$row['reference_number']])) {
                 $datetime_value = $reference_datetime_map[$row['reference_number']];
+            }
+
+            // KPX cancellation behavior (Auto-mode concept):
+            // keep cancellation row insertable, and also attach cancelled row datetime
+            // into cancellation_date of the matched regular transaction row.
+            if ($is_cancellation && strtoupper($sourceType) === 'KPX' && !empty($datetime_value) && !empty($cancellation_date)) {
+                $updSQL = "UPDATE mldb.billspayment_transaction
+                           SET cancellation_date = ?
+                           WHERE reference_no = ?
+                             AND `datetime` = ?
+                             AND post_transaction = 'unposted'
+                             AND status IS NULL";
+                if (!empty($row['sub_billers_id'])) {
+                    $updSQL .= " AND sub_billers_id = ?";
+                    $updStmt = $conn->prepare($updSQL);
+                    if ($updStmt) {
+                        $u_cancel = $cancellation_date;
+                        $u_ref = $row['reference_number'];
+                        $u_dt = $datetime_value;
+                        $u_sub = $row['sub_billers_id'];
+                        $updStmt->bind_param("ssss", $u_cancel, $u_ref, $u_dt, $u_sub);
+                        $updStmt->execute();
+                        $updStmt->close();
+                    }
+                } elseif (!empty($row['PartnerID_KPX'])) {
+                    $updSQL .= " AND partner_id_kpx = ?";
+                    $updStmt = $conn->prepare($updSQL);
+                    if ($updStmt) {
+                        $u_cancel = $cancellation_date;
+                        $u_ref = $row['reference_number'];
+                        $u_dt = $datetime_value;
+                        $u_pkpx = $row['PartnerID_KPX'];
+                        $updStmt->bind_param("ssss", $u_cancel, $u_ref, $u_dt, $u_pkpx);
+                        $updStmt->execute();
+                        $updStmt->close();
+                    }
+                }
             }
 
             // Handle user decision: override vs skip
