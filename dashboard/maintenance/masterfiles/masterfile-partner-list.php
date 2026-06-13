@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_partner_upload
     $updatedCount = 0;
 
     $saveFields = [
-        'partner_id','partner_id_kpx','partner_type','gl_code','partner_name','inc_exc','withheld','partnerTin',
+        'partner_id','partner_id_kpx','partner_type','gl_code','partner_name','tg_partner_name','inc_exc','withheld','partnerTin',
         'address','businessStyle','abbreviation','partner_accName','bank_accNumber','bank',
         'settled_online_check','settled_sched','charge_to','settlement_status','charge_sched','serviceCharge',
         'payment_option','transaction_range','transaction_path','status'
@@ -39,12 +39,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_partner_upload
 
         if (!empty($newPartnersForSave)) {
             $insertSql = "INSERT INTO masterdata.partner_masterfile (
-                partner_id, partner_id_kpx, partner_type, gl_code, partner_name, inc_exc, withheld, partnerTin,
+                partner_id, partner_id_kpx, partner_type, gl_code, partner_name, tg_partner_name, inc_exc, withheld, partnerTin,
                 address, businessStyle, abbreviation, partner_accName, bank_accNumber, bank,
                 settled_online_check, settled_sched, charge_to, settlement_status, charge_sched, serviceCharge,
                 payment_option, transaction_range, transaction_path, status
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )";
             $insertStmt = $conn->prepare($insertSql);
             if (!$insertStmt) throw new Exception('Prepare insert failed: ' . $conn->error);
@@ -67,13 +67,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_partner_upload
 
         if (!empty($existedPartnersForSave)) {
             $updateSqlByPartnerId = "UPDATE masterdata.partner_masterfile SET
-                partner_id = ?, partner_id_kpx = ?, partner_type = ?, gl_code = ?, partner_name = ?, inc_exc = ?, withheld = ?, partnerTin = ?,
+                partner_id = ?, partner_id_kpx = ?, partner_type = ?, gl_code = ?, partner_name = ?, tg_partner_name = ?, inc_exc = ?, withheld = ?, partnerTin = ?,
                 address = ?, businessStyle = ?, abbreviation = ?, partner_accName = ?, bank_accNumber = ?, bank = ?,
                 settled_online_check = ?, settled_sched = ?, charge_to = ?, settlement_status = ?, charge_sched = ?, serviceCharge = ?,
                 payment_option = ?, transaction_range = ?, transaction_path = ?, status = ?
                 WHERE partner_id = ?";
             $updateSqlByKpx = "UPDATE masterdata.partner_masterfile SET
-                partner_id = ?, partner_id_kpx = ?, partner_type = ?, gl_code = ?, partner_name = ?, inc_exc = ?, withheld = ?, partnerTin = ?,
+                partner_id = ?, partner_id_kpx = ?, partner_type = ?, gl_code = ?, partner_name = ?, tg_partner_name = ?, inc_exc = ?, withheld = ?, partnerTin = ?,
                 address = ?, businessStyle = ?, abbreviation = ?, partner_accName = ?, bank_accNumber = ?, bank = ?,
                 settled_online_check = ?, settled_sched = ?, charge_to = ?, settlement_status = ?, charge_sched = ?, serviceCharge = ?,
                 payment_option = ?, transaction_range = ?, transaction_path = ?, status = ?
@@ -209,7 +209,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_partner') {
 
         // allowlist fields to update
         $allowed = [
-            'partner_id_kpx','partner_type','gl_code','partner_name','inc_exc','withheld','partnerTin',
+            'partner_id_kpx','partner_type','gl_code','partner_name','tg_partner_name','inc_exc','withheld','partnerTin',
             'address','businessStyle','abbreviation','series_number','partner_accName','bank_accNumber',
             'bank','settled_online_check','settled_sched','charge_to','charge_sched','serviceCharge',
             'payment_option','transaction_range','transaction_path','status'
@@ -288,6 +288,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manual_upload_preview
             partner_type,
             gl_code,
             partner_name,
+            tg_partner_name,
             inc_exc,
             withheld,
             partnerTin,
@@ -347,26 +348,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manual_upload_preview
                 'partner_type' => trim((string)($cols[3] ?? '')),
                 'gl_code' => trim((string)($cols[4] ?? '')),
                 'partner_name' => trim((string)($cols[5] ?? '')),
-                'inc_exc' => trim((string)($cols[7] ?? '')),
-                'withheld' => trim((string)($cols[8] ?? '')),
-                'partnerTin' => trim((string)($cols[9] ?? '')),
-                'address' => trim((string)($cols[10] ?? '')),
-                'businessStyle' => trim((string)($cols[11] ?? '')),
-                'abbreviation' => trim((string)($cols[12] ?? '')),
-                'partner_accName' => trim((string)($cols[13] ?? '')),
-                'bank_accNumber' => trim((string)($cols[14] ?? '')),
-                'bank' => trim((string)($cols[15] ?? '')),
+                'tg_partner_name' => trim((string)($cols[6] ?? '')),
+                'inc_exc' => trim((string)($cols[8] ?? '')),
+                'withheld' => trim((string)($cols[9] ?? '')),
+                'partnerTin' => trim((string)($cols[10] ?? '')),
+                'address' => trim((string)($cols[11] ?? '')),
+                'businessStyle' => trim((string)($cols[12] ?? '')),
+                'abbreviation' => trim((string)($cols[13] ?? '')),
+                'partner_accName' => trim((string)($cols[14] ?? '')),
+                'bank_accNumber' => trim((string)($cols[15] ?? '')),
+                'bank' => trim((string)($cols[16] ?? '')),
                 'series_number' => '',
-                'settled_online_check' => trim((string)($cols[17] ?? '')),
-                'settled_sched' => trim((string)($cols[18] ?? '')),
-                'charge_to' => trim((string)($cols[19] ?? '')),
-                'settlement_status' => trim((string)($cols[25] ?? '')),
-                'charge_sched' => trim((string)($cols[20] ?? '')),
-                'serviceCharge' => trim((string)($cols[21] ?? '')),
-                'payment_option' => trim((string)($cols[22] ?? '')),
-                'transaction_range' => trim((string)($cols[23] ?? '')),
-                'transaction_path' => trim((string)($cols[24] ?? '')),
-                'status' => trim((string)($cols[26] ?? ''))
+                'settled_online_check' => trim((string)($cols[18] ?? '')),
+                'settled_sched' => trim((string)($cols[19] ?? '')),
+                'charge_to' => trim((string)($cols[20] ?? '')),
+                'settlement_status' => trim((string)($cols[26] ?? '')),
+                'charge_sched' => trim((string)($cols[21] ?? '')),
+                'serviceCharge' => trim((string)($cols[22] ?? '')),
+                'payment_option' => trim((string)($cols[23] ?? '')),
+                'transaction_range' => trim((string)($cols[24] ?? '')),
+                'transaction_path' => trim((string)($cols[25] ?? '')),
+                'status' => trim((string)($cols[27] ?? ''))
             ];
 
             $csvKpx = $csvRow['partner_id_kpx'];
@@ -795,7 +797,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manual_upload_preview
     const rowsPerPage = 10;
     const newPartnersDeveloperData = <?php echo json_encode($newPartners, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
     const existedPartnersDeveloperData = <?php echo json_encode($existedPartners, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
-    const developerColumns = ['partner_id','partner_id_kpx','partner_type','gl_code','partner_name','inc_exc','withheld','partnerTin','address','businessStyle','abbreviation','partner_accName','bank_accNumber','bank','series_number','settled_online_check','settled_sched','charge_to','settlement_status','charge_sched','serviceCharge','payment_option','transaction_range','transaction_path','status'];
+    const developerColumns = ['partner_id','partner_id_kpx','partner_type','gl_code','partner_name','tg_partner_name','inc_exc','withheld','partnerTin','address','businessStyle','abbreviation','partner_accName','bank_accNumber','bank','series_number','settled_online_check','settled_sched','charge_to','settlement_status','charge_sched','serviceCharge','payment_option','transaction_range','transaction_path','status'];
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -1005,6 +1007,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manual_upload_preview
                 ['partner_type', 'Partner Type'],
                 ['gl_code', 'GL Code'],
                 ['partner_name', 'Partner Name'],
+                ['tg_partner_name', 'TG Partner Name'],
                 ['inc_exc', 'Pricing Type'],
                 ['withheld', 'Withheld'],
                 ['partnerTin', 'Partner Tin'],

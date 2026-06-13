@@ -14,36 +14,15 @@ if (!function_exists('has_any_permission') || !has_any_permission(['Transaction 
 // prefer explicit session values for current user email; avoid role-based gating
 $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
-// if (!isset($_SESSION['user_type'])) {
-//     // Redirect to login page if user is not logged in
-//     header("Location: ../../../login.php");
-//     exit();
-// }
-
-// dropdown queries for partner list
-$partnersQuery = "SELECT partner_name FROM masterdata.partner_masterfile ORDER BY partner_name";
-$partnersResult = $conn->query($partnersQuery);
-
-// Fix the post_transaction dropdown query to get distinct values
-$dataQuery = "SELECT DISTINCT post_transaction FROM mldb.billspayment_transaction WHERE post_transaction IS NOT NULL ORDER BY post_transaction";
-$post_transaction_result = $conn->query($dataQuery);
-
-// Fix the status dropdown query to get distinct values
-$dataQuery = "SELECT DISTINCT status FROM mldb.billspayment_transaction ORDER BY status";
-$status_result = $conn->query($dataQuery);
-
-//Fix the all information comes from branch profile dropdown query to get distinct values
-// mainzone
-$dataQuery = "SELECT DISTINCT mainzone FROM masterdata.branch_profile WHERE NOT mainzone IN ('HO') GROUP BY mainzone ORDER BY mainzone";
-$mainzone_result = $conn->query($dataQuery);
-
 // zone - Modified to be populated via AJAX based on mainzone selection
 $zone_result = null; // Will be populated via AJAX
 
 // Add AJAX handler for fetching transaction data
 if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     // Clear any previous output and set headers
-    ob_clean();
+    if (ob_get_level()) {
+        ob_clean();
+    }
     header('Content-Type: application/json');
     
     $partner = isset($_POST['partner']) ? $_POST['partner'] : '';
@@ -58,7 +37,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     $branch = isset($_POST['branch']) ? $_POST['branch'] : '';
     $search = isset($_POST['search']) ? $_POST['search'] : '';
     $page = isset($_POST['page']) ? (int)$_POST['page'] : 1;
-    $rows_per_page = isset($_POST['rows_per_page']) ? (int)$_POST['rows_per_page'] : 10;
+    $rows_per_page = isset($_POST['rows_per_page']) ? (int)$_POST['rows_per_page'] : 15;
     
     // Initialize arrays and variables
     $whereConditions = [];
@@ -72,13 +51,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     if (!empty($search)) {
         $whereConditions[] = "(reference_no LIKE ?)";
         $searchParam = "%$search%";
-        $params = array_merge($params, [$searchParam]);
+        $params[] = $searchParam;
         $types .= 's';
     }
 
     if (!empty($partner) && $partner !== 'All') {
         if($partner === 'SECURITY BANK') {
-            $whereConditions[] = "(partner_name = ? AND sub_billers_name IS NULL)";
+            $whereConditions[] = "(partner_name = ? AND sub_billers_id IS NULL)";
         }elseif($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING'){
             $whereConditions[] = "sub_billers_name = ?";
         }else{
@@ -89,38 +68,38 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     }
 
     if (!empty($start_date)) {
-        $whereConditions[] = "(DATE(datetime) >= ? OR DATE(cancellation_date) >= ?)";
+        $whereConditions[] = "(DATE(datetime) >= ? OR DATE(cancellation_date) >= ? OR DATE(report_date) >= ?)";
         $params[] = $start_date;
         $params[] = $start_date;
-        $types .= 'ss';
+        $params[] = $start_date;
+        $types .= 'sss';
     }
 
     if (!empty($end_date)) {
-        $whereConditions[] = "(DATE(datetime) <= ? OR DATE(cancellation_date) <= ?)";
+        $whereConditions[] = "(DATE(datetime) <= ? OR DATE(cancellation_date) <= ? OR DATE(report_date) <= ?)";
         $params[] = $end_date;
         $params[] = $end_date;
-        $types .= 'ss';
+        $params[] = $end_date;
+        $types .= 'sss';
     }
 
-    if (!empty($post_transaction)) {
+    if (!empty($post_transaction) && $post_transaction !== 'All') {
         $whereConditions[] = "post_transaction = ?";
         $params[] = $post_transaction;
         $types .= 's';
     }
 
-    if (!empty($status)) {
+    if (!empty($status) && $status !== 'All') {
         if ($status === 'active') {
             // Handle cases for Active status (NULL or empty values in database)
             $whereConditions[] = "status IS NULL";
         } else {
             // Handle other specific statuses
-            $whereConditions[] = "status = ?";
-            $params[] = $status;
-            $types .= 's';
+            $whereConditions[] = "status = '*'";
         }
     }
 
-    if (!empty($source_file)) {
+    if (!empty($source_file) && $source_file !== 'All') {
         $whereConditions[] = "source_file = ?";
         $params[] = $source_file;
         $types .= 's';
@@ -128,7 +107,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
 
     //for mainzone and zone filtering
     if($mainzone ==='VISMIN'){
-        if (!empty($zone)) {
+        if (!empty($zone) && $zone !== 'All') {
             $whereConditions[] = "zone_code = ?";
             $params[] = $zone;
             $types .= 's';
@@ -136,7 +115,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
             $whereConditions[] = "zone_code IN ('VIS', 'MIN')";
         }
     }elseif($mainzone ==='LNCR'){
-        if (!empty($zone)) {
+        if (!empty($zone) && $zone !== 'All') {
             $whereConditions[] = "zone_code = ?";
             $params[] = $zone;
             $types .= 's';
@@ -145,13 +124,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
         }
     }
 
-    if (!empty($region)) {
+    if (!empty($region) && $region !== 'All') {
         $whereConditions[] = "region_code = ?";
         $params[] = $region;
         $types .= 's';
     }
 
-    if (!empty($branch)) {
+    if (!empty($branch) && $branch !== 'All') {
         $whereConditions[] = "branch_id = ?";
         $params[] = $branch;
         $types .= 's';
@@ -162,29 +141,55 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     if (!empty($whereConditions)) {
         $whereClause = 'WHERE ' . implode(' AND ', $whereConditions);
     }
-    
+
     // Check database connection
     if (!$conn) {
         echo json_encode(['success' => false, 'error' => 'Database connection failed']);
         exit;
     }
-    
+
+    // Helper: bind parameters with proper reference handling.
+    // mysqli_stmt::bind_param requires arguments by reference; the spread
+    // operator (...) unpacks by value, which causes bind_param to fail
+    // silently on PHP < 8.1.  call_user_func_array preserves references.
+    $bindParams = function ($stmt, $types, &$params) {
+        if (empty($types)) {
+            return true;
+        }
+        $refs = [$types];
+        foreach ($params as $key => $val) {
+            $refs[] = &$params[$key];
+        }
+        return call_user_func_array([$stmt, 'bind_param'], $refs);
+    };
+
+    // Execute a prepared query and return the result set (or null on failure)
+    $execPrepared = function ($conn, $query, $types, &$params) use ($bindParams) {
+        $stmt = $conn->prepare($query);
+        if (!$stmt) {
+            return null;
+        }
+        if (!$bindParams($stmt, $types, $params)) {
+            $stmt->close();
+            return null;
+        }
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return null;
+        }
+        $result = $stmt->get_result();
+        $stmt->close();
+        return $result ?: null;
+    };
+
     // Count total records
     $totalRecords = 0;
     $countQuery = "SELECT COUNT(*) as total FROM mldb.billspayment_transaction $whereClause";
-    
+
     if (!empty($params)) {
-        $countStmt = $conn->prepare($countQuery);
-        if ($countStmt) {
-            if (!empty($types)) {
-                $countStmt->bind_param($types, ...$params);
-            }
-            $countStmt->execute();
-            $countResult = $countStmt->get_result();
-            if ($countResult) {
-                $totalRecords = $countResult->fetch_assoc()['total'];
-            }
-            $countStmt->close();
+        $countResult = $execPrepared($conn, $countQuery, $types, $params);
+        if ($countResult) {
+            $totalRecords = $countResult->fetch_assoc()['total'];
         }
     } else {
         $countResult = $conn->query($countQuery);
@@ -192,67 +197,70 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
             $totalRecords = $countResult->fetch_assoc()['total'];
         }
     }
-    
-    // Calculate totals for ALL filtered records (not just current page)
-    $totals = ['principal' => 0, 'partner' => 0, 'customer' => 0];
-    $totalsQuery = "SELECT 
-                        COALESCE(SUM(amount_paid), 0) as total_principal,
-                        COALESCE(SUM(charge_to_partner), 0) as total_partner,
-                        COALESCE(SUM(charge_to_customer), 0) as total_customer
+
+    $summaryResults = [
+        'summary' => ['volume' => 0, 'principal' => 0, 'chargePartner' => 0, 'chargeCustomer' => 0, 'totalCharge' => 0],
+        'adjustment' => ['volume' => 0, 'principal' => 0, 'chargePartner' => 0, 'chargeCustomer' => 0, 'totalCharge' => 0],
+        'net' => ['volume' => 0, 'principal' => 0, 'chargePartner' => 0, 'chargeCustomer' => 0, 'totalCharge' => 0, 'settlementAmount' => 0]
+    ];
+
+    $summaryQuery = "SELECT
+                        COALESCE(SUM(CASE WHEN status IS NULL OR status = '' THEN 1 ELSE 0 END), 0) as summary_volume,
+                        COALESCE(SUM(CASE WHEN status IS NULL OR status = '' THEN ABS(amount_paid) ELSE 0 END), 0) as summary_principal,
+                        COALESCE(SUM(CASE WHEN status IS NULL OR status = '' THEN ABS(charge_to_partner) ELSE 0 END), 0) as summary_charge_partner,
+                        COALESCE(SUM(CASE WHEN status IS NULL OR status = '' THEN ABS(charge_to_customer) ELSE 0 END), 0) as summary_charge_customer,
+                        COALESCE(SUM(CASE WHEN status = '*' OR status = 'cancelled' THEN 1 ELSE 0 END), 0) as adjustment_volume,
+                        COALESCE(SUM(CASE WHEN status = '*' OR status = 'cancelled' THEN ABS(amount_paid) ELSE 0 END), 0) as adjustment_principal,
+                        COALESCE(SUM(CASE WHEN status = '*' OR status = 'cancelled' THEN ABS(charge_to_partner) ELSE 0 END), 0) as adjustment_charge_partner,
+                        COALESCE(SUM(CASE WHEN status = '*' OR status = 'cancelled' THEN ABS(charge_to_customer) ELSE 0 END), 0) as adjustment_charge_customer
                     FROM mldb.billspayment_transaction $whereClause";
-    
+
     if (!empty($params)) {
-        $totalsStmt = $conn->prepare($totalsQuery);
-        if ($totalsStmt) {
-            if (!empty($types)) {
-                $totalsStmt->bind_param($types, ...$params);
-            }
-            $totalsStmt->execute();
-            $totalsResult = $totalsStmt->get_result();
-            if ($totalsResult) {
-                $totalsRow = $totalsResult->fetch_assoc();
-                $totals['principal'] = number_format((float)$totalsRow['total_principal'], 2);
-                $totals['partner'] = number_format((float)$totalsRow['total_partner'], 2);
-                $totals['customer'] = number_format((float)$totalsRow['total_customer'], 2);
-            }
-            $totalsStmt->close();
-        }
+        $summaryResult = $execPrepared($conn, $summaryQuery, $types, $params);
     } else {
-        $totalsResult = $conn->query($totalsQuery);
-        if ($totalsResult) {
-            $totalsRow = $totalsResult->fetch_assoc();
-            $totals['principal'] = number_format((float)$totalsRow['total_principal'], 2);
-            $totals['partner'] = number_format((float)$totalsRow['total_partner'], 2);
-            $totals['customer'] = number_format((float)$totalsRow['total_customer'], 2);
-        }
+        $summaryResult = $conn->query($summaryQuery);
     }
-    
+
+    if ($summaryResult) {
+        $summaryRow = $summaryResult->fetch_assoc();
+        $summaryResults['summary']['volume'] = (int)$summaryRow['summary_volume'];
+        $summaryResults['summary']['principal'] = (float)$summaryRow['summary_principal'];
+        $summaryResults['summary']['chargePartner'] = (float)$summaryRow['summary_charge_partner'];
+        $summaryResults['summary']['chargeCustomer'] = (float)$summaryRow['summary_charge_customer'];
+        $summaryResults['summary']['totalCharge'] = $summaryResults['summary']['chargePartner'] + $summaryResults['summary']['chargeCustomer'];
+
+        $summaryResults['adjustment']['volume'] = (int)$summaryRow['adjustment_volume'];
+        $summaryResults['adjustment']['principal'] = (float)$summaryRow['adjustment_principal'];
+        $summaryResults['adjustment']['chargePartner'] = (float)$summaryRow['adjustment_charge_partner'];
+        $summaryResults['adjustment']['chargeCustomer'] = (float)$summaryRow['adjustment_charge_customer'];
+        $summaryResults['adjustment']['totalCharge'] = $summaryResults['adjustment']['chargePartner'] + $summaryResults['adjustment']['chargeCustomer'];
+
+        $summaryResults['net']['volume'] = $summaryResults['summary']['volume'] - $summaryResults['adjustment']['volume'];
+        $summaryResults['net']['principal'] = $summaryResults['summary']['principal'] - $summaryResults['adjustment']['principal'];
+        $summaryResults['net']['chargePartner'] = $summaryResults['summary']['chargePartner'] - $summaryResults['adjustment']['chargePartner'];
+        $summaryResults['net']['chargeCustomer'] = $summaryResults['summary']['chargeCustomer'] - $summaryResults['adjustment']['chargeCustomer'];
+        $summaryResults['net']['totalCharge'] = $summaryResults['summary']['totalCharge'] - $summaryResults['adjustment']['totalCharge'];
+        $summaryResults['net']['settlementAmount'] = $summaryResults['net']['principal'] - $summaryResults['net']['totalCharge'];
+    }
+
     // Calculate pagination
     $offset = ($page - 1) * $rows_per_page;
     $totalPages = $totalRecords > 0 ? ceil($totalRecords / $rows_per_page) : 0;
-    
+
     // Main data query with pagination
-    $dataQuery = "SELECT * FROM mldb.billspayment_transaction 
+    $dataQuery = "SELECT * FROM mldb.billspayment_transaction
                 $whereClause
-                ORDER BY datetime DESC 
+                ORDER BY datetime DESC
                 LIMIT $rows_per_page OFFSET $offset";
-    
+
     // Execute main query
     $data = [];
-    if (!empty($whereConditions)) {
-        $stmt = $conn->prepare($dataQuery);
-        if ($stmt) {
-            if (!empty($types)) {
-                $stmt->bind_param($types, ...$params);
+    if (!empty($params)) {
+        $result = $execPrepared($conn, $dataQuery, $types, $params);
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $data[] = $row;
             }
-            $stmt->execute();
-            $result = $stmt->get_result();
-            if ($result) {
-                while ($row = $result->fetch_assoc()) {
-                    $data[] = $row;
-                }
-            }
-            $stmt->close();
         }
     } else {
         $result = $conn->query($dataQuery);
@@ -262,12 +270,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
             }
         }
     }
-    
-    // Return JSON response with totals
+
+    // Return JSON response
     echo json_encode([
         'success' => true,
         'data' => $data,
-        'totals' => $totals,
+        'summary' => $summaryResults,
         'pagination' => [
             'current_page' => $page,
             'total_pages' => $totalPages,
@@ -280,101 +288,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     exit;
 }
 
-// Add AJAX handler for fetching zone data based on mainzone
-if (isset($_POST['action']) && $_POST['action'] === 'get_zones') {
-    header('Content-Type: application/json');
-    
-    $mainzone = isset($_POST['mainzone']) ? $_POST['mainzone'] : '';
-    
-    if (empty($mainzone)) {
-        echo json_encode(['success' => false, 'error' => 'Mainzone is required']);
-        exit;
-    }
-    
-    $zoneQuery = "SELECT DISTINCT zone FROM masterdata.branch_profile WHERE mainzone = ? ORDER BY zone";
-    $zoneStmt = $conn->prepare($zoneQuery);
-    
-    if ($zoneStmt) {
-        $zoneStmt->bind_param('s', $mainzone);
-        $zoneStmt->execute();
-        $zoneResult = $zoneStmt->get_result();
-        
-        $zones = [];
-        while ($row = $zoneResult->fetch_assoc()) {
-            $zones[] = $row['zone'];
-        }
-        
-        $zoneStmt->close();
-        echo json_encode(['success' => true, 'zones' => $zones]);
-    } else {
-        echo json_encode(['success' => false, 'error' => 'Failed to fetch zones']);
-    }
-    exit;
-}
-
-// Add AJAX handler for fetching regions based on zone
-if (isset($_POST['action']) && $_POST['action'] === 'get_regions') {
-    header('Content-Type: application/json');
-    
-    $zone = isset($_POST['zone']) ? $_POST['zone'] : '';
-    
-    if (empty($zone)) {
-        echo json_encode(['success' => false, 'error' => 'Zone is required']);
-        exit;
-    }
-    
-    $regionQuery = "SELECT DISTINCT region_code, region FROM masterdata.branch_profile WHERE zone = ? ORDER BY region";
-    $regionStmt = $conn->prepare($regionQuery);
-    
-    if ($regionStmt) {
-        $regionStmt->bind_param('s', $zone);
-        $regionStmt->execute();
-        $regionResult = $regionStmt->get_result();
-        
-        $regions = [];
-        while ($row = $regionResult->fetch_assoc()) {
-            $regions[] = ['region_code' => $row['region_code'], 'region' => $row['region']];
-        }
-        
-        $regionStmt->close();
-        echo json_encode(['success' => true, 'regions' => $regions]);
-    } else {
-        echo json_encode(['success' => false, 'error' => 'Failed to fetch regions']);
-    }
-    exit;
-}
-
-// Add AJAX handler for fetching branches based on region
-if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
-    header('Content-Type: application/json');
-    
-    $region_code = isset($_POST['region']) ? $_POST['region'] : '';
-    
-    if (empty($region_code)) {
-        echo json_encode(['success' => false, 'error' => 'Region is required']);
-        exit;
-    }
-    
-    $branchQuery = "SELECT DISTINCT branch_id, branch_name FROM masterdata.branch_profile WHERE region_code = ? AND ml_matic_status IN ('Active', 'Pending', 'Inactive') AND branch_name IS NOT NULL ORDER BY branch_name";
-    $branchStmt = $conn->prepare($branchQuery);
-    
-    if ($branchStmt) {
-        $branchStmt->bind_param('s', $region_code);
-        $branchStmt->execute();
-        $branchResult = $branchStmt->get_result();
-        
-        $branches = [];
-        while ($row = $branchResult->fetch_assoc()) {
-            $branches[] = ['branch_id' => $row['branch_id'], 'branch_name' => $row['branch_name']];
-        }
-        
-        $branchStmt->close();
-        echo json_encode(['success' => true, 'branches' => $branches]);
-    } else {
-        echo json_encode(['success' => false, 'error' => 'Failed to fetch branches']);
-    }
-    exit;
-}
 ?>
 
 <!DOCTYPE html>
@@ -414,19 +327,32 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
             justify-content: center;
         }
 
-        .scrollable-table tfoot th {
-            position: sticky;
-            bottom: 0;
-            background-color: var(--bs-dark);
-            color: white;
-            z-index: 10;
-            border-top: 2px solid #dee2e6;
-        }
-        
         /* Style for Select2 validation */
         .select2-container.is-invalid .select2-selection {
             border-color: #dc3545 !important;
             box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+        }
+
+        /* Keep Select2 clear/remove icons visible above Bootstrap/theme styles */
+        .select2-container--bootstrap-5 .select2-selection__clear,
+        .select2-container .select2-selection__clear {
+            color: #dc3545 !important;
+            font-size: 1rem !important;
+            font-weight: 700 !important;
+            line-height: 1 !important;
+            opacity: 1 !important;
+            z-index: 3;
+            cursor: pointer !important;
+        }
+
+        .select2-container--bootstrap-5 .select2-selection__choice__remove,
+        .select2-container .select2-selection__choice__remove {
+            color: #dc3545 !important;
+            font-size: 1rem !important;
+            font-weight: 700 !important;
+            opacity: 1 !important;
+            cursor: pointer !important;
+            margin-right: 4px !important;
         }
         
         /* Transaction row hover effect */
@@ -472,6 +398,39 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
         .modal-body .fas {
             width: 20px;
             text-align: center;
+        }
+
+        .filter-compact-select {
+            width: auto;
+            min-width: 120px;
+            max-width: 100%;
+            display: block;
+        }
+
+        .filter-action-buttons.is-compact {
+            gap: 0.35rem !important;
+        }
+
+        .filter-action-buttons.is-compact .btn {
+            width: auto;
+            min-width: 0;
+            padding-left: 0.65rem;
+            padding-right: 0.65rem;
+        }
+
+        .transaction-results-group {
+            min-height: 100%;
+        }
+
+        .system-table-group {
+            min-height: 0;
+            height: 500px;
+            flex: 1 1 auto;
+        }
+
+        .system-table-group .table-responsive {
+            height: 100%;
+            overflow: auto;
         }
     </style>
     <style>
@@ -534,16 +493,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                     <label for="partnerlistDropdown" class="form-label small text-muted mb-1">Partner:</label>
                                     <select id="partnerlistDropdown" class="form-select form-select-sm select2" aria-label="Select Partner" name="partnerlist" data-placeholder="Search Partner..." required>
                                         <option value="">Select Partner</option>
-                                        <option value="All">All</option>
-                                        <?php 
-                                            if ($partnersResult && mysqli_num_rows($partnersResult) > 0) {
-                                                while ($row = mysqli_fetch_assoc($partnersResult)) {
-                                                    $partner_names = htmlspecialchars($row['partner_name']);
-                                                    $selected = (isset($_GET['partner_name']) && $_GET['partner_name'] == $partner_names) ? 'selected' : '';
-                                                    echo "<option value='$partner_names' $selected>" . ucfirst($partner_names) . "</option>";
-                                                }
-                                            }
-                                        ?>
+                                        <option value="All" selected>All</option>
+                                        <!-- options will be populated by JS -->
                                     </select>
                                 </div>
                                 
@@ -577,72 +528,61 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                 </div>
                                 
                                 <!-- CAD Status Dropdown -->
-                                <div class="col-md-2 col-sm-6">
+                                <div class="col-auto d-none">
                                     <label for="post_transaction_filter" class="form-label small text-muted mb-1">CAD Status:</label>
-                                    <select id="post_transaction_filter" name="post_transaction" class="form-select form-select-sm">
-                                        <option value="">All Status</option>
-                                        <?php 
-                                            if ($post_transaction_result && mysqli_num_rows($post_transaction_result) > 0) {
-                                                while ($row = mysqli_fetch_assoc($post_transaction_result)) {
-                                                    $status = htmlspecialchars($row['post_transaction']);
-                                                    $selected = (isset($_GET['post_transaction']) && $_GET['post_transaction'] == $status) ? 'selected' : '';
-                                                    echo "<option value='$status' $selected>" . ucfirst($status) . "</option>";
-                                                }
-                                            }
-                                        ?>
+                                    <select id="post_transaction_filter" name="post_transaction" class="form-select form-select-sm filter-compact-select">
+                                        <option value="All" selected>All</option>
+                                        <option value="posted">Posted</option>
+                                        <option value="unposted">Unposted</option>
                                     </select>
                                 </div>
                                 
                                 <!-- Transaction Status Dropdown -->
-                                <div class="col-md-2 col-sm-6">
+                                <div class="col-auto">
                                     <label for="status_filter" class="form-label small text-muted mb-1">Transaction Status:</label>
-                                    <select id="status_filter" name="status" class="form-select form-select-sm">
-                                        <option value="">All Status</option>
-                                        <option value="active">Active</option>
-                                        <option value="*">Cancelled</option>
+                                    <select id="status_filter" name="status" class="form-select form-select-sm filter-compact-select">
+                                        <option value="All">All</option>
+                                        <option value="active" selected>Active</option>
+                                        <option value="cancelled">Cancelled</option>
                                     </select>
                                 </div>
 
                                 <!-- Source File Dropdown -->
-                                <div class="col-md-2 col-sm-6">
+                                <div class="col-auto">
                                     <label for="source_file_filter" class="form-label small text-muted mb-1">Source File:</label>
-                                    <select id="source_file_filter" name="source_file" class="form-select form-select-sm">
-                                        <option value="">Select Source File</option>
+                                    <select id="source_file_filter" name="source_file" class="form-select form-select-sm filter-compact-select">
+                                        <option value="All" selected>All</option>
                                         <option value="KP7">KP7</option>
                                         <option value="KPX">KPX</option>
                                     </select>
                                 </div>
 
                                 <!-- Mainzone Dropdown -->
-                                <div class="col-md-2 col-sm-6">
+                                <div class="col-auto">
                                     <label for="mainzone_filter" class="form-label small text-muted mb-1">Mainzone:</label>
-                                    <select id="mainzone_filter" name="mainzone" class="form-select form-select-sm">
+                                    <select id="mainzone_filter" name="mainzone" class="form-select form-select-sm filter-compact-select">
                                         <option value="">Select Mainzone</option>
-                                        <?php 
-                                            if ($mainzone_result && mysqli_num_rows($mainzone_result) > 0) {
-                                                while ($row = mysqli_fetch_assoc($mainzone_result)) {
-                                                    $mainzone = htmlspecialchars($row['mainzone']);
-                                                    $selected = (isset($_GET['mainzone']) && $_GET['mainzone'] == $mainzone) ? 'selected' : '';
-                                                    echo "<option value='$mainzone' $selected>" . ucfirst($mainzone) . "</option>";
-                                                }
-                                            }
-                                        ?>
+                                        <option value="All">All</option>
+                                        <!-- options will be populated by JS -->
                                     </select>
                                 </div>
                                 
                                 <!-- Zone Dropdown -->
-                                <div class="col-md-2 col-sm-6">
+                                <div class="col-auto">
                                     <label for="zone_filter" class="form-label small text-muted mb-1">Zone:</label>
-                                    <select id="zone_filter" name="zone" class="form-select form-select-sm">
+                                    <select id="zone_filter" name="zone" class="form-select form-select-sm filter-compact-select">
                                         <option value="">Select Zone</option>
+                                        <option value="All">All</option>
+                                        <!-- options will be populated by JS -->
                                     </select>
                                 </div>
 
                                 <!-- Region Dropdown -->
-                                <div class="col-md-2 col-sm-6">
+                                <div class="col-auto">
                                     <label for="region_filter" class="form-label small text-muted mb-1">Region:</label>
-                                    <select id="region_filter" name="region" class="form-select form-select-sm">
+                                    <select id="region_filter" name="region" class="form-select form-select-sm filter-compact-select">
                                         <option value="">Select Region</option>
+                                        <option value="All">All</option>
                                     </select>
                                 </div>
 
@@ -651,6 +591,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                     <label for="branchDropdown" class="form-label small text-muted mb-1">Branch Name:</label>
                                     <select id="branchDropdown" class="form-select form-select-sm select2" aria-label="Select Branch Name" name="branch" data-placeholder="Search Branch Name..." required>
                                         <option value="">Select Branch Name</option>
+                                        <option value="All">All</option>
+                                        <!-- options will be populated by JS -->
                                     </select>
                                 </div>
                                 
@@ -664,25 +606,115 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                         placeholder="Search...">
                                 </div>
                                 
-                                <!-- Action Button -->
-                                <div class="col-md-1 col-sm-6">
-                                    <button type="button" id="searchButton" class="btn btn-danger btn-sm w-100">
-                                        <i class="fas fa-search"></i> Search
-                                    </button>
+                                <!-- Action Buttons -->
+                                <div class="col-auto">
+                                    <label class="form-label small text-muted mb-1 d-block">&nbsp;</label>
+                                    <div class="d-flex gap-2 filter-action-buttons">
+                                        <button type="button" id="searchButton" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-search"></i> Search
+                                        </button>
+                                        <button type="button" id="clearButton" class="btn btn-secondary btn-sm" style="display: none;">
+                                            <i class="fas fa-eraser"></i> Clear
+                                        </button>
+                                        <button type="button" id="ExportButton" class="btn btn-danger btn-sm" style="display: none;">
+                                            <i class="fas fa-download"></i> Export To
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         <div class="card-body" style="display: none;">
-                            <div class="text-center mb-3">
-                                <button type="button" id="ExportButton" class="btn btn-danger btn-sm">
-                                    <i class="fas fa-download"></i> Export To
-                                </button>
-                            </div>
-                            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <div class="row g-3 align-items-stretch">
+                                <div class="col-lg-3 col-md-4">
+                                    <div class="card mb-3 h-100">
+                                        <div class="card-body">
+                                            <div class="fw-semibold text-center mb-3">Summary Results</div>
+
+                                            <div class="mb-3">
+                                                <div class="fw-semibold text-danger mb-2">Summary</div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Volume</span>
+                                                    <span id="summaryVolume" class="fw-bold">0</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Principal</span>
+                                                    <span id="summaryPrincipal" class="fw-bold">0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Charge to Partner</span>
+                                                    <span id="summaryChargePartner" class="fw-bold">0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Charge to Customer</span>
+                                                    <span id="summaryChargeCustomer" class="fw-bold">0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between py-1">
+                                                    <span class="text-muted small">Total Charge</span>
+                                                    <span id="summaryTotalCharge" class="fw-bold">0.00</span>
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <div class="fw-semibold text-danger mb-2">Adjustment</div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Volume</span>
+                                                    <span id="adjustmentVolume" class="fw-bold">0</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Principal</span>
+                                                    <span id="adjustmentPrincipal" class="fw-bold">0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Charge to Partner</span>
+                                                    <span id="adjustmentChargePartner" class="fw-bold">0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Charge to Customer</span>
+                                                    <span id="adjustmentChargeCustomer" class="fw-bold">0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between py-1">
+                                                    <span class="text-muted small">Total Charge</span>
+                                                    <span id="adjustmentTotalCharge" class="fw-bold">0.00</span>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <div class="fw-semibold text-danger mb-2">Net</div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Volume</span>
+                                                    <span id="netVolume" class="fw-bold">0</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Principal</span>
+                                                    <span id="netPrincipal" class="fw-bold">0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Charge to Partner</span>
+                                                    <span id="netChargePartner" class="fw-bold">0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Charge to Customer</span>
+                                                    <span id="netChargeCustomer" class="fw-bold">0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between border-bottom py-1">
+                                                    <span class="text-muted small">Total Charge</span>
+                                                    <span id="netTotalCharge" class="fw-bold">0.00</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between py-1">
+                                                    <span class="text-muted small">Settlement Amount</span>
+                                                    <span id="netSettlementAmount" class="fw-bold">0.00</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-lg-9 col-md-8">
+                            <div class="transaction-results-group h-100 d-flex flex-column">
+                            <div class="system-table-group">
+                            <div class="table-responsive">
                                 <table id="transactionReportTable" class="table table-bordered table-hover table-striped">
                                     <thead class="table-light sticky-top">
                                         <tr>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>Billing Invoice</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Transaction Date</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Cancelled Date</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Reference Number</th>
@@ -693,8 +725,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                             <th colspan="2" class='text-truncate text-center align-middle'>Partner ID</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Principal Amount</th>
                                             <th colspan="2" class='text-truncate text-center align-middle'>Charge to</th>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>GL Code</th>
-                                            <th rowspan="2" class='text-truncate text-center align-middle'>GL Description</th>
+                                            <th rowspan="2" class='text-truncate text-center align-middle'>Billing Invoice</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>CAD Status</th>
                                             <th rowspan="2" class='text-truncate text-center align-middle'>Transaction Status</th>
                                         </tr>
@@ -708,25 +739,17 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                     <tbody>
                                         <!-- Data will be populated via JavaScript -->
                                     </tbody>
-                                        <tfoot class="sticky-bottom table-dark">
-                                            <tr>
-                                                <th colspan="10" style="text-align:right">Total : </th>
-                                                <th id="totalPrincipalAmount" class="text-end">0.00</th>
-                                                <th id="totalChargetoPartner" class="text-end">0.00</th>
-                                                <th id="totalChargetoCustomer" class="text-end">0.00</th>
-                                                <th colspan="4"></th>
-                                            </tr>
-                                        </tfoot>
                                 </table>
                             </div>
                             
+                            </div>
+                            
                             <!-- Pagination Controls -->
-                            <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div class="pagination-controls-group d-flex justify-content-between align-items-center pt-3">
                                 <div class="d-flex align-items-center">
                                     <span class="me-2">Show:</span>
                                     <select id="rowsPerPage" class="form-select form-select-sm" style="width: auto;">
-                                        <option value="5">5</option>
-                                        <option value="10" selected>10</option>
+                                        <option value="15" selected>15</option>
                                         <option value="25">25</option>
                                         <option value="50">50</option>
                                         <option value="100">100</option>
@@ -735,7 +758,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                 </div>
                                 
                                 <div id="pagination-info" class="text-muted">
-                                    Showing 0 to 0 of 0 entries
+                                    Showing 0 to 0
                                 </div>
                                 
                                 <nav aria-label="Table pagination">
@@ -743,6 +766,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
                                         <!-- Pagination will be generated by JavaScript -->
                                     </ul>
                                 </nav>
+                            </div>
+                            </div>
+                                </div>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -1112,144 +1139,987 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_branches') {
     </div>
 </body>
 <?php include '../../../templates/footer.php'; ?>
+<!-- Include Select2 for partner dropdown -->
+<script>
+    $(document).ready(function() {
+        // Initialize Select2 for partner dropdown
+        $('#partnerlistDropdown').select2({
+            placeholder: 'Search or select a Partner...',
+            allowClear: true
+        });
+
+        // Keep dropdown behavior stable: close immediately after choosing a partner.
+        $('#partnerlistDropdown').on('select2:select', function() {
+            if ($(this).val()) {
+                $('#status_filter').val('active');
+            }
+            $(this).select2('close');
+        });
+
+        $('#partnerlistDropdown').on('change', function() {
+            if ($(this).val()) {
+                $('#status_filter').val('active');
+            } else {
+                $('#status_filter').val('All');
+            }
+        });
+
+        // Fetch partner list from server
+        // Load partners on page load
+        loadPartners();
+        
+        function loadPartners() {
+            $.ajax({
+                url: '../../../fetch/get_partners.php',
+                type: 'GET',
+                dataType: 'json',
+                success: function(result) {
+                    if (result && result.success === true && Array.isArray(result.data)) {
+                        const select = $('#partnerlistDropdown');
+
+                        // Keep default static options only, then append fetched partners.
+                        select.find('option').not('[value=""]').not('[value="All"]').remove();
+
+                        result.data.forEach(partner => {
+                            if (partner && partner.partner_name) {
+                                select.append(new Option(partner.partner_name, partner.partner_name));
+                            }
+                        });
+                    } else {
+                        console.error('Error loading partners: Invalid response format', result);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading partners:', { xhr: xhr, status: status, error: error });
+                }
+            });
+        }
+    });
+</script>
+
+<!-- Include for mainzone dropdown -->
+<script>
+    $(document).ready(function() {
+        $.ajax({
+            url: '../../../fetch/zoning/get_mainzone.php',
+            type: 'GET',
+            dataType: 'json',
+            success: function(result) {
+                if (result && result.success === true && Array.isArray(result.data)) {
+                    const select = $('#mainzone_filter');
+
+                    // Keep default static options only, then append fetched mainzones.
+                    select.find('option').not('[value=""]').not('[value="All"]').remove();
+
+                    result.data.forEach(item => {
+                        // Support different shapes: string array or objects with a `mainzone`/`name` field
+                        let value = null;
+                        if (typeof item === 'string') {
+                            value = item;
+                        } else if (item && (item.mainzone || item.name)) {
+                            value = item.mainzone || item.name;
+                        } else if (item && item.value) {
+                            value = item.value;
+                        }
+
+                        if (value) {
+                            select.append(new Option(value, value));
+                        }
+                    });
+                } else {
+                    console.error('Error loading mainzones: Invalid response format', result);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error loading mainzones:', { xhr: xhr, status: status, error: error });
+            }
+        });
+    });
+</script>
+
+<!-- Include for zone dropdown -->
+<script>
+    $(document).ready(function() {
+        function loadZones(mainzone) {
+            const select = $('#zone_filter');
+            // If no mainzone selected, keep only the default placeholder option (and "All")
+            if (!mainzone || mainzone === '' || mainzone === 'Select Mainzone') {
+                // Keep only the placeholder option (no 'All') when no mainzone selected
+                select.find('option').not('[value=""]').not('[value=""]').remove();
+                // ensure only the first placeholder remains
+                select.find('option').not(':first').remove();
+                return;
+            }
+
+            const params = {};
+            // If selected mainzone is 'All', request without mainzone param to return all zones
+            if (mainzone !== 'All') params.mainzone = mainzone;
+            $.ajax({
+                url: '../../../fetch/zoning/get_zone-code.php',
+                type: 'GET',
+                data: params,
+                dataType: 'json',
+                success: function(result) {
+                    if (result && result.success === true && Array.isArray(result.data)) {
+                        const select = $('#zone_filter');
+
+                        // Keep only the first placeholder option, then append fetched zones.
+                        const placeholder = select.find('option').first();
+                        select.find('option').not(':first').remove();
+
+                        // If requested for all zones (mainzone==='All'), ensure 'All' option will be added after placeholder
+                        const requestedAll = (mainzone === 'All');
+                        result.data.forEach(item => {
+                            let value = null;
+                            if (typeof item === 'string') {
+                                value = item;
+                            } else if (item && (item.zone || item.name)) {
+                                value = item.zone || item.name;
+                            } else if (item && item.value) {
+                                value = item.value;
+                            }
+                            if (value) {
+                                select.append(new Option(value, value));
+                            }
+                        });
+
+                        if (requestedAll) {
+                            // Ensure 'All' exists immediately after the placeholder
+                            if (select.find('option[value="All"]').length === 0) {
+                                placeholder.after(new Option('All', 'All'));
+                            } else {
+                                const allOpt = select.find('option[value="All"]').remove();
+                                placeholder.after(allOpt);
+                            }
+                            // Ensure 'SHOWROOM' (value 'Showroom') is present — place after 'VIS' if present, otherwise at end
+                            if (select.find('option[value="Showroom"]').length === 0) {
+                                const showroomOpt = new Option('SHOWROOM', 'Showroom');
+                                if (select.find('option[value="VIS"]').length) {
+                                    select.find('option[value="VIS"]').after(showroomOpt);
+                                } else {
+                                    select.append(showroomOpt);
+                                }
+                            } else {
+                                const showroomOpt = select.find('option[value="Showroom"]').remove();
+                                if (select.find('option[value="VIS"]').length) {
+                                    select.find('option[value="VIS"]').after(showroomOpt);
+                                } else {
+                                    select.append(showroomOpt);
+                                }
+                            }
+                        }
+
+                        // Also include 'All' and 'SHOWROOM' for LNCR-specific request
+                        if (mainzone === 'LNCR' || mainzone === 'VISMIN') {
+                            if (select.find('option[value="All"]').length === 0) {
+                                placeholder.after(new Option('All', 'All'));
+                            } else {
+                                const allOpt = select.find('option[value="All"]').remove();
+                                placeholder.after(allOpt);
+                            }
+
+                            // Ensure SHOWROOM placed after VIS when possible
+                            if (select.find('option[value="Showroom"]').length === 0) {
+                                const showroomOpt = new Option('SHOWROOM', 'Showroom');
+                                if (select.find('option[value="VIS"]').length) {
+                                    select.find('option[value="VIS"]').after(showroomOpt);
+                                } else {
+                                    select.append(showroomOpt);
+                                }
+                            } else {
+                                const showroomOpt = select.find('option[value="Showroom"]').remove();
+                                if (select.find('option[value="VIS"]').length) {
+                                    select.find('option[value="VIS"]').after(showroomOpt);
+                                } else {
+                                    select.append(showroomOpt);
+                                }
+                            }
+                        }
+                    } else {
+                        console.error('Error loading zones: Invalid response format', result);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading zones:', { xhr: xhr, status: status, error: error });
+                }
+            });
+        }
+
+        // Always run loadZones on initial load to enforce correct placeholder state
+        const initialMainzone = $('#mainzone_filter').val();
+        loadZones(initialMainzone);
+
+        // Reload zones whenever mainzone changes
+        $('#mainzone_filter').on('change', function() {
+            const mz = $(this).val();
+            // normalize placeholder
+            const normMz = (mz === 'Select Mainzone') ? '' : mz;
+            loadZones(normMz);
+            // when mainzone changes, reset region dropdown to placeholder only immediately
+            const regionSelect = $('#region_filter');
+            const firstOpt = regionSelect.find('option').first();
+            regionSelect.find('option').not(':first').remove();
+            regionSelect.val(firstOpt.val());
+            // also call loadRegions('') to ensure any logic-run cleanup
+            if (typeof loadRegions === 'function') loadRegions('');
+            // reset branch dropdown and reload branches filtered by mainzone
+            const branchSelect = $('#branchDropdown');
+            branchSelect.find('option').not(':first').remove();
+            try { branchSelect.val(null).trigger('change'); } catch (e) { /* ignore */ }
+            loadBranches(normMz, '', '');
+        });
+    });
+</script>
+
+<!-- Include for region dropdown -->
+<script>
+    $(document).ready(function() {
+        function loadRegions(zone) {
+            const select = $('#region_filter');
+            // If no zone selected, keep only the default placeholder option (and "All")
+            if (!zone || zone === '' || zone === 'Select Zone') {
+                // Keep only the placeholder option (no 'All') when no zone selected
+                select.find('option').not('[value=""]').not('[value=""]').remove();
+                // ensure only the first placeholder remains
+                select.find('option').not(':first').remove();
+                return;
+            }
+
+            const params = {};
+            // If selected zone is 'All', we may need to special-case by mainzone
+            const currentMainzone = $('#mainzone_filter').val();
+
+            if (zone === 'All' && currentMainzone === 'VISMIN') {
+                // For VISMIN + All: fetch regions for VIS and MIN, combine unique
+                const reqVIS = $.ajax({ url: '../../../fetch/zoning/get_region-code.php', type: 'GET', data: { zone: 'VIS' }, dataType: 'json' });
+                const reqMIN = $.ajax({ url: '../../../fetch/zoning/get_region-code.php', type: 'GET', data: { zone: 'MIN' }, dataType: 'json' });
+
+                $.when(reqVIS, reqMIN).done(function(visRes, minRes) {
+                    const visData = (visRes && visRes[0] && visRes[0].success && Array.isArray(visRes[0].data)) ? visRes[0].data : [];
+                    const minData = (minRes && minRes[0] && minRes[0].success && Array.isArray(minRes[0].data)) ? minRes[0].data : [];
+
+                    // combine and dedupe by region_code (or string)
+                    const combinedMap = {};
+                    visData.concat(minData).forEach(item => {
+                        let key = null;
+                        let desc = null;
+                        if (typeof item === 'string') {
+                            key = item; desc = item;
+                        } else if (item && item.region_code) {
+                            key = item.region_code; desc = item.region_description || item.region_code;
+                        }
+                        if (key && !combinedMap[key]) combinedMap[key] = desc;
+                    });
+
+                    const select = $('#region_filter');
+                    const placeholder = select.find('option').first();
+                    select.find('option').not(':first').remove();
+
+                    // Insert 'All' after placeholder
+                    placeholder.after(new Option('All', 'All'));
+
+                    // Append combined regions
+                    Object.keys(combinedMap).forEach(k => {
+                        const label = combinedMap[k] || k;
+                        select.append(new Option(label, k));
+                    });
+
+                    // Insert showroom entries after the last region so they appear below the list
+                    select.append(new Option('VISAYAS SHOWROOM', 'VIS'));
+                    select.append(new Option('MINDANAO SHOWROOM', 'MIN'));
+                }).fail(function() {
+                    console.error('Error loading VIS/MIN regions');
+                });
+
+                return;
+            }
+
+            if (zone === 'All' && currentMainzone === 'LNCR') {
+                // For LNCR + All: fetch the zones for LNCR, then fetch regions for each zone and combine
+                $.ajax({
+                    url: '../../../fetch/zoning/get_zone-code.php',
+                    type: 'GET',
+                    data: { mainzone: 'LNCR' },
+                    dataType: 'json',
+                    success: function(zres) {
+                        if (zres && zres.success === true && Array.isArray(zres.data)) {
+                            const zones = zres.data.map(it => (typeof it === 'string') ? it : (it.zone || it.name || it.value)).filter(Boolean);
+                            const reqs = zones.map(z => $.ajax({ url: '../../../fetch/zoning/get_region-code.php', type: 'GET', data: { zone: z }, dataType: 'json' }));
+                            $.when.apply($, reqs).done(function() {
+                                const responses = Array.from(arguments);
+                                const allData = [];
+                                if (reqs.length === 1) {
+                                    const single = responses[0];
+                                    if (single && single[0] && single[0].success && Array.isArray(single[0].data)) allData.push.apply(allData, single[0].data);
+                                } else {
+                                    responses.forEach(r => { if (r && r[0] && r[0].success && Array.isArray(r[0].data)) allData.push.apply(allData, r[0].data); });
+                                }
+
+                                // dedupe
+                                const combinedMap = {};
+                                allData.forEach(item => {
+                                    let key = null; let desc = null;
+                                    if (typeof item === 'string') { key = item; desc = item; }
+                                    else if (item && item.region_code) { key = item.region_code; desc = item.region_description || item.region_code; }
+                                    if (key && !combinedMap[key]) combinedMap[key] = desc;
+                                });
+
+                                const select = $('#region_filter');
+                                const placeholder = select.find('option').first();
+                                select.find('option').not(':first').remove();
+                                placeholder.after(new Option('All', 'All'));
+                                Object.keys(combinedMap).forEach(k => select.append(new Option(combinedMap[k], k)));
+
+                                // LNCR showroom entries
+                                select.append(new Option('LUZON SHOWROOM', 'LZN'));
+                                select.append(new Option('NCR SHOWROOM', 'NCR'));
+                            }).fail(function() { console.error('Error loading LNCR regions'); });
+                        } else {
+                            console.error('Failed to fetch LNCR zones', zres);
+                        }
+                    },
+                    error: function() { console.error('Failed to fetch zones for LNCR'); }
+                });
+
+                return;
+            }
+
+            // Special case: when user selects Showroom, show showroom entries only
+            if (zone === 'Showroom' && (currentMainzone === 'VISMIN' || currentMainzone === 'LNCR' || currentMainzone === 'All')) {
+                const select = $('#region_filter');
+                const placeholder = select.find('option').first();
+                select.find('option').not(':first').remove();
+
+                // Insert 'All' after placeholder
+                placeholder.after(new Option('All', 'All'));
+
+                if (currentMainzone === 'LNCR') {
+                    select.append(new Option('LUZON SHOWROOM', 'LZN'));
+                    select.append(new Option('NCR SHOWROOM', 'NCR'));
+                } else if (currentMainzone === 'All') {
+                    select.append(new Option('LUZON SHOWROOM', 'LZN'));
+                    select.append(new Option('NCR SHOWROOM', 'NCR'));
+                    select.append(new Option('VISAYAS SHOWROOM', 'VIS'));
+                    select.append(new Option('MINDANAO SHOWROOM', 'MIN'));
+                } else {
+                    select.append(new Option('VISAYAS SHOWROOM', 'VIS'));
+                    select.append(new Option('MINDANAO SHOWROOM', 'MIN'));
+                }
+
+                return;
+            }
+
+            // default behavior: If selected zone is 'All', request without zone param to return all regions
+            if (zone !== 'All') params.zone = zone;
+            $.ajax({
+                url: '../../../fetch/zoning/get_region-code.php',
+                type: 'GET',
+                data: params,
+                dataType: 'json',
+                success: function(result) {
+                    if (result && result.success === true && Array.isArray(result.data)) {
+                        const select = $('#region_filter');
+
+                        // Keep only the first placeholder option, then append fetched regions.
+                        const placeholder = select.find('option').first();
+                        select.find('option').not(':first').remove();
+
+                        // Determine special modes
+                        const singleZoneAllList = ['VIS','MIN','LZN','NCR'];
+                        const isSingleZoneAll = (zone && singleZoneAllList.indexOf(zone) !== -1);
+                        const isGlobalAll = (zone === 'All' && currentMainzone === 'All');
+
+                        if (isSingleZoneAll) {
+                            // insert All immediately after placeholder
+                            if (select.find('option[value="All"]').length === 0) {
+                                placeholder.after(new Option('All', 'All'));
+                            } else {
+                                const allOpt = select.find('option[value="All"]').remove();
+                                placeholder.after(allOpt);
+                            }
+                        }
+                        if (isGlobalAll) {
+                            // ensure All exists immediately after placeholder for global All
+                            if (select.find('option[value="All"]').length === 0) {
+                                placeholder.after(new Option('All', 'All'));
+                            }
+                        }
+
+                        result.data.forEach(item => {
+                            let val = null;
+                            let label = null;
+                            if (typeof item === 'string') {
+                                val = item;
+                                label = item;
+                            } else if (item && item.region_code) {
+                                val = item.region_code;
+                                // Show only region_description as label when available
+                                label = (item.region_description && item.region_description.length) ? item.region_description : item.region_code;
+                            } else if (item && item.name) {
+                                val = item.name;
+                                label = item.name;
+                            } else if (item && item.value) {
+                                val = item.value;
+                                label = item.value;
+                            }
+                                if (val) {
+                                    select.append(new Option(label, val));
+                                }
+                        });
+
+                            if (isGlobalAll) {
+                                // after all regions, append showroom entries for all mainzones
+                                select.append(new Option('LUZON SHOWROOM', 'LZN'));
+                                select.append(new Option('NCR SHOWROOM', 'NCR'));
+                                select.append(new Option('VISAYAS SHOWROOM', 'VIS'));
+                                select.append(new Option('MINDANAO SHOWROOM', 'MIN'));
+                            }
+                    } else {
+                        console.error('Error loading regions: Invalid response format', result);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading regions:', { xhr: xhr, status: status, error: error });
+                }
+            });
+        }
+        // Initial run to set correct placeholder state on page load
+        let initialZone = $('#zone_filter').val();
+        if (initialZone === 'Select Zone') initialZone = '';
+        loadRegions(initialZone);
+
+        // Reload regions whenever zone changes
+        $('#zone_filter').on('change', function() {
+            let z = $(this).val();
+            // normalize placeholder text value
+            if (z === 'Select Zone') z = '';
+            console.debug('zone changed ->', z);
+            loadRegions(z);
+            // reset branch dropdown and reload branches filtered by zone
+            const branchSelect = $('#branchDropdown');
+            branchSelect.find('option').not(':first').remove();
+            try { branchSelect.val(null).trigger('change'); } catch (e) { /* ignore */ }
+            let mz = $('#mainzone_filter').val();
+            if (mz === 'Select Mainzone') mz = '';
+            loadBranches(mz, z, '');
+        });
+        // If zone is a Select2 control, also handle select2:select
+        $('#zone_filter').on('select2:select', function(e) {
+            let z = $(this).val();
+            if (z === 'Select Zone') z = '';
+            console.debug('zone select2:select ->', z, e);
+            loadRegions(z);
+            // reset branch dropdown and reload branches filtered by zone
+            const branchSelect = $('#branchDropdown');
+            branchSelect.find('option').not(':first').remove();
+            try { branchSelect.val(null).trigger('change'); } catch (e) { /* ignore */ }
+            let mz = $('#mainzone_filter').val();
+            if (mz === 'Select Mainzone') mz = '';
+            loadBranches(mz, z, '');
+        });
+    });
+</script>
+
+<!-- Include for branch dropdown -->
+<script>
+    $(document).ready(function() {
+        // Initialize Select2 for branch dropdown
+        $('#branchDropdown').select2({
+            placeholder: 'Search or select a Branch...',
+            allowClear: true
+        });
+
+        // Keep dropdown behavior stable: close immediately after choosing a partner.
+        // Keep dropdown behavior stable: close immediately after choosing branch (like partner)
+        $('#branchDropdown').on('select2:select', function() {
+            $(this).select2('close');
+        });
+
+        // Load branches for current filters and bind to region changes
+        function loadBranches(mainzone, zone, region) {
+            const select = $('#branchDropdown');
+
+            // Normalize: treat empty strings and placeholder texts as no selection
+            const mainzoneSet = mainzone && mainzone !== '' && mainzone !== 'Select Mainzone';
+            const zoneSet = zone && zone !== '' && zone !== 'Select Zone';
+            const regionSet = region && region !== '' && region !== 'Select Region';
+
+            // clear non-placeholder options
+            select.find('option:not(:first)').remove();
+            // reset Select2 value to placeholder
+            try {
+                select.val(null).trigger('change');
+            } catch (e) { /* ignore */ }
+
+            // If no parent filter has a real selection, skip the AJAX call entirely
+            if (!mainzoneSet && !zoneSet && !regionSet) {
+                return;
+            }
+
+            // Only show "All" option if at least one parent filter has a real selection
+            if (mainzoneSet || zoneSet || regionSet) {
+                select.append(new Option('All', 'All'));
+            }
+
+            const params = {};
+            if (mainzoneSet) params.mainzone = mainzone;
+            if (zoneSet) params.zone = zone;
+            if (regionSet) params.region = region;
+
+            $.ajax({
+                url: '../../../fetch/zoning/get_branch.php',
+                type: 'GET',
+                data: params,
+                dataType: 'json',
+                success: function(res) {
+                    console.debug('get_branch response:', res);
+                    if (res && res.success === true && Array.isArray(res.data) && res.data.length) {
+                        // append options then refresh Select2
+                        res.data.forEach(b => {
+                            if (b && b.branch_id && b.branch_name) {
+                                select.append(new Option(b.branch_name, b.branch_id));
+                            }
+                        });
+                        try {
+                            // Re-render options while preserving clear-button behavior.
+                            select.trigger('change.select2');
+                            if (select.data('select2')) {
+                                select.select2('destroy');
+                            }
+                            select.select2({
+                                placeholder: 'Search or select a Branch...',
+                                allowClear: true
+                            });
+                        } catch (e) { /* ignore */ }
+                    } else {
+                        console.warn('No branches returned for params', params, res);
+                    }
+                },
+                error: function(xhr, status, err) { console.error('Branch request failed', status, err, xhr && xhr.responseText); }
+            });
+        }
+
+        // Initial load and on region change
+        const initialMainzone = $('#mainzone_filter').val();
+        const initialZone = $('#zone_filter').val();
+        const initialRegion = $('#region_filter').val();
+        loadBranches(initialMainzone, initialZone, initialRegion);
+
+        $('#region_filter').on('change select2:select', function() {
+            let mz = $('#mainzone_filter').val();
+            let z = $('#zone_filter').val();
+            let r = $(this).val();
+            if (mz === 'Select Mainzone') mz = '';
+            if (z === 'Select Zone') z = '';
+            if (r === 'Select Region') r = '';
+
+            const branchSelect = $('#branchDropdown');
+
+            // When region is reset to placeholder, clear branch dropdown completely (no All)
+            if (r === '' || (mz === '' && z === '')) {
+                branchSelect.find('option').not(':first').remove();
+                try { branchSelect.val(null).trigger('change'); } catch (e) { /* ignore */ }
+            } else {
+                loadBranches(mz, z, r);
+            }
+        });
+    });
+</script>
+
+<!-- display Data Table Result -->
 <script>
 $(document).ready(function() {
-    // Initialize Select2 for partner dropdown
-    $('#partnerlistDropdown').select2({
-        placeholder: 'Search or select a Partner...',
-        allowClear: true
-    });
-    $('#branchDropdown').select2({
-        placeholder: 'Search or select a Branch Name...',
-        allowClear: true
-    });
-    
-    // Initialize variables
-    let currentPage = 1;
-    let rowsPerPage = 10;
-    
-    // Event handlers
-    $('#searchButton').click(function() {
-        // Validate required fields before searching
-        if (validateRequiredFields()) {
-            currentPage = 1;
-            loadTransactionData();
-        }
-    });
-    
-    // Add Enter key handler for search input
-    $('#search_input').keypress(function(e) {
-        if (e.which === 13) { // Enter key
-            $('#searchButton').click();
-        }
+    // Trigger search on button click
+    $('#searchButton').off('click').on('click', function() {
+        $('#clearButton').show();
+        setActionButtonsCompact(true);
+        fetchTransactionData(1);
     });
 
-    // Hide hint and results when search input is cleared
-    $('#search_input').on('input', function() {
-        if ($(this).val().trim() === '') {
-            $('.card-body').hide();
-            $('#transactionReportTable tbody').empty();
-            updateTotalsFromServer({ principal: '0.00', partner: '0.00', customer: '0.00' });
-            $('#searchHint').hide();
-        }
+    // Trigger search on rows per page change
+    $('#rowsPerPage').off('change').on('change', function() {
+        fetchTransactionData(1);
     });
-    
-    // Add Export button click handler
-    $('#ExportButton').click(function() {
+
+    // Export button click handler
+    $('#ExportButton').off('click').on('click', function() {
         showExportModal();
     });
-    
-    $('#rowsPerPage').change(function() {
-        rowsPerPage = parseInt($(this).val());
-        currentPage = 1;
-        loadTransactionData();
-    });
-    
-    // Pagination click handler
-    $(document).on('click', '.page-link', function(e) {
-        e.preventDefault();
-        const page = parseInt($(this).data('page'));
-        if (page && page !== currentPage && !isNaN(page)) {
-            currentPage = page;
-            loadTransactionData();
-        }
-    });
-    
-    // Add double-click event handler for table rows
-    $(document).on('dblclick', '.transaction-row', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const rowIndex = $(this).data('row-index');
-        
-        if (window.currentTableData && window.currentTableData[rowIndex]) {
-            const rowData = window.currentTableData[rowIndex];
-            showTransactionModal(rowData);
-        }
-    });
-    
-    // Function to validate required fields
-    function validateRequiredFields() {
-        let isValid = true;
-        
-        // Validate partner selection
-        const partner = $('#partnerlistDropdown').val();
-        if (!partner || partner === '') {
-            // Add visual feedback to Select2 dropdown
-            $('#partnerlistDropdown').next('.select2-container').addClass('is-invalid');
-            showAlert('Validation Error', 'Please select a partner.', 'error');
-            isValid = false;
-        } else {
-            $('#partnerlistDropdown').next('.select2-container').removeClass('is-invalid');
-        }
-        
-        // Validate start date
-        const startDate = $('#start_date').val();
-        if (!startDate) {
-            $('#start_date').addClass('is-invalid');
-            if (isValid) { // Only show one error at a time
-                showAlert('Validation Error', 'Please select a start date.', 'error');
-            }
-            isValid = false;
-        } else {
-            $('#start_date').removeClass('is-invalid');
-        }
-        
-        // Validate end date
-        const endDate = $('#end_date').val();
-        if (!endDate) {
-            $('#end_date').addClass('is-invalid');
-            if (isValid) { // Only show one error at a time
-                showAlert('Validation Error', 'Please select an end date.', 'error');
-            }
-            isValid = false;
-        } else {
-            $('#end_date').removeClass('is-invalid');
-        }
-        
-        // Validate date range (end date should not be before start date)
-        if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-            $('#end_date').addClass('is-invalid');
-            if (isValid) {
-                showAlert('Validation Error', 'End date cannot be before start date.', 'error');
-            }
-            isValid = false;
-        }
-        
-        return isValid;
-    }
-    
-    // Clear validation styling when user changes the input
-    $('#start_date, #end_date').change(function() {
-        $(this).removeClass('is-invalid');
-    });
-    
-    // Clear validation styling when partner selection changes
-    $('#partnerlistDropdown').change(function() {
-        $('#partnerlistDropdown').next('.select2-container').removeClass('is-invalid');
+
+    $('#clearButton').off('click').on('click', function() {
+        $(this).hide();
+        setActionButtonsCompact(false);
+        clearReportFiltersAndResults();
     });
 
-    // Function to show export modal
+    function setActionButtonsCompact(isCompact) {
+        $('.filter-action-buttons').toggleClass('is-compact', isCompact);
+        if (isCompact) {
+            $('#searchButton').html('<i class="fas fa-search"></i> Search').removeAttr('title');
+            $('#clearButton').html('<i class="fas fa-eraser"></i> Clear').removeAttr('title');
+            $('#ExportButton').html('<i class="fas fa-download"></i> Export To').removeAttr('title');
+        } else {
+            $('#searchButton').html('<i class="fas fa-search"></i> Search').removeAttr('title');
+            $('#clearButton').html('<i class="fas fa-eraser"></i> Clear').removeAttr('title');
+            $('#ExportButton').html('<i class="fas fa-download"></i> Export To').removeAttr('title');
+        }
+    }
+
+    // Format currency
+    function formatCurrency(value) {
+        const num = parseFloat(value) || 0;
+        return '₱' + num.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatAmount(value) {
+        const num = Math.abs(parseFloat(value) || 0);
+        return num.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatSummaryAmount(value) {
+        const num = parseFloat(value) || 0;
+        return num.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function createSummaryBucket() {
+        return {
+            volume: 0,
+            principal: 0,
+            chargePartner: 0,
+            chargeCustomer: 0,
+            totalCharge: 0
+        };
+    }
+
+    function applySummaryBucket(prefix, bucket) {
+        $('#' + prefix + 'Volume').text(bucket.volume.toLocaleString('en-PH'));
+        $('#' + prefix + 'Principal').text(formatSummaryAmount(bucket.principal));
+        $('#' + prefix + 'ChargePartner').text(formatSummaryAmount(bucket.chargePartner));
+        $('#' + prefix + 'ChargeCustomer').text(formatSummaryAmount(bucket.chargeCustomer));
+        $('#' + prefix + 'TotalCharge').text(formatSummaryAmount(bucket.totalCharge));
+    }
+
+    function renderSummaryResults(summaryData) {
+        const summary = summaryData && summaryData.summary ? summaryData.summary : createSummaryBucket();
+        const adjustment = summaryData && summaryData.adjustment ? summaryData.adjustment : createSummaryBucket();
+        const net = summaryData && summaryData.net ? summaryData.net : {
+            volume: 0,
+            principal: 0,
+            chargePartner: 0,
+            chargeCustomer: 0,
+            totalCharge: 0,
+            settlementAmount: 0
+        };
+
+        applySummaryBucket('summary', summary);
+        applySummaryBucket('adjustment', adjustment);
+        applySummaryBucket('net', net);
+        $('#netSettlementAmount').text(formatSummaryAmount(net.settlementAmount || 0));
+    }
+
+    // Escape HTML to prevent XSS
+    function esc(str) {
+        if (str === null || str === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = String(str);
+        return div.innerHTML;
+    }
+
+    // Format MySQL datetime to "January 01, 2026"
+    function formatDisplayDate(dt) {
+        if (!dt) return '';
+        const d = new Date(dt.replace(' ', 'T'));
+        if (isNaN(d.getTime())) return dt;
+        const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+        return months[d.getMonth()] + ' ' + String(d.getDate()).padStart(2, '0') + ', ' + d.getFullYear();
+    }
+
+    function clearReportFiltersAndResults() {
+        $('#partnerlistDropdown').val(null).trigger('change');
+        $('#start_date, #end_date, #search_input').val('');
+        $('#post_transaction_filter, #status_filter, #source_file_filter').val('All');
+        $('#mainzone_filter').val('').trigger('change');
+        $('#zone_filter').html('<option value="">Select Zone</option><option value="All">All</option>').val('');
+        $('#region_filter').html('<option value="">Select Region</option><option value="All">All</option>').val('');
+        $('#branchDropdown').html('<option value="">Select Branch Name</option><option value="All">All</option>').val(null).trigger('change');
+
+        $('#transactionReportTable tbody').empty();
+        renderSummaryResults([]);
+        $('#pagination').empty();
+        $('#pagination-info').text('Showing 0 to 0');
+        $('#rowsPerPage').val('15');
+        $('#searchHint, #ExportButton, #clearButton').hide();
+        setActionButtonsCompact(false);
+        $('#transactionReportTable').closest('.card-body').hide();
+    }
+
+    function fetchTransactionData(page) {
+        const start_date = $('#start_date').val() || '';
+        const end_date = $('#end_date').val() || '';
+        const partner = $('#partnerlistDropdown').val() || '';
+        const post_transaction = $('#post_transaction_filter').val() || '';
+        const status = $('#status_filter').val() || '';
+        const source_file = $('#source_file_filter').val() || '';
+        const mainzone = $('#mainzone_filter').val() || '';
+        const zone = $('#zone_filter').val() || '';
+        const region = $('#region_filter').val() || '';
+        const branch = $('#branchDropdown').val() || '';
+        const search = $('#search_input').val() || '';
+        const rows_per_page = parseInt($('#rowsPerPage').val()) || 15;
+
+        // Show loading state
+        $('#loading-overlay').removeClass('d-none').addClass('d-flex');
+        $('#searchButton').prop('disabled', true);
+
+        $.ajax({
+            url: window.location.pathname,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'get_transaction_data',
+                start_date: start_date,
+                end_date: end_date,
+                partner: partner,
+                post_transaction: post_transaction,
+                status: status,
+                source_file: source_file,
+                mainzone: mainzone,
+                zone: zone,
+                region: region,
+                branch: branch,
+                search: search,
+                page: page,
+                rows_per_page: rows_per_page
+            },
+            success: function(response) {
+                if (response.success) {
+                    updateReportDateText(start_date, end_date);
+                    renderSummaryResults(response.summary);
+                    renderTable(response.data);
+                    renderPagination(response.pagination);
+                    $('.card-body').show();
+                    $('#searchHint').show();
+                } else {
+                    Swal.fire('Error', response.error || 'Failed to fetch data', 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Search error:', { xhr, status, error });
+                Swal.fire('Error', 'Failed to fetch transaction data.', 'error');
+            },
+            complete: function() {
+                $('#loading-overlay').removeClass('d-flex').addClass('d-none');
+                $('#searchButton').prop('disabled', false);
+            }
+        });
+    }
+
+    function formatReportDate(rawDate) {
+        if (!rawDate) return '';
+        const d = new Date(rawDate + 'T00:00:00');
+        if (isNaN(d.getTime())) return rawDate;
+        const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+        return months[d.getMonth()] + ' ' + String(d.getDate()).padStart(2, '0') + ', ' + d.getFullYear();
+    }
+
+    function updateReportDateText(startDate, endDate) {
+        const start = formatReportDate(startDate);
+        const end = formatReportDate(endDate);
+        let text = '';
+
+        if (startDate && endDate) {
+            text = (startDate === endDate) ? start : (start + ' to ' + end);
+        } else if (startDate) {
+            text = start;
+        } else if (endDate) {
+            text = end;
+        }
+
+        $('#reportDateValue').text(text);
+    }
+
+    function renderTable(data) {
+        const tbody = $('#transactionReportTable tbody');
+        tbody.empty();
+
+        if (!data || data.length === 0) {
+            tbody.html('<tr><td colspan="15" class="text-center text-muted py-4">No records found.</td></tr>');
+            $('#ExportButton').hide();
+            return;
+        }
+        $('#ExportButton').show();
+
+        $.each(data, function(i, row) {
+            const partnerName = row.sub_billers_name || row.partner_name || '-';
+            const kp7Id = row.partner_id || '-';
+            const kpxId = row.partner_id_kpx || '-';
+            const source = row.source_file || '-';
+            const statusText = (row.status === null || row.status === '') ? 'Active' : (row.status === 'cancelled' || row.status === '*') ? 'Cancelled' : row.status;
+            const postStatus = row.post_transaction || '';
+            const postLabel = postStatus === 'posted' ? 'Posted' : (postStatus === 'unposted' ? 'Unposted' : '-');
+
+            const tr = $('<tr class="transaction-row"></tr>');
+            tr.html(
+                '<td class="text-center text-truncate" style="max-width:120px;">' + esc(formatDisplayDate(row.datetime) || '-') + '</td>' +
+                '<td class="text-center text-truncate" style="max-width:120px;">' + esc(formatDisplayDate(row.cancellation_date) || '-') + '</td>' +
+                '<td class="text-center text-truncate" style="max-width:150px;">' + esc(row.reference_no || '-') + '</td>' +
+                '<td class="text-center text-truncate">' + esc(row.branch_id || '-') + '</td>' +
+                '<td class="text-truncate" style="max-width:150px;">' + esc(row.outlet || '-') + '</td>' +
+                '<td class="text-center text-truncate">' + esc(source) + '</td>' +
+                '<td class="text-truncate" style="max-width:160px;">' + esc(partnerName) + '</td>' +
+                '<td class="text-center text-truncate">' + esc(kp7Id) + '</td>' +
+                '<td class="text-center text-truncate">' + esc(kpxId) + '</td>' +
+                '<td class="text-end text-truncate">' + formatAmount(row.amount_paid || 0) + '</td>' +
+                '<td class="text-end text-truncate">' + formatAmount(row.charge_to_partner || 0) + '</td>' +
+                '<td class="text-end text-truncate">' + formatAmount(row.charge_to_customer || 0) + '</td>' +
+                '<td class="text-center text-truncate" style="max-width:120px;">' + esc(row.billing_invoice || '-') + '</td>' +
+                '<td class="text-center text-truncate">' + (postLabel === 'Posted' ? '<span class="badge bg-success text-white">Posted</span>' : (postLabel === 'Unposted' ? '<span class="badge bg-warning text-dark">Unposted</span>' : esc(postLabel))) + '</td>' +
+                '<td class="text-center"><span class="badge ' + (statusText === 'Active' ? 'bg-success' : 'bg-danger') + '">' + esc(statusText) + '</span></td>'
+            );
+
+            // Double click to open modal
+            tr.off('dblclick').on('dblclick', function() {
+                openTransactionModal(row);
+            });
+
+            tbody.append(tr);
+        });
+    }
+
+    function renderPagination(pagination) {
+        const ul = $('#pagination');
+        ul.empty();
+
+        if (!pagination || pagination.total_pages <= 0) {
+            $('#pagination-info').text('Showing 0 to 0');
+            return;
+        }
+
+        const { current_page, total_pages, total_records, start_record, end_record } = pagination;
+        const maxVisible = 5;
+
+        $('#pagination-info').text(
+            'Showing ' + start_record + ' to ' + end_record
+        );
+
+        // Previous button
+        ul.append(
+            '<li class="page-item ' + (current_page <= 1 ? 'disabled' : '') + '">' +
+            '<a class="page-link" href="#" data-page="' + (current_page - 1) + '">&laquo;</a></li>'
+        );
+
+        // Page numbers
+        let startPage = Math.max(1, current_page - Math.floor(maxVisible / 2));
+        let endPage = Math.min(total_pages, startPage + maxVisible - 1);
+        startPage = Math.max(1, endPage - maxVisible + 1);
+
+        if (startPage > 1) {
+            ul.append('<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>');
+            if (startPage > 2) ul.append('<li class="page-item disabled"><a class="page-link" href="#">...</a></li>');
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            ul.append(
+                '<li class="page-item ' + (i === current_page ? 'active' : '') + '">' +
+                '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>'
+            );
+        }
+
+        if (endPage < total_pages) {
+            if (endPage < total_pages - 1) ul.append('<li class="page-item disabled"><a class="page-link" href="#">...</a></li>');
+            ul.append('<li class="page-item"><a class="page-link" href="#" data-page="' + total_pages + '">' + total_pages + '</a></li>');
+        }
+
+        // Next button
+        ul.append(
+            '<li class="page-item ' + (current_page >= total_pages ? 'disabled' : '') + '">' +
+            '<a class="page-link" href="#" data-page="' + (current_page + 1) + '">&raquo;</a></li>'
+        );
+
+        // Page click handler
+        ul.off('click', '.page-link').on('click', '.page-link', function(e) {
+            e.preventDefault();
+            const page = parseInt($(this).data('page'));
+            if (page && page > 0) fetchTransactionData(page);
+        });
+    }
+
+    function openTransactionModal(row) {
+        const formatDate = function(dt) {
+            if (!dt) return '<span class="text-muted">—</span>';
+            const formatted = formatDisplayDate(dt);
+            return formatted ? esc(formatted) : esc(dt);
+        };
+
+        const formatVal = function(v) {
+            if (v === null || v === undefined || v === '') return '<span class="text-muted">—</span>';
+            return esc(v);
+        };
+
+        const statusText = (row.status === null || row.status === '') ? 'Active' : (row.status === 'cancelled' || row.status === '*') ? 'Cancelled' : esc(row.status);
+        const postStatus = row.post_transaction || '';
+        const postLabel = postStatus === 'posted' ? '<span class="badge bg-success text-white">Posted</span>' : (postStatus === 'unposted' ? '<span class="badge bg-warning text-dark">Unposted</span>' : '<span class="text-muted">—</span>');
+
+        $('#modal-cad-status').html(postLabel);
+        $('#modal-source-file').html(formatVal(row.source_file || ''));
+        $('#modal-datetime').html(formatDate(row.datetime));
+        $('#modal-cancelled-date').html(formatDate(row.cancellation_date));
+        $('#modal-reference-no').html(formatVal(row.reference_no));
+        $('#modal-control-number').html(formatVal(row.control_no));
+        $('#modal-billing-invoice').html(formatVal(row.billing_invoice));
+        $('#modal-status').html('<span class="badge ' + (statusText === 'Active' ? 'bg-success' : 'bg-danger') + '">' + esc(statusText) + '</span>');
+
+        // Branch info
+        (function() {
+            const zc = row.zone_code || '';
+            let mz = '';
+            if (zc === 'VIS' || zc === 'MIN') mz = 'VISMIN';
+            else if (zc === 'NCR' || zc === 'LZN') mz = 'LNCR';
+            $('#modal-mainzone').html(formatVal(mz));
+        })();
+        $('#modal-zone-code').html(formatVal(row.zone_code || ''));
+        $('#modal-region-code').html(formatVal(row.region_code || ''));
+        $('#modal-region-name').html(formatVal(row.region || ''));
+        $('#modal-outlet').html(formatVal(row.outlet || ''));
+        $('#modal-branch-id').html(formatVal(row.branch_id || ''));
+        $('#modal-branch-code').html(formatVal(row.branch_code || ''));
+
+        // Partner info
+        $('#modal-partner-name').html(formatVal(row.partner_name || ''));
+        $('#modal-partner-id').html(formatVal(row.partner_id || ''));
+        $('#modal-partner-id-kpx').html(formatVal(row.partner_id_kpx || ''));
+        $('#modal-gl-code').html(formatVal(row.mpm_gl_code || ''));
+        $('#modal-gl-description').html(formatVal(row.gl_description || ''));
+
+        // Payor info
+        $('#modal-payor-name').html(formatVal(row.payor || ''));
+        $('#modal-account-number').html(formatVal(row.account_no || ''));
+        $('#modal-account-name').html(formatVal(row.account_name || ''));
+        $('#modal-address').html(formatVal(row.address || ''));
+        $('#modal-contact-number').html(formatVal(row.contact_no || ''));
+        $('#modal-operator').html(formatVal(row.operator || ''));
+        $('#modal-remote-branch').html(formatVal(row.remote_branch || ''));
+        $('#modal-remote-operator').html(formatVal(row.remote_operator || ''));
+        $('#modal-second-approver').html(formatVal(row['2nd_approver'] || ''));
+
+        // Personnel / Upload info
+        $('#modal-uploaded-by').html(formatVal(row.imported_by || ''));
+        $('#modal-uploaded-date').html(formatDate(row.imported_date || ''));
+
+        // Financial amounts
+        $('#modal-amount-paid').text(formatCurrency(row.amount_paid || 0));
+        $('#modal-charge-partner').text(formatCurrency(row.charge_to_partner || 0));
+        $('#modal-charge-customer').text(formatCurrency(row.charge_to_customer || 0));
+
+        // Open modal
+        const modalEl = document.getElementById('transactionDetailsModal');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    }
+
+    // Show export modal with SweetAlert2
     function showExportModal() {
         Swal.fire({
             title: 'Export Report',
@@ -1265,40 +2135,34 @@ $(document).ready(function() {
                 denyButton: 'btn btn-success me-2',
             },
             buttonsStyling: false
-        }).then((result) => {
+        }).then(function(result) {
             if (result.isConfirmed) {
-                // PDF Format selected
                 exportToPDF();
             } else if (result.isDenied) {
-                // CSV Format selected
                 exportToCSV();
             }
-            // If cancelled, do nothing
         });
     }
-    
-    // Function to export to PDF
+
+    // Export to PDF (placeholder)
     function exportToPDF() {
-        showLoading();
-        // Add your PDF export logic here
-        setTimeout(() => {
-            hideLoading();
+        $('#loading-overlay').removeClass('d-none').addClass('d-flex');
+        setTimeout(function() {
+            $('#loading-overlay').removeClass('d-flex').addClass('d-none');
             Swal.fire({
                 title: 'PDF Export',
                 text: 'PDF export functionality is under development.',
-                // text: 'PDF export functionality will be implemented here.',
                 icon: 'info',
                 confirmButtonText: 'OK'
             });
         }, 1000);
     }
-    
-    // Function to export to CSV (updated)
+
+    // Export to CSV
     function exportToCSV() {
-        showLoading();
-        
-        // Get current filter values
-        const formData = {
+        $('#loading-overlay').removeClass('d-none').addClass('d-flex');
+
+        var formData = {
             partner: $('#partnerlistDropdown').val() || '',
             start_date: $('#start_date').val() || '',
             end_date: $('#end_date').val() || '',
@@ -1311,28 +2175,25 @@ $(document).ready(function() {
             branch: $('#branchDropdown').val() || '',
             search: $('#search_input').val() || ''
         };
-        
-        // Build query string
-        const queryParams = new URLSearchParams();
-        Object.keys(formData).forEach(key => {
+
+        var queryParams = new URLSearchParams();
+        Object.keys(formData).forEach(function(key) {
             if (formData[key]) {
                 queryParams.append(key, formData[key]);
             }
         });
-        
-        // Create download URL
-        const exportUrl = '../../../models/generate/excel/generate-excel-transaction-report.php?' + queryParams.toString();
-        
-        // Create a temporary link and trigger download
-        const link = document.createElement('a');
+
+        var exportUrl = '../../../models/generate/excel/generate-excel-transaction-report.php?' + queryParams.toString();
+
+        var link = document.createElement('a');
         link.href = exportUrl;
         link.download = 'Transaction_Report_' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.csv';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
-        hideLoading();
-        
+
+        $('#loading-overlay').removeClass('d-flex').addClass('d-none');
+
         Swal.fire({
             title: 'Export Started',
             text: 'Your CSV file is being downloaded.',
@@ -1342,435 +2203,6 @@ $(document).ready(function() {
             timerProgressBar: true
         });
     }
-    
-    // Main function to load transaction data
-    function loadTransactionData() {
-        showLoading();
-        
-        const formData = {
-            action: 'get_transaction_data',
-            partner: $('#partnerlistDropdown').val() || '',
-            start_date: $('#start_date').val() || '',
-            end_date: $('#end_date').val() || '',
-            post_transaction: $('#post_transaction_filter').val() || '',
-            status: $('#status_filter').val() || '',
-            source_file: $('#source_file_filter').val() || '',
-            mainzone: $('#mainzone_filter').val() || '',
-            zone: $('#zone_filter').val() || '',
-            region: $('#region_filter').val() || '',
-            branch: $('#branchDropdown').val() || '',
-            search: $('#search_input').val() || '',
-            page: currentPage,
-            rows_per_page: rowsPerPage
-        };
-        
-        $.ajax({
-            url: window.location.href,
-            type: 'POST',
-            data: formData,
-            dataType: 'json',
-            timeout: 30000,
-            success: function(response) {
-                hideLoading();
-
-                if (response && response.success) {
-                    var rows = response.data || [];
-                    populateTable(rows);
-                    updatePagination(response.pagination || {});
-                    updateTotalsFromServer(response.totals || {});
-                    $('.card-body').show();
-                    if (Array.isArray(rows) && rows.length > 0) {
-                        $('#searchHint').show();
-                    } else {
-                        $('#searchHint').hide();
-                    }
-                } else {
-                    showAlert('Error', response.error || 'Failed to load transaction data', 'error');
-                    $('.card-body').hide();
-                    $('#searchHint').hide();
-                }
-            },
-            error: function(xhr, status, error) {
-                hideLoading();
-                
-                let errorMessage = 'Failed to load transaction data';
-                if (xhr.responseText) {
-                    if (xhr.responseText.includes('Fatal error') || xhr.responseText.includes('Parse error')) {
-                        errorMessage = 'Server error occurred. Please check the logs.';
-                    } else if (xhr.responseText.includes('Connection failed')) {
-                        errorMessage = 'Database connection failed.';
-                    }
-                }
-                
-                showAlert('Error', errorMessage, 'error');
-                $('.card-body').hide();
-            }
-        });
-    }
-    
-    // Function to populate table with data
-    function populateTable(data) {
-        const tbody = $('#transactionReportTable tbody');
-        tbody.empty();
-        
-        if (!Array.isArray(data) || data.length === 0) {
-            tbody.append('<tr><td colspan="17" class="text-center">No data found</td></tr>');
-            return;
-        }
-        
-        data.forEach(function(row, index) {
-            const cadStatusBadge = getStatusBadge(row.post_transaction);
-            const transactionStatusBadge = getTransactionStatusBadge(row.status);
-            const partner_name_raw = row.sub_billers_name && row.sub_billers_name.toString().trim() !== ''
-                ? row.sub_billers_name
-                : row.partner_name;
-            
-            const tr = `
-                <tr class="transaction-row" data-row-index="${index}" style="cursor: pointer;">
-                    <td>${escapeHtml(row.billing_invoice || '-')}</td>
-                    <td>${formatDate(row.datetime) || '-'}</td>
-                    <td>${formatDate(row.cancellation_date) || '-'}</td>
-                    <td>${escapeHtml(row.reference_no || '-')}</td>
-                    <td>${escapeHtml(row.branch_id || '-')}</td>
-                    <td class="text-truncate">${escapeHtml(row.outlet || '-')}</td>
-                    <td>${escapeHtml(row.source_file || '-')}</td>
-                    <td class="text-truncate">${escapeHtml(partner_name_raw || '-')}</td>
-                    <td>${escapeHtml(row.partner_id || '-')}</td>
-                    <td>${escapeHtml(row.partner_id_kpx || '-')}</td>
-                    <td class="text-end">${formatCurrency(row.amount_paid)}</td>
-                    <td class="text-end">${formatCurrency(row.charge_to_partner)}</td>
-                    <td class="text-end">${formatCurrency(row.charge_to_customer)}</td>
-                    <td>${escapeHtml(row.mpm_gl_code || '-')}</td>
-                    <td>${escapeHtml(row.mpm_gl_description || '-')}</td>
-                    <td class="text-center">${cadStatusBadge}</td>
-                    <td class="text-center">${transactionStatusBadge}</td>
-                </tr>
-            `;
-            tbody.append(tr);
-        });
-        
-        // Store the data globally for modal access
-        window.currentTableData = data;
-    }
-
-    // Function to get CAD status badge HTML (existing function)
-    function getStatusBadge(status) {
-        if (!status) return '<span class="badge bg-secondary text-white">-</span>';
-        
-        const statusLower = status.toLowerCase();
-        const statusCapitalized = capitalizeFirstLetter(status);
-        
-        if (statusLower === 'unposted') {
-            return `<span class="badge bg-warning text-dark">${escapeHtml(statusCapitalized)}</span>`;
-        } else if (statusLower === 'posted') {
-            return `<span class="badge bg-success text-white">${escapeHtml(statusCapitalized)}</span>`;
-        } else {
-            // Default for other statuses
-            return `<span class="badge bg-secondary text-white">${escapeHtml(statusCapitalized)}</span>`;
-        }
-    }
-
-    // NEW Function to get Transaction Status badge HTML
-    function getTransactionStatusBadge(status) {
-        if (!status || status === '' || status === null) {
-            // Active status - green/success color
-            return '<span class="badge bg-success text-white">Active</span>';
-        } else if (status === '*') {
-            // Cancelled status - red/danger color
-            return '<span class="badge bg-danger text-white">Cancelled</span>';
-        } else {
-            // Any other status - show as is with secondary color
-            const statusCapitalized = capitalizeFirstLetter(status);
-            return `<span class="badge bg-secondary text-white">${escapeHtml(statusCapitalized)}</span>`;
-        }
-    }
-
-    // Function to show transaction details modal (updated to use new status function)
-    function showTransactionModal(data) {
-        // Populate modal with data - Basic Information
-        $('#modal-reference-no').text(data.reference_no || '-');
-        $('#modal-status').html(getTransactionStatusBadge(data.status || ''));
-        $('#modal-cad-status').html(getStatusBadge(data.post_transaction));
-        $('#modal-source-file').text(data.source_file || '-');
-        $('#modal-datetime').text(formatDate(data.datetime) || '-');
-        $('#modal-cancelled-date').text(formatDate(data.cancellation_date) || '-');
-        $('#modal-billing-invoice').text(data.billing_invoice || '-');
-        if (data.zone_code === 'VIS' || data.zone_code === 'MIN') {
-            $('#modal-mainzone').text('VISMIN' || '-');
-        } else if (data.zone_code === 'LZN' || data.zone_code === 'NCR') {
-            $('#modal-mainzone').text('LNCR' || '-');
-        }
-        $('#modal-zone-code').text(data.zone_code || '-');
-        $('#modal-zone-code').text(data.zone_code || '-');
-        $('#modal-region-code').text(data.region_code || '-');
-        $('#modal-region-name').text(data.region || '-');
-        $('#modal-branch-code').text(data.branch_code || '-');
-        $('#modal-branch-id').text(data.branch_id || '-');
-        $('#modal-outlet').text(data.outlet || '-');
-        $('#modal-source-file').text(data.source_file || '-');
-        $('#modal-partner-name').text(data.partner_name || '-');
-        $('#modal-partner-id').text(data.partner_id || '-');
-        $('#modal-partner-id-kpx').text(data.partner_id_kpx || '-');
-        $('#modal-gl-code').text(data.mpm_gl_code || '-');
-        $('#modal-gl-description').text(data.mpm_gl_description || '-');
-        $('#modal-control-number').text(data.control_no || '-');
-        $('#modal-payor-name').text(data.payor || '-');
-        $('#modal-account-number').text(data.account_no || '-');
-        $('#modal-account-name').text(data.account_name || '-');
-        $('#modal-address').text(data.address || '-');
-        $('#modal-contact-number').text(data.contact_no || '-');
-        $('#modal-operator').text(data.operator || '-');
-        $('#modal-remote-branch').text(data.remote_branch || '-');
-        $('#modal-remote-operator').text(data.remote_operator || '-');
-        $('#modal-second-approver').text(data['2nd_approver'] || '-');
-        $('#modal-uploaded-by').text(data.imported_by || '-');
-        $('#modal-uploaded-date').text(formatDate(data.imported_date) || '-');
-        $('#modal-amount-paid').text(formatCurrency(data.amount_paid));
-        $('#modal-charge-partner').text(formatCurrency(data.charge_to_partner));
-        $('#modal-charge-customer').text(formatCurrency(data.charge_to_customer));
-        
-        // Show the modal using Bootstrap 5 syntax
-        const modalElement = document.getElementById('transactionDetailsModal');
-        const modal = new bootstrap.Modal(modalElement);
-        modal.show();
-    }
-
-    // Function to get status badge HTML (updated to capitalize first letter)
-    function getStatusBadge(status) {
-        if (!status) return '<span class="badge bg-secondary text-white">-</span>';
-        
-        const statusLower = status.toLowerCase();
-        const statusCapitalized = capitalizeFirstLetter(status);
-        
-        if (statusLower === 'unposted') {
-            return `<span class="badge bg-warning text-dark">${escapeHtml(statusCapitalized)}</span>`;
-        } else if (statusLower === 'posted') {
-            return `<span class="badge bg-success text-white">${escapeHtml(statusCapitalized)}</span>`;
-        } else {
-            // Default for other statuses
-            return `<span class="badge bg-secondary text-white">${escapeHtml(statusCapitalized)}</span>`;
-        }
-    }
-
-    // Add helper function to capitalize first letter
-    function capitalizeFirstLetter(string) {
-        if (!string) return '';
-        return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
-    }
-
-    // Function to update totals from server response (all filtered records)
-    function updateTotalsFromServer(totals) {
-        // Update the footer totals with server-calculated totals
-        $('#totalPrincipalAmount').text(totals.principal || '0.00');
-        $('#totalChargetoPartner').text(totals.partner || '0.00');
-        $('#totalChargetoCustomer').text(totals.customer || '0.00');
-
-        // Check if all totals are 0 and hide/show Export button accordingly
-        const principalAmount = parseFloat(totals.principal) || 0;
-        const partnerAmount = parseFloat(totals.partner) || 0;
-        const customerAmount = parseFloat(totals.customer) || 0;
-        
-        // Hide Export button if all totals are 0, otherwise show it
-        if (principalAmount === 0 && partnerAmount === 0 && customerAmount === 0) {
-            $('#ExportButton').hide();
-        } else {
-            $('#ExportButton').show();
-        }
-    }
-    
-    // Function to update pagination
-    function updatePagination(pagination) {
-        const paginationContainer = $('#pagination');
-        paginationContainer.empty();
-        
-        if (!pagination || !pagination.total_records) {
-            $('#pagination-info').text('Showing 0 to 0 of 0 entries');
-            return;
-        }
-        
-        // Update info text
-        $('#pagination-info').text(
-            `Showing ${pagination.start_record || 0} to ${pagination.end_record || 0} of ${pagination.total_records || 0} entries`
-        );
-        
-        if (pagination.total_pages <= 1) return;
-        
-        // Previous button
-        const prevDisabled = pagination.current_page === 1 ? 'disabled' : '';
-        paginationContainer.append(`
-            <li class="page-item ${prevDisabled}">
-                <a class="page-link" href="#" data-page="${pagination.current_page - 1}">Previous</a>
-            </li>
-        `);
-        
-        // Page numbers
-        const startPage = Math.max(1, pagination.current_page - 2);
-        const endPage = Math.min(pagination.total_pages, pagination.current_page + 2);
-        
-        for (let i = startPage; i <= endPage; i++) {
-            const active = i === pagination.current_page ? 'active' : '';
-            paginationContainer.append(`
-                <li class="page-item ${active}">
-                    <a class="page-link" href="#" data-page="${i}">${i}</a>
-                </li>
-            `);
-        }
-        
-        // Next button
-        const nextDisabled = pagination.current_page === pagination.total_pages ? 'disabled' : '';
-        paginationContainer.append(`
-            <li class="page-item ${nextDisabled}">
-                <a class="page-link" href="#" data-page="${pagination.current_page + 1}">Next</a>
-            </li>
-        `);
-    }
-    
-    // Utility functions
-    function formatDate(dateString) {
-        if (!dateString) return '';
-        const date = new Date(dateString);
-        if (isNaN(date.getTime())) return '';
-        
-        // Format as "F d, Y" (e.g., "January 20, 2026")
-        const options = { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-        };
-        return date.toLocaleDateString('en-US', options);
-    }
-
-    function formatCurrency(amount) {
-        if (!amount || isNaN(amount)) return '0.00';
-        return parseFloat(amount).toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
-    }
-
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    function showLoading() {
-        $('#loading-overlay').removeClass('d-none');
-    }
-    
-    function hideLoading() {
-        $('#loading-overlay').addClass('d-none');
-    }
-    
-    function showAlert(title, message, type) {
-        Swal.fire({
-            title: title,
-            text: message,
-            icon: type,
-            confirmButtonText: 'OK'
-        });
-    }
-
-    // Add cascading dropdown functionality
-    $('#mainzone_filter').change(function() {
-        const selectedMainzone = $(this).val();
-        const zoneDropdown = $('#zone_filter');
-        const regionDropdown = $('#region_filter');
-        const branchDropdown = $('#branchDropdown');
-        
-        // Clear dependent dropdowns
-        zoneDropdown.html('<option value="">Select Zone</option>');
-        regionDropdown.html('<option value="">Select Region</option>');
-        branchDropdown.html('<option value="">Select Branch Name</option>');
-        
-        if (selectedMainzone) {
-            // Fetch zones based on selected mainzone
-            $.ajax({
-                url: window.location.href,
-                type: 'POST',
-                data: {
-                    action: 'get_zones',
-                    mainzone: selectedMainzone
-                },
-                dataType: 'json',
-                success: function(response) {
-                    if (response.success && response.zones) {
-                        response.zones.forEach(function(zone) {
-                            zoneDropdown.append(`<option value="${zone}">${zone}</option>`);
-                        });
-                    }
-                },
-                error: function() {
-                    console.error('Failed to fetch zones');
-                }
-            });
-        }
-    });
-
-    $('#zone_filter').change(function() {
-        const selectedZone = $(this).val();
-        const regionDropdown = $('#region_filter');
-        const branchDropdown = $('#branchDropdown');
-        
-        // Clear dependent dropdowns
-        regionDropdown.html('<option value="">Select Region</option>');
-        branchDropdown.html('<option value="">Select Branch Name</option>');
-        
-        if (selectedZone) {
-            // Fetch regions based on selected zone
-            $.ajax({
-                url: window.location.href,
-                type: 'POST',
-                data: {
-                    action: 'get_regions',
-                    zone: selectedZone
-                },
-                dataType: 'json',
-                success: function(response) {
-                    if (response.success && response.regions) {
-                        response.regions.forEach(function(region) {
-                            regionDropdown.append(`<option value="${region.region_code}">${region.region}</option>`);
-                        });
-                    }
-                },
-                error: function() {
-                    console.error('Failed to fetch regions');
-                }
-            });
-        }
-    });
-
-    $('#region_filter').change(function() {
-        const selectedRegion = $(this).val();
-        const branchDropdown = $('#branchDropdown');
-        
-        // Clear branch dropdown
-        branchDropdown.html('<option value="">Select Branch Name</option>');
-        
-        if (selectedRegion) {
-            // Fetch branches based on selected region
-            $.ajax({
-                url: window.location.href,
-                type: 'POST',
-                data: {
-                    action: 'get_branches',
-                    region: selectedRegion
-                },
-                dataType: 'json',
-                success: function(response) {
-                    if (response.success && response.branches) {
-                        response.branches.forEach(function(branch) {
-                            branchDropdown.append(`<option value="${branch.branch_id}">${branch.branch_name}</option>`);
-                        });
-                    }
-                },
-                error: function() {
-                    console.error('Failed to fetch branches');
-                }
-            });
-        }
-    });
 });
 </script>
 </html>

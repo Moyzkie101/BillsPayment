@@ -39,6 +39,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             $sqlDATE = "(
                         DATE(bt.datetime) BETWEEN '$startDate' AND '$endDate'
                         OR DATE(bt.cancellation_date) BETWEEN '$startDate' AND '$endDate'
+                        OR DATE(report_date) BETWEEN '$startDate' AND '$endDate'
                     )";
         } else {
             // single day
@@ -46,6 +47,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             $sqlDATE = "(
                         DATE(bt.datetime) = '$startDate'
                         OR DATE(bt.cancellation_date) = '$startDate'
+                        OR DATE(report_date) = '$startDate'
                     )";
         }
     } else {
@@ -457,9 +459,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
             $sheet->setCellValue('G' . $row, (float)$totals['summaryPrincipal']);
             $sheet->setCellValue('H' . $row, (float)$totals['summaryCharge']);
             
+            $sheet->setCellValue('I' . $row, (int)$totals['adjustmentVol']);
             $sheet->setCellValue('J' . $row, (float)$totals['adjustmentPrincipal']);
             $sheet->setCellValue('K' . $row, (float)$totals['adjustmentCharge']);
         
+            $sheet->setCellValue('L' . $row, (int)$totals['netVol']);
             $sheet->setCellValue('M' . $row, (float)$totals['netPrincipal']);
             $sheet->setCellValue('N' . $row, (float)$totals['netCharge']);
 

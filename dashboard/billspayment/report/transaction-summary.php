@@ -1,4 +1,10 @@
 <?php
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+
 // Connect to the database
 include '../../../config/config.php';
 require '../../../vendor/autoload.php';
@@ -17,6 +23,295 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 $partnersQuery = "SELECT partner_name FROM masterdata.partner_masterfile ORDER BY partner_name";
 $partnersResult = $conn->query($partnersQuery);
 
+function format_report_date_range($start_date, $end_date) {
+    $formattedStartDate = !empty($start_date) ? date('F d, Y', strtotime($start_date)) : '';
+    $formattedEndDate = !empty($end_date) ? date('F d, Y', strtotime($end_date)) : '';
+
+    if (!empty($formattedStartDate) && !empty($formattedEndDate) && $start_date !== $end_date) {
+        return $formattedStartDate . ' to ' . $formattedEndDate;
+    }
+
+    return $formattedStartDate;
+}
+
+function build_transaction_summary_query($conn, $partner, $start_date, $end_date, $source_file) {
+    $ownerFilterCondition = '';
+    if (!empty($partner) && $partner !== 'All') {
+        $partnerEsc = mysqli_real_escape_string($conn, $partner);
+        if ($partner === 'SECURITY BANK') {
+            $ownerFilterCondition = " AND bt.partner_name = '{$partnerEsc}' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '')";
+        } elseif ($partner === 'MYLORA CORPORATION' || $partner === 'JUNANS MARKETING') {
+            $ownerFilterCondition = " AND bt.sub_billers_name = '{$partnerEsc}'";
+        } else {
+            $ownerFilterCondition = " AND bt.partner_name = '{$partnerEsc}'";
+        }
+    }
+
+    $selectedOwnerCondition = '';
+    if (!empty($partner) && $partner !== 'All') {
+        $selectedOwnerEsc = mysqli_real_escape_string($conn, $partner);
+        $selectedOwnerCondition = " AND ao.owner_name = '{$selectedOwnerEsc}'";
+    }
+
+    $dateCondition = '1=1';
+    // if (!empty($start_date) && !empty($end_date)) {
+    //     $dateCondition = "(DATE(bt.datetime) BETWEEN '$start_date' AND '$end_date' OR DATE(bt.cancellation_date) BETWEEN '$start_date' AND '$end_date')";
+    // } else
+    
+    if (!empty($start_date)) {
+        $dateCondition = "(DATE(bt.datetime) >= '$start_date' OR DATE(bt.cancellation_date) >= '$start_date' OR DATE(report_date) >= '$start_date')";
+    } 
+    if (!empty($end_date)) {
+        $dateCondition = "(DATE(bt.datetime) <= '$end_date' OR DATE(bt.cancellation_date) <= '$end_date' OR DATE(report_date) <= '$end_date')";
+    }
+
+    if (!empty($source_file) && $source_file !== 'All') {
+        $sourceFileEsc = mysqli_real_escape_string($conn, $source_file);
+        $sourceFileCondition = "AND bt.source_file = '{$sourceFileEsc}'";
+    } else {
+        $sourceFileCondition = "AND bt.source_file IN ('KP7', 'KPX')";
+    }
+
+    return "
+        WITH summary_vol AS (
+            SELECT
+                CASE
+                    WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                    WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                    ELSE bt.partner_name
+                END AS owner_name,
+                MAX(bt.sub_billers_name) AS sub_billers_name,
+                COUNT(*) AS vol1,
+                sum(bt.amount_paid) AS principal1,
+                sum(bt.charge_to_partner) AS charge_partner1,
+                sum(bt.charge_to_customer) AS charge_customer1
+            FROM mldb.billspayment_transaction AS bt
+            WHERE $dateCondition
+                AND bt.status IS NULL
+                AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                $sourceFileCondition
+                $ownerFilterCondition
+            GROUP BY
+                CASE
+                    WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                    WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                    ELSE bt.partner_name
+                END
+        ),
+        adjustment_vol AS (
+            SELECT
+                CASE
+                    WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                    WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                    ELSE bt.partner_name
+                END AS owner_name,
+                MAX(bt.sub_billers_name) AS sub_billers_name,
+                COUNT(*) AS vol2,
+                sum(bt.amount_paid) AS principal2,
+                sum(bt.charge_to_partner) AS charge_partner2,
+                sum(bt.charge_to_customer) AS charge_customer2
+            FROM mldb.billspayment_transaction AS bt
+            WHERE $dateCondition
+                AND bt.status = '*'
+                AND NOT bt.branch_id IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
+                $sourceFileCondition
+                $ownerFilterCondition
+            GROUP BY
+                CASE
+                    WHEN bt.sub_billers_name IN ('MYLORA CORPORATION', 'JUNANS MARKETING') THEN bt.sub_billers_name
+                    WHEN bt.partner_name = 'SECURITY BANK' AND (bt.sub_billers_name IS NULL OR bt.sub_billers_name = '') THEN bt.partner_name
+                    ELSE bt.partner_name
+                END
+        ),
+        mpm_details AS (
+            SELECT partner_name, MAX(partner_id) AS partner_id, MAX(partner_id_kpx) AS partner_id_kpx, MAX(gl_code) AS gl_code
+            FROM masterdata.partner_masterfile
+            WHERE status = 'ACTIVE'
+            GROUP BY partner_name
+        ),
+        all_owners AS (
+            SELECT partner_name AS owner_name FROM mpm_details
+            UNION SELECT owner_name FROM summary_vol
+            UNION SELECT owner_name FROM adjustment_vol
+        )
+        SELECT
+            ao.owner_name AS partner_name,
+            mpm.partner_id,
+            mpm.partner_id_kpx,
+            mpm.gl_code,
+            COALESCE(sv.sub_billers_name, av.sub_billers_name) AS sub_billers_name,
+            COALESCE(sv.vol1, 0) AS summary_vol,
+            COALESCE(sv.principal1, 0) AS summary_principal,
+            COALESCE(sv.charge_partner1, 0) AS summary_charges_partner,
+            COALESCE(sv.charge_customer1, 0) AS summary_charges_customer,
+            (COALESCE(sv.charge_partner1, 0) + COALESCE(sv.charge_customer1, 0)) AS summary_total_charge,
+            COALESCE(av.vol2, 0) AS adjustment_vol,
+            COALESCE(ABS(av.principal2), 0) AS adjustment_principal,
+            COALESCE(ABS(av.charge_partner2), 0) AS adjustment_charges_partner,
+            COALESCE(ABS(av.charge_customer2), 0) AS adjustment_charges_customer,
+            (COALESCE(ABS(av.charge_partner2), 0) + COALESCE(ABS(av.charge_customer2), 0)) AS adjustment_total_charge,
+            (COALESCE(sv.vol1, 0) - COALESCE(av.vol2, 0)) AS net_vol,
+            (COALESCE(sv.principal1, 0) - COALESCE(ABS(av.principal2), 0)) AS net_principal,
+            (COALESCE(sv.charge_partner1, 0) - COALESCE(ABS(av.charge_partner2), 0)) AS net_charges_partner,
+            (COALESCE(sv.charge_customer1, 0) - COALESCE(ABS(av.charge_customer2), 0)) AS net_charges_customer,
+            ((COALESCE(sv.charge_partner1, 0) - COALESCE(ABS(av.charge_partner2), 0)) + (COALESCE(sv.charge_customer1, 0) - COALESCE(ABS(av.charge_customer2), 0))) AS net_total_charge
+        FROM all_owners AS ao
+        LEFT JOIN summary_vol AS sv ON ao.owner_name = sv.owner_name
+        LEFT JOIN adjustment_vol AS av ON ao.owner_name = av.owner_name
+        LEFT JOIN mpm_details AS mpm ON ao.owner_name = mpm.partner_name
+        WHERE ao.owner_name IS NOT NULL
+            $selectedOwnerCondition
+        ORDER BY ao.owner_name
+    ";
+}
+
+function fetch_transaction_summary_rows($conn, $partner, $start_date, $end_date, $source_file) {
+    $query = build_transaction_summary_query($conn, $partner, $start_date, $end_date, $source_file);
+    $result = $conn->query($query);
+
+    if (!$result) {
+        throw new Exception('Query failed: ' . $conn->error);
+    }
+
+    $data = [];
+    while ($row = $result->fetch_assoc()) {
+        $data[] = $row;
+    }
+
+    return $data;
+}
+
+if (isset($_POST['action']) && $_POST['action'] === 'export_excel') {
+    $partner = $_POST['partner'] ?? '';
+    $start_date = $_POST['start_date'] ?? '';
+    $end_date = $_POST['end_date'] ?? '';
+    $source_file = $_POST['source_file'] ?? '';
+    $reportDate = format_report_date_range($start_date, $end_date);
+    $rows = fetch_transaction_summary_rows($conn, $partner, $start_date, $end_date, $source_file);
+
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setTitle('Transaction Summary');
+
+    $sheet->mergeCells('A1:S1');
+    $sheet->setCellValue('A1', 'Transaction Summary Report');
+    $sheet->mergeCells('A2:S2');
+    $sheet->setCellValue('A2', 'Report Date: ' . $reportDate);
+    $sheet->mergeCells('A3:D3');
+    $sheet->setCellValue('A3', 'Import Details');
+    $sheet->mergeCells('E3:S3');
+    $sheet->setCellValue('E3', 'Transaction Summary');
+    $sheet->mergeCells('A4:A5');
+    $sheet->setCellValue('A4', 'Partner Name');
+    $sheet->mergeCells('B4:C4');
+    $sheet->setCellValue('B4', 'Partner ID');
+    $sheet->mergeCells('D4:D5');
+    $sheet->setCellValue('D4', 'GL Code');
+    $sheet->mergeCells('E4:I4');
+    $sheet->setCellValue('E4', 'Summary');
+    $sheet->mergeCells('J4:N4');
+    $sheet->setCellValue('J4', 'Adjustment');
+    $sheet->mergeCells('O4:S4');
+    $sheet->setCellValue('O4', 'Net');
+
+    $columnHeaders = [
+        'B5' => 'KP7',
+        'C5' => 'KPX',
+        'E5' => 'Total Count',
+        'F5' => 'Total Principal',
+        'G5' => 'Charge to Partner',
+        'H5' => 'Charge to Customer',
+        'I5' => 'Total Charge',
+        'J5' => 'Total Count',
+        'K5' => 'Total Principal',
+        'L5' => 'Charge to Partner',
+        'M5' => 'Charge to Customer',
+        'N5' => 'Total Charge',
+        'O5' => 'Total Count',
+        'P5' => 'Total Principal',
+        'Q5' => 'Charge to Partner',
+        'R5' => 'Charge to Customer',
+        'S5' => 'Total Charge'
+    ];
+    foreach ($columnHeaders as $cell => $label) {
+        $sheet->setCellValue($cell, $label);
+    }
+
+    $totals = array_fill_keys([
+        'summary_vol', 'summary_principal', 'summary_charges_partner', 'summary_charges_customer', 'summary_total_charge',
+        'adjustment_vol', 'adjustment_principal', 'adjustment_charges_partner', 'adjustment_charges_customer', 'adjustment_total_charge',
+        'net_vol', 'net_principal', 'net_charges_partner', 'net_charges_customer', 'net_total_charge'
+    ], 0);
+
+    $rowNumber = 6;
+    foreach ($rows as $row) {
+        $subBillersName = trim((string)($row['sub_billers_name'] ?? ''));
+        $partnerName = trim((string)($row['partner_name'] ?? ''));
+        $displayPartnerName = $partnerName;
+        if ($subBillersName === 'MYLORA CORPORATION' || $subBillersName === 'JUNANS MARKETING') {
+            $displayPartnerName = $subBillersName;
+        }
+
+        $sheet->fromArray([
+            $displayPartnerName,
+            $row['partner_id'] ?? '',
+            $row['partner_id_kpx'] ?? '',
+            $row['gl_code'] ?? '',
+            (int)($row['summary_vol'] ?? 0),
+            (float)($row['summary_principal'] ?? 0),
+            (float)($row['summary_charges_partner'] ?? 0),
+            (float)($row['summary_charges_customer'] ?? 0),
+            (float)($row['summary_total_charge'] ?? 0),
+            (int)($row['adjustment_vol'] ?? 0),
+            (float)($row['adjustment_principal'] ?? 0),
+            (float)($row['adjustment_charges_partner'] ?? 0),
+            (float)($row['adjustment_charges_customer'] ?? 0),
+            (float)($row['adjustment_total_charge'] ?? 0),
+            (int)($row['net_vol'] ?? 0),
+            (float)($row['net_principal'] ?? 0),
+            (float)($row['net_charges_partner'] ?? 0),
+            (float)($row['net_charges_customer'] ?? 0),
+            (float)($row['net_total_charge'] ?? 0),
+        ], null, 'A' . $rowNumber);
+
+        foreach ($totals as $key => $_) {
+            $totals[$key] += (float)($row[$key] ?? 0);
+        }
+        $rowNumber++;
+    }
+
+    $totalRowNumber = $rowNumber + 1;
+    $sheet->setCellValue('A' . $totalRowNumber, 'Total :');
+    $sheet->mergeCells("A{$totalRowNumber}:D{$totalRowNumber}");
+    $sheet->fromArray(array_values($totals), null, 'E' . $totalRowNumber);
+
+    $sheet->getStyle('A1:S5')->getFont()->setBold(true);
+    $sheet->getStyle('A1:S5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+    $sheet->getStyle("A{$totalRowNumber}:S{$totalRowNumber}")->getFont()->setBold(true);
+    $sheet->getStyle("A1:S{$totalRowNumber}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+    $sheet->getStyle('A1:S5')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D9EAF7');
+    $sheet->getStyle("F6:S{$totalRowNumber}")->getNumberFormat()->setFormatCode('#,##0.00');
+    $sheet->getStyle("E6:E{$totalRowNumber}")->getNumberFormat()->setFormatCode('#,##0');
+    $sheet->getStyle("J6:J{$totalRowNumber}")->getNumberFormat()->setFormatCode('#,##0');
+    $sheet->getStyle("O6:O{$totalRowNumber}")->getNumberFormat()->setFormatCode('#,##0');
+
+    foreach (range('A', 'S') as $column) {
+        $sheet->getColumnDimension($column)->setAutoSize(true);
+    }
+
+    $filename = 'Transaction-Summary-Report-' . date('Ymd-His') . '.xlsx';
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Cache-Control: max-age=0');
+
+    $writer = new Xlsx($spreadsheet);
+    $writer->save('php://output');
+    exit;
+}
+
 // Add AJAX handler for fetching transaction data
 if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
     // Clear any previous output and set headers
@@ -28,8 +323,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
         $start_date = isset($_POST['start_date']) ? $_POST['start_date'] : '';
         $end_date = isset($_POST['end_date']) ? $_POST['end_date'] : '';
         $source_file = isset($_POST['source_file']) ? $_POST['source_file'] : '';
-        $page = isset($_POST['page']) ? (int)$_POST['page'] : 1;
-        $rows_per_page = isset($_POST['rows_per_page']) ? (int)$_POST['rows_per_page'] : 10;
+        $formattedStartDate = !empty($start_date) ? date('F d, Y', strtotime($start_date)) : '';
+        $formattedEndDate = !empty($end_date) ? date('F d, Y', strtotime($end_date)) : '';
+        $reportDate = $formattedStartDate;
+        if (!empty($formattedStartDate) && !empty($formattedEndDate) && $start_date !== $end_date) {
+            $reportDate = $formattedStartDate . ' to ' . $formattedEndDate;
+        }
         
         // Build transaction-level partner owner filter using sub_billers_name rules
         $ownerFilterCondition = '';
@@ -51,17 +350,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
             $selectedOwnerCondition = " AND ao.owner_name = '{$selectedOwnerEsc}'";
         }
 
-        // Date condition - fix the logic
-        $dateCondition = '';
+        // Date condition
+        $dateCondition = '1=1';
         if (!empty($start_date) && !empty($end_date)) {
             $dateCondition = "(DATE(bt.datetime) BETWEEN '$start_date' AND '$end_date' OR DATE(bt.cancellation_date) BETWEEN '$start_date' AND '$end_date')";
         } elseif (!empty($start_date)) {
             $dateCondition = "(DATE(bt.datetime) >= '$start_date' OR DATE(bt.cancellation_date) >= '$start_date')";
         } elseif (!empty($end_date)) {
             $dateCondition = "(DATE(bt.datetime) <= '$end_date' OR DATE(bt.cancellation_date) <= '$end_date')";
-        } else {
-            // If no dates provided, use a default condition to prevent empty results
-            $dateCondition = "1=1";
         }
 
         // Source file condition
@@ -248,24 +544,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'get_transaction_data') {
         error_log('Sample row: ' . json_encode($data[0] ?? 'No data'));
         error_log('Totals calculated: ' . json_encode($totals));
 
-        // Calculate pagination
-        $total_records = count($data);
-        $total_pages = ceil($total_records / $rows_per_page);
-        $offset = ($page - 1) * $rows_per_page;
-        $paged_data = array_slice($data, $offset, $rows_per_page);
-        
-        $pagination = [
-            'current_page' => $page,
-            'total_pages' => $total_pages,
-            'total_records' => $total_records,
-            'start_record' => $offset + 1,
-            'end_record' => min($offset + $rows_per_page, $total_records)
-        ];
-        
         echo json_encode([
             'success' => true,
-            'data' => $paged_data,
-            'pagination' => $pagination,
+            'data' => $data,
+            'report_date' => $reportDate,
             'totals' => $totals
         ]);
         
@@ -592,6 +874,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                         <i class="fas fa-search"></i> Search
                                     </button>
                                 </div>
+                                <div class="col-md-2 col-sm-6">
+                                    <button type="button" id="exportButton" class="btn btn-success btn-sm w-100 d-inline-flex align-items-center justify-content-center gap-1 text-nowrap" style="display: none !important;">
+                                        <i class="fas fa-file-excel"></i> Export to Excel
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="card-body" style="display: none;">
@@ -603,6 +890,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                             <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                                 <table id="transactionReportTable" class="table table-bordered table-hover table-striped">
                                     <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th colspan="19" class='text-center align-middle' id="reportDateHeader">Report Date: </th>
+                                        </tr>
                                         <tr>
                                             <th colspan="4" class='text-center'>Import Details</th>
                                             <th colspan="15" class='text-center'>Transaction Summary</th>
@@ -666,30 +956,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                                 </table>
                             </div>
                             
-                            <!-- Pagination Controls -->
-                            <div class="d-flex justify-content-between align-items-center mt-3">
-                                <div class="d-flex align-items-center">
-                                    <span class="me-2">Show:</span>
-                                    <select id="rowsPerPage" class="form-select form-select-sm" style="width: auto;">
-                                        <option value="5">5</option>
-                                        <option value="10" selected>10</option>
-                                        <option value="25">25</option>
-                                        <option value="50">50</option>
-                                        <option value="100">100</option>
-                                    </select>
-                                    <span class="ms-2">entries</span>
-                                </div>
-                                
-                                <div id="pagination-info" class="text-muted">
-                                    Showing 0 to 0 of 0 entries
-                                </div>
-                                
-                                <nav aria-label="Table pagination">
-                                    <ul id="pagination" class="pagination pagination-sm mb-0">
-                                        <!-- Pagination will be generated by JavaScript -->
-                                    </ul>
-                                </nav>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -705,39 +971,51 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
         allowClear: true
     });
 
-    // Initialize variables
-    let currentPage = 1;
-    let rowsPerPage = 10;
-    
     // Event handlers
     $('#searchButton').click(function() {
         console.log('Search button clicked'); // Debug log
         
         // Validate required fields before searching
         if (validateRequiredFields()) {
-            currentPage = 1;
             loadTransactionData();
             // Show the card body when search is performed
             toggleCardBodyVisibility(true);
         }
     });
 
-    $('#rowsPerPage').change(function() {
-        rowsPerPage = parseInt($(this).val());
-        currentPage = 1;
-        if ($('#transactionReportTable tbody tr').length > 0 && !$('#transactionReportTable tbody tr').hasClass('no-data')) {
-            loadTransactionData();
-        }
+    $('#start_date, #end_date, #source_file_filter, #partnerlistDropdown').on('change', function() {
+        resetToDefaultState();
     });
-    
-    // Pagination click handler
-    $(document).on('click', '.page-link', function(e) {
-        e.preventDefault();
-        const page = parseInt($(this).data('page'));
-        if (page && page !== currentPage && !isNaN(page)) {
-            currentPage = page;
-            loadTransactionData();
+
+    $('#exportButton').click(function() {
+        if (!validateRequiredFields()) {
+            return;
         }
+
+        const form = $('<form>', {
+            method: 'POST',
+            action: window.location.href
+        });
+
+        const fields = {
+            action: 'export_excel',
+            partner: $('#partnerlistDropdown').val() || '',
+            start_date: $('#start_date').val() || '',
+            end_date: $('#end_date').val() || '',
+            source_file: $('#source_file_filter').val() || ''
+        };
+
+        Object.keys(fields).forEach(function(name) {
+            form.append($('<input>', {
+                type: 'hidden',
+                name: name,
+                value: fields[name]
+            }));
+        });
+
+        $('body').append(form);
+        form.trigger('submit');
+        form.remove();
     });
 
     // Method to display transaction data in the table tbody
@@ -772,7 +1050,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
             `);
             
             // Hide export button when no data
-            $('#ExportButton').hide();
+            $('#exportButton').attr('style', 'display: none !important;');
             return;
         }
         
@@ -883,7 +1161,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
 
     // Method to check if all totals are zero and toggle Export button visibility
     function toggleExportButtonVisibility(totals) {
-        const exportButton = $('#ExportButton');
+        const exportButton = $('#exportButton');
         
         // Check if all total values are zero
         const allTotalsZero = (
@@ -905,10 +1183,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
         );
         
         if (allTotalsZero) {
-            exportButton.hide();
+            exportButton.attr('style', 'display: none !important;');
             console.log('Export button hidden - all totals are zero');
         } else {
-            exportButton.show();
+            exportButton.attr('style', 'display: inline-flex !important;');
             console.log('Export button shown - totals contain data');
         }
     }
@@ -923,9 +1201,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
             partner: $('#partnerlistDropdown').val() || '',
             start_date: $('#start_date').val() || '',
             end_date: $('#end_date').val() || '',
-            source_file: $('#source_file_filter').val() || '',
-            page: currentPage,
-            rows_per_page: rowsPerPage
+            source_file: $('#source_file_filter').val() || ''
         };
         
         console.log('Form data:', formData); // Debug log
@@ -946,7 +1222,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
                 if (response && response.success) {
                     // Display the data using our new method
                     displayTransactionData(response.data || [], response.totals || {});
-                    updatePagination(response.pagination || {});
+                    $('#reportDateHeader').text(`Report Date: ${response.report_date || ''}`);
                     // Show the card body on successful data load
                     toggleCardBodyVisibility(true);
                     // Show or hide the hint label depending on returned rows (handled in displayTransactionData)
@@ -1012,67 +1288,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
     // Function to show transaction details in modal (optional)
     function showTransactionDetails(rowData) {
         console.log('Transaction details:', rowData);
-    }
-
-    // Function to update pagination info
-    function updatePagination(pagination) {
-        if (!pagination) return;
-        
-        const { current_page, total_pages, total_records, start_record, end_record } = pagination;
-        
-        // Update pagination info
-        $('#pagination-info').text(`Showing ${start_record} to ${end_record} of ${total_records} entries`);
-        
-        // Generate pagination controls
-        const paginationUL = $('#pagination');
-        paginationUL.empty();
-        
-        if (total_pages <= 1) return;
-        
-        // Previous button
-        if (current_page > 1) {
-            paginationUL.append(`
-                <li class="page-item">
-                    <a class="page-link" href="#" data-page="${current_page - 1}">Previous</a>
-                </li>
-            `);
-        }
-        
-        // Page numbers
-        let startPage = Math.max(1, current_page - 2);
-        let endPage = Math.min(total_pages, current_page + 2);
-        
-        if (startPage > 1) {
-            paginationUL.append(`<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`);
-            if (startPage > 2) {
-                paginationUL.append(`<li class="page-item disabled"><span class="page-link">...</span></li>`);
-            }
-        }
-        
-        for (let i = startPage; i <= endPage; i++) {
-            const activeClass = i === current_page ? 'active' : '';
-            paginationUL.append(`
-                <li class="page-item ${activeClass}">
-                    <a class="page-link" href="#" data-page="${i}">${i}</a>
-                </li>
-            `);
-        }
-        
-        if (endPage < total_pages) {
-            if (endPage < total_pages - 1) {
-                paginationUL.append(`<li class="page-item disabled"><span class="page-link">...</span></li>`);
-            }
-            paginationUL.append(`<li class="page-item"><a class="page-link" href="#" data-page="${total_pages}">${total_pages}</a></li>`);
-        }
-        
-        // Next button
-        if (current_page < total_pages) {
-            paginationUL.append(`
-                <li class="page-item">
-                    <a class="page-link" href="#" data-page="${current_page + 1}">Next</a>
-                </li>
-            `);
-        }
     }
 
     // Validation function for required fields
@@ -1151,7 +1366,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
         toggleHintLabelVisibility(false);
         
         // Hide the export button
-        $('#ExportButton').hide();
+        $('#exportButton').attr('style', 'display: none !important;');
+        $('#reportDateHeader').text('Report Date: ');
         
         // Clear the table data
         const tbody = $('#transactionReportTable tbody');
@@ -1182,10 +1398,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
             <th class="text-end fw-bold">0.00</th>
         `);
         
-        // Reset pagination info
-        $('#pagination-info').text('Showing 0 to 0 of 0 entries');
-        $('#pagination').empty();
-        
         console.log('Reset to default state');
     }
 
@@ -1195,7 +1407,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'debug_partner') {
         // Hide the card body, export button, and hint label on page load
         toggleCardBodyVisibility(false);
         toggleHintLabelVisibility(false);
-        $('#ExportButton').hide();
+        $('#exportButton').attr('style', 'display: none !important;');
     });
 </script>
 </html>

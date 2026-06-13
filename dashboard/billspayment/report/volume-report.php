@@ -84,13 +84,13 @@ if(isset($_POST['action']) && $_POST['action'] === 'generate_report'){
     
     if(!empty($filterType)){
         if($filterType === 'daily'){
-            $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ?)";
-            $dateParams = [$startDate, $endDate, $startDate, $endDate]; // 4 params for 2 CTEs
-            $dateTypes = 'ssss';
+            $dateCondition = "(DATE(bt.datetime) = ? OR DATE(bt.cancellation_date) = ? OR DATE(report_date) = ?)";
+            $dateParams = [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate]; // 6 params for 3 CTEs
+            $dateTypes = 'ssssss';
         }elseif($filterType === 'weekly'){
-            $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
-            $dateParams = [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate, $startDate, $endDate];
-            $dateTypes = 'ssssssss';
+            $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ? OR DATE(report_date) BETWEEN ? AND ?)";
+            $dateParams = [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate, $startDate, $endDate, $startDate, $endDate, $startDate, $endDate];
+            $dateTypes = 'ssssssssssss';
         }elseif($filterType === 'monthly'){
             $dateCondition = "(DATE(bt.datetime) BETWEEN ? AND ? OR DATE(bt.cancellation_date) BETWEEN ? AND ?)";
             $startMonth = $startDate . '-01';
@@ -1731,13 +1731,13 @@ $(document).ready(function() {
                 // Add to totals
                 totals.summaryVol += parseInt(row.summary_vol || 0);
                 totals.summaryPrincipal += parseFloat(row.summary_principal || 0);
-                totals.summaryCharge += parseFloat(row.summary_charges || 0);
+                totals.summaryCharge += parseFloat(summaryChargeVal || 0);
                 totals.adjustmentVol += parseInt(row.adjustment_vol || 0);
                 totals.adjustmentPrincipal += parseFloat(row.adjustment_principal || 0);
-                totals.adjustmentCharge += parseFloat(row.adjustment_charges || 0);
+                totals.adjustmentCharge += parseFloat(adjustmentChargeVal || 0);
                 totals.netVol += parseInt(row.net_vol || 0);
                 totals.netPrincipal += parseFloat(row.net_principal || 0);
-                totals.netCharge += parseFloat(row.net_charges || 0);
+                totals.netCharge += parseFloat(netChargeVal || 0);
             });
         }
         

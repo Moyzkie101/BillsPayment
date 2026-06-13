@@ -15,7 +15,6 @@ if (!function_exists('has_any_permission') || !has_any_permission(['Import Trans
 $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -27,74 +26,12 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
     <link rel="stylesheet" href="../../../assets/css/templates/style.css?v=<?php echo time(); ?>">
     <script src="https://kit.fontawesome.com/30b908cc5a.js" crossorigin="anonymous"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="../../../assets/js/sweetalert2.all.min.js"></script>
 
     <link rel="icon" href="../../../images/MLW logo.png" type="image/png">
     <style>
-       /* Print styles */
-        @media print {
-            body * {
-                visibility: hidden;
-                visibility: visible;
-            }
-            .alert-warning {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                border: none !important;
-                background-color: white !important;
-                color: black !important;
-            }
-            .alert-warning .d-flex {
-                display: none !important;
-            }
-            .alert-warning h4 {
-                text-align: center;
-                font-size: 18px;
-                margin-bottom: 15px;
-            }
-            .alert-warning p {
-                text-align: center;
-                margin-bottom: 15px;
-            }
-            /* Make sure the table-responsive container shows all content */
-            .table-responsive {
-                max-height: none !important;
-                height: auto !important;
-                overflow: visible !important;
-            }
-            .table {
-                width: 100%;
-                border-collapse: collapse;
-                page-break-inside: auto;
-            }
-            .table th, .table td {
-                border: 1px solid #000;
-            }
-            .table tr {
-                page-break-inside: avoid;
-                page-break-after: auto;
-            }
-            .sticky-top {
-                position: static;
-            }
-        }
-
-        
-        /* Enhanced SweetAlert2 backdrop for confidentiality */
-        .swal2-container.swal2-backdrop-show {
-            backdrop-filter: blur(10px);
-            background-color: rgba(0,0,0,0.8) !important;
-        }
-        
-        /* Make sure the modal itself is still clear */
-        .swal2-popup {
-            backdrop-filter: none !important;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
-
-        /* File Upload Area Styles */
         .file-upload-area {
             border: 3px dashed #dee2e6;
             border-radius: 10px;
@@ -106,7 +43,6 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
             margin-bottom: 20px;
         }
 
-        /* Mode card selector */
         .mode-cards { display:flex; gap:8px; }
         .mode-card {
             border: 1px solid #e9ecef;
@@ -129,23 +65,20 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
         .mode-card small { color:#6c757d; display:block; font-size:11px; }
         .mode-card.selected { border-color: #dc3545; box-shadow: 0 8px 24px rgba(220,53,69,0.06); }
         .mode-card.selected .mode-icon { color:#dc3545; }
-
+        
         .file-upload-area.drag-over {
             border-color: #dc3545;
             background-color: #ffe5e5;
         }
-
         .file-upload-area:hover {
             border-color: #dc3545;
             background-color: #fff;
         }
-
         .file-upload-icon {
             font-size: 48px;
             color: #6c757d;
             margin-bottom: 15px;
         }
-
         /* File Cards Container */
         .files-container {
             display: grid;
@@ -153,7 +86,6 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
             gap: 15px;
             margin-top: 20px;
         }
-
         /* Individual File Card */
         .file-card {
             border: 1px solid #dee2e6;
@@ -169,7 +101,6 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
             position: relative;
             overflow: hidden;
         }
-
         .file-card:hover { box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
 
         .file-card-header { display:flex; gap:10px; align-items:flex-start; }
@@ -181,7 +112,12 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
 
         .file-card-delete { cursor:pointer; color:#6c757d; padding:6px; border-radius:6px; background: rgba(255,255,255,0.6); position:absolute; top:10px; right:10px; z-index:6; }
         .file-card-delete:hover { background:#f8f9fa; color:#dc3545; transform: none; }
+        .file-card-view { cursor:pointer; color:#6c757d; padding:6px; border-radius:6px; background: rgba(255,255,255,0.6); position:absolute; top:10px; right:42px; z-index:6; }
+        .file-card-view:hover { background:#f8f9fa; color:#0d6efd; transform: none; }
 
+        .badge-source { padding:4px 8px; border-radius:6px; font-weight:700; font-size:12px; }
+        .badge-kpx { background:#e9f7ef; color:#1e7e34; }
+        .badge-kp7 { background:#eaf4ff; color:#1552c1; }
         /* Footer container stays inside card flow and is pushed to bottom */
         .file-card-footer {
             margin-top: auto;
@@ -193,514 +129,160 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
             padding-top: 6px;
         }
 
-        .badge-source {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .badge-kpx {
-            background-color: #0d6efd;
-            color: white;
-        }
-
-        .badge-kp7 {
-            background-color: #198754;
-            color: white;
-        }
-
-        /* Tooltip for partner name */
-        .partner-tooltip {
-            position: relative;
-            cursor: help;
-            display: inline-block;
-        }
-
-        .partner-tooltip .tooltip-text {
-            visibility: hidden;
-            width: 200px;
-            background-color: #212529;
-            color: #fff;
-            text-align: center;
-            border-radius: 6px;
-            padding: 8px;
-            position: absolute;
-            z-index: 1000;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -100px;
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 12px;
-        }
-
-        .partner-tooltip .tooltip-text::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            margin-left: -5px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #212529 transparent transparent transparent;
-        }
-
-        .partner-tooltip:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
-
-        /* Proceed Button Container (top-right, sticky) */
-        .proceed-container {
-            margin-top: 0;
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            gap: 12px;
-            position: sticky;
-            top: 12px;
-            z-index: 1050;
-        }
-
-        .btn-proceed {
-            min-width: 200px;
-            padding: 12px 30px;
-            font-size: 16px;
-            font-weight: 600;
-        }
-
-        /* Loading Overlay */
         #loading-overlay {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 9999;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .loading-spinner {
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #dc3545;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .file-name-display {
-            font-size: 12px;
-            color: #6c757d;
-            margin-top: 3px;
-        }
-
-        /* Duplicate check live list inside overlay (improved) */
-        .duplicate-wrapper {
-            display: flex;
-            flex-direction: column;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.78);
+            z-index: 2000;
             align-items: center;
             justify-content: center;
-            padding: 12px;
+            backdrop-filter: blur(2px);
         }
 
-        #duplicate-check-list {
-            width: 560px;
-            max-height: 420px;
-            overflow: auto;
-            background: #ffffff;
-            border-radius: 8px;
-            padding: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-            text-align: left;
-        }
-
-        #duplicate-check-header {
-            font-weight: 700;
-            margin-bottom: 8px;
-            font-size: 14px;
-            color: #333;
-        }
-
-        .check-item {
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap: 12px;
-            padding:10px 8px;
-            border-bottom:1px solid #f1f1f1;
-            font-size:13px;
-        }
-
-        .check-item .name { flex:1; margin-right:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .check-item .status { width:40px; text-align:center; margin-left:8px; }
-
-        .fade-up {
-            animation: fadeUp 700ms forwards;
-        }
-
-        @keyframes fadeUp {
-            to { transform: translateY(-18px); opacity: 0; }
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 20px;
-            color: #6c757d;
-        }
-        
-        /* Branded section header and card */
-        .bp-section-header {
+        #loading-overlay.show {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 6px 0 0 0;
-        }
-        .bp-section-title { display:flex; align-items:center; gap:12px; }
-        .bp-section-title i { font-size:32px; color: #dc3545; }
-        .bp-section-title h2 { margin:0; font-size:20px; color:#212529; font-weight:700; }
-        .bp-section-sub { margin:0; font-size:13px; color:#6c757d; }
-        .bp-card { background:#ffffff; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.04); border:1px solid #f1f1f1; }
-
-    </style>
-    
-    <style>
-        /* Page header, card and upload area - M Lhuillier theme */
-        .bp-section-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 14px 18px;
-            background: #ffffff; /* changed to white per request */
-            border-radius: 8px;
-            color: #212529;
-            margin: 18px 0 8px;
-            box-shadow: 0 6px 18px rgba(16,24,40,0.04);
-            border-left: 4px solid #dc3545; /* subtle brand accent */
         }
 
-        .bp-section-title { display:flex; gap:12px; align-items:center; }
-        .bp-section-title i { font-size:28px; color:#dc3545; }
-        .bp-section-title h2 { margin:0; font-size:20px; font-weight:700; }
-        .bp-section-sub { margin:0; font-size:13px; opacity:0.95; }
-
-        .bp-card { background:#ffffff; border-radius:10px; box-shadow: 0 10px 24px rgba(16,24,40,0.06); color:#212529; }
-
-        /* File upload area */
-        .file-upload-area {
-            border: 2px dashed rgba(220,53,69,0.16);
-            border-radius: 10px;
-            padding: 34px 18px;
-            text-align: center;
-            background: #fff;
-            transition: all 180ms ease;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .file-upload-area.drag-over { background:#fff5f5; transform: translateY(-4px); box-shadow: 0 10px 20px rgba(220,53,69,0.06); border-color:#dc3545; }
-
-        .file-upload-icon i { font-size:36px; color:#dc3545; margin-bottom:8px; }
-        .file-upload-area h5 { margin:8px 0 4px; font-weight:700; }
-        .file-upload-area p { margin:0; color:#6c757d; }
-
-        /* small adjustments for alternate rules (kept for backward compatibility) */
-        .files-container { margin-top: 14px; }
-        .file-card { margin-bottom:10px; }
-        .file-card-header { display:flex; gap:12px; align-items:center; }
-        .file-card-info .file-card-label { font-size:12px; color:#6c757d; font-weight:600; }
-        .file-card-info .file-card-value { font-size:14px; color:#212529; font-weight:600; }
-        .file-card-delete { color:#6c757d; cursor:pointer; padding:6px; border-radius:6px; }
-        .file-card-delete:hover { background:#f8f9fa; color:#dc3545; }
-
-        .badge-source { padding:4px 8px; border-radius:6px; font-weight:700; font-size:12px; }
-        .badge-kpx { background:#e9f7ef; color:#1e7e34; }
-        .badge-kp7 { background:#eaf4ff; color:#1552c1; }
-
-        /* Proceed button */
-        .proceed-container { display:flex; align-items:center; gap:10px; }
-        .btn-proceed { background:#dc3545; border: none; color:#fff; padding:8px 14px; border-radius:8px; font-weight:700; }
-        .btn-proceed i { margin-right:8px; }
-
-        /* Tooltip partner name */
-        .partner-tooltip { position: relative; display:inline-block; }
-        .partner-tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #212529; color: #fff; text-align: left; border-radius: 6px; padding: 8px; position: absolute; z-index: 99999; bottom: 125%; left: 0; opacity: 0; transition: opacity 0.2s; font-size:12px; }
-        .partner-tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
-
-        /* Professional Duplicate-Check Modal */
         .duplicate-modal {
             position: fixed;
             inset: 0;
+            z-index: 3000;
+            background: rgba(0, 0, 0, 0.35);
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
-            z-index: 19999;
-            pointer-events: none;
-            animation: fadeIn 0.3s ease;
         }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
         .duplicate-modal .duplicate-modal-content {
-            pointer-events: auto;
-            width: 580px;
-            max-width: 100%;
-            max-height: 85vh;
-            background: #ffffff;
+            width: 100%;
+            max-width: 760px;
+            background: #fff;
             border-radius: 12px;
-            box-shadow: 0 24px 48px rgba(0,0,0,0.2), 0 8px 16px rgba(0,0,0,0.1);
-            text-align: left;
-            box-sizing: border-box;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 18px 40px rgba(0,0,0,0.25);
         }
-        
-        @keyframes slideUp {
-            from { 
-                opacity: 0;
-                transform: translateY(30px) scale(0.95);
-            }
-            to { 
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-        
-        /* Header Section */
         .duplicate-modal-header {
-            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-            padding: 20px 24px 18px;
-            color: #ffffff;
-            border-radius: 12px 12px 0 0;
+            background: #dc3545;
+            color: #fff;
+            padding: 16px 18px;
         }
-        
-        .duplicate-modal-header-title {
-            display: flex;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        
-        .duplicate-modal-header-title i {
-            font-size: 24px;
-            margin-right: 12px;
-        }
-        
-        #duplicate-check-header {
-            font-weight: 600;
-            font-size: 18px;
-            color: #ffffff;
-            margin: 0;
-        }
-        
-        /* Progress Bar */
-        .duplicate-progress-bar-container {
-            background: rgba(255,255,255,0.25);
-            height: 6px;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-top: 12px;
-        }
-        
-        .duplicate-progress-bar {
-            height: 100%;
-            background: #ffffff;
-            width: 0%;
-            transition: width 0.3s ease;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(255,255,255,0.5);
-        }
-        
-        /* List Container */
-        .duplicate-modal-body {
-            padding: 20px 24px;
-            flex: 1 1 auto;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-        
+        .duplicate-modal-header-title { display:flex; align-items:center; gap:10px; }
+        .duplicate-modal-header-title h4 { margin: 0; font-size: 28px; font-weight: 800; }
+        .duplicate-progress-bar-container { margin-top: 12px; height: 4px; background: rgba(255,255,255,0.35); border-radius: 4px; }
+        .duplicate-progress-bar { height: 100%; width: 0%; border-radius: 4px; background: #ffd1d7; }
+        .duplicate-modal-body { padding: 18px; background: #f3f4f6; }
         #duplicate-check-list {
+            max-height: 260px;
             overflow-y: auto;
-            overflow-x: hidden;
-            padding-right: 8px;
-            flex: 1 1 auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
-        
-        /* Check Items */
+        #duplicate-check-list::-webkit-scrollbar { width: 0; height: 0; }
         .check-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 16px;
+            background: #fff;
+            border: 1px solid #cfe2ff;
             border-radius: 8px;
-            border: 1px solid #e9ecef;
-            margin-bottom: 10px;
-            background: #ffffff;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-        }
-        
-        .check-item:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
-            border-color: #dee2e6;
-        }
-        
-        .check-item .name {
-            flex: 1;
-            margin-right: 16px;
-            font-size: 13px;
-            color: #495057;
-            word-break: break-word;
-            line-height: 1.5;
-            font-weight: 500;
-        }
-        
-        .check-item .status {
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-        
-        .check-item.checking {
-            border-color: #007bff20;
-            background: linear-gradient(to right, #ffffff, #f8f9fa);
-        }
-        
-        .check-item.success {
-            border-color: #28a74520;
-            background: linear-gradient(to right, #d4edda, #ffffff);
-        }
-        
-        .check-item.warning {
-            border-color: #ffc10720;
-            background: linear-gradient(to right, #fff3cd, #ffffff);
-        }
-        
-        .check-item.fade-up {
-            transform: translateX(10px);
-            opacity: 0;
-            transition: all 0.4s ease;
-            max-height: 0;
-            padding: 0 16px;
-            margin-bottom: 0;
-            border-color: transparent;
-        }
-        
-        /* Footer Section */
-        .duplicate-modal-footer {
-            padding: 16px 24px;
-            background: #f8f9fa;
-            border-top: 1px solid #e9ecef;
-            border-radius: 0 0 12px 12px;
-        }
-        
-        #duplicate-check-footer {
+            padding: 14px 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-size: 13px;
-            color: #6c757d;
-            margin: 0;
+            margin-bottom: 10px;
         }
-        
-        .duplicate-footer-icon {
+        .check-item .name { color: #495057; font-weight: 600; font-size: 16px; }
+        .check-item.success { border-color: #b7e4c7; background: #f0fff4; }
+        .status-icon-success { color: #198754; font-size: 18px; }
+        .check-item.fade-up {
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 260ms ease, transform 260ms ease;
+        }
+        .duplicate-modal-footer { padding: 12px 18px; border-top: 1px solid #e9ecef; }
+        #duplicate-check-footer { display:flex; align-items:center; justify-content:space-between; font-weight:700; color:#344054; }
+        .excel-detail-popup {
+            width: min(96vw, 1400px) !important;
+        }
+        .excel-detail-table-wrap {
+            max-height: 68vh;
+            overflow: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background: #fff;
+        }
+        .excel-detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .excel-detail-table th,
+        .excel-detail-table td {
+            border-bottom: 1px solid #e9ecef;
+            border-right: 1px solid #e9ecef;
+            padding: 7px 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .excel-detail-table th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #f8f9fa;
+            font-weight: 700;
+            color: #343a40;
+        }
+        .excel-detail-table td {
+            color: #212529;
+            max-width: 240px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .excel-detail-table td.text-end {
+            text-align: right;
+        }
+        .excel-detail-mode-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin: -6px 0 14px;
+            flex-wrap: wrap;
+        }
+        .excel-detail-mode-option {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 7px;
+            min-height: 34px;
+            padding: 7px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            background: #fff;
+            color: #212529;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .excel-detail-mode-option input {
+            margin: 0;
+        }
+        .excel-detail-empty {
+            padding: 22px;
+            color: #6c757d;
+            text-align: center;
             font-weight: 600;
-            color: #495057;
-        }
-        
-        .duplicate-footer-icon i {
-            color: #dc3545;
-        }
-        
-        /* Loading Overlay */
-        #loading-overlay {
-            position: fixed;
-            inset: 0;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0,0,0,0.4);
-            z-index: 9998;
-            backdrop-filter: blur(2px);
-        }
-        
-        #loading-overlay .loading-spinner {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-        }
-        
-        /* Custom Scrollbar */
-        #duplicate-check-list::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        #duplicate-check-list::-webkit-scrollbar-track {
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-        
-        #duplicate-check-list::-webkit-scrollbar-thumb {
-            background: #dee2e6;
-            border-radius: 10px;
-            transition: background 0.3s;
-        }
-        
-        #duplicate-check-list::-webkit-scrollbar-thumb:hover {
-            background: #adb5bd;
-        }
-        
-        /* Status Icons */
-        .status-icon-checking {
-            color: #007bff;
-            animation: spin 1s linear infinite;
-        }
-        
-        .status-icon-success {
-            color: #28a745;
-        }
-        
-        .status-icon-warning {
-            color: #ffc107;
-        }
-        
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
         }
     </style>
 </head>
-
 <body>
     <div class="main-container">
         <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
         <div id="loading-overlay">
-            <div class="loading-spinner"></div>
+            <div class="text-center">
+                <div class="spinner-border text-danger" role="status" aria-hidden="true"></div>
+                <div class="mt-2 fw-semibold text-dark">Processing file(s)...</div>
+            </div>
         </div>
         <div class="bp-section-header">
             <div class="bp-section-title">
@@ -711,48 +293,36 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                 </div>
             </div>
         </div>
-
         <div class="bp-card container-fluid mt-3 p-4">
             <div class="bp-card-body">
-                <!-- Mode Toggle (Auto / Manual) + Proceed (moved to top-right) -->
                 <div class="mb-3 d-flex align-items-center justify-content-between" style="gap:12px;">
                     <div class="d-flex align-items-center" style="gap:12px;">
                         <label class="form-label me-2 mb-0">Import Mode:</label>
                         <div class="mode-cards">
-                                <label class="mode-card selected" data-mode="auto">
-                                    <input type="radio" name="importMode" id="modeAuto" value="auto" checked style="display:none;">
-                                    <div class="mode-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-                                    <div class="mode-text">
-                                        <div class="mode-label">Auto</div>
-                                        <small>Drag & Drop</small>
-                                    </div>
-                                </label>
-                                <label class="mode-card" data-mode="manual">
-                                    <input type="radio" name="importMode" id="modeManual" value="manual" style="display:none;">
-                                    <div class="mode-icon"><i class="fa-solid fa-file-lines"></i></div>
-                                    <div class="mode-text">
-                                        <div class="mode-label">Manual</div>
-                                        <small>Form Upload</small>
-                                    </div>
-                                </label>
-                                <label class="mode-card" data-mode="multiple">
-                                    <input type="radio" name="importMode" id="modeMultiple" value="multiple" style="display:none;">
-                                    <div class="mode-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-                                    <div class="mode-text">
-                                        <div class="mode-label">Multiple</div>
-                                        <small>Drag & Drop</small>
-                                    </div>
-                                </label>
+                            <label class="mode-card selected" data-mode="auto">
+                                <input type="radio" name="importMode" id="modeAuto" value="auto" checked style="display:none;">
+                                <div class="mode-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                                <div class="mode-text">
+                                    <div class="mode-label">Auto</div>
+                                    <small>Drag & Drop</small>
+                                </div>
+                            </label>
+                            <label class="mode-card" data-mode="manual">
+                                <input type="radio" name="importMode" id="modeManual" value="manual" style="display:none;">
+                                <div class="mode-icon"><i class="fa-solid fa-file-lines"></i></div>
+                                <div class="mode-text">
+                                    <div class="mode-label">Manual</div>
+                                    <small>Form Upload</small>
+                                </div>
+                            </label>
                         </div>
                     </div>
-
-                    <div id="proceedContainer" class="proceed-container" style="display: none;">
-                        <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn">
+                    <div id="proceedContainer" class="proceed-container mt-3" style="display: none;">
+                        <button type="button" class="btn btn-danger btn-proceed" id="proceedBtn" data-bs-toggle="modal" data-bs-target="#proceedPreviewModal">
                             <i class="fa-solid fa-paper-plane me-2" aria-hidden="true"></i>Proceed
                         </button>
                     </div>
                 </div>
-
                 <!-- Drag and Drop Upload Area -->
                 <div class="file-upload-area" id="fileUploadArea">
                     <div class="file-upload-icon">
@@ -762,79 +332,16 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     <p class="text-muted">or click to browse</p>
                     <p class="text-muted"><small>Supports multiple Excel files (.xls, .xlsx)</small></p>
                     <input type="file" id="fileInput" accept=".xls,.xlsx" multiple style="display: none;">
-                    
                 </div>
-
-                <!-- Manual Import Area (hidden by default) -->
-                <div id="manualArea" style="display:none;">
-                    <form id="manualUploadForm" action="../../../models/saved/saved_billspaymentImportFile.php" method="post" enctype="multipart/form-data">
-                        <div class="row mt-3">
-                            <div class="col-md-5 mb-3">
-                                <div class="d-flex align-items-center">
-                                    <label class="form-label me-2 mb-0">Partners Name:</label>
-                                    <input list="manualCompanyList" id="manualCompanyInput" name="company" class="form-control" placeholder="Search or type company name" required />
-                                    <datalist id="manualCompanyList"></datalist>
-                                    <!-- hidden select kept for compatibility -->
-                                    <!-- <select id="manualCompanyDropdown" name="company_select" style="display:none;"></select> -->
-                                </div>
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <div class="d-flex align-items-center">
-                                    <label for="manualFileType" class="form-label me-2 mb-0">Source File Type:</label>
-                                    <select id="manualFileType" class="form-select" name="fileType" required>
-                                        <option value="">Select Source File Type</option>
-                                        <option value="KPX">KPX</option>
-                                        <option value="KP7">KP7</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-4 mb-3 d-flex">
-                                <input id="manualFileInput" type="file" name="import_file" accept=".xls,.xlsx" class="form-control me-2" />
-                                <input type="submit" class="btn btn-danger" id="manualProceed" value="Proceed" style="display:none;">
-                            </div>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Files Container -->
                 <div id="filesContainer" class="files-container"></div>
-
-                <!-- Removed bottom Proceed button; top button used instead -->
             </div>
         </div>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- File Card -->
     <script>
-        // Global variable to store file data (use var so it's available across script tags)
         var uploadedFiles = window.uploadedFiles || [];
-
-        // Backwards-compatibility wrappers: expose global uploadFile/uploadFiles
-        // Define early so inline handlers can call them before DOM ready
-        window.uploadFile = function(f) {
-            try {
-                if (!f) return;
-                // if processFile is available, delegate; otherwise push into uploadedFiles
-                if (typeof processFile === 'function') return processFile(f);
-                // fallback: add file to uploadedFiles and attempt to render later
-                uploadedFiles.push(f);
-            } catch (e) {
-                console.error('uploadFile wrapper error:', e);
-            }
-        };
-
-        window.uploadFiles = function(files) {
-            try {
-                if (!files) return;
-                if (files instanceof FileList) files = Array.from(files);
-                if (!Array.isArray(files)) files = [files];
-                if (typeof handleFiles === 'function') return handleFiles(files);
-                files.forEach(function(f){ uploadedFiles.push(f); });
-            } catch (e) {
-                console.error('uploadFiles wrapper error:', e);
-            }
-        };
+        var parsedTransactionRows = window.parsedTransactionRows || [];
+        var currentImportedBy = <?php echo json_encode(strval($_SESSION['admin_name'] ?? $_SESSION['user_name'] ?? '')); ?>;
 
         $(document).ready(function() {
             const fileUploadArea = $('#fileUploadArea');
@@ -842,27 +349,44 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
             const filesContainer = $('#filesContainer');
             const proceedContainer = $('#proceedContainer');
             const proceedBtn = $('#proceedBtn');
+            const loadingOverlay = $('#loading-overlay');
 
-            // Click to open file dialog — use native DOM click for reliability
-            fileUploadArea.on('click', function() {
-                if (fileInput.length && fileInput[0]) {
-                    try {
-                        fileInput[0].click();
-                    } catch (e) {
-                        // Fallback to jQuery trigger if DOM click fails
-                        fileInput.trigger('click');
-                    }
-                } else {
-                    fileInput.trigger('click');
-                }
+            function showLoadingOverlay() { loadingOverlay.addClass('show'); }
+            function hideLoadingOverlay() { loadingOverlay.removeClass('show'); }
+            function selectImportMode(mode) {
+                $('input[name="importMode"][value="' + mode + '"]').prop('checked', true);
+                $('.mode-card').removeClass('selected');
+                $('.mode-card[data-mode="' + mode + '"]').addClass('selected');
+            }
+
+            $('.mode-card[data-mode="auto"]').on('click', function() {
+                selectImportMode('auto');
             });
 
-            // File input change event
+            $('.mode-card[data-mode="manual"]').on('click', function(event) {
+                event.preventDefault();
+                selectImportMode('manual');
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Under Maintenance',
+                    text: 'Manual Form Upload is currently under maintenance.',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    allowEnterKey: false,
+                    confirmButtonColor: '#6c757d'
+                }).then(function() {
+                    selectImportMode('auto');
+                });
+            });
+
+            fileUploadArea.on('click', function() {
+                if (fileInput.length && fileInput[0]) fileInput[0].click();
+            });
+
             fileInput.on('change', function(e) {
                 handleFiles(e.target.files);
             });
 
-            // Drag and drop events
             fileUploadArea.on('dragover', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -879,1353 +403,1194 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                 e.preventDefault();
                 e.stopPropagation();
                 $(this).removeClass('drag-over');
-                
                 const files = e.originalEvent.dataTransfer.files;
                 handleFiles(files);
             });
 
-            // Handle files
-            function handleFiles(files) {
-                const fileArray = Array.from(files);
-                
-                // Filter only Excel files
-                const excelFiles = fileArray.filter(file => {
-                    const extension = file.name.split('.').pop().toLowerCase();
-                    return extension === 'xlsx' || extension === 'xls';
-                });
+            function escapeHtml(str) {
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
 
-                if (excelFiles.length === 0) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Invalid File Type',
-                        text: 'Please select only Excel files (.xls, .xlsx)',
-                        confirmButtonText: 'OK'
+            function normalizeHeader(value) {
+                return String(value || '').replace(/"/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+            }
+
+            function isEmpty(value) {
+                return value === null || value === undefined || String(value).trim() === '';
+            }
+
+            function getCellValue(sheet, address) {
+                const cell = sheet[address];
+                if (!cell) return '';
+                return cell.w !== undefined ? String(cell.w).trim() : String(cell.v ?? '').trim();
+            }
+
+            function padDatePart(value) {
+                return String(value).padStart(2, '0');
+            }
+
+            function formatDateYmd(dateValue) {
+                if (!(dateValue instanceof Date) || Number.isNaN(dateValue.getTime())) return '';
+                return [
+                    dateValue.getFullYear(),
+                    padDatePart(dateValue.getMonth() + 1),
+                    padDatePart(dateValue.getDate())
+                ].join('-');
+            }
+
+            function normalizeExcelDateCell(sheet, address) {
+                const cell = sheet[address];
+                if (!cell) return '';
+
+                if (cell.v instanceof Date) {
+                    return formatDateYmd(cell.v);
+                }
+
+                if (typeof cell.v === 'number' && window.XLSX && XLSX.SSF && typeof XLSX.SSF.parse_date_code === 'function') {
+                    const parsedDate = XLSX.SSF.parse_date_code(cell.v);
+                    if (parsedDate) {
+                        return [
+                            parsedDate.y,
+                            padDatePart(parsedDate.m),
+                            padDatePart(parsedDate.d)
+                        ].join('-');
+                    }
+                }
+
+                const rawValue = getCellValue(sheet, address);
+                const parsedFromText = new Date(rawValue);
+                if (!Number.isNaN(parsedFromText.getTime())) {
+                    return formatDateYmd(parsedFromText);
+                }
+
+                return rawValue;
+            }
+
+            function getStatusMarker(sheet, row) {
+                const rawStatus = getCellValue(sheet, 'A' + row);
+                return rawStatus.includes('*') ? '*' : '';
+            }
+
+            function detectKp7HeaderIdentifier(sheet) {
+                return normalizeHeader(getCellValue(sheet, 'A9')) === 'STATUS' && isEmpty(getCellValue(sheet, 'B9'));
+            }
+
+            let branchJsonLookupPromise = null;
+            async function getBranchJsonLookup() {
+                if (branchJsonLookupPromise) return branchJsonLookupPromise;
+
+                branchJsonLookupPromise = fetch('../../../branch.json', { credentials: 'same-origin' })
+                    .then(function(response) {
+                        if (!response.ok) throw new Error('branch.json HTTP error: ' + response.status);
+                        return response.json();
+                    })
+                    .then(function(rows) {
+                        const lookup = {};
+                        (Array.isArray(rows) ? rows : []).forEach(function(row) {
+                            const branchName = normalizeHeader(row && row.branch_name ? row.branch_name : '');
+                            if (branchName !== '' && row && row.branch_id !== undefined && row.branch_id !== null) {
+                                lookup[branchName] = row.branch_id;
+                            }
+                        });
+                        return lookup;
+                    })
+                    .catch(function(err) {
+                        console.error('[getBranchJsonLookup][exception]', err && err.message ? err.message : String(err));
+                        return {};
                     });
-                    return;
-                }
 
-                // Process each file
-                excelFiles.forEach(file => {
-                        processFile(file);
+                return branchJsonLookupPromise;
+            }
+
+            async function fillMissingBranchIdsFromOutlet(rows) {
+                const branchLookup = await getBranchJsonLookup();
+                (rows || []).forEach(function(row) {
+                    if (!isEmpty(row.branch_id)) return;
+
+                    const outletKey = normalizeHeader(row.branch_outlet || '');
+                    if (outletKey !== '' && Object.prototype.hasOwnProperty.call(branchLookup, outletKey)) {
+                        row.branch_id = branchLookup[outletKey];
+                    }
+                });
+
+                return rows;
+            }
+
+            let regionJsonLookupPromise = null;
+            async function getRegionJsonLookup() {
+                if (regionJsonLookupPromise) return regionJsonLookupPromise;
+
+                regionJsonLookupPromise = fetch('../../../region.json', { credentials: 'same-origin' })
+                    .then(function(response) {
+                        if (!response.ok) throw new Error('region.json HTTP error: ' + response.status);
+                        return response.json();
+                    })
+                    .then(function(rows) {
+                        const lookup = {};
+                        (Array.isArray(rows) ? rows : []).forEach(function(row) {
+                            const regionName = normalizeHeader(row && row.region_name ? row.region_name : '');
+                            if (regionName !== '') {
+                                lookup[regionName] = {
+                                    region_code: row.region_code || null,
+                                    zone_code: row.zone_code || null
+                                };
+                            }
+                        });
+                        return lookup;
+                    })
+                    .catch(function(err) {
+                        console.error('[getRegionJsonLookup][exception]', err && err.message ? err.message : String(err));
+                        return {};
+                    });
+
+                return regionJsonLookupPromise;
+            }
+
+            async function fillMissingKp7RegionCodesFromJson(rows) {
+                const regionLookup = await getRegionJsonLookup();
+                (rows || []).forEach(function(row) {
+                    const isKp7 = String(row.source_type || '').toUpperCase() === 'KP7';
+                    if (!isKp7 || (!isEmpty(row.region_code) && !isEmpty(row.zone_code))) return;
+
+                    const regionKey = normalizeHeader(row.region_name || '');
+                    const regionCodes = Object.prototype.hasOwnProperty.call(regionLookup, regionKey) ? regionLookup[regionKey] : null;
+                    if (!regionCodes) return;
+
+                    if (isEmpty(row.region_code)) row.region_code = regionCodes.region_code;
+                    if (isEmpty(row.zone_code)) row.zone_code = regionCodes.zone_code;
+                });
+
+                return rows;
+            }
+
+            async function fillMissingKp7BranchIdsByCodeRegion(rows) {
+                const kp7BranchLookups = [];
+                (rows || []).forEach(function(row) {
+                    const isKp7 = String(row.source_type || '').toUpperCase() === 'KP7';
+                    const branchCode = String(row.branch_code || '').trim();
+                    const regionCode = String(row.region_code || '').trim();
+                    if (isKp7 && isEmpty(row.branch_id) && branchCode !== '' && regionCode !== '') {
+                        kp7BranchLookups.push({
+                            code: branchCode,
+                            region_code: regionCode
+                        });
+                    }
+                });
+
+                if (kp7BranchLookups.length === 0) return rows;
+
+                const branchCodeLookupMap = (await fetchBranchCodesByBranch([], [], kp7BranchLookups)).branch_codes || {};
+                (rows || []).forEach(function(row) {
+                    const isKp7 = String(row.source_type || '').toUpperCase() === 'KP7';
+                    if (!isKp7 || !isEmpty(row.branch_id)) return;
+
+                    const key = String(row.branch_code || '').trim() + '|' + String(row.region_code || '').trim();
+                    const branchLookup = Object.prototype.hasOwnProperty.call(branchCodeLookupMap, key) ? branchCodeLookupMap[key] : null;
+                    if (branchLookup && branchLookup.branch_id) {
+                        row.branch_id = branchLookup.branch_id;
+                    }
+                });
+
+                return rows;
+            }
+
+            function getBranchCodeFromReference(referenceNo) {
+                const normalizedReference = String(referenceNo || '').trim().toUpperCase();
+                const prefix = normalizedReference.substring(0, 3);
+                if (prefix === 'BPP' || prefix === 'BPX') {
+                    const branchCode = parseInt(normalizedReference.substring(3, 6), 10);
+                    return Number.isNaN(branchCode) ? null : branchCode;
+                }
+                return null;
+            }
+
+            const excelDetailColumns = [
+                { label: '$report_date', key: 'report_date' },
+                { label: '$source_type', key: 'source_type' },
+                { label: '$status', key: 'status' },
+                { label: '$datetime', key: 'datetime' },
+                { label: '$cancellation_date', key: 'cancellation_date' },
+                { label: '$control_no', key: 'control_no' },
+                { label: '$reference_no', key: 'reference_no' },
+                { label: '$payor_name', key: 'payor_name' },
+                { label: '$address', key: 'address' },
+                { label: '$account_no', key: 'account_no' },
+                { label: '$account_name', key: 'account_name' },
+                { label: '$amount_paid', key: 'amount_paid' },
+                { label: '$charge_customer', key: 'charge_customer' },
+                { label: '$charge_partner', key: 'charge_partner' },
+                { label: '$contact_no', key: 'contact_no' },
+                { label: '$other_details', key: 'other_details' },
+                { label: '$branch_id', key: 'branch_id' },
+                { label: '$branch_code', key: 'branch_code' },
+                { label: '$branch_outlet', key: 'branch_outlet' },
+                { label: '$zone_code', key: 'zone_code' },
+                { label: '$region_code', key: 'region_code' },
+                { label: '$region_name', key: 'region_name' },
+                { label: '$operator', key: 'operator' },
+                { label: '$remote_branch', key: 'remote_branch' },
+                { label: '$remote_operator', key: 'remote_operator' },
+                { label: '$2nd_approver', key: 'second_approver' },
+                { label: '$partner_name', key: 'partner_name' },
+                { label: '$partner_id_kpx', key: 'partner_id_kpx' },
+                { label: '$partner_id', key: 'partner_id' },
+                { label: '$gl_code', key: 'gl_code' },
+                { label: '$post_transaction', key: 'post_transaction' },
+                { label: '$imported_date', key: 'imported_date' },
+                { label: '$imported_by', key: 'imported_by' }
+            ];
+
+            const originalDetailColumns = [
+                { label: 'Date / Time', key: 'date_time' },
+                { label: 'Control No.', key: 'control_no' },
+                { label: 'Reference No.', key: 'reference_no' },
+                { label: 'Payor', key: 'payor' },
+                { label: 'Address', key: 'address' },
+                { label: 'Account No.', key: 'account_no' },
+                { label: 'Account Name', key: 'account_name' },
+                { label: 'Amount Paid', key: 'amount_paid' },
+                { label: 'Charge to Customer', key: 'charge_customer' },
+                { label: 'Charge to Partner', key: 'charge_partner' },
+                { label: 'Contact No.', key: 'contact_no' },
+                { label: 'Other Details', key: 'other_details' },
+                { label: 'Branch ID', key: 'branch_id' },
+                { label: 'ML Outlet', key: 'ml_outlet' },
+                { label: 'Region Code', key: 'region_code' },
+                { label: 'Region', key: 'region' },
+                { label: 'Operator', key: 'operator' },
+                { label: 'Remote Branch', key: 'remote_branch' },
+                { label: 'Remote Operator', key: 'remote_operator' },
+                { label: '2nd Approver', key: 'second_approver' },
+                { label: 'Partner ID', key: 'partner_id' },
+                { label: 'Partner Name', key: 'partner_name' }
+            ];
+
+            function formatDetailValue(value) {
+                if (value === null || value === undefined || value === '') return '';
+                return String(value);
+            }
+
+            function normalizeAmountValue(value) {
+                return String(value ?? '').replace(/,/g, '').trim();
+            }
+
+            function formatAmountForDisplay(value) {
+                const normalized = normalizeAmountValue(value);
+                if (normalized === '' || Number.isNaN(Number(normalized))) return formatDetailValue(value);
+                return Number(normalized).toLocaleString('en-US', {
+                    minimumFractionDigits: normalized.includes('.') ? 2 : 0,
+                    maximumFractionDigits: 2
                 });
             }
 
-            // Process individual file and auto-detect metadata
-            function processFile(file) {
-                const selectedMode = $('input[name="importMode"]:checked').val();
-                // Indicate files are being read so UI can block Proceed
-                window._filesBeingRead = window._filesBeingRead || 0;
-                window._filesBeingRead++;
-                $('#loading-overlay').css('display', 'flex');
-                proceedBtn.prop('disabled', true);
-
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    try {
-                        function finishFileRead() {
-                            window._filesBeingRead--;
-                            if (window._filesBeingRead <= 0) {
-                                window._filesBeingRead = 0;
-                                $('#loading-overlay').hide();
-                                proceedBtn.prop('disabled', false);
-                            }
-                        }
-
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                        
-                        let partnerId = '';
-                        let sourceType = '';
-                        if (selectedMode === 'multiple') {
-                            const firstDataPartnerCell = firstSheet['U10'];
-                            partnerId = firstDataPartnerCell ? String(firstDataPartnerCell.v).trim() : '';
-                            sourceType = 'KPX';
-                        } else {
-                            const partnerIdCell = firstSheet['G3'];
-                            partnerId = partnerIdCell ? String(partnerIdCell.v).trim() : '';
-                            const sourceTypeCell = firstSheet['H3'];
-                            sourceType = sourceTypeCell ? String(sourceTypeCell.v).trim().toUpperCase() : '';
-                        }
-
-                        // For KPX partner_id_kpx=1074, extract billers name from B4.
-                        const billersCell = firstSheet['B4'] || firstSheet['b4'];
-                        const billersNameRaw = billersCell && billersCell.v !== undefined ? String(billersCell.v).trim() : '';
-                        let billersName = billersNameRaw;
-
-                        // Auto-detect Report Date from Column B, Row 3 (B3) - parse to YYYY-MM-DD when possible
-                        const reportDateCell = firstSheet['B3'];
-                        const reportDateRaw = reportDateCell ? String(reportDateCell.v).trim() : '';
-                        let reportDate = '';
-                        if (reportDateRaw) {
-                            // Try to extract patterns like "FEBRUARY 03 2026" or "January 5 2026"
-                            const m = reportDateRaw.match(/([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})/);
-                            if (m) {
-                                const monthName = m[1].toUpperCase();
-                                const day = parseInt(m[2], 10);
-                                const year = parseInt(m[3], 10);
-                                const months = {JAN:1,JANUARY:1,FEB:2,FEBRUARY:2,MAR:3,MARCH:3,APR:4,APRIL:4,MAY:5,JUN:6,JUNE:6,JUL:7,JULY:7,AUG:8,AUGUST:8,SEP:9,SEPTEMBER:9,OCT:10,OCTOBER:10,NOV:11,NOVEMBER:11,DEC:12,DECEMBER:12};
-                                const mm = months[monthName] || months[monthName.slice(0,3)];
-                                if (mm) {
-                                    const mmStr = String(mm).padStart(2, '0');
-                                    const ddStr = String(day).padStart(2, '0');
-                                    reportDate = `${year}-${mmStr}-${ddStr}`;
-                                }
-                            } else {
-                                // fallback: try Date parser
-                                const ds = new Date(reportDateRaw);
-                                if (!isNaN(ds.getTime())) {
-                                    const y = ds.getFullYear();
-                                    const m = String(ds.getMonth() + 1).padStart(2, '0');
-                                    const d = String(ds.getDate()).padStart(2, '0');
-                                    reportDate = `${y}-${m}-${d}`;
-                                }
-                            }
-                        }
-                        
-                        if (selectedMode === 'multiple') {
-                            const minAllowedDate = '2026-05-25';
-                            if (!reportDate || reportDate < minAllowedDate) {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Invalid Upload Date',
-                                    html: `File: <strong>${file.name}</strong><br>Multiple mode only allows report date from <strong>May 25, 2026</strong> and above.`,
-                                    confirmButtonText: 'OK'
-                                });
-                                finishFileRead();
-                                return;
-                            }
-                        }
-
-                        // Validate source type
-                        if (sourceType !== 'KPX' && sourceType !== 'KP7') {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Invalid Source Type',
-                                html: `File: <strong>${file.name}</strong><br>Source Type in Column H, Row 3 must be either "KPX" or "KP7".<br>Found: "${sourceType}"`,
-                                confirmButtonText: 'OK'
-                            });
-                            finishFileRead();
-                            return;
-                        }
-
-                        // Validate partner ID exists
-                        if (!partnerId) {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Missing Partner ID',
-                                html: `File: <strong>${file.name}</strong><br>Partner ID not found in Column G, Row 3.`,
-                                confirmButtonText: 'OK'
-                            });
-                            finishFileRead();
-                            return;
-                        }
-
-                        // Special rule: only for KPX + partner_id_kpx=1074, billers name (B4) is required.
-                        if (sourceType === 'KPX' && String(partnerId) === '1074' && !billersName) {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Missing Billers Name',
-                                html: `File: <strong>${file.name}</strong><br>Billers Name not found in Cell B4.`,
-                                confirmButtonText: 'OK'
-                            });
-                            finishFileRead();
-                            return;
-                        }
-
-                        // Check if file already added
-                        const existingFile = uploadedFiles.find(f => f.name === file.name);
-                        if (existingFile) {
-                            Swal.fire({
-                                icon: 'warning',
-                                title: 'Duplicate File',
-                                text: `"${file.name}" has already been added.`,
-                                confirmButtonText: 'OK'
-                            });
-                            finishFileRead();
-                            return;
-                        }
-
-                        // Fetch partner name from database. For 1074/KPX use billers name lookup and keep
-                        // partner name fixed to SECURITY BANK to enforce business rule.
-                        const isSpecial1074 = sourceType === 'KPX' && String(partnerId) === '1074';
-                        const partnerLookupPayload = isSpecial1074
-                            ? { partner_name: billersName, filter_partner_id_kpx: '1074' }
-                            : { partner_id: partnerId };
-
-                        $.ajax({
-                            url: '../../../fetch/get_partner_name.php',
-                            method: 'POST',
-                            data: partnerLookupPayload,
-                            dataType: 'json',
-                            success: function(response) {
-                                if (isSpecial1074 && response.success && response.partner_name) {
-                                    billersName = response.partner_name;
-                                }
-
-                                const partnerName = isSpecial1074
-                                    ? 'SECURITY BANK'
-                                    : (response.success ? response.partner_name : 'Unknown Partner');
-
-                                const fileData = {
-                                    file: file,
-                                    name: file.name,
-                                    partnerId: partnerId,
-                                    partnerName: partnerName,
-                                    billersName: isSpecial1074 ? billersName : '',
-                                    subBillersId: null,
-                                    sourceType: sourceType,
-                                    report_date_raw: reportDateRaw,
-                                    report_date: reportDate,
-                                    importMode: selectedMode,
-                                    id: Date.now() + Math.random()
-                                };
-
-                                // If we have a billersName, attempt server-side resolve of sub_billers_id
-                                if (fileData.billersName) {
-                                    $.ajax({
-                                        url: '../../../fetch/resolve_subbiller.php',
-                                        method: 'POST',
-                                        data: { sub_billers_name: fileData.billersName },
-                                        dataType: 'json'
-                                    }).always(function(resp) {
-                                        try {
-                                            if (resp && resp.success && resp.sub_billers_id) {
-                                                fileData.subBillersId = resp.sub_billers_id;
-                                                // if partner_id is empty, adopt resolved partner_id when available
-                                                if ((!fileData.partnerId || fileData.partnerId === '') && resp.partner_id) {
-                                                    fileData.partnerId = resp.partner_id;
-                                                }
-                                            }
-                                        } catch (e) {}
-                                        uploadedFiles.push(fileData);
-                                        renderFileCards();
-                                        finishFileRead();
-                                    });
-                                } else {
-                                    uploadedFiles.push(fileData);
-                                    renderFileCards();
-                                    finishFileRead();
-                                }
-                            },
-                            error: function() {
-                                const fileData = {
-                                    file: file,
-                                    name: file.name,
-                                    partnerId: partnerId,
-                                    partnerName: isSpecial1074 ? 'SECURITY BANK' : 'Unknown Partner',
-                                    billersName: isSpecial1074 ? billersName : '',
-                                    subBillersId: null,
-                                    sourceType: sourceType,
-                                    importMode: selectedMode,
-                                    id: Date.now() + Math.random()
-                                };
-
-                                if (fileData.billersName) {
-                                    $.ajax({
-                                        url: '../../../fetch/resolve_subbiller.php',
-                                        method: 'POST',
-                                        data: { sub_billers_name: fileData.billersName },
-                                        dataType: 'json'
-                                    }).always(function(resp) {
-                                        try {
-                                            if (resp && resp.success && resp.sub_billers_id) {
-                                                fileData.subBillersId = resp.sub_billers_id;
-                                                if ((!fileData.partnerId || fileData.partnerId === '') && resp.partner_id) {
-                                                    fileData.partnerId = resp.partner_id;
-                                                }
-                                            }
-                                        } catch (e) {}
-                                        uploadedFiles.push(fileData);
-                                        renderFileCards();
-                                        finishFileRead();
-                                    });
-                                } else {
-                                    uploadedFiles.push(fileData);
-                                    renderFileCards();
-                                    finishFileRead();
-                                }
-                            }
-                        });
-
-                    } catch (error) {
-                        console.error('Error processing file:', error);
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'File Processing Error',
-                            html: `Error reading file: <strong>${file.name}</strong><br>${error.message}`,
-                            confirmButtonText: 'OK'
-                        });
-                        finishFileRead();
-                    }
-                };
-
-                reader.readAsArrayBuffer(file);
+            function formatIntegerForDisplay(value) {
+                const numericValue = Number(value || 0);
+                if (Number.isNaN(numericValue)) return '0';
+                return Math.trunc(numericValue).toLocaleString('en-US', {
+                    maximumFractionDigits: 0
+                });
             }
 
-            function renderFileCards() {
-                filesContainer.empty();
+            function getDisplayValue(row, key) {
+                if (key === 'amount_paid' || key === 'charge_customer' || key === 'charge_partner') {
+                    return formatAmountForDisplay(row[key]);
+                }
+                return formatDetailValue(row[key]);
+            }
 
-                if (uploadedFiles.length === 0) {
-                    proceedContainer.hide();
-                    if (typeof window.updateManualProceedVisibility === 'function') {
-                        window.updateManualProceedVisibility();
-                    }
-                    return;
+            function buildDetailTable(rows, columns, valueResolver, rowNumberResolver) {
+                if (!Array.isArray(rows) || rows.length === 0) {
+                    return '<div class="excel-detail-empty">No parsed Excel data available.</div>';
                 }
 
-                uploadedFiles.forEach(fileData => {
-                    let statusIcon = '';
-                    const isMultipleModeCard = String(fileData.importMode || '').toLowerCase() === 'multiple';
-                    if (fileData.status === 'reading') {
-                        statusIcon = '<i class="fa-solid fa-spinner fa-spin text-primary"></i>';
-                    } else if (fileData.status === 'valid') {
-                        statusIcon = '<i class="fa-solid fa-circle-check text-success"></i>';
-                    } else if (fileData.status === 'duplicates') {
-                        statusIcon = '<i class="fa-solid fa-circle-xmark text-warning"></i>';
-                    } else if (fileData.status === 'error') {
-                        statusIcon = '<i class="fa-solid fa-circle-exclamation text-danger"></i>';
+                const headerHtml = '<th>No.</th>' + columns.map(function(col) {
+                    return '<th>' + escapeHtml(col.label) + '</th>';
+                }).join('');
+
+                const bodyHtml = rows.map(function(row, rowIndex) {
+                    const cells = columns.map(function(col) {
+                        const displayValue = valueResolver(row, col.key);
+                        const amountClass = (col.key === 'amount_paid' || col.key === 'charge_customer' || col.key === 'charge_partner') ? ' class="text-end"' : '';
+                        return '<td' + amountClass + ' title="' + escapeHtml(displayValue) + '">' + escapeHtml(displayValue) + '</td>';
+                    }).join('');
+                    const rowNumber = typeof rowNumberResolver === 'function' ? rowNumberResolver(row, rowIndex) : formatIntegerForDisplay(rowIndex + 1);
+                    return '<tr><td>' + escapeHtml(rowNumber) + '</td>' + cells + '</tr>';
+                }).join('');
+
+                return '<div class="excel-detail-table-wrap">'
+                    + '<table class="excel-detail-table">'
+                    + '<thead><tr>' + headerHtml + '</tr></thead>'
+                    + '<tbody>' + bodyHtml + '</tbody>'
+                    + '</table>'
+                    + '</div>';
+            }
+
+            function buildExcelDetailTable(rows) {
+                return buildDetailTable(rows, excelDetailColumns, getDisplayValue);
+            }
+
+            function buildOriginalDetailTable(rows) {
+                return buildDetailTable(rows, originalDetailColumns, function(row, key) {
+                    if (key === 'amount_paid' || key === 'charge_customer' || key === 'charge_partner') {
+                        return formatAmountForDisplay(row[key]);
+                    }
+                    return formatDetailValue(row[key]);
+                }, function(row) {
+                    return formatDetailValue(row.excel_no);
+                });
+            }
+
+            function buildExcelDetailModeControls() {
+                return '<div class="excel-detail-mode-bar">'
+                    + '<label class="excel-detail-mode-option">'
+                    + '<input type="radio" name="excelDetailDataMode" value="original" checked>'
+                    + '<span>Original Data Mode</span>'
+                    + '</label>'
+                    + '<label class="excel-detail-mode-option">'
+                    + '<input type="radio" name="excelDetailDataMode" value="developer">'
+                    + '<span>Developer Data Mode</span>'
+                    + '</label>'
+                    + '</div>';
+            }
+
+            function buildExcelDetailContent(fileData, mode) {
+                const selectedMode = mode === 'original' ? 'original' : 'developer';
+                const originalRows = fileData && Array.isArray(fileData.originalRows) ? fileData.originalRows : [];
+                const developerRows = fileData && Array.isArray(fileData.parsedRows) ? fileData.parsedRows : [];
+                return selectedMode === 'original' ? buildOriginalDetailTable(originalRows) : buildExcelDetailTable(developerRows);
+            }
+
+            async function fetchBranchCodesByBranch(branchIds, regionNames, branchCodeLookups) {
+                const uniqueBranchIds = Array.from(new Set((branchIds || [])
+                    .map(function(branchId) { return String(branchId || '').trim(); })
+                    .filter(function(branchId) { return branchId !== ''; })));
+                const uniqueRegionNames = Array.from(new Set((regionNames || [])
+                    .map(function(regionName) { return String(regionName || '').trim(); })
+                    .filter(function(regionName) { return regionName !== ''; })));
+                const branchCodeLookupList = Array.isArray(branchCodeLookups) ? branchCodeLookups : [];
+
+                if (uniqueBranchIds.length === 0 && uniqueRegionNames.length === 0 && branchCodeLookupList.length === 0) return {};
+
+                try {
+                    const response = await fetch('get-region-code-by-branch.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({
+                            branch_ids: uniqueBranchIds,
+                            region_names: uniqueRegionNames,
+                            branch_code_lookups: branchCodeLookupList
+                        })
+                    });
+
+                    if (!response.ok) {
+                        console.error('get-region-code-by-branch.php HTTP error:', response.status);
+                        return {};
                     }
 
-                    const card = $(`
-                        <div class="file-card" data-id="${fileData.id}">
+                    const result = await response.json();
+                    if (!result || result.success !== true || (!result.branches && !result.regions && !result.region_names)) {
+                        console.error('get-region-code-by-branch.php error:', result && result.error);
+                        return {};
+                    }
+
+                    if (result.branches || result.region_names) {
+                        return {
+                            branches: result.branches || {},
+                            region_names: result.region_names || {},
+                            branch_codes: result.branch_codes || {}
+                        };
+                    }
+
+                    const branchMap = {};
+                    Object.keys(result.regions || {}).forEach(function(branchId) {
+                        branchMap[branchId] = {
+                            region_code: result.regions[branchId],
+                            zone_code: null
+                        };
+                    });
+                    return {
+                        branches: branchMap,
+                        region_names: {},
+                        branch_codes: {}
+                    };
+                } catch (err) {
+                    console.error('[fetchBranchCodesByBranch][exception]', err && err.message ? err.message : String(err));
+                    return {};
+                }
+            }
+
+            async function enrichRowsWithBranchCodes(rows) {
+                const lookupMap = await fetchBranchCodesByBranch((rows || []).map(function(row) {
+                    return row.branch_id;
+                }), (rows || []).map(function(row) {
+                    return String(row.source_type || '').toUpperCase() === 'KP7' ? row.region_name : '';
+                }));
+                const branchMap = lookupMap.branches || {};
+                const regionNameMap = lookupMap.region_names || {};
+
+                (rows || []).forEach(function(row) {
+                    const isKp7 = String(row.source_type || '').toUpperCase() === 'KP7';
+                    const lookupKey = isKp7 ? String(row.region_name || '').trim() : String(row.branch_id || '').trim();
+                    const lookupSource = isKp7 ? regionNameMap : branchMap;
+                    const branchCodes = Object.prototype.hasOwnProperty.call(lookupSource, lookupKey) ? lookupSource[lookupKey] : null;
+                    row.region_code = branchCodes ? branchCodes.region_code : null;
+                    row.zone_code = branchCodes ? branchCodes.zone_code : null;
+                });
+
+                return rows;
+            }
+
+            function getPartnerLookupKey(row) {
+                const sourceType = String(row && row.source_type ? row.source_type : '').trim().toUpperCase();
+                const partnerId = String(row && row.partner_id ? row.partner_id : '').trim();
+                const partnerIdKpx = String(row && row.partner_id_kpx ? row.partner_id_kpx : '').trim();
+                const partnerName = String(row && row.partner_name ? row.partner_name : '').trim();
+                if (sourceType === 'KP7' && partnerId !== '') return 'kp7:' + partnerId;
+                return partnerIdKpx !== '' ? 'kpx:' + partnerIdKpx : 'name:' + partnerName;
+            }
+
+            async function fetchPartnerCodes(rows) {
+                const partnerMap = {};
+                (rows || []).forEach(function(row) {
+                    const key = getPartnerLookupKey(row);
+                    if (key === 'name:' || partnerMap[key]) return;
+                    partnerMap[key] = {
+                        key: key,
+                        source_type: String(row.source_type || '').trim(),
+                        partner_id: String(row.partner_id || '').trim(),
+                        partner_id_kpx: String(row.partner_id_kpx || '').trim(),
+                        partner_name: String(row.partner_name || '').trim()
+                    };
+                });
+
+                const partners = Object.values(partnerMap);
+                if (partners.length === 0) return {};
+
+                try {
+                    const response = await fetch('get-partner-codes.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ partners: partners })
+                    });
+
+                    if (!response.ok) {
+                        console.error('get-partner-codes.php HTTP error:', response.status);
+                        return {};
+                    }
+
+                    const result = await response.json();
+                    if (!result || result.success !== true || !result.partners) {
+                        console.error('get-partner-codes.php error:', result && result.error);
+                        return {};
+                    }
+
+                    return result.partners;
+                } catch (err) {
+                    console.error('[fetchPartnerCodes][exception]', err && err.message ? err.message : String(err));
+                    return {};
+                }
+            }
+
+            async function enrichRowsWithPartnerCodes(rows) {
+                const partnerMap = await fetchPartnerCodes(rows);
+
+                (rows || []).forEach(function(row) {
+                    const key = getPartnerLookupKey(row);
+                    const partnerCodes = Object.prototype.hasOwnProperty.call(partnerMap, key) ? partnerMap[key] : null;
+                    row.partner_id = partnerCodes ? partnerCodes.partner_id : row.partner_id;
+                    row.gl_code = partnerCodes ? partnerCodes.gl_code : row.gl_code;
+                    if (isEmpty(row.partner_id_kpx) && partnerCodes && !isEmpty(partnerCodes.partner_id_kpx)) {
+                        row.partner_id_kpx = partnerCodes.partner_id_kpx;
+                    }
+                });
+
+                return rows;
+            }
+
+            function buildDebugImportPayload() {
+                return {
+                    files: uploadedFiles.map(function(fileData) {
+                        return {
+                            filename: fileData.name,
+                            file_source_type: fileData.sourceType,
+                            rows: (fileData.parsedRows || []).map(function(row) {
+                                return {
+                                    filename: fileData.name,
+                                    file_source_type: fileData.sourceType,
+                                    report_date: row.report_date,
+                                    source_type: row.source_type,
+                                    status: row.status,
+                                    datetime: row.datetime,
+                                    cancellation_date: row.cancellation_date,
+                                    control_no: row.control_no,
+                                    reference_no: row.reference_no,
+                                    payor_name: row.payor_name,
+                                    address: row.address,
+                                    account_no: row.account_no,
+                                    account_name: row.account_name,
+                                    amount_paid: row.amount_paid,
+                                    charge_customer: row.charge_customer,
+                                    charge_partner: row.charge_partner,
+                                    contact_no: row.contact_no,
+                                    other_details: row.other_details,
+                                    branch_id: row.branch_id,
+                                    branch_code: row.branch_code,
+                                    branch_outlet: row.branch_outlet,
+                                    zone_code: row.zone_code,
+                                    region_code: row.region_code,
+                                    region_name: row.region_name,
+                                    operator: row.operator,
+                                    remote_branch: row.remote_branch,
+                                    remote_operator: row.remote_operator,
+                                    second_approver: row.second_approver,
+                                    '2nd_approver': row.second_approver,
+                                    partner_name: row.partner_name,
+                                    partner_id_kpx: row.partner_id_kpx,
+                                    partner_id: row.partner_id,
+                                    gl_code: row.gl_code,
+                                    post_transaction: row.post_transaction,
+                                    imported_date: row.imported_date,
+                                    imported_by: row.imported_by
+                                };
+                            })
+                        };
+                    })
+                };
+            }
+
+            async function submitDebugImportPayload() {
+                const response = await fetch('../../../models/saved/saved_billspayImportFile_NEW.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(buildDebugImportPayload())
+                });
+
+                const result = await response.json();
+                if (!response.ok || !result || result.success !== true) {
+                    throw new Error(result && result.error ? result.error : 'Unable to validate parsed JSON payload.');
+                }
+
+                return result;
+            }
+
+            function showExcelDetails(fileData) {
+                Swal.fire({
+                    title: escapeHtml(fileData && fileData.name ? fileData.name : 'Excel Data Details'),
+                    html: buildExcelDetailModeControls() + '<div id="excelDetailTableHost">' + buildExcelDetailContent(fileData, 'original') + '</div>',
+                    width: '96vw',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    allowEnterKey: false,
+                    customClass: {
+                        popup: 'excel-detail-popup'
+                    },
+                    showConfirmButton: true,
+                    confirmButtonText: 'Close',
+                    didOpen: function() {
+                        const tableHost = document.getElementById('excelDetailTableHost');
+                        document.querySelectorAll('input[name="excelDetailDataMode"]').forEach(function(input) {
+                            input.addEventListener('change', function() {
+                                if (tableHost) {
+                                    tableHost.innerHTML = buildExcelDetailContent(fileData, input.value);
+                                }
+                            });
+                        });
+                    }
+                });
+            }
+
+            function getStandardHeaderMap(isAllPartners, sourceType) {
+                const normalizedSourceType = normalizeHeader(sourceType);
+                if (isAllPartners && normalizedSourceType === 'KP7') {
+                    return {
+                        C: 'DATE / TIME',
+                        D: 'CONTROL NO.',
+                        E: 'REFERENCE NO.',
+                        F: 'PAYOR',
+                        G: 'ADDRESS',
+                        H: 'ACCOUNT NO.',
+                        I: '"ACCOUNT NAME"',
+                        J: '"AMOUNT PAID"',
+                        K: 'CHARGE TO PARTNER',
+                        L: 'CHARGE TO CUSTOMER',
+                        M: '"CONTACT NO."',
+                        N: 'OTHER DETAILS',
+                        O: 'ML OUTLET',
+                        P: 'Region',
+                        Q: 'OPERATOR',
+                        R: 'PARTNER NAME',
+                        S: 'PARTNER ID'
+                    };
+                }
+
+                if (isAllPartners) {
+                    return {
+                        B: 'Date / Time',
+                        C: 'Control No.',
+                        D: 'Reference No.',
+                        E: 'Payor',
+                        F: 'Address',
+                        G: 'Account No.',
+                        H: 'Account Name',
+                        I: 'Amount Paid',
+                        J: 'Charge to Customer',
+                        K: 'Charge to Partner',
+                        L: 'Other Details',
+                        M: 'Branch ID',
+                        N: 'ML Outlet',
+                        O: 'Region Code',
+                        P: 'Region',
+                        Q: 'Operator',
+                        R: 'Remote Branch',
+                        S: 'Remote Operator',
+                        T: '2nd Approver',
+                        U: 'Partner ID',
+                        V: 'Partner Name'
+                    };
+                }
+
+                return {
+                    B: 'Date / Time',
+                    C: 'Control No.',
+                    D: 'Reference No.',
+                    E: 'Payor',
+                    F: 'Address',
+                    G: 'Account No.',
+                    H: 'Account Name',
+                    I: 'Amount Paid',
+                    J: 'Charge to Customer',
+                    K: 'Charge to Partner',
+                    L: 'Contact No.',
+                    M: 'Other Details',
+                    N: 'Branch ID',
+                    O: 'ML Outlet',
+                    P: 'Region Code',
+                    Q: 'Region',
+                    R: 'Operator',
+                    S: 'Remote Branch',
+                    T: 'Remote Operator',
+                    U: '2nd Approver',
+                };
+            }
+
+            function validateHeaderRow(sheet, headerMap) {
+                const mismatches = [];
+                Object.keys(headerMap).forEach(function(col) {
+                    const actual = getCellValue(sheet, col + '9');
+                    const expected = headerMap[col];
+                    if (normalizeHeader(actual) !== normalizeHeader(expected)) {
+                        mismatches.push({
+                            cell: col + '9',
+                            expected: expected,
+                            actual: actual
+                        });
+                    }
+                });
+                return mismatches;
+            }
+
+            function getWorksheetLastRow(sheet) {
+                if (!sheet || !sheet['!ref']) return 0;
+                return XLSX.utils.decode_range(sheet['!ref']).e.r + 1;
+            }
+
+            function hasTransactionData(sheet, row, isAllPartners) {
+                const columns = isAllPartners
+                    ? ['B','C','D','E','G','I','M','U','V']
+                    : ['B','C','D','E','G','I','N'];
+                return columns.some(function(col) {
+                    return !isEmpty(getCellValue(sheet, col + row));
+                });
+            }
+
+            function buildOriginalDataRow(sheet, row, isAllPartners, partnerCell, sourceType) {
+                const normalizedSourceType = normalizeHeader(sourceType);
+                if (isAllPartners && normalizedSourceType === 'KP7') {
+                    return {
+                        excel_no: getCellValue(sheet, 'A' + row),
+                        date_time: getCellValue(sheet, 'C' + row),
+                        control_no: getCellValue(sheet, 'D' + row),
+                        reference_no: getCellValue(sheet, 'E' + row),
+                        payor: getCellValue(sheet, 'F' + row),
+                        address: getCellValue(sheet, 'G' + row),
+                        account_no: getCellValue(sheet, 'H' + row),
+                        account_name: getCellValue(sheet, 'I' + row),
+                        amount_paid: getCellValue(sheet, 'J' + row),
+                        charge_customer: getCellValue(sheet, 'L' + row),
+                        charge_partner: getCellValue(sheet, 'K' + row),
+                        contact_no: getCellValue(sheet, 'M' + row),
+                        other_details: getCellValue(sheet, 'N' + row),
+                        branch_id: '',
+                        ml_outlet: getCellValue(sheet, 'O' + row),
+                        region_code: '',
+                        region: getCellValue(sheet, 'P' + row),
+                        operator: getCellValue(sheet, 'Q' + row),
+                        remote_branch: '',
+                        remote_operator: '',
+                        second_approver: '',
+                        partner_id: getCellValue(sheet, 'S' + row),
+                        partner_name: getCellValue(sheet, 'R' + row)
+                    };
+                }
+
+                if (isAllPartners) {
+                    return {
+                        excel_no: getCellValue(sheet, 'A' + row),
+                        date_time: getCellValue(sheet, 'B' + row),
+                        control_no: getCellValue(sheet, 'C' + row),
+                        reference_no: getCellValue(sheet, 'D' + row),
+                        payor: getCellValue(sheet, 'E' + row),
+                        address: getCellValue(sheet, 'F' + row),
+                        account_no: getCellValue(sheet, 'G' + row),
+                        account_name: getCellValue(sheet, 'H' + row),
+                        amount_paid: getCellValue(sheet, 'I' + row),
+                        charge_customer: getCellValue(sheet, 'J' + row),
+                        charge_partner: getCellValue(sheet, 'K' + row),
+                        contact_no: '',
+                        other_details: getCellValue(sheet, 'L' + row),
+                        branch_id: getCellValue(sheet, 'M' + row),
+                        ml_outlet: getCellValue(sheet, 'N' + row),
+                        region_code: getCellValue(sheet, 'O' + row),
+                        region: getCellValue(sheet, 'P' + row),
+                        operator: getCellValue(sheet, 'Q' + row),
+                        remote_branch: getCellValue(sheet, 'R' + row),
+                        remote_operator: getCellValue(sheet, 'S' + row),
+                        second_approver: getCellValue(sheet, 'T' + row),
+                        partner_id: getCellValue(sheet, 'U' + row),
+                        partner_name: getCellValue(sheet, 'V' + row)
+                    };
+                }
+
+                return {
+                    excel_no: getCellValue(sheet, 'A' + row),
+                    date_time: getCellValue(sheet, 'B' + row),
+                    control_no: getCellValue(sheet, 'C' + row),
+                    reference_no: getCellValue(sheet, 'D' + row),
+                    payor: getCellValue(sheet, 'E' + row),
+                    address: getCellValue(sheet, 'F' + row),
+                    account_no: getCellValue(sheet, 'G' + row),
+                    account_name: getCellValue(sheet, 'H' + row),
+                    amount_paid: getCellValue(sheet, 'I' + row),
+                    charge_customer: getCellValue(sheet, 'J' + row),
+                    charge_partner: getCellValue(sheet, 'K' + row),
+                    contact_no: getCellValue(sheet, 'L' + row),
+                    other_details: getCellValue(sheet, 'M' + row),
+                    branch_id: getCellValue(sheet, 'N' + row),
+                    ml_outlet: getCellValue(sheet, 'O' + row),
+                    region_code: getCellValue(sheet, 'P' + row),
+                    region: getCellValue(sheet, 'Q' + row),
+                    operator: getCellValue(sheet, 'R' + row),
+                    remote_branch: getCellValue(sheet, 'S' + row),
+                    remote_operator: getCellValue(sheet, 'T' + row),
+                    second_approver: getCellValue(sheet, 'U' + row),
+                    partner_id: '',
+                    partner_name: partnerCell
+                };
+            }
+
+            function isTransactionRowEmpty(sheet, row, isAllPartners) {
+                const columns = isAllPartners
+                    ? ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V']
+                    : ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U'];
+                return columns.every(function(col) {
+                    return isEmpty(getCellValue(sheet, col + row));
+                });
+            }
+
+            function parseKpxRowsFromSheet(sheet, sourceType) {
+                const partnerCell = getCellValue(sheet, 'B4');
+                const normalizedSourceType = normalizeHeader(sourceType);
+                const isAllPartners = normalizeHeader(partnerCell) === 'ALL PARTNERS' || normalizedSourceType === 'KP7';
+                const headerMap = getStandardHeaderMap(isAllPartners, sourceType);
+                const headerErrors = validateHeaderRow(sheet, headerMap);
+
+                if (headerErrors.length > 0) {
+                    return {
+                        success: false,
+                        isAllPartners: isAllPartners,
+                        headerErrors: headerErrors,
+                        rows: []
+                    };
+                }
+
+                const reportDate = normalizeExcelDateCell(sheet, 'B3');
+                const importedDate = new Date().toISOString().slice(0, 10);
+                const lastRow = getWorksheetLastRow(sheet);
+                const rows = [];
+                const originalRows = [];
+
+                for (let row = 10; row <= lastRow; row++) {
+                    if (isTransactionRowEmpty(sheet, row, isAllPartners)) break;
+                    if (!hasTransactionData(sheet, row, isAllPartners)) continue;
+
+                    const status = getStatusMarker(sheet, row);
+                    const isCancelled = status === '*';
+                    const isKp7 = normalizedSourceType === 'KP7';
+                    const branchId = isKp7 ? null : getCellValue(sheet, (isAllPartners ? 'M' : 'N') + row);
+                    const partnerName = isKp7 ? getCellValue(sheet, 'R' + row) : (isAllPartners ? getCellValue(sheet, 'V' + row) : partnerCell);
+                    const partnerIdKpx = isKp7 ? null : (isAllPartners ? getCellValue(sheet, 'U' + row) : null);
+                    const partnerId = isKp7 ? getCellValue(sheet, 'S' + row) : null;
+                    const referenceNo = getCellValue(sheet, (isKp7 ? 'E' : 'D') + row);
+
+                    rows.push({
+                        report_date: reportDate,
+                        source_type: sourceType,
+                        status: status,
+                        datetime: getCellValue(sheet, (isKp7 ? 'C' : 'B') + row),
+                        cancellation_date: isCancelled ? reportDate : null,
+                        control_no: getCellValue(sheet, (isKp7 ? 'D' : 'C') + row),
+                        reference_no: referenceNo,
+                        payor_name: getCellValue(sheet, (isKp7 ? 'F' : 'E') + row),
+                        address: getCellValue(sheet, (isKp7 ? 'G' : 'F') + row),
+                        account_no: getCellValue(sheet, (isKp7 ? 'H' : 'G') + row),
+                        account_name: getCellValue(sheet, (isKp7 ? 'I' : 'H') + row),
+                        amount_paid: normalizeAmountValue(getCellValue(sheet, (isKp7 ? 'J' : 'I') + row)),
+                        charge_customer: normalizeAmountValue(getCellValue(sheet, (isKp7 ? 'L' : 'J') + row)),
+                        charge_partner: normalizeAmountValue(getCellValue(sheet, (isKp7 ? 'K' : 'K') + row)),
+                        contact_no: isKp7 ? getCellValue(sheet, 'M' + row) : (isAllPartners ? null : getCellValue(sheet, 'L' + row)),
+                        other_details: getCellValue(sheet, (isKp7 ? 'N' : (isAllPartners ? 'L' : 'M')) + row),
+                        branch_id: branchId,
+                        branch_code: isKp7 ? getBranchCodeFromReference(referenceNo) : null,
+                        branch_outlet: getCellValue(sheet, (isKp7 ? 'O' : (isAllPartners ? 'N' : 'O')) + row),
+                        zone_code: null,
+                        region_code: null,
+                        region_code_lookup: {
+                            table: 'masterdata.branch_profile',
+                            branch_id: branchId
+                        },
+                        region_name: getCellValue(sheet, (isKp7 ? 'P' : (isAllPartners ? 'P' : 'Q')) + row),
+                        operator: getCellValue(sheet, (isKp7 ? 'Q' : (isAllPartners ? 'Q' : 'R')) + row),
+                        remote_branch: isKp7 ? null : getCellValue(sheet, (isAllPartners ? 'R' : 'S') + row),
+                        remote_operator: isKp7 ? null : getCellValue(sheet, (isAllPartners ? 'S' : 'T') + row),
+                        second_approver: isKp7 ? null : getCellValue(sheet, (isAllPartners ? 'T' : 'U') + row),
+                        partner_name: partnerName,
+                        partner_id_kpx: partnerIdKpx,
+                        partner_id: partnerId,
+                        gl_code: null,
+                        partner_lookup: isKp7 && !isEmpty(partnerId)
+                            ? { table: 'masterdata.partner_masterfile', partner_id: partnerId }
+                            : isAllPartners && !isEmpty(partnerIdKpx)
+                            ? { table: 'masterdata.partner_masterfile', partner_id_kpx: partnerIdKpx }
+                            : { table: 'masterdata.partner_masterfile', partner_name: partnerName },
+                        post_transaction: 'unposted',
+                        imported_date: importedDate,
+                        imported_by: currentImportedBy,
+                        source_row: row
+                    });
+                    originalRows.push(buildOriginalDataRow(sheet, row, isAllPartners, partnerCell, sourceType));
+                }
+
+                return {
+                    success: true,
+                    isAllPartners: isAllPartners,
+                    headerErrors: [],
+                    rows: rows,
+                    originalRows: originalRows
+                };
+            }
+
+            function readWorkbook(file) {
+                return new Promise(function(resolve, reject) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const data = new Uint8Array(e.target.result);
+                            resolve(XLSX.read(data, { type: 'array', cellDates: true }));
+                        } catch (err) {
+                            reject(err);
+                        }
+                    };
+                    reader.onerror = function() { reject(reader.error); };
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
+            async function parseTransactionFile(file, sourceType) {
+                const workbook = await readWorkbook(file);
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                const effectiveSourceType = sourceType === 'UNKNOWN' && detectKp7HeaderIdentifier(sheet) ? 'KP7' : sourceType;
+
+                if (effectiveSourceType !== 'KPX' && effectiveSourceType !== 'KP7') {
+                    return {
+                        success: false,
+                        rows: [],
+                        headerErrors: [],
+                        message: 'Only KPX and KP7 parsing are configured in this debug page.'
+                    };
+                }
+
+                const parsed = parseKpxRowsFromSheet(sheet, effectiveSourceType);
+                if (parsed.success) {
+                    parsed.rows = await fillMissingBranchIdsFromOutlet(parsed.rows);
+                    parsed.rows = await enrichRowsWithBranchCodes(parsed.rows);
+                    parsed.rows = await fillMissingKp7RegionCodesFromJson(parsed.rows);
+                    parsed.rows = await fillMissingKp7BranchIdsByCodeRegion(parsed.rows);
+                    parsed.rows = await enrichRowsWithPartnerCodes(parsed.rows);
+                }
+                parsed.sheetName = sheetName;
+                return parsed;
+            }
+
+            async function detectSourceType(file) {
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const response = await fetch('detect-source-type.php', {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'same-origin'
+                    });
+
+                    if (!response.ok) {
+                        console.error('detect-source-type.php HTTP error:', response.status);
+                        return 'UNKNOWN';
+                    }
+
+                    const result = await response.json();
+                    console.log('[detectSourceType][response]', {
+                        fileName: file && file.name ? file.name : '',
+                        fileSize: file && file.size ? file.size : 0,
+                        httpStatus: response.status,
+                        payload: result
+                    });
+                    if (!result || result.success !== true) {
+                        console.error('detect-source-type.php error:', result && result.error);
+                        return 'UNKNOWN';
+                    }
+
+                    const detected = String(result.sourceType || 'UNKNOWN').toUpperCase();
+                    console.log('[detectSourceType][final]', {
+                        fileName: file && file.name ? file.name : '',
+                        sourceType: detected
+                    });
+                    return detected;
+                } catch (err) {
+                    console.error('[detectSourceType][exception]', {
+                        fileName: file && file.name ? file.name : '',
+                        message: err && err.message ? err.message : String(err)
+                    });
+                    return 'UNKNOWN';
+                }
+            }
+
+            async function handleFiles(files) {
+                showLoadingOverlay();
+                try {
+                    const fileArray = Array.from(files || []);
+                    const excelFiles = fileArray.filter(file => {
+                        const extension = file.name.split('.').pop().toLowerCase();
+                        return extension === 'xls' || extension === 'xlsx';
+                    });
+
+                    if (excelFiles.length !== fileArray.length) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Invalid File Type',
+                            text: 'Please select only Excel files (.xls, .xlsx)'
+                        });
+                    }
+
+                    for (const file of excelFiles) {
+                        if (!uploadedFiles.find(f => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified)) {
+                            const sourceType = await detectSourceType(file);
+                            let parsedData;
+                            try {
+                                parsedData = await parseTransactionFile(file, sourceType);
+                            } catch (err) {
+                                console.error('[parseTransactionFile][exception]', {
+                                    fileName: file && file.name ? file.name : '',
+                                    message: err && err.message ? err.message : String(err)
+                                });
+                                parsedData = {
+                                    success: false,
+                                    rows: [],
+                                    headerErrors: [],
+                                    message: 'Failed to read Excel rows.'
+                                };
+                            }
+                            const fileData = {
+                                name: file.name,
+                                size: file.size,
+                                lastModified: file.lastModified,
+                                file: file,
+                                sourceType: sourceType,
+                                parsedRows: parsedData.rows || [],
+                                originalRows: parsedData.originalRows || [],
+                                parsedMeta: parsedData
+                            };
+
+                            uploadedFiles.push(fileData);
+                            parsedTransactionRows = parsedTransactionRows.concat(fileData.parsedRows);
+                            window.parsedTransactionRows = parsedTransactionRows;
+
+                            if (!parsedData.success) {
+                                const headerText = parsedData.headerErrors && parsedData.headerErrors.length
+                                    ? parsedData.headerErrors.map(err => `${err.cell}: expected "${err.expected}", got "${err.actual || '(blank)'}"`).join('\n')
+                                    : (parsedData.message || 'Unable to parse transaction rows.');
+                                Swal.fire({
+                                    icon: 'warning',
+                                    title: 'Header Validation Failed',
+                                    text: `${file.name}\n${headerText}`
+                                });
+                            }
+                        }
+                    }
+
+                    renderFiles();
+                } finally {
+                    hideLoadingOverlay();
+                }
+            }
+
+            function renderFiles() {
+                filesContainer.empty();
+                uploadedFiles.forEach((item, index) => {
+                    const parsedCount = Array.isArray(item.parsedRows) ? item.parsedRows.length : 0;
+                    const parseStatus = item.parsedMeta && item.parsedMeta.success ? `${formatIntegerForDisplay(parsedCount)} row(s)` : '-';
+                    filesContainer.append(`
+                        <div class="file-card">
+                            <span class="file-card-view" data-index="${index}" title="View Excel data details"><i class="fa-solid fa-eye"></i></span>
+                            <span class="file-card-delete" data-index="${index}"><i class="fa-solid fa-xmark"></i></span>
                             <div class="file-card-header">
                                 <div class="file-card-info">
-                                    <div class="file-card-label">Filename ${statusIcon ? `<span class="ms-2">${statusIcon}</span>` : ''}</div>
-                                    <div class="file-card-value">${fileData.name}</div>
-                                </div>
-                                <div class="file-card-delete" title="Remove file">
-                                    <i class="fa-solid fa-xmark"></i>
+                                    <div class="file-card-label">File Name</div>
+                                    <div class="file-card-value">${escapeHtml(item.name)}</div>
                                 </div>
                             </div>
                             <div class="file-card-body"></div>
                             <div class="file-card-footer">
-                                ${!isMultipleModeCard ? `
-                                    <div class="file-card-detail">
-                                        <div class="file-card-label">Sub Billers ID</div>
-                                        <div class="file-card-value">
-                                            ${fileData.subBillersId !== undefined && fileData.subBillersId !== null ? fileData.subBillersId : null}
-                                        </div>
-                                    </div>
-                                    <div class="file-card-detail">
-                                        <div class="file-card-label">Partner ID</div>
-                                        <div class="file-card-value partner-tooltip">
-                                            ${fileData.partnerId}
-                                            <span class="tooltip-text">${fileData.billersName ? ('Partner Name: ' + fileData.partnerName + '<br>Sub Billers Name: ' + fileData.billersName) : fileData.partnerName}</span>
-                                        </div>
-                                    </div>
-                                ` : ''}
                                 <div class="file-card-detail">
-                                    <div class="file-card-label">${isMultipleModeCard ? 'Source File' : 'Source Type'}</div>
+                                    <div class="file-card-label">No. of Data Row(s)</div>
+                                    <div class="file-card-value">${escapeHtml(parseStatus)}</div>
+                                </div>
+                                <div class="file-card-detail">
+                                    <div class="file-card-label">Source Type</div>
                                     <div class="file-card-value">
-                                        <span class="badge-source ${fileData.sourceType === 'KPX' ? 'badge-kpx' : 'badge-kp7'}">
-                                            ${fileData.sourceType}
-                                        </span>
+                                        <span class="badge-source ${item.sourceType === 'KP7' ? 'badge-kp7' : (item.sourceType === 'KPX' ? 'badge-kpx' : '')}">${escapeHtml(item.sourceType || 'UNKNOWN')}</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     `);
-
-                    card.find('.file-card-delete').on('click', function() {
-                        removeFile(fileData.id);
-                    });
-
-                    filesContainer.append(card);
                 });
 
-                proceedContainer.show();
-                if (typeof window.updateManualProceedVisibility === 'function') {
-                    window.updateManualProceedVisibility();
+                if (uploadedFiles.length > 0) {
+                    proceedContainer.show();
+                    const count = uploadedFiles.length;
+                    proceedBtn.html(`<i class="fa-solid fa-paper-plane me-2" aria-hidden="true"></i>${count > 1 ? `Proceed (${count})` : 'Proceed'}`);
+                } else {
+                    proceedContainer.hide();
                 }
             }
 
-            // Manual proceed visibility and submit handling
-            (function() {
-                var $manualFileInput = $('#manualFileInput');
-                var $manualProceed = $('#manualProceed');
-
-                window.updateManualProceedVisibility = function() {
-                    if (!$manualProceed || $manualProceed.length === 0) return;
-                    var fi = $manualFileInput && $manualFileInput.length ? $manualFileInput[0] : null;
-                    var hasNativeFile = !!(fi && fi.files && fi.files.length > 0);
-                    var hasDroppedFiles = !!(window.uploadedFiles && window.uploadedFiles.length > 0);
-                    if (hasNativeFile || hasDroppedFiles) {
-                        $manualProceed.show();
-                    } else {
-                        $manualProceed.hide();
-                    }
-                };
-
-                window.updateManualProceedVisibility();
-                if ($manualFileInput && $manualFileInput.length) {
-                    $manualFileInput.on('change', window.updateManualProceedVisibility);
-                }
-
-                $('#manualUploadForm').off('submit.manual').on('submit.manual', function(e) {
-                    e.preventDefault();
-
-                    var selectedCompany = $('#manualCompanyInput').val();
-                    var fileType = $('#manualFileType').val();
-                    if (!fileType) {
-                        Swal.fire({ icon: 'warning', title: 'Missing File Type', text: 'Please select a source file type (KPX or KP7).', confirmButtonText: 'OK' });
-                        return false;
-                    }
-
-                    var fi = $('#manualFileInput')[0];
-                    var hasNativeFile = !!(fi && fi.files && fi.files.length > 0);
-                    var hasDroppedFiles = !!(window.uploadedFiles && window.uploadedFiles.length > 0);
-                    if (!hasNativeFile && !hasDroppedFiles) {
-                        $('#loading-overlay').hide();
-                        return false;
-                    }
-
-                    $('#loading-overlay').css('display', 'flex');
-                    checkManualDuplicates(this);
-                    return false;
-                });
-            })();
-
-            // Remove file from array
-            function removeFile(fileId) {
-                uploadedFiles = uploadedFiles.filter(f => f.id !== fileId);
-                renderFileCards();
-            }
-
-            // Proceed button click
-            proceedBtn.on('click', function() {
-                if (uploadedFiles.length === 0) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'No Files Selected',
-                        text: 'Please select at least one file to proceed.',
-                        confirmButtonText: 'OK'
-                    });
-                    return;
-                }
-
-                // Start duplicate check flow
-                $('#loading-overlay').css('display', 'flex');
-                checkForDuplicates();
+            $(document).on('click', '.file-card-view', function(e) {
+                e.stopPropagation();
+                const index = Number($(this).data('index'));
+                showExcelDetails(uploadedFiles[index]);
             });
 
-            // Function to check for duplicates (batched to avoid PHP's max_file_uploads limit)
-            function checkForDuplicates() {
-                // Set all files to "reading" status
-                uploadedFiles.forEach(file => { file.status = 'reading'; });
-                renderFileCards();
+            $(document).on('click', '.file-card-delete', function(e) {
+                e.stopPropagation();
+                const index = Number($(this).data('index'));
+                uploadedFiles.splice(index, 1);
+                parsedTransactionRows = uploadedFiles.reduce(function(rows, fileData) {
+                    return rows.concat(fileData.parsedRows || []);
+                }, []);
+                window.parsedTransactionRows = parsedTransactionRows;
+                renderFiles();
+            });
 
-                const BATCH_SIZE = 50; // adjust as needed (PHP default max_file_uploads is often 20)
-                let index = 0;
-                const aggregateResults = [];
+            proceedBtn.on('click', function(e) {
+                e.preventDefault();
+                if (uploadedFiles.length === 0) return;
 
-                // Build live-check modal UI (professional design)
-                $('#loading-overlay').css('display', 'flex');
-                // hide the small global spinner while the modal is visible
-                $('#loading-overlay .loading-spinner').hide();
-
-                var modalHtml = '<div class="duplicate-modal">'
+                $('.duplicate-modal').remove();
+                const total = uploadedFiles.length;
+                const modalHtml = '<div class="duplicate-modal">'
                     + '<div class="duplicate-modal-content">'
                     + '<div class="duplicate-modal-header">'
                     + '<div class="duplicate-modal-header-title">'
                     + '<i class="fa-solid fa-shield-halved"></i>'
-                    + '<h4 id="duplicate-check-header">Checking files (0/' + uploadedFiles.length + ')</h4>'
+                    + '<h6 id="duplicate-check-header">Checking files (0/' + total + ')</h6>'
                     + '</div>'
-                    + '<div class="duplicate-progress-bar-container">'
-                    + '<div class="duplicate-progress-bar" id="duplicate-progress-bar"></div>'
+                    + '<div class="duplicate-progress-bar-container"><div class="duplicate-progress-bar" id="duplicate-progress-bar"></div></div>'
                     + '</div>'
-                    + '</div>'
-                    + '<div class="duplicate-modal-body">'
-                    + '<div id="duplicate-check-list"></div>'
-                    + '</div>'
+                    + '<div class="duplicate-modal-body"><div id="duplicate-check-list"></div></div>'
                     + '<div class="duplicate-modal-footer">'
-                    + '<div id="duplicate-check-footer">'
-                    + '<span class="duplicate-footer-icon"><i class="fa-solid fa-file-circle-check"></i> Validating files</span>'
-                    + '<span id="duplicate-progress-text"><strong>0</strong> / ' + uploadedFiles.length + '</span>'
-                    + '</div>'
-                    + '</div>'
-                    + '</div></div>';
-
-                // append modal to body to avoid clipping by overlay containers
+                    + '<div id="duplicate-check-footer"><span><i class="fa-solid fa-file-circle-check text-danger"></i> Validating files</span><span id="duplicate-progress-text"><strong>0</strong> / ' + total + '</span></div>'
+                    + '</div></div></div>';
                 $('body').append(modalHtml);
+
                 const $list = $('#duplicate-check-list');
-                $list.empty();
-                uploadedFiles.forEach((f, idx) => {
-                    const item = $(`<div class="check-item checking" data-idx="${idx}">
-                        <div class="name">${f.name}</div>
-                        <div class="status"><i class="fa-solid fa-spinner fa-spin status-icon-checking"></i></div>
-                    </div>`);
-                    $list.append(item);
+                uploadedFiles.forEach(function(fileData, idx) {
+                    $list.append('<div class="check-item checking" data-idx="' + idx + '"><div class="name">' + escapeHtml(fileData.name) + '</div><div class="status"><i class="fa-solid fa-spinner fa-spin"></i></div></div>');
                 });
-
-                let totalCount = uploadedFiles.length;
+                $('.duplicate-modal').on('wheel mousewheel DOMMouseScroll', function(evt) {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    return false;
+                });
                 let processedCount = 0;
-                function updateHeader() {
-                    $('#duplicate-check-header').text('Checking files (' + processedCount + '/' + totalCount + ')');
-                    $('#duplicate-progress-text').html('<strong>' + processedCount + '</strong> / ' + totalCount);
-                    
-                    // Update progress bar
-                    const progressPercent = (processedCount / totalCount) * 100;
-                    $('#duplicate-progress-bar').css('width', progressPercent + '%');
-                }
-
-                function processBatch(start) {
-                    const formData = new FormData();
-                    const batchFiles = uploadedFiles.slice(start, start + BATCH_SIZE);
-                    batchFiles.forEach((fileData) => {
-                        formData.append('files[]', fileData.file);
-                        formData.append('partner_ids[]', fileData.partnerId);
-                        formData.append('source_types[]', fileData.sourceType);
-                        formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
-                        formData.append('sub_billers_ids[]', (fileData.subBillersId !== undefined && fileData.subBillersId !== null) ? fileData.subBillersId : '');
-                    });
-                    formData.append('check_duplicates', '1');
-
-                    return $.ajax({
-                        url: '../../../models/saved/saved_billspayImportFile_NEW.php',
-                        type: 'POST',
-                        data: formData,
-                        processData: false,
-                        contentType: false,
-                        dataType: 'json'
-                    });
-                }
-
-                // Sequentially process batches to avoid overwhelming the server
-                function next() {
-                    if (index >= uploadedFiles.length) {
-                        // All batches done — aggregate and update UI
-                        // restore global spinner visibility then hide overlay
-                        $('#loading-overlay .loading-spinner').show();
-
-                        // Flatten aggregateResults into a single array of per-file results
-                        const flat = [].concat.apply([], aggregateResults);
-
-                        // Update uploadedFiles statuses from flat results
-                        flat.forEach((result, idx) => {
-                            if (uploadedFiles[idx]) {
-                                if (result.hasDuplicates) {
-                                    uploadedFiles[idx].status = 'duplicates';
-                                    uploadedFiles[idx].duplicateCount = result.duplicateRows;
-                                    uploadedFiles[idx].newCount = result.newRows;
-                                } else {
-                                    uploadedFiles[idx].status = 'valid';
-                                }
-                            }
-                        });
-
-                        renderFileCards();
-
-                        // remove live modal
-                        $('.duplicate-modal').remove();
-                        $('#loading-overlay').hide();
-
-                        // Check duplicates overal
-                        const filesWithDuplicates = flat.filter(f => f.hasDuplicates);
-                        if (filesWithDuplicates.length > 0) {
-                            showDuplicateModal(flat, filesWithDuplicates);
-                        } else {
-                            proceedWithUpload('skip');
-                        }
-
-                        return;
-                    }
-
-                    $('#loading-overlay').css('display', 'flex');
-
-                    processBatch(index).done(function(response) {
-                        if (response && response.success && Array.isArray(response.files)) {
-                            aggregateResults.push(response.files);
-
-                            // Update live UI for this batch
-                            response.files.forEach(function(res, j) {
-                                var globalIndex = index + j;
-                                var $item = $list.find('.check-item[data-idx="' + globalIndex + '"]');
-                                if ($item.length) {
-                                    if (res.hasDuplicates) {
-                                        $item.removeClass('checking').addClass('warning');
-                                        $item.find('.status').html('<i class="fa-solid fa-circle-exclamation status-icon-warning"></i>');
-                                    } else {
-                                        $item.removeClass('checking').addClass('success');
-                                        $item.find('.status').html('<i class="fa-solid fa-circle-check status-icon-success"></i>');
-                                    }
-                                    // animate fade-up then remove the item so new ones appear from bottom
-                                    setTimeout(function() { 
-                                        $item.addClass('fade-up'); 
-                                        setTimeout(function(){ 
-                                            $item.remove(); 
-                                            processedCount++; 
-                                            updateHeader(); 
-                                        }, 400); 
-                                    }, 300 + (j*60));
-                                }
-                            });
-
-                            index += BATCH_SIZE;
-                            // short delay to keep UI responsive for massive batches
-                            setTimeout(next, 50);
-                        } else {
-                            // treat as error for this batch
-                            $('#loading-overlay').hide();
-                            uploadedFiles.forEach(file => { file.status = 'error'; });
-                            renderFileCards();
-                            Swal.fire({ icon: 'error', title: 'Validation Error', text: (response && response.error) ? response.error : 'An error occurred while checking for duplicates.', confirmButtonText: 'OK' });
-                        }
-                    }).fail(function(xhr, status, error) {
-                        $('#loading-overlay .loading-spinner').show();
-                        $('.duplicate-modal').remove();
-                        $('#loading-overlay').hide();
-                        uploadedFiles.forEach(file => { file.status = 'error'; });
-                        renderFileCards();
-
-                        // Show generic error message for batch failure
-                        Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.', confirmButtonText: 'OK' });
-                        console.error('Duplicate check batch error:', error, xhr.responseText);
-                    });
-                }
-
-                // Start processing
-                next();
-            }
-
-            // Function to show duplicate modal
-            function showDuplicateModal(allFiles, filesWithDuplicates) {
-                // Calculate totals (including posted/unposted breakdown)
-                let totalDuplicates = 0;
-                let totalNew = 0;
-                let totalRows = 0;
-                let totalPostedMatches = 0;
-                let totalUnpostedMatches = 0;
-
-                allFiles.forEach(file => {
-                    totalDuplicates += file.duplicateRows || 0;
-                    totalNew += file.newRows || 0;
-                    totalRows += file.totalRows || 0;
-                    totalPostedMatches += file.postedRows || 0;
-                    totalUnpostedMatches += file.unpostedRows || 0;
-                });
-
-                // Build detailed file list HTML (initially hidden)
-                let fileListHTML = '<div id="duplicate-details" style="display: none; max-height: 250px; overflow-y: auto; margin-top: 15px; text-align: left; border-top: 1px solid #ddd; padding-top: 15px;">';
-                filesWithDuplicates.forEach(file => {
-                    fileListHTML += `
-                        <div style="padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; border-radius: 5px; background-color: #fff8e1;">
-                            <strong style="color: #000;">📄 ${file.fileName}</strong><br>
-                            <small style="color: #666;">Partner: ${file.partnerId} | Type: ${file.sourceType}</small><br>
-                            <small style="color: #d32f2f;">⚠️ ${file.duplicateRows.toLocaleString()} duplicate row(s) found</small><br>
-                            <small style="color: #388e3c;">✓ ${file.newRows.toLocaleString()} new row(s)</small>
-                        </div>
-                    `;
-                });
-                fileListHTML += '</div>';
-
-                // Simple summary message
-                const summaryHTML = `
-                    <div style="text-align: center;">
-                        <div style="background-color: #fff8e1; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #ff9800;">
-                            <p style="margin: 0; color: #666; font-size: 15px;">
-                                <strong style="color: #000;">${filesWithDuplicates.length}</strong> file(s) with Partner ID data already exists
-                            </p>
-                        </div>
-                        <div style="background-color: #f5f5f5; padding: 12px; border-radius: 5px; margin-bottom: 15px;">
-                            <p style="margin: 5px 0; color: #d32f2f; font-size: 14px;">
-                                <i class="fa-solid fa-exclamation-triangle"></i> 
-                                <strong>${totalDuplicates.toLocaleString()}</strong> duplicate row(s) detected
-                            </p>
-                            <p style="margin: 5px 0; color: #388e3c; font-size: 14px;">
-                                <i class="fa-solid fa-check-circle"></i> 
-                                <strong>${totalNew.toLocaleString()}</strong> new row(s)
-                            </p>
-                        </div>
-                        <button id="toggle-details-btn" type="button" style="background-color: #1976d2; color: white; border: none; padding: 8px 20px; border-radius: 5px; cursor: pointer; font-size: 13px; margin-bottom: 10px;">
-                            <i class="fa-solid fa-chevron-down"></i> View All Details
-                        </button>
-                    </div>
-                `;
-
-                // If all duplicate matches are already posted (no unposted duplicates), show an alternate modal
-                if (totalDuplicates > 0 && totalUnpostedMatches === 0 && totalPostedMatches > 0) {
-                    // Build a concise "Data already Existed" summary showing partner + posted status
-                    const firstPartnerId = (allFiles && allFiles[0] && allFiles[0].partnerId) ? allFiles[0].partnerId : '';
-                    const firstPartnerName = (allFiles && allFiles[0] && allFiles[0].partnerName) ? allFiles[0].partnerName : 'Unknown Partner';
-                    const altSummary = `
-                        <div style="text-align:center;">
-                            <div style="background-color: #fff8e1; padding: 15px; border-radius: 8px; margin-bottom: 12px;">
-                                <p style="margin: 0; color: #000; font-size:16px;"><strong>Data already Existed</strong></p>
-                            </div>
-                            <div style="background-color: #f5f5f5; padding: 12px; border-radius: 5px; margin-bottom: 12px; text-align:left;">
-                                <p style="margin:4px 0; font-size:14px;"><strong>Partner ID:</strong> ${firstPartnerId}</p>
-                                <p style="margin:4px 0; font-size:14px;"><strong>Partner Name:</strong> ${firstPartnerName}</p>
-                                <p style="margin:4px 0; font-size:14px;"><strong>Status:</strong> <span style="color:#388e3c; font-weight:700;">Posted</span></p>
-                                <p style="margin:8px 0; color:#d32f2f; font-size:14px;"><strong>Existing rows detected:</strong> ${totalDuplicates.toLocaleString()}</p>
-                            </div>
-                        </div>
-                    `;
-
-                    // Only show a single Remove action (no Override/Skip)
-                    const confirmText = (allFiles.length === 1) ? '<i class="fa-solid fa-trash"></i> Remove' : '<i class="fa-solid fa-trash"></i> Remove Existing File(s)';
-
-                    Swal.fire({
-                        title: '<i class="fa-solid fa-info-circle" style="color: #388e3c;"></i> Data already Existed',
-                        html: altSummary + '<div id="alt-details" style="display:none; margin-top:10px; text-align:left;">' + fileListHTML + '</div>',
-                        icon: 'info',
-                        showCancelButton: false,
-                        showDenyButton: false,
-                        showConfirmButton: true,
-                        confirmButtonText: confirmText,
-                        confirmButtonColor: '#6c757d',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false,
-                        width: '700px',
-                        didOpen: () => {
-                            // no toggle button required for this simplified message, but keep details wrapper hidden by default
-                        }
-                    }).then(() => {
-                        if (allFiles.length === 1) {
-                            // For single-file manual-like flows, treat confirm as cancel import (remove)
-                            window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php?cancel=1';
-                        } else {
-                            // Remove files that had existing posted records and continue with the rest
-                            filesWithDuplicates.forEach(f => {
-                                uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId)));
-                            });
-                            renderFileCards();
-                            if (uploadedFiles.length === 0) {
-                                Swal.fire({
-                                    icon: 'info',
-                                    title: 'All Files Removed',
-                                    text: 'No files left to import.',
-                                    confirmButtonText: 'OK'
-                                });
-                            } else {
-                                // Proceed with remaining files (default to skip duplicates)
-                                proceedWithUpload('skip');
-                            }
-                        }
-                    });
-
-                    return;
-                }
-
-                // Otherwise show the standard duplicate modal with Override/Skip/Remove
-                // If ALL uploaded files have duplicates, hide the Skip (deny) option
-                const allFilesAreDuplicate = (filesWithDuplicates.length === uploadedFiles.length);
-
-                Swal.fire({
-                    title: '<i class="fa-solid fa-triangle-exclamation" style="color: #ff9800;"></i> Duplicate Records Detected',
-                    html: summaryHTML + fileListHTML,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    showDenyButton: !allFilesAreDuplicate,
-                    confirmButtonText: '<i class="fa-solid fa-rotate"></i> Override',
-                    denyButtonText: '<i class="fa-solid fa-forward"></i> Skip',
-                    cancelButtonText: '<i class="fa-solid fa-trash"></i> Remove',
-                    confirmButtonColor: '#d33',
-                    denyButtonColor: '#3085d6',
-                    cancelButtonColor: '#6c757d',
-                    allowOutsideClick: false,
-                    allowEscapeKey: false,
-                    customClass: {
-                        popup: 'duplicate-modal-popup'
-                    },
-                    width: '600px',
-                    didOpen: () => {
-                        // Add toggle functionality
-                        const toggleBtn = document.getElementById('toggle-details-btn');
-                        const detailsDiv = document.getElementById('duplicate-details');
-                        let isExpanded = false;
-                        
-                        toggleBtn.addEventListener('click', function() {
-                            isExpanded = !isExpanded;
-                            if (isExpanded) {
-                                detailsDiv.style.display = 'block';
-                                toggleBtn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Hide Details';
-                            } else {
-                                detailsDiv.style.display = 'none';
-                                toggleBtn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> View All Details';
-                            }
-                        });
-                    }
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        // User chose Override
-                        proceedWithUpload('override');
-                    } else if (result.isDenied) {
-                        // User chose Skip — exclude entire files that have any duplicates
-                        filesWithDuplicates.forEach(f => {
-                            uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId)));
-                        });
-                        renderFileCards();
-                        if (uploadedFiles.length === 0) {
-                            Swal.fire({
-                                icon: 'info',
-                                title: 'All Files Skipped',
-                                text: 'No files left to import after skipping duplicates.',
-                                confirmButtonText: 'OK'
-                            });
-                        } else {
-                            proceedWithUpload('skip');
-                        }
-                    } else {
-                        // User chose Remove: delete the files that had duplicates and continue
-                        filesWithDuplicates.forEach(f => {
-                            uploadedFiles = uploadedFiles.filter(u => !(u.name === f.fileName && String(u.partnerId) === String(f.partnerId)));
-                        });
-                        renderFileCards();
-                        if (uploadedFiles.length === 0) {
-                            Swal.fire({
-                                icon: 'info',
-                                title: 'All Files Removed',
-                                text: 'No files left to import.',
-                                confirmButtonText: 'OK'
-                            });
-                        } else {
-                            // Proceed with remaining files (default to skip duplicates)
-                            proceedWithUpload('skip');
-                        }
-                    }
-                });
-            }
-
-            // Function to proceed with upload based on user decision
-            function proceedWithUpload(userDecision) {
-                $('#loading-overlay').css('display', 'flex');
-
-                // Create FormData and append all files
-                const formData = new FormData();
-                uploadedFiles.forEach((fileData, index) => {
-                    formData.append('files[]', fileData.file);
-                    formData.append('partner_ids[]', fileData.partnerId);
-                    formData.append('source_types[]', fileData.sourceType);
-                    formData.append('import_modes[]', fileData.importMode || 'auto');
-                    formData.append('report_dates[]', fileData.report_date || fileData.report_date_raw || '');
-                    formData.append('billers_names[]', fileData.billersName || '');
-                    formData.append('sub_billers_ids[]', (fileData.subBillersId !== undefined && fileData.subBillersId !== null) ? fileData.subBillersId : '');
-                });
-                formData.append('upload', '1');
-                formData.append('user_decision', userDecision); // Pass user decision
-
-                // Send to checker page via session storage
-                sessionStorage.setItem('uploadedFilesData', JSON.stringify(uploadedFiles.map(f => ({
-                    name: f.name,
-                    partnerId: f.partnerId,
-                    partnerName: f.partnerName,
-                    billersName: f.billersName || '',
-                    sourceType: f.sourceType
-                    , report_date: f.report_date || f.report_date_raw || ''
-                }))));
-
-                // Send to checker page
-                $.ajax({
-                    url: '../../../models/saved/saved_billspayImportFile_NEW.php',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        // Redirect to validation page
+                const finishDebugValidation = async function() {
+                    try {
+                        showLoadingOverlay();
+                        const result = await submitDebugImportPayload();
                         window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php';
-                    },
-                    error: function(xhr, status, error) {
-                        $('#loading-overlay').hide();
+                    } catch (err) {
+                        $('.duplicate-modal').remove();
                         Swal.fire({
                             icon: 'error',
-                            title: 'Upload Error',
-                            text: 'An error occurred while uploading files. Please try again.',
-                            confirmButtonText: 'OK'
+                            title: 'Validation Error',
+                            text: err && err.message ? err.message : 'Unable to validate parsed JSON payload.'
                         });
-                        console.error('Upload error:', error);
+                    } finally {
+                        hideLoadingOverlay();
                     }
-                });
-            }
-        });
-    </script>
-    <script>
-        // Mode toggle: show/hide Auto (drag-drop) vs Manual form
-        $(function() {
-            function setMode(mode) {
-                // update selected card UI
-                $('.mode-card').removeClass('selected');
-                $('.mode-card[data-mode="' + mode + '"]').addClass('selected');
-
-                if (mode === 'manual') {
-                    $('#fileUploadArea').hide();
-                    $('#filesContainer').hide();
-                    $('#proceedContainer').hide();
-                    $('#manualArea').show();
-                    // initialize manual partners dropdown
-                    initManualSelect2();
-                    loadManualPartners();
-                    if (typeof window.updateManualProceedVisibility === 'function') {
-                        window.updateManualProceedVisibility();
-                    }
-                } else {
-                    $('#manualArea').hide();
-                    $('#fileUploadArea').show();
-                    $('#filesContainer').show();
-                    if (uploadedFiles.length) $('#proceedContainer').show();
-                }
-            }
-
-            $('input[name="importMode"]').on('change', function() {
-                setMode($(this).val());
-            });
-
-            // Clickable mode-card behavior: toggle radio and classes
-            $('.mode-card').on('click', function() {
-                var mode = $(this).data('mode');
-                $('input[name="importMode"][value="' + mode + '"]').prop('checked', true).trigger('change');
-                $('.mode-card').removeClass('selected');
-                $(this).addClass('selected');
-            });
-
-            function initManualSelect2() {
-                // No-op: we use a native searchable input + datalist.
-                // Keep function for compatibility if select2 is added later.
-                return;
-            }
-
-            function loadManualPartners() {
-                var $select = $('#manualCompanyDropdown');
-                var $input = $('#manualCompanyInput');
-                var $datalist = $('#manualCompanyList');
-                if ($input.length === 0 || $datalist.length === 0) return;
-
-                // Clear existing
-                $datalist.empty();
-                if ($select.length) $select.empty();
-
-                // Add default options
-                var allOpt = document.createElement('option');
-                allOpt.value = 'All';
-                allOpt.text = 'All';
-                $datalist.append(allOpt);
-                if ($select.length) $select.append($('<option>', { value: '', text: 'Select Company' }));
-                if ($select.length) $select.append($('<option>', { value: 'All', text: 'All' }));
-
-                $.ajax({
-                    url: '../../../fetch/get_partners.php',
-                    method: 'GET',
-                    dataType: 'json',
-                    success: function(response) {
-                        if (!response) return;
-                        if (response.success === false) return;
-                        var list = Array.isArray(response.data) ? response.data : response;
-                        // Use a Set to avoid duplicate partner names. Normalize keys to lowercase.
-                        var seen = new Set();
-                        // Mark the default 'All' as seen to prevent duplicate if returned from server
-                        seen.add('all');
-                        list.forEach(function(p) {
-                            var rawName = p.partner_name || '';
-                            var name = rawName.toString().trim();
-                            if (!name) return;
-                            // Normalize unicode and collapse multiple spaces to a single space
-                            try {
-                                name = name.normalize ? name.normalize('NFC') : name;
-                            } catch (e) {
-                                // ignore if normalize not supported
-                            }
-                            name = name.replace(/\s+/g, ' ');
-                            var key = name.toLowerCase();
-                            if (seen.has(key)) return; // skip duplicates (normalized, case-insensitive)
-                            seen.add(key);
-                            // Defensive DOM check: only append if not already present in datalist/select
-                            var existsInDatalist = $datalist.find('option').filter(function() { return $(this).val() === name; }).length > 0;
-                            if (!existsInDatalist) {
-                                var opt = document.createElement('option');
-                                opt.value = name;
-                                $datalist.append(opt);
-                            }
-                            if ($select.length) {
-                                var existsInSelect = $select.find('option').filter(function() { return $(this).val() === name; }).length > 0;
-                                if (!existsInSelect) $select.append($('<option>', { value: name, text: name }));
-                            }
-                        });
-                        // keep input empty
-                        $input.val('');
-                    },
-                    error: function() {
-                        // ignore error, keep defaults
-                    }
-                });
-            }
-
-            // Manual form validation
-            
-
-            // Function to check for duplicates in manual mode (exposed globally)
-            window.checkManualDuplicates = function(form) {
-                // Async flow: resolve partner id (if specific), then POST to the same duplicate-check endpoint
-                $('#loading-overlay').css('display', 'flex');
-
-                var selectedPartner = $('#manualCompanyInput').val();
-                var fileType = $('#manualFileType').val();
-
-                function resolvePartnerIds(name) {
-                    return new Promise(function(resolve) {
-                        if (!name || name === 'All') return resolve({ partner_id: 'ALL', partner_id_kpx: 'ALL' });
-                        $.ajax({
-                            url: '../../../fetch/get_partner_ids.php',
-                            method: 'POST',
-                            data: { partner_name: name },
-                            dataType: 'json',
-                            success: function(response) {
-                                if (response && response.success) return resolve({ partner_id: response.partner_id || '', partner_id_kpx: response.partner_id_kpx || '' });
-                                return resolve({ partner_id: '', partner_id_kpx: '' });
-                            },
-                            error: function() { return resolve({ partner_id: '', partner_id_kpx: '' }); }
-                        });
-                    });
-                }
-
-                resolvePartnerIds(selectedPartner).then(function(partnerResp) {
-                    var partnerId = '';
-                    if (partnerResp) {
-                        partnerId = (fileType && fileType.toUpperCase() === 'KPX') ? (partnerResp.partner_id_kpx || '') : (partnerResp.partner_id || '');
-                    }
-                    var formData = new FormData();
-                    var fileInput = $(form).find('input[name="import_file"]')[0];
-                    var selectedFile = null;
-
-                    if (fileInput && fileInput.files && fileInput.files.length > 0) {
-                        selectedFile = fileInput.files[0];
-                    } else if (window.uploadedFiles && window.uploadedFiles.length > 0) {
-                        var firstDropped = window.uploadedFiles[0];
-                        selectedFile = firstDropped && firstDropped.file ? firstDropped.file : firstDropped;
-                    }
-
-                    if (!selectedFile) {
-                        $('#loading-overlay').hide();
-                        // No file selected for manual flow
+                };
+                const runVisualCheck = function(index) {
+                    if (index >= total) {
+                        finishDebugValidation();
                         return;
                     }
-
-                    // Use the batch duplicate check endpoint (same as Auto) to ensure identical detection logic
-                    var batchData = new FormData();
-                    batchData.append('files[]', selectedFile);
-                    batchData.append('partner_ids[]', partnerId || '');
-                    batchData.append('source_types[]', fileType || '');
-                    batchData.append('check_duplicates', '1');
-
-                    $.ajax({
-                        url: '../../../models/saved/saved_billspayImportFile_NEW.php',
-                        type: 'POST',
-                        data: batchData,
-                        processData: false,
-                        contentType: false,
-                        dataType: 'json',
-                        success: function(response) {
-                            $('#loading-overlay').hide();
-                            console.log('Manual duplicate check response:', response);
-                            if (response && response.success && Array.isArray(response.files) && response.files.length > 0) {
-                                var first = response.files[0];
-                                if (first && (first.hasDuplicates || (first.duplicateRows && first.duplicateRows > 0))) {
-                                    showManualDuplicateModal(first, form);
-                                } else {
-                                    proceedWithManualUpload(form, 'skip');
-                                }
-                            } else if (response && response.success && !Array.isArray(response.files)) {
-                                // fallback if server returned single-file object
-                                var f = response.files || response;
-                                if (f && (f.hasDuplicates || (f.duplicateRows && f.duplicateRows > 0))) {
-                                    showManualDuplicateModal(f, form);
-                                } else {
-                                    proceedWithManualUpload(form, 'skip');
-                                }
-                            } else {
-                                Swal.fire({ icon: 'error', title: 'Validation Error', text: (response && response.error) ? response.error : 'An error occurred while checking for duplicates.', confirmButtonText: 'OK' });
-                            }
-                        },
-                        error: function(xhr, status, error) {
-                            $('#loading-overlay').hide();
-                            Swal.fire({ icon: 'error', title: 'Validation Error', text: 'An error occurred while checking for duplicates. Please try again.', confirmButtonText: 'OK' });
-                            console.error('Duplicate check error:', error, xhr.responseText);
-                        }
-                    });
-                });
-            }
-
-            // Function to show duplicate modal for manual mode
-            function showManualDuplicateModal(fileData, form) {
-                // Simple summary message with expandable details
-                const summaryHTML = `
-                    <div style="text-align: center;">
-                        <div style="background-color: #fff8e1; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #ff9800;">
-                            <p style="margin: 0; color: #666; font-size: 15px;">
-                                File <strong style="color: #000;">${fileData.fileName}</strong> with Partner ID <strong style="color: #000;">${fileData.partnerId}</strong> data already exists in the database
-                            </p>
-                        </div>
-                        <div style="background-color: #f5f5f5; padding: 12px; border-radius: 5px; margin-bottom: 15px;">
-                            <p style="margin: 5px 0; color: #d32f2f; font-size: 14px;">
-                                <i class="fa-solid fa-exclamation-triangle"></i> 
-                                <strong>${fileData.duplicateRows.toLocaleString()}</strong> duplicate row(s) detected
-                            </p>
-                            <p style="margin: 5px 0; color: #388e3c; font-size: 14px;">
-                                <i class="fa-solid fa-check-circle"></i> 
-                                <strong>${fileData.newRows.toLocaleString()}</strong> new row(s)
-                            </p>
-                        </div>
-                        <button id="toggle-manual-details-btn" type="button" style="background-color: #1976d2; color: white; border: none; padding: 8px 20px; border-radius: 5px; cursor: pointer; font-size: 13px; margin-bottom: 10px;">
-                            <i class="fa-solid fa-chevron-down"></i> View All Details
-                        </button>
-                    </div>
-                `;
-                
-                // Detailed breakdown (initially hidden)
-                const detailsHTML = `
-                    <div id="manual-duplicate-details" style="display: none; border-top: 1px solid #ddd; padding-top: 15px; margin-top: 10px; text-align: left;">
-                        <div style="padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; border-radius: 5px; background-color: #fff8e1;">
-                            <strong style="color: #000;">📄 ${fileData.fileName}</strong><br>
-                            <small style="color: #666;">Partner: ${fileData.partnerId} | Type: ${fileData.sourceType}</small><br>
-                            <small style="color: #666;">Total rows: ${fileData.totalRows.toLocaleString()}</small><br>
-                            <small style="color: #d32f2f;">⚠️ ${fileData.duplicateRows.toLocaleString()} duplicate row(s) found</small><br>
-                            <small style="color: #388e3c;">✓ ${fileData.newRows.toLocaleString()} new row(s)</small>
-                        </div>
-                        <p style="font-size: 13px; color: #666; margin-top: 10px;">
-                            <strong>Note:</strong> Duplicates are matched by reference number, transaction date, and cancellation date.
-                        </p>
-                    </div>
-                `;
-                
-                // If duplicates exist but all matches are already posted, show alternate modal
-                if (fileData.duplicateRows > 0 && (fileData.unpostedRows || 0) === 0 && (fileData.postedRows || 0) > 0) {
-                    const altHtml = `
-                        <div style="text-align:center;">
-                            <div style="background-color: #fff8e1; padding: 15px; border-radius: 8px; margin-bottom: 12px;">
-                                <p style="margin: 0; color: #000; font-size:16px;"><strong>Data already Existed</strong></p>
-                            </div>
-                            <div style="background-color: #f5f5f5; padding: 12px; border-radius: 5px; text-align:left;">
-                                <p style="margin:4px 0; font-size:14px;"><strong>Partner ID:</strong> ${fileData.partnerId}</p>
-                                <p style="margin:4px 0; font-size:14px;"><strong>Partner Name:</strong> ${fileData.partnerName || 'Unknown'}</p>
-                                <p style="margin:4px 0; font-size:14px;"><strong>Status:</strong> <span style="color:#388e3c; font-weight:700;">Posted</span></p>
-                                <p style="margin:8px 0; color:#d32f2f; font-size:14px;"><strong>Existing rows detected:</strong> ${fileData.duplicateRows.toLocaleString()}</p>
-                            </div>
-                        </div>
-                    `;
-
-                    Swal.fire({
-                        title: '<i class="fa-solid fa-info-circle" style="color: #388e3c;"></i> Data already Existed',
-                        html: altHtml,
-                        icon: 'info',
-                        showCancelButton: false,
-                        showDenyButton: false,
-                        showConfirmButton: true,
-                        confirmButtonText: '<i class="fa-solid fa-trash"></i> Remove',
-                        confirmButtonColor: '#6c757d',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false,
-                        width: '600px'
-                    }).then(() => {
-                        // Treat as cancel/remove for manual flow
-                        window.location.href = '../../../models/saved/saved_billspayImportFile_NEW.php?cancel=1';
-                    });
-
-                    return;
-                }
-
-                Swal.fire({
-                    title: '<i class="fa-solid fa-triangle-exclamation" style="color: #ff9800;"></i> Duplicate Records Detected',
-                    html: summaryHTML + detailsHTML,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    showDenyButton: false,
-                    confirmButtonText: '<i class="fa-solid fa-rotate"></i> Override',
-                    denyButtonText: '<i class="fa-solid fa-forward"></i> Skip',
-                    cancelButtonText: '<i class="fa-solid fa-trash"></i> Remove',
-                    confirmButtonColor: '#d33',
-                    denyButtonColor: '#3085d6',
-                    cancelButtonColor: '#6c757d',
-                    allowOutsideClick: false,
-                    allowEscapeKey: false,
-                    customClass: {
-                        popup: 'duplicate-modal-popup'
-                    },
-                    width: '600px',
-                    didOpen: () => {
-                        // Add toggle functionality
-                        const toggleBtn = document.getElementById('toggle-manual-details-btn');
-                        const detailsDiv = document.getElementById('manual-duplicate-details');
-                        let isExpanded = false;
-                        
-                        toggleBtn.addEventListener('click', function() {
-                            isExpanded = !isExpanded;
-                            if (isExpanded) {
-                                detailsDiv.style.display = 'block';
-                                toggleBtn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> Hide Details';
-                            } else {
-                                detailsDiv.style.display = 'none';
-                                toggleBtn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> View All Details';
-                            }
-                        });
-                    }
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        // User chose Override
-                        proceedWithManualUpload(form, 'override');
-                    } else if (result.isDenied) {
-                        // User chose Skip
-                        proceedWithManualUpload(form, 'skip');
+                    const $item = $list.find('.check-item[data-idx="' + index + '"]');
+                    if ($item.length) {
+                        $item.removeClass('checking').addClass('success');
+                        $item.find('.status').html('<i class="fa-solid fa-circle-check status-icon-success"></i>');
+                        setTimeout(function() {
+                            $item.addClass('fade-up');
+                            setTimeout(function() {
+                                $item.remove();
+                                processedCount++;
+                                $('#duplicate-check-header').text('Checking files (' + processedCount + '/' + total + ')');
+                                $('#duplicate-progress-text').html('<strong>' + processedCount + '</strong> / ' + total);
+                                $('#duplicate-progress-bar').css('width', ((processedCount / total) * 100) + '%');
+                                runVisualCheck(index + 1);
+                            }, 280);
+                        }, 420);
                     } else {
-                        // User chose Remove: reset the manual form and inform the user
-                        try {
-                            form.reset();
-                        } catch (e) {
-                            // ignore
-                        }
-                        Swal.fire({
-                            icon: 'info',
-                            title: 'File Removed',
-                            text: 'The selected file has been removed. You can select another file to upload.',
-                            confirmButtonText: 'OK'
-                        });
+                        runVisualCheck(index + 1);
                     }
-                });
-            }
+                };
+                setTimeout(function() { runVisualCheck(0); }, 450);
 
-            async function extractReportDateFromManualFile(file) {
-                if (!file) return '';
-                try {
-                    const buffer = await file.arrayBuffer();
-                    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const reportDateCell = firstSheet['B3'];
-                    const raw = reportDateCell ? String(reportDateCell.v).trim() : '';
-                    if (!raw) return '';
-
-                    const m = raw.match(/([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})/);
-                    if (m) {
-                        const monthName = m[1].toUpperCase();
-                        const day = parseInt(m[2], 10);
-                        const year = parseInt(m[3], 10);
-                        const months = {JAN:1,JANUARY:1,FEB:2,FEBRUARY:2,MAR:3,MARCH:3,APR:4,APRIL:4,MAY:5,JUN:6,JUNE:6,JUL:7,JULY:7,AUG:8,AUGUST:8,SEP:9,SEPTEMBER:9,OCT:10,OCTOBER:10,NOV:11,NOVEMBER:11,DEC:12,DECEMBER:12};
-                        const mm = months[monthName] || months[monthName.slice(0,3)];
-                        if (mm) {
-                            return `${year}-${String(mm).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                        }
-                    }
-
-                    const ds = new Date(raw);
-                    if (!isNaN(ds.getTime())) {
-                        return `${ds.getFullYear()}-${String(ds.getMonth() + 1).padStart(2, '0')}-${String(ds.getDate()).padStart(2, '0')}`;
-                    }
-                } catch (err) {
-                    console.warn('Manual report date extraction failed:', err);
+                if (window.bootstrap && typeof window.bootstrap.Modal === 'function') {
+                    // no-op: UI uses custom modal structure to match checking-files concept
                 }
-                return '';
-            }
-
-            // Function to proceed with manual upload based on user decision
-            async function proceedWithManualUpload(form, userDecision) {
-                $('#loading-overlay').css('display', 'flex');
-
-                var fileInput = form.querySelector('input[name="import_file"]');
-                var selectedCompany = form.querySelector('input[name="company"]');
-                var fileTypeSelect = form.querySelector('select[name="fileType"]');
-
-                // Build a temporary form and do normal navigation submit to manual handler
-                var tempForm = document.createElement('form');
-                tempForm.method = 'POST';
-                tempForm.enctype = 'multipart/form-data';
-                tempForm.action = '../../../models/saved/saved_billspaymentImportFile.php';
-                tempForm.style.display = 'none';
-
-                var hasNativeFile = !!(fileInput && fileInput.files && fileInput.files.length > 0);
-                var appendedFile = false;
-                var submittedFile = null;
-
-                if (hasNativeFile) {
-                    submittedFile = fileInput.files[0] || null;
-                    var originalParent = fileInput.parentNode;
-                    var nextSibling = fileInput.nextSibling;
-                    tempForm.appendChild(fileInput);
-                    appendedFile = true;
-
-                    // If submit fails and page doesn't navigate, restore input
-                    setTimeout(function() {
-                        if (document.body.contains(tempForm)) {
-                            if (originalParent) {
-                                if (nextSibling) originalParent.insertBefore(fileInput, nextSibling);
-                                else originalParent.appendChild(fileInput);
-                            }
-                        }
-                    }, 2000);
-                } else if (window.uploadedFiles && window.uploadedFiles.length > 0) {
-                    try {
-                        var firstDropped = window.uploadedFiles[0];
-                        var droppedFile = firstDropped && firstDropped.file ? firstDropped.file : firstDropped;
-                        if (droppedFile) {
-                            submittedFile = droppedFile;
-                            var dt = new DataTransfer();
-                            dt.items.add(droppedFile);
-                            var syntheticInput = document.createElement('input');
-                            syntheticInput.type = 'file';
-                            syntheticInput.name = 'import_file';
-                            syntheticInput.files = dt.files;
-                            tempForm.appendChild(syntheticInput);
-                            appendedFile = true;
-                        }
-                    } catch (err) {
-                        console.warn('Failed to attach dropped file for manual submit:', err);
-                    }
-                }
-
-                if (!appendedFile) {
-                    $('#loading-overlay').hide();
-                    return;
-                }
-
-                var hiddenUpload = document.createElement('input');
-                hiddenUpload.type = 'hidden';
-                hiddenUpload.name = 'upload';
-                hiddenUpload.value = '1';
-                tempForm.appendChild(hiddenUpload);
-
-                var hiddenDecision = document.createElement('input');
-                hiddenDecision.type = 'hidden';
-                hiddenDecision.name = 'user_decision';
-                hiddenDecision.value = userDecision || 'skip';
-                tempForm.appendChild(hiddenDecision);
-
-                var hiddenCompany = document.createElement('input');
-                hiddenCompany.type = 'hidden';
-                hiddenCompany.name = 'company';
-                hiddenCompany.value = selectedCompany ? selectedCompany.value : '';
-                tempForm.appendChild(hiddenCompany);
-
-                var hiddenFileType = document.createElement('input');
-                hiddenFileType.type = 'hidden';
-                hiddenFileType.name = 'fileType';
-                hiddenFileType.value = fileTypeSelect ? fileTypeSelect.value : '';
-                tempForm.appendChild(hiddenFileType);
-
-                // Extract Report Date from B3 and pass it to manual handler
-                var extractedReportDate = '';
-                if (submittedFile) {
-                    extractedReportDate = await extractReportDateFromManualFile(submittedFile);
-                }
-                if (!extractedReportDate && window.uploadedFiles && window.uploadedFiles.length > 0) {
-                    var firstMeta = window.uploadedFiles[0];
-                    extractedReportDate = (firstMeta && (firstMeta.report_date || firstMeta.report_date_raw)) ? (firstMeta.report_date || firstMeta.report_date_raw) : '';
-                }
-
-                var hiddenReportDate = document.createElement('input');
-                hiddenReportDate.type = 'hidden';
-                hiddenReportDate.name = 'report_date';
-                hiddenReportDate.value = extractedReportDate || '';
-                tempForm.appendChild(hiddenReportDate);
-
-                document.body.appendChild(tempForm);
-                tempForm.submit();
-            }
-
-            // Start in auto mode
-            setMode('auto');
+            });
         });
     </script>
-    
+
+
 </body>
 <?php include '../../../templates/footer.php'; ?>
-
-
 </html>
