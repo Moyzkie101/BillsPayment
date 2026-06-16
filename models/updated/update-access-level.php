@@ -389,6 +389,7 @@ try {
 
     if ($shouldUpdateSession) {
         $_SESSION['user_access_level'] = (int)$updatedRow['access_level'];
+        $_SESSION['access_level'] = (int)$updatedRow['access_level'];
 
         // Normalize and expand permissions for server-side checks so that
         // ancestor/catalog keys (e.g., 'Bills Payment') are present when a

@@ -67,6 +67,7 @@ if (!function_exists('get_user_access_level')) {
 function get_user_access_level()
 {
     if (isset($_SESSION['user_access_level'])) return $_SESSION['user_access_level'];
+    if (isset($_SESSION['access_level'])) return $_SESSION['access_level'];
     $id = resolve_user_identifier();
     if (empty($id)) return null;
     $row = get_user_row($id);
@@ -175,6 +176,40 @@ function normalize_permission_list($list)
 }
 }
 
+if (!function_exists('permission_aliases')) {
+function permission_aliases($perm)
+{
+    $aliases = [
+        'Access Levels' => ['Maintenance Accounts Access Levels'],
+        'Adjustment Entry Per Branch' => ['BP Settlement Adjustment Entry'],
+        'Balance Sheet Report' => ['BP Report Balance Sheet'],
+        'Billing Invoice Service Charge' => ['BI Create Automated'],
+        'Billing Service Charge' => ['BI Create Manual'],
+        'Cancellation Report' => ['BP Report Cancellation'],
+        'Duplicate Transaction' => ['Maintenance Duplicate Transaction'],
+        'EDI Report' => ['BP Report EDI'],
+        'Import Cancellation' => ['BP Import Cancellation'],
+        'Import Transaction' => ['BP Import Transaction'],
+        'Masterfile Partner List' => ['Maintenance Masterfiles Partner List'],
+        'Post Transaction' => ['BP Post Transaction'],
+        'Settlement Per Bank' => ['BP Settlement Per Bank'],
+        'SOA Report' => ['BI Report Billing Invoice'],
+        'Transaction Report' => ['BP Report Transaction Details'],
+        'Transaction Summary' => ['BP Report Transaction Summary'],
+        'View Bank List' => ['Masterfiles View Bank List'],
+        'View Partner List' => ['Masterfiles View Partner List'],
+        'Volume Report' => ['BP Report Volume'],
+    ];
+
+    $keys = [$perm];
+    if (isset($aliases[$perm])) {
+        $keys = array_merge($keys, $aliases[$perm]);
+    }
+
+    return array_values(array_unique($keys));
+}
+}
+
 if (!function_exists('get_current_user_permissions')) {
 function get_current_user_permissions()
 {
@@ -185,6 +220,7 @@ function get_current_user_permissions()
     if (!isset($_SESSION['access_map_mtime']) || $_SESSION['access_map_mtime'] !== $map_mtime) {
         unset($_SESSION['user_permissions']);
         unset($_SESSION['user_access_level']);
+        unset($_SESSION['access_level']);
         unset($_SESSION['user_permissions_raw']);
     }
 
@@ -203,6 +239,7 @@ function get_current_user_permissions()
                 if ($db_level !== null && $session_level !== null && $db_level !== $session_level) {
                     unset($_SESSION['user_permissions']);
                     unset($_SESSION['user_access_level']);
+                    unset($_SESSION['access_level']);
                     unset($_SESSION['user_permissions_raw']);
                 } else {
                     // Compare normalized permissions if DB has explicit perms
@@ -215,6 +252,7 @@ function get_current_user_permissions()
                         if ($db_perms !== $sess_perms) {
                             unset($_SESSION['user_permissions']);
                             unset($_SESSION['user_access_level']);
+                            unset($_SESSION['access_level']);
                             unset($_SESSION['user_permissions_raw']);
                         }
                     }
@@ -223,6 +261,7 @@ function get_current_user_permissions()
                 // user row missing -> clear session permissions
                 unset($_SESSION['user_permissions']);
                 unset($_SESSION['user_access_level']);
+                unset($_SESSION['access_level']);
                 unset($_SESSION['user_permissions_raw']);
             }
         }
@@ -245,7 +284,10 @@ function get_current_user_permissions()
             if (is_array($dec)) {
                 $perms = normalize_permission_list($dec);
                 $_SESSION['user_permissions'] = $perms;
-                if (!empty($level)) $_SESSION['user_access_level'] = $level;
+                if (!empty($level)) {
+                    $_SESSION['user_access_level'] = $level;
+                    $_SESSION['access_level'] = $level;
+                }
                 $_SESSION['access_map_mtime'] = isset($GLOBALS['__access_map_file_mtime']) ? $GLOBALS['__access_map_file_mtime'] : 0;
                 return $perms;
             }
@@ -269,6 +311,7 @@ function get_current_user_permissions()
             }
             $_SESSION['user_permissions'] = $perms;
             $_SESSION['user_access_level'] = intval($level);
+            $_SESSION['access_level'] = intval($level);
             $_SESSION['access_map_mtime'] = isset($GLOBALS['__access_map_file_mtime']) ? $GLOBALS['__access_map_file_mtime'] : 0;
             return $perms;
         }
@@ -278,6 +321,7 @@ function get_current_user_permissions()
             $perms = load_permissions_for_level(intval($level));
             $_SESSION['user_permissions'] = $perms;
             $_SESSION['user_access_level'] = intval($level);
+            $_SESSION['access_level'] = intval($level);
             $_SESSION['access_map_mtime'] = isset($GLOBALS['__access_map_file_mtime']) ? $GLOBALS['__access_map_file_mtime'] : 0;
             return $perms;
         }
@@ -290,16 +334,21 @@ function get_current_user_permissions()
 if (!function_exists('has_permission')) {
 function has_permission($perm)
 {
+    $level = get_user_access_level();
+    if ($level !== null && intval($level) === -1) return true;
+
     $perms = get_current_user_permissions();
-    return in_array($perm, $perms, true);
+    foreach (permission_aliases($perm) as $key) {
+        if (in_array($key, $perms, true)) return true;
+    }
+    return false;
 }
 }
 
 if (!function_exists('has_any_permission')) {
 function has_any_permission($needed)
 {
-    $perms = get_current_user_permissions();
-    foreach ($needed as $n) if (in_array($n, $perms, true)) return true;
+    foreach ($needed as $n) if (has_permission($n)) return true;
     return false;
 }
 }

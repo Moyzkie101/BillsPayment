@@ -128,6 +128,7 @@ elseif(isset($_POST['submit'])){
             $_SESSION['user_access_level'] = isset($row['access_level'])
                ? (int)$row['access_level']
                : (isset($row['acess_level']) ? (int)$row['acess_level'] : 0);
+            $_SESSION['access_level'] = $_SESSION['user_access_level'];
             // $_SESSION['user_roles'] = $row['roles'];
             echo "<script>
                   window.onload = function() {
@@ -182,6 +183,7 @@ elseif(isset($_POST['submit'])){
             $_SESSION['user_access_level'] = isset($row['access_level'])
                ? (int)$row['access_level']
                : (isset($row['acess_level']) ? (int)$row['acess_level'] : 0);
+            $_SESSION['access_level'] = $_SESSION['user_access_level'];
             // Check if the password is "Password1"
             if($pass == md5("Mlinc1234")){
                // Show a modal to prompt the user to create another password
