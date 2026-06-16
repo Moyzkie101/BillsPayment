@@ -349,6 +349,8 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
             DATE(bt.datetime) BETWEEN ? AND ?
             OR 
             DATE(bt.cancellation_date) BETWEEN ? AND ?
+            OR
+            DATE(bt.report_date) BETWEEN ? AND ?
         )";
     } elseif($filterType === 'month_range') {
         $dateCondition = "(
@@ -357,30 +359,41 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
             OR 
             (YEAR(bt.cancellation_date) >= YEAR(?) AND MONTH(bt.cancellation_date) >= MONTH(?)) AND
             (YEAR(bt.cancellation_date) <= YEAR(?) AND MONTH(bt.cancellation_date) <= MONTH(?))
+            OR
+            (YEAR(bt.report_date) >= YEAR(?) AND MONTH(bt.report_date) >= MONTH(?)) AND
+            (YEAR(bt.report_date) <= YEAR(?) AND MONTH(bt.report_date) <= MONTH(?))
         )";
     } elseif($filterType === 'year_range') {
         $dateCondition = "(
             YEAR(bt.datetime) BETWEEN ? AND ?
             OR 
             YEAR(bt.cancellation_date) BETWEEN ? AND ?
+            OR
+            YEAR(bt.report_date) BETWEEN ? AND ?
         )";
     } elseif($filterType === 'per_day') {
         $dateCondition = "(
             DATE(bt.datetime) = ?
             OR 
             DATE(bt.cancellation_date) = ?
+            OR
+            DATE(bt.report_date) = ?
         )";
     } elseif($filterType === 'per_month') {
         $dateCondition = "(
             (YEAR(bt.datetime) = YEAR(?) AND MONTH(bt.datetime) = MONTH(?))
             OR 
             (YEAR(bt.cancellation_date) = YEAR(?) AND MONTH(bt.cancellation_date) = MONTH(?))
+            OR
+            (YEAR(bt.report_date) = YEAR(?) AND MONTH(bt.report_date) = MONTH(?))
         )";
     } elseif($filterType === 'per_year') {
         $dateCondition = "(
             YEAR(bt.datetime) = ?
             OR 
             YEAR(bt.cancellation_date) = ?
+            OR
+            YEAR(bt.report_date) = ?
         )";
     }
 
@@ -416,12 +429,16 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                                 bt.partner_name,
                                 bt.partner_id,
                                 bt.partner_id_kpx,
+                                MAX(bt.zone_code) AS transaction_zone,
+                                MAX(bt.region) AS transaction_region,
+                                MAX(bt.outlet) AS transaction_outlet,
                                 SUM(bt.charge_to_customer + bt.charge_to_partner) AS charges
                             FROM mldb.billspayment_transaction AS bt
                             WHERE 
                                 " . $dateCondition . "
                                 AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
                                 AND bt.outlet NOT IN ('ML CEBU HEAD OFFICE', 'ML HEAD OFFICE', 'CEBU HEAD OFFICE', 'HEAD OFFICE')
+                                AND NOT REGEXP_LIKE(bt.payor, '\\bTEST\\b')
                             GROUP BY bt.branch_id, bt.partner_name, bt.partner_id, bt.partner_id_kpx
                         )
 
@@ -434,13 +451,13 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                             GROUP_CONCAT(DISTINCT abt.partner_id ORDER BY abt.partner_name SEPARATOR ', ') AS partner_id,
                             GROUP_CONCAT(DISTINCT abt.partner_id_kpx ORDER BY abt.partner_name SEPARATOR ', ') AS partner_id_kpx,
                             MAX(ab.ml_matic_region) AS ml_matic_region,
-                            MAX(ab.zone) AS zone,
-                            MAX(ab.region) AS region,
+                            COALESCE(NULLIF(NULLIF(MAX(ab.zone), ''), '-'), NULLIF(NULLIF(MAX(abt.transaction_zone), ''), '-'), '-') AS zone,
+                            COALESCE(NULLIF(NULLIF(MAX(ab.region), ''), '-'), NULLIF(NULLIF(MAX(abt.transaction_region), ''), '-'), '-') AS region,
                             MAX(ab.region_code) AS region_code,
                             MAX(ab.kp_code) AS kp_code,
                             SUM(abt.charges) AS total_charges,
                             MAX(ab.area) AS area,
-                            MAX(ab.branch_name) AS branch_name,
+                            COALESCE(NULLIF(NULLIF(MAX(ab.branch_name), ''), '-'), NULLIF(NULLIF(MAX(abt.transaction_outlet), ''), '-'), '-') AS branch_name,
                             abt.branch_id
                         FROM all_branch_transactions AS abt
                         LEFT JOIN all_branches AS ab ON abt.branch_id = ab.branch_id
@@ -473,12 +490,16 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                                 bt.partner_name,
                                 bt.partner_id,
                                 bt.partner_id_kpx,
+                                MAX(bt.zone_code) AS transaction_zone,
+                                MAX(bt.region) AS transaction_region,
+                                MAX(bt.outlet) AS transaction_outlet,
                                 SUM(bt.charge_to_customer + bt.charge_to_partner) AS charges
                             FROM mldb.billspayment_transaction AS bt
                             WHERE 
                                 " . $dateCondition . "
                                 AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
                                 AND bt.outlet NOT IN ('ML CEBU HEAD OFFICE', 'ML HEAD OFFICE', 'CEBU HEAD OFFICE', 'HEAD OFFICE')
+                                AND NOT REGEXP_LIKE(bt.payor, '\\bTEST\\b')
                             GROUP BY bt.branch_id, bt.partner_name, bt.partner_id, bt.partner_id_kpx
                         )
 
@@ -487,13 +508,13 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
                             MAX(abt.partner_id) AS partner_id,
                             MAX(abt.partner_id_kpx) AS partner_id_kpx,
                             MAX(ab.ml_matic_region) AS ml_matic_region,
-                            MAX(ab.zone) AS zone,
-                            MAX(ab.region) AS region,
+                            COALESCE(NULLIF(NULLIF(MAX(ab.zone), ''), '-'), NULLIF(NULLIF(MAX(abt.transaction_zone), ''), '-'), '-') AS zone,
+                            COALESCE(NULLIF(NULLIF(MAX(ab.region), ''), '-'), NULLIF(NULLIF(MAX(abt.transaction_region), ''), '-'), '-') AS region,
                             MAX(ab.region_code) AS region_code,
                             MAX(ab.kp_code) AS kp_code,
                             SUM(abt.charges) AS total_charges,
                             MAX(ab.area) AS area,
-                            MAX(ab.branch_name) AS branch_name
+                            COALESCE(NULLIF(NULLIF(MAX(ab.branch_name), ''), '-'), NULLIF(NULLIF(MAX(abt.transaction_outlet), ''), '-'), '-') AS branch_name
                         FROM all_branch_transactions AS abt
                         LEFT JOIN all_branches AS ab ON abt.branch_id = ab.branch_id
                         WHERE 1=1";
@@ -685,23 +706,31 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
     
     // Add date parameters
     if($filterType === 'date_range') {
-        $params = array_merge($params, [$startDate, $endDate, $startDate, $endDate]);
-        $types .= "ssss";
+        $params = array_merge($params, [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate]);
+        $types .= "ssssss";
     } elseif($filterType === 'month_range') {
-        $params = array_merge($params, [$startDate.'-01', $startDate.'-01', $endDate.'-01', $endDate.'-01', $startDate.'-01', $startDate.'-01', $endDate.'-01', $endDate.'-01']);
-        $types .= "ssssssss";
+        $params = array_merge($params, [
+            $startDate.'-01', $startDate.'-01', $endDate.'-01', $endDate.'-01',
+            $startDate.'-01', $startDate.'-01', $endDate.'-01', $endDate.'-01',
+            $startDate.'-01', $startDate.'-01', $endDate.'-01', $endDate.'-01'
+        ]);
+        $types .= "ssssssssssss";
     } elseif($filterType === 'year_range') {
-        $params = array_merge($params, [$startDate, $endDate, $startDate, $endDate]);
-        $types .= "ssss";
+        $params = array_merge($params, [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate]);
+        $types .= "ssssss";
     } elseif($filterType === 'per_day') {
-        $params = array_merge($params, [$startDate, $startDate]);
-        $types .= "ss";
+        $params = array_merge($params, [$startDate, $startDate, $startDate]);
+        $types .= "sss";
     } elseif($filterType === 'per_month') {
-        $params = array_merge($params, [$startDate.'-01', $startDate.'-01', $startDate.'-01', $startDate.'-01']);
-        $types .= "ssss";
+        $params = array_merge($params, [
+            $startDate.'-01', $startDate.'-01',
+            $startDate.'-01', $startDate.'-01',
+            $startDate.'-01', $startDate.'-01'
+        ]);
+        $types .= "ssssss";
     } elseif($filterType === 'per_year') {
-        $params = array_merge($params, [$startDate, $startDate]);
-        $types .= "ss";
+        $params = array_merge($params, [$startDate, $startDate, $startDate]);
+        $types .= "sss";
     }
     
     // Add partner parameter
@@ -781,6 +810,23 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
 
     <link rel="icon" href="../../../images/MLW logo.png" type="image/png">
     <style>
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            background: rgba(33, 37, 41, 0.35);
+            align-items: center;
+            justify-content: center;
+        }
+
+        #loading-overlay.d-none {
+            display: none;
+        }
+
+        #loading-overlay.d-flex {
+            display: flex;
+        }
+
         .scrollable-table {
             max-height: 400px;
             overflow-y: auto;
@@ -834,8 +880,13 @@ if(isset($_POST['action']) && $_POST['action'] === 'get_report_data') {
         <?php include '../../../templates/header_ui.php'; ?>
         <!-- Show and Hide Side Nav Menu -->
         <?php include '../../../templates/sidebar.php'; ?>
-        <div id="loading-overlay">
-            <div class="loading-spinner"></div>
+        <div id="loading-overlay" class="d-none" aria-live="polite" aria-busy="true">
+            <div class="bg-white rounded-3 shadow p-4 text-center">
+                <div class="spinner-border text-danger" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="mt-2 fw-semibold text-secondary">Loading EDI report data...</div>
+            </div>
         </div>
         <div class="bp-section-header" role="region" aria-label="Page title">
             <div class="bp-section-title">
@@ -1506,8 +1557,9 @@ $(document).ready(function() {
             console.log('Table tbody exists:', $table.find('tbody').length > 0);
             console.log('Table tfoot exists:', $table.find('tfoot').length > 0);
             
-            // Show loading overlay
-            $('#loading-overlay').show();
+            // Show loading state
+            $('#loading-overlay').removeClass('d-none').addClass('d-flex');
+            proceedButton.prop('disabled', true);
             
             // Collect all form data
             const formData = {
@@ -1531,7 +1583,6 @@ $(document).ready(function() {
                 data: formData,
                 dataType: 'json',
                 success: function(response) {
-                    $('#loading-overlay').hide();
                     console.log('AJAX Success - Raw response:', response);
 
                     if (response && response.success) {
@@ -1612,7 +1663,6 @@ $(document).ready(function() {
                     }
                 },
                 error: function(xhr, status, error) {
-                    $('#loading-overlay').hide();
                     console.error('AJAX Error Details:', {
                         status: status,
                         error: error,
@@ -1647,6 +1697,10 @@ $(document).ready(function() {
                         icon: 'error',
                         confirmButtonText: 'OK'
                     });
+                },
+                complete: function() {
+                    $('#loading-overlay').removeClass('d-flex').addClass('d-none');
+                    checkFormValidity();
                 }
             });
         }

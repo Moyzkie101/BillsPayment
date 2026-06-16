@@ -104,9 +104,11 @@ if ($filterType === 'date_range') {
         DATE(bt.datetime) BETWEEN ? AND ?
         OR
         DATE(bt.cancellation_date) BETWEEN ? AND ?
+        OR
+        DATE(bt.report_date) BETWEEN ? AND ?
     )";
-    $params = array_merge($params, [$startDate, $endDate, $startDate, $endDate]);
-    $types .= 'ssss';
+    $params = array_merge($params, [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate]);
+    $types .= 'ssssss';
 } elseif ($filterType === 'month_range') {
     $dateCondition = "(
         (YEAR(bt.datetime) >= YEAR(?) AND MONTH(bt.datetime) >= MONTH(?)) AND
@@ -114,44 +116,60 @@ if ($filterType === 'date_range') {
         OR
         (YEAR(bt.cancellation_date) >= YEAR(?) AND MONTH(bt.cancellation_date) >= MONTH(?)) AND
         (YEAR(bt.cancellation_date) <= YEAR(?) AND MONTH(bt.cancellation_date) <= MONTH(?))
+        OR
+        (YEAR(bt.report_date) >= YEAR(?) AND MONTH(bt.report_date) >= MONTH(?)) AND
+        (YEAR(bt.report_date) <= YEAR(?) AND MONTH(bt.report_date) <= MONTH(?))
     )";
     $params = array_merge($params, [
         $startDate . '-01', $startDate . '-01', $endDate . '-01', $endDate . '-01',
+        $startDate . '-01', $startDate . '-01', $endDate . '-01', $endDate . '-01',
         $startDate . '-01', $startDate . '-01', $endDate . '-01', $endDate . '-01'
     ]);
-    $types .= 'ssssssss';
+    $types .= 'ssssssssssss';
 } elseif ($filterType === 'year_range') {
     $dateCondition = "(
         YEAR(bt.datetime) BETWEEN ? AND ?
         OR
         YEAR(bt.cancellation_date) BETWEEN ? AND ?
+        OR
+        YEAR(bt.report_date) BETWEEN ? AND ?
     )";
-    $params = array_merge($params, [$startDate, $endDate, $startDate, $endDate]);
-    $types .= 'ssss';
+    $params = array_merge($params, [$startDate, $endDate, $startDate, $endDate, $startDate, $endDate]);
+    $types .= 'ssssss';
 } elseif ($filterType === 'per_day') {
     $dateCondition = "(
         DATE(bt.datetime) = ?
         OR
         DATE(bt.cancellation_date) = ?
+        OR
+        DATE(bt.report_date) = ?
     )";
-    $params = array_merge($params, [$startDate, $startDate]);
-    $types .= 'ss';
+    $params = array_merge($params, [$startDate, $startDate, $startDate]);
+    $types .= 'sss';
 } elseif ($filterType === 'per_month') {
     $dateCondition = "(
         (YEAR(bt.datetime) = YEAR(?) AND MONTH(bt.datetime) = MONTH(?))
         OR
         (YEAR(bt.cancellation_date) = YEAR(?) AND MONTH(bt.cancellation_date) = MONTH(?))
+        OR
+        (YEAR(bt.report_date) = YEAR(?) AND MONTH(bt.report_date) = MONTH(?))
     )";
-    $params = array_merge($params, [$startDate . '-01', $startDate . '-01', $startDate . '-01', $startDate . '-01']);
-    $types .= 'ssss';
+    $params = array_merge($params, [
+        $startDate . '-01', $startDate . '-01',
+        $startDate . '-01', $startDate . '-01',
+        $startDate . '-01', $startDate . '-01'
+    ]);
+    $types .= 'ssssss';
 } elseif ($filterType === 'per_year') {
     $dateCondition = "(
         YEAR(bt.datetime) = ?
         OR
         YEAR(bt.cancellation_date) = ?
+        OR
+        YEAR(bt.report_date) = ?
     )";
-    $params = array_merge($params, [$startDate, $startDate]);
-    $types .= 'ss';
+    $params = array_merge($params, [$startDate, $startDate, $startDate]);
+    $types .= 'sss';
 } else {
     http_response_code(400);
     exit('Invalid filter type');
@@ -178,6 +196,7 @@ $getDataSql = "WITH all_branches AS (
                         " . $dateCondition . "
                         AND bt.branch_id NOT IN ('1', '2', '4937', '4938', '4962', '4987', '4993', '4944')
                         AND bt.outlet NOT IN ('ML CEBU HEAD OFFICE', 'ML HEAD OFFICE', 'CEBU HEAD OFFICE', 'HEAD OFFICE')
+                        AND NOT REGEXP_LIKE(bt.payor, '\\bTEST\\b')
                     GROUP BY bt.branch_id, bt.partner_name
                 )
                 SELECT
