@@ -95,6 +95,11 @@ try {
             $sourceType = 'KPX';
         }
 
+        if ($b4Normalized === 'ALL PARTNERS' && $a9Normalized === 'NO' && $b9Normalized === 'DATE / TIME') {
+            $sourceType = 'KPX';
+            break;
+        }
+
         if ($b4Normalized !== 'ALL PARTNERS' && $a9Normalized === 'NO') {
             $sourceType = 'KPX';
         }

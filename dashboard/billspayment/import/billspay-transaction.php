@@ -480,6 +480,13 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                 return normalizeHeader(getCellValue(sheet, 'A9')) === 'STATUS' && isEmpty(getCellValue(sheet, 'B9'));
             }
 
+            function detectKpxHeaderIdentifier(sheet) {
+                return normalizeHeader(getCellValue(sheet, 'A9')) === 'NO'
+                    && normalizeHeader(getCellValue(sheet, 'B9')) === 'DATE / TIME'
+                    && normalizeHeader(getCellValue(sheet, 'C9')) === 'CONTROL NO.'
+                    && normalizeHeader(getCellValue(sheet, 'D9')) === 'REFERENCE NO.';
+            }
+
             let branchJsonLookupPromise = null;
             async function getBranchJsonLookup() {
                 if (branchJsonLookupPromise) return branchJsonLookupPromise;
@@ -1317,7 +1324,12 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                 const workbook = await readWorkbook(file);
                 const sheetName = workbook.SheetNames[0];
                 const sheet = workbook.Sheets[sheetName];
-                const effectiveSourceType = sourceType === 'UNKNOWN' && detectKp7HeaderIdentifier(sheet) ? 'KP7' : sourceType;
+                let effectiveSourceType = sourceType;
+                if (sourceType === 'UNKNOWN') {
+                    effectiveSourceType = detectKp7HeaderIdentifier(sheet)
+                        ? 'KP7'
+                        : (detectKpxHeaderIdentifier(sheet) ? 'KPX' : sourceType);
+                }
 
                 if (effectiveSourceType !== 'KPX' && effectiveSourceType !== 'KP7') {
                     return {
