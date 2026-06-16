@@ -469,11 +469,15 @@ function validate_file_payload(array $file, array $branchIds): array
         $branchId = trim((string)($normalized['branch_id'] ?? ''));
         $sourceType = strtoupper(trim((string)($normalized['source_type'] ?? $fileSourceType)));
         $branchOutlet = strtoupper(trim(preg_replace('/\s+/', ' ', (string)($normalized['branch_outlet'] ?? '')) ?? ''));
-        $isKp7MisUs = $sourceType === 'KP7' && $branchOutlet === 'ML MIS US';
+        $kp7AllowedBranchOutlets = [
+            'ML MIS US',
+            'MIS DIVISION',
+        ];
+        $isKp7AllowedBranchOutlet = $sourceType === 'KP7' && in_array($branchOutlet, $kp7AllowedBranchOutlets, true);
         $partnerIdKpx = trim((string)($normalized['partner_id_kpx'] ?? ''));
         $partnerId = trim((string)($normalized['partner_id'] ?? ''));
 
-        if (!$isKp7MisUs && $branchId === '') {
+        if (!$isKp7AllowedBranchOutlet && $branchId === '') {
             $issues[] = [
                 'row' => $index + 1,
                 'type' => 'no_branch_id',
@@ -481,7 +485,7 @@ function validate_file_payload(array $file, array $branchIds): array
                 'branch_id' => '',
                 'branch_outlet' => $normalized['branch_outlet'] ?? '',
             ];
-        } elseif (!$isKp7MisUs && !isset($branchIds[$branchId])) {
+        } elseif (!$isKp7AllowedBranchOutlet && !isset($branchIds[$branchId])) {
             $issues[] = [
                 'row' => $index + 1,
                 'type' => 'new_branch_id',
