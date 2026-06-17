@@ -208,8 +208,9 @@ function find_active_partner_by_name_with_json_fallback(string $partnerName): ?a
     return $partner ?? find_partner_in_json_by_tg_partner_name($lookupName);
 }
 
-function get_partner_display_name(array $partner): string
+function get_partner_display_name(?array $partner): string
 {
+    if (!is_array($partner)) return '';
     return trim((string)($partner['tg_partner_name'] ?? ($partner['partner_name'] ?? '')));
 }
 
@@ -703,26 +704,30 @@ function validate_file_payload(array $file, array $branchIds): array
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
+    ob_start();
+    set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    });
 
-    $input = json_decode((string)file_get_contents('php://input'), true);
-    if (!is_array($input)) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'Invalid JSON payload']);
-        exit;
-    }
-
-    if (($input['action'] ?? '') === 'import') {
-        $sessionFiles = isset($_SESSION['debug_import_files']) && is_array($_SESSION['debug_import_files'])
-            ? $_SESSION['debug_import_files']
-            : [];
-
-        if (empty($sessionFiles)) {
+    try {
+        $input = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($input)) {
             http_response_code(400);
-            echo json_encode(['success' => false, 'error' => 'No validated files found for import.']);
+            echo json_encode(['success' => false, 'error' => 'Invalid JSON payload']);
             exit;
         }
 
-        try {
+        if (($input['action'] ?? '') === 'import') {
+            $sessionFiles = isset($_SESSION['debug_import_files']) && is_array($_SESSION['debug_import_files'])
+                ? $_SESSION['debug_import_files']
+                : [];
+
+            if (empty($sessionFiles)) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'No validated files found for import.']);
+                exit;
+            }
+
             $summary = import_debug_files($sessionFiles);
             unset($_SESSION['debug_import_files']);
             echo json_encode([
@@ -730,45 +735,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'summary' => $summary,
                 'redirect' => $importerPath,
             ]);
-        } catch (Throwable $exception) {
-            http_response_code(500);
-            echo json_encode([
-                'success' => false,
-                'error' => $exception->getMessage(),
-            ]);
+            exit;
         }
-        exit;
-    }
 
-    $files = isset($input['files']) && is_array($input['files']) ? $input['files'] : [];
-    $branchIds = load_branch_ids();
-    $validatedFiles = [];
+        $files = isset($input['files']) && is_array($input['files']) ? $input['files'] : [];
+        $branchIds = load_branch_ids();
+        $validatedFiles = [];
 
-    foreach ($files as $file) {
-        if (is_array($file)) {
-            $validatedFiles[] = validate_file_payload($file, $branchIds);
+        foreach ($files as $file) {
+            if (is_array($file)) {
+                $validatedFiles[] = validate_file_payload($file, $branchIds);
+            }
         }
+
+        $_SESSION['debug_import_files'] = $validatedFiles;
+
+        echo json_encode([
+            'success' => true,
+            'redirect' => '../../models/saved/saved_billspayImportFile_NEW.php',
+            'files' => array_map(static function (array $file): array {
+                return [
+                    'filename' => $file['filename'],
+                    'file_source_type' => $file['file_source_type'],
+                    'total_rows' => $file['total_rows'],
+                    'valid_rows' => $file['valid_rows'],
+                    'status' => $file['status'],
+                    'issue_count' => count($file['issues']),
+                    'override_count' => count($file['overrides'] ?? []),
+                    'issues' => $file['issues'],
+                    'overrides' => $file['overrides'] ?? [],
+                ];
+            }, $validatedFiles),
+        ]);
+    } catch (Throwable $exception) {
+        if (ob_get_length() !== false) {
+            ob_clean();
+        }
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => $exception->getMessage(),
+        ]);
     }
-
-    $_SESSION['debug_import_files'] = $validatedFiles;
-
-    echo json_encode([
-        'success' => true,
-        'redirect' => '../../models/saved/saved_billspayImportFile_NEW.php',
-        'files' => array_map(static function (array $file): array {
-            return [
-                'filename' => $file['filename'],
-                'file_source_type' => $file['file_source_type'],
-                'total_rows' => $file['total_rows'],
-                'valid_rows' => $file['valid_rows'],
-                'status' => $file['status'],
-                'issue_count' => count($file['issues']),
-                'override_count' => count($file['overrides'] ?? []),
-                'issues' => $file['issues'],
-                'overrides' => $file['overrides'] ?? [],
-            ];
-        }, $validatedFiles),
-    ]);
     exit;
 }
 

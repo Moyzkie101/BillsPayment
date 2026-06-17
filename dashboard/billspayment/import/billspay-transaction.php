@@ -980,7 +980,17 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     body: JSON.stringify(buildDebugImportPayload())
                 });
 
-                const result = await response.json();
+                const responseText = await response.text();
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (err) {
+                    console.error('[submitDebugImportPayload][non-json-response]', {
+                        status: response.status,
+                        responseText: responseText
+                    });
+                    throw new Error('Server returned a non-JSON validation response. Check PHP error details in the browser console.');
+                }
                 if (!response.ok || !result || result.success !== true) {
                     throw new Error(result && result.error ? result.error : 'Unable to validate parsed JSON payload.');
                 }
