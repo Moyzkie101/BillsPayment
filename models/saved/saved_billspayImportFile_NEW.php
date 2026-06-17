@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    ob_start();
+}
+
 include '../../config/config.php';
 session_start();
 @include_once __DIR__ . '/../../templates/middleware.php';
@@ -8,6 +12,7 @@ session_start();
 $id = function_exists('resolve_user_identifier') ? resolve_user_identifier() : null;
 if (empty($id)) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (ob_get_length() !== false) ob_clean();
         header('Content-Type: application/json');
         http_response_code(401);
         echo json_encode(['success' => false, 'error' => 'Unauthorized']);
@@ -19,6 +24,7 @@ if (empty($id)) {
 
 if (!function_exists('has_any_permission') || !has_any_permission(['Import Transaction', 'Bills Payment'])) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (ob_get_length() !== false) ob_clean();
         header('Content-Type: application/json');
         http_response_code(403);
         echo json_encode(['success' => false, 'error' => 'Forbidden']);
@@ -704,7 +710,6 @@ function validate_file_payload(array $file, array $branchIds): array
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
-    ob_start();
     set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
         throw new ErrorException($message, 0, $severity, $file, $line);
     });
@@ -715,6 +720,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Invalid JSON payload']);
             exit;
+        }
+
+        if (($input['action'] ?? '') === 'reset_validation') {
+            unset($_SESSION['debug_import_payload_files'], $_SESSION['debug_import_files']);
+            if (ob_get_length() !== false) {
+                ob_clean();
+            }
+            echo json_encode(['success' => true]);
+            exit;
+        }
+
+        if (($input['action'] ?? '') === 'append_validation_chunk') {
+            if (!isset($_SESSION['debug_import_payload_files']) || !is_array($_SESSION['debug_import_payload_files'])) {
+                $_SESSION['debug_import_payload_files'] = [];
+            }
+
+            $file = isset($input['file']) && is_array($input['file']) ? $input['file'] : [];
+            $filename = trim((string)($file['filename'] ?? ''));
+            $fileSourceType = trim((string)($file['file_source_type'] ?? ''));
+            $rows = isset($input['rows']) && is_array($input['rows']) ? $input['rows'] : [];
+
+            if ($filename === '') {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Missing chunk filename.']);
+                exit;
+            }
+
+            if (!isset($_SESSION['debug_import_payload_files'][$filename])) {
+                $_SESSION['debug_import_payload_files'][$filename] = [
+                    'filename' => $filename,
+                    'file_source_type' => $fileSourceType,
+                    'rows' => [],
+                ];
+            }
+
+            $_SESSION['debug_import_payload_files'][$filename]['rows'] = array_merge(
+                $_SESSION['debug_import_payload_files'][$filename]['rows'],
+                $rows
+            );
+
+            if (ob_get_length() !== false) {
+                ob_clean();
+            }
+            echo json_encode(['success' => true]);
+            exit;
+        }
+
+        if (($input['action'] ?? '') === 'finalize_validation') {
+            $files = isset($_SESSION['debug_import_payload_files']) && is_array($_SESSION['debug_import_payload_files'])
+                ? array_values($_SESSION['debug_import_payload_files'])
+                : [];
+        } else {
+            $files = isset($input['files']) && is_array($input['files']) ? $input['files'] : [];
         }
 
         if (($input['action'] ?? '') === 'import') {
@@ -738,7 +796,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        $files = isset($input['files']) && is_array($input['files']) ? $input['files'] : [];
         $branchIds = load_branch_ids();
         $validatedFiles = [];
 
@@ -749,7 +806,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $_SESSION['debug_import_files'] = $validatedFiles;
+        unset($_SESSION['debug_import_payload_files']);
 
+        if (ob_get_length() !== false) {
+            ob_clean();
+        }
         echo json_encode([
             'success' => true,
             'redirect' => '../../models/saved/saved_billspayImportFile_NEW.php',

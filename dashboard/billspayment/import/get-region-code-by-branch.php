@@ -30,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $input = json_decode((string)file_get_contents('php://input'), true);
 $branchIds = [];
 $regionNames = [];
+$kpxRegionNames = [];
 $branchCodeLookups = [];
 
 if (isset($input['branch_ids']) && is_array($input['branch_ids'])) {
@@ -44,6 +45,12 @@ if (isset($input['region_names']) && is_array($input['region_names'])) {
     $regionNames = $input['region_names'];
 } elseif (isset($_POST['region_names']) && is_array($_POST['region_names'])) {
     $regionNames = $_POST['region_names'];
+}
+
+if (isset($input['kpx_region_names']) && is_array($input['kpx_region_names'])) {
+    $kpxRegionNames = $input['kpx_region_names'];
+} elseif (isset($_POST['kpx_region_names']) && is_array($_POST['kpx_region_names'])) {
+    $kpxRegionNames = $_POST['kpx_region_names'];
 }
 
 if (isset($input['branch_code_lookups']) && is_array($input['branch_code_lookups'])) {
@@ -134,6 +141,45 @@ if (!empty($regionNames)) {
     $regionStmt->close();
 }
 
+$kpxRegionNames = array_values(array_unique(array_filter(array_map(static function ($regionName): string {
+    return trim((string)$regionName);
+}, $kpxRegionNames), static function (string $regionName): bool {
+    return $regionName !== '';
+})));
+
+$kpxRegionNameMap = [];
+if (!empty($kpxRegionNames)) {
+    $kpxRegionStmt = $conn->prepare('SELECT region_code, zone_code FROM masterdata.region_masterfile WHERE gl_region = ? LIMIT 1');
+    if (!$kpxRegionStmt) {
+        region_json_response(['success' => false, 'error' => 'Unable to prepare KPX region lookup'], 500);
+    }
+
+    foreach ($kpxRegionNames as $regionName) {
+        $kpxRegionStmt->bind_param('s', $regionName);
+        if ($kpxRegionStmt->execute()) {
+            $result = $kpxRegionStmt->get_result();
+            if ($result && $row = $result->fetch_assoc()) {
+                $kpxRegionNameMap[$regionName] = [
+                    'region_code' => $row['region_code'] ?? null,
+                    'zone_code' => $row['zone_code'] ?? null,
+                ];
+            } else {
+                $kpxRegionNameMap[$regionName] = [
+                    'region_code' => null,
+                    'zone_code' => null,
+                ];
+            }
+        } else {
+            $kpxRegionNameMap[$regionName] = [
+                'region_code' => null,
+                'zone_code' => null,
+            ];
+        }
+    }
+
+    $kpxRegionStmt->close();
+}
+
 $branchCodeMap = [];
 if (!empty($branchCodeLookups)) {
     $branchCodeStmt = $conn->prepare('SELECT branch_id FROM masterdata.branch_profile WHERE code = ? AND region_code = ? LIMIT 1');
@@ -177,6 +223,7 @@ region_json_response([
     'success' => true,
     'branches' => $branches,
     'region_names' => $regionNameMap,
+    'kpx_region_names' => $kpxRegionNameMap,
     'branch_codes' => $branchCodeMap,
     'regions' => array_map(static function (array $branch): ?string {
         return $branch['region_code'];

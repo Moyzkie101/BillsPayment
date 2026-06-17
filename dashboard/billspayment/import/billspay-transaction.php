@@ -471,6 +471,28 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                 return rawValue;
             }
 
+            function normalizeZoneCode(value) {
+                const normalized = normalizeHeader(value);
+                const zoneMap = {
+                    'LUZON': 'LZN',
+                    'NORTH LUZON': 'LZN',
+                    'SOUTH LUZON': 'LZN',
+                    'LNCR': 'LZN',
+                    'LNCR-MANCOMM': 'LZN',
+                    'LNCR-SUPPORT': 'LZN',
+                    'NCR': 'NCR',
+                    'VISAYAS': 'VIS',
+                    'VISAYA': 'VIS',
+                    'VISMIN': 'VIS',
+                    'VISMIN-MANCOMM': 'VIS',
+                    'VISMIN-SUPPORT': 'VIS',
+                    'MINDANAO': 'MIN'
+                };
+
+                if (Object.prototype.hasOwnProperty.call(zoneMap, normalized)) return zoneMap[normalized];
+                return ['LZN', 'NCR', 'VIS', 'MIN', 'HO', 'JEW'].includes(normalized) ? normalized : null;
+            }
+
             function getStatusMarker(sheet, row) {
                 const rawStatus = getCellValue(sheet, 'A' + row);
                 return rawStatus.includes('*') ? '*' : '';
@@ -558,18 +580,17 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                 return regionJsonLookupPromise;
             }
 
-            async function fillMissingKp7RegionCodesFromJson(rows) {
+            async function fillMissingRegionCodesFromJson(rows) {
                 const regionLookup = await getRegionJsonLookup();
                 (rows || []).forEach(function(row) {
-                    const isKp7 = String(row.source_type || '').toUpperCase() === 'KP7';
-                    if (!isKp7 || (!isEmpty(row.region_code) && !isEmpty(row.zone_code))) return;
+                    if (!isEmpty(row.region_code) && !isEmpty(row.zone_code)) return;
 
                     const regionKey = normalizeHeader(row.region_name || '');
                     const regionCodes = Object.prototype.hasOwnProperty.call(regionLookup, regionKey) ? regionLookup[regionKey] : null;
                     if (!regionCodes) return;
 
                     if (isEmpty(row.region_code)) row.region_code = regionCodes.region_code;
-                    if (isEmpty(row.zone_code)) row.zone_code = regionCodes.zone_code;
+                    if (isEmpty(row.zone_code)) row.zone_code = normalizeZoneCode(regionCodes.zone_code);
                 });
 
                 return rows;
@@ -772,16 +793,19 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                 return selectedMode === 'original' ? buildOriginalDetailTable(originalRows) : buildExcelDetailTable(developerRows);
             }
 
-            async function fetchBranchCodesByBranch(branchIds, regionNames, branchCodeLookups) {
+            async function fetchBranchCodesByBranch(branchIds, regionNames, branchCodeLookups, kpxRegionNames) {
                 const uniqueBranchIds = Array.from(new Set((branchIds || [])
                     .map(function(branchId) { return String(branchId || '').trim(); })
                     .filter(function(branchId) { return branchId !== ''; })));
                 const uniqueRegionNames = Array.from(new Set((regionNames || [])
                     .map(function(regionName) { return String(regionName || '').trim(); })
                     .filter(function(regionName) { return regionName !== ''; })));
+                const uniqueKpxRegionNames = Array.from(new Set((kpxRegionNames || [])
+                    .map(function(regionName) { return String(regionName || '').trim(); })
+                    .filter(function(regionName) { return regionName !== ''; })));
                 const branchCodeLookupList = Array.isArray(branchCodeLookups) ? branchCodeLookups : [];
 
-                if (uniqueBranchIds.length === 0 && uniqueRegionNames.length === 0 && branchCodeLookupList.length === 0) return {};
+                if (uniqueBranchIds.length === 0 && uniqueRegionNames.length === 0 && uniqueKpxRegionNames.length === 0 && branchCodeLookupList.length === 0) return {};
 
                 try {
                     const response = await fetch('get-region-code-by-branch.php', {
@@ -791,6 +815,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                         body: JSON.stringify({
                             branch_ids: uniqueBranchIds,
                             region_names: uniqueRegionNames,
+                            kpx_region_names: uniqueKpxRegionNames,
                             branch_code_lookups: branchCodeLookupList
                         })
                     });
@@ -801,15 +826,16 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     }
 
                     const result = await response.json();
-                    if (!result || result.success !== true || (!result.branches && !result.regions && !result.region_names)) {
+                    if (!result || result.success !== true || (!result.branches && !result.regions && !result.region_names && !result.kpx_region_names)) {
                         console.error('get-region-code-by-branch.php error:', result && result.error);
                         return {};
                     }
 
-                    if (result.branches || result.region_names) {
+                    if (result.branches || result.region_names || result.kpx_region_names) {
                         return {
                             branches: result.branches || {},
                             region_names: result.region_names || {},
+                            kpx_region_names: result.kpx_region_names || {},
                             branch_codes: result.branch_codes || {}
                         };
                     }
@@ -824,6 +850,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     return {
                         branches: branchMap,
                         region_names: {},
+                        kpx_region_names: {},
                         branch_codes: {}
                     };
                 } catch (err) {
@@ -837,17 +864,29 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                     return row.branch_id;
                 }), (rows || []).map(function(row) {
                     return String(row.source_type || '').toUpperCase() === 'KP7' ? row.region_name : '';
+                }), null, (rows || []).map(function(row) {
+                    const isKpx = String(row.source_type || '').toUpperCase() === 'KPX';
+                    return isKpx && (isEmpty(row.region_code) || isEmpty(row.zone_code)) ? row.region_name : '';
                 }));
                 const branchMap = lookupMap.branches || {};
                 const regionNameMap = lookupMap.region_names || {};
+                const kpxRegionNameMap = lookupMap.kpx_region_names || {};
 
                 (rows || []).forEach(function(row) {
                     const isKp7 = String(row.source_type || '').toUpperCase() === 'KP7';
-                    const lookupKey = isKp7 ? String(row.region_name || '').trim() : String(row.branch_id || '').trim();
-                    const lookupSource = isKp7 ? regionNameMap : branchMap;
-                    const branchCodes = Object.prototype.hasOwnProperty.call(lookupSource, lookupKey) ? lookupSource[lookupKey] : null;
-                    row.region_code = branchCodes ? branchCodes.region_code : null;
-                    row.zone_code = branchCodes ? branchCodes.zone_code : null;
+                    const isKpx = String(row.source_type || '').toUpperCase() === 'KPX';
+                    const branchLookupKey = String(row.branch_id || '').trim();
+                    const regionLookupKey = String(row.region_name || '').trim();
+                    const branchCodes = Object.prototype.hasOwnProperty.call(branchMap, branchLookupKey) ? branchMap[branchLookupKey] : null;
+                    const regionCodes = Object.prototype.hasOwnProperty.call(regionNameMap, regionLookupKey) ? regionNameMap[regionLookupKey] : null;
+                    const kpxRegionCodes = Object.prototype.hasOwnProperty.call(kpxRegionNameMap, regionLookupKey) ? kpxRegionNameMap[regionLookupKey] : null;
+                    const resolvedCodes = isKp7 ? (regionCodes || branchCodes) : branchCodes;
+                    row.region_code = resolvedCodes ? resolvedCodes.region_code : null;
+                    row.zone_code = resolvedCodes ? normalizeZoneCode(resolvedCodes.zone_code) : null;
+                    if (isKpx && kpxRegionCodes) {
+                        if (isEmpty(row.region_code)) row.region_code = kpxRegionCodes.region_code;
+                        if (isEmpty(row.zone_code)) row.zone_code = normalizeZoneCode(kpxRegionCodes.zone_code);
+                    }
                 });
 
                 return rows;
@@ -972,12 +1011,55 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                 };
             }
 
-            async function submitDebugImportPayload() {
+            function buildDebugImportRows(fileData, rows) {
+                return (rows || []).map(function(row) {
+                    return {
+                        filename: fileData.name,
+                        file_source_type: fileData.sourceType,
+                        report_date: row.report_date,
+                        source_type: row.source_type,
+                        status: row.status,
+                        datetime: row.datetime,
+                        cancellation_date: row.cancellation_date,
+                        control_no: row.control_no,
+                        reference_no: row.reference_no,
+                        payor_name: row.payor_name,
+                        address: row.address,
+                        account_no: row.account_no,
+                        account_name: row.account_name,
+                        amount_paid: row.amount_paid,
+                        charge_customer: row.charge_customer,
+                        charge_partner: row.charge_partner,
+                        contact_no: row.contact_no,
+                        other_details: row.other_details,
+                        branch_id: row.branch_id,
+                        branch_code: row.branch_code,
+                        branch_outlet: row.branch_outlet,
+                        zone_code: row.zone_code,
+                        region_code: row.region_code,
+                        region_name: row.region_name,
+                        operator: row.operator,
+                        remote_branch: row.remote_branch,
+                        remote_operator: row.remote_operator,
+                        second_approver: row.second_approver,
+                        '2nd_approver': row.second_approver,
+                        partner_name: row.partner_name,
+                        partner_id_kpx: row.partner_id_kpx,
+                        partner_id: row.partner_id,
+                        gl_code: row.gl_code,
+                        post_transaction: row.post_transaction,
+                        imported_date: row.imported_date,
+                        imported_by: row.imported_by
+                    };
+                });
+            }
+
+            async function postDebugImportPayload(payload) {
                 const response = await fetch('../../../models/saved/saved_billspayImportFile_NEW.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
-                    body: JSON.stringify(buildDebugImportPayload())
+                    body: JSON.stringify(payload)
                 });
 
                 const responseText = await response.text();
@@ -989,13 +1071,52 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                         status: response.status,
                         responseText: responseText
                     });
-                    throw new Error('Server returned a non-JSON validation response. Check PHP error details in the browser console.');
+                    const responseSnippet = responseText
+                        .replace(/<[^>]*>/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .slice(0, 260);
+                    throw new Error(responseSnippet || 'Server returned a non-JSON validation response.');
                 }
                 if (!response.ok || !result || result.success !== true) {
                     throw new Error(result && result.error ? result.error : 'Unable to validate parsed JSON payload.');
                 }
 
                 return result;
+            }
+
+            async function submitDebugImportPayload() {
+                const fileCount = Math.max(1, uploadedFiles.length);
+                const chunkSize = Math.max(75, Math.floor(350 / fileCount));
+
+                await postDebugImportPayload({ action: 'reset_validation' });
+
+                for (const fileData of uploadedFiles) {
+                    const rows = fileData.parsedRows || [];
+                    for (let start = 0; start < rows.length; start += chunkSize) {
+                        await postDebugImportPayload({
+                            action: 'append_validation_chunk',
+                            file: {
+                                filename: fileData.name,
+                                file_source_type: fileData.sourceType
+                            },
+                            rows: buildDebugImportRows(fileData, rows.slice(start, start + chunkSize))
+                        });
+                    }
+
+                    if (rows.length === 0) {
+                        await postDebugImportPayload({
+                            action: 'append_validation_chunk',
+                            file: {
+                                filename: fileData.name,
+                                file_source_type: fileData.sourceType
+                            },
+                            rows: []
+                        });
+                    }
+                }
+
+                return postDebugImportPayload({ action: 'finalize_validation' });
             }
 
             function showExcelDetails(fileData) {
@@ -1299,7 +1420,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                             : { table: 'masterdata.partner_masterfile', partner_name: partnerName },
                         post_transaction: 'unposted',
                         imported_date: importedDate,
-                        imported_by: currentImportedBy,
+                        imported_by: currentImportedBy, 
                         source_row: row
                     });
                     originalRows.push(buildOriginalDataRow(sheet, row, isAllPartners, partnerCell, sourceType));
@@ -1354,7 +1475,7 @@ $current_user_email = $_SESSION['admin_email'] ?? $_SESSION['user_email'] ?? '';
                 if (parsed.success) {
                     parsed.rows = await fillMissingBranchIdsFromOutlet(parsed.rows);
                     parsed.rows = await enrichRowsWithBranchCodes(parsed.rows);
-                    parsed.rows = await fillMissingKp7RegionCodesFromJson(parsed.rows);
+                    parsed.rows = await fillMissingRegionCodesFromJson(parsed.rows);
                     parsed.rows = await fillMissingKp7BranchIdsByCodeRegion(parsed.rows);
                     parsed.rows = await enrichRowsWithPartnerCodes(parsed.rows);
                 }
