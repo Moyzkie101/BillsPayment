@@ -95,27 +95,28 @@ function normalize_import_row(array $row, string $filename, string $fileSourceTy
     ];
 }
 
-function partner_exists_by_column(string $column, string $value): bool
+function find_partner_by_column(string $column, string $value, bool $activeOnly = true): ?array
 {
     global $conn;
 
     static $cache = [];
     $value = trim($value);
-    if ($value === '') return false;
+    if ($value === '') return null;
 
-    $allowedColumns = ['partner_id_kpx', 'partner_id'];
-    if (!in_array($column, $allowedColumns, true)) return false;
+    $allowedColumns = ['partner_id_kpx', 'partner_id', 'tg_partner_name'];
+    if (!in_array($column, $allowedColumns, true)) return null;
 
-    $cacheKey = $column . ':' . $value;
+    $cacheKey = $column . ':' . $value . ':' . ($activeOnly ? 'active' : 'any');
     if (array_key_exists($cacheKey, $cache)) {
         return $cache[$cacheKey];
     }
 
-    $sql = "SELECT COUNT(*) AS total FROM masterdata.partner_masterfile WHERE {$column} = ? LIMIT 1";
+    $statusSql = $activeOnly ? " AND status = 'ACTIVE'" : '';
+    $sql = "SELECT partner_id, partner_id_kpx, partner_name, tg_partner_name, status FROM masterdata.partner_masterfile WHERE {$column} = ?{$statusSql} LIMIT 1";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        $cache[$cacheKey] = false;
-        return false;
+        $cache[$cacheKey] = null;
+        return null;
     }
 
     $stmt->bind_param('s', $value);
@@ -124,8 +125,143 @@ function partner_exists_by_column(string $column, string $value): bool
     $row = $result ? $result->fetch_assoc() : null;
     $stmt->close();
 
-    $cache[$cacheKey] = ((int)($row['total'] ?? 0)) > 0;
+    $cache[$cacheKey] = is_array($row) ? $row : null;
     return $cache[$cacheKey];
+}
+
+function partner_exists_by_column(string $column, string $value): bool
+{
+    return find_partner_by_column($column, $value, true) !== null;
+}
+
+function normalize_partner_lookup_name(string $value): string
+{
+    return strtoupper(trim(preg_replace('/\s+/', ' ', $value) ?? ''));
+}
+
+function load_partner_json_rows(): array
+{
+    static $partners = null;
+
+    if ($partners === null) {
+        $partners = [];
+        $partnerPath = __DIR__ . '/../../partner.json';
+        $raw = is_file($partnerPath) ? file_get_contents($partnerPath) : '[]';
+        $rows = json_decode((string)$raw, true);
+
+        if (is_array($rows)) {
+            foreach ($rows as $row) {
+                if (!is_array($row)) continue;
+                $partners[] = [
+                    'partner_id' => $row['partner_id'] ?? '',
+                    'partner_id_kpx' => $row['partner_id_kpx'] ?? '',
+                    'partner_name' => $row['tg_partner_name'] ?? '',
+                    'tg_partner_name' => $row['tg_partner_name'] ?? '',
+                    'status' => 'ACTIVE',
+                ];
+            }
+        }
+    }
+
+    return $partners;
+}
+
+function find_partner_in_json_by_tg_partner_name(string $partnerName): ?array
+{
+    $lookupName = normalize_partner_lookup_name($partnerName);
+    if ($lookupName === '') return null;
+
+    foreach (load_partner_json_rows() as $partner) {
+        if (normalize_partner_lookup_name((string)($partner['tg_partner_name'] ?? '')) === $lookupName) {
+            return $partner;
+        }
+    }
+
+    return null;
+}
+
+function partner_exists_in_json_for_excel_row(string $partnerName, string $partnerIdKpx, string $partnerId): bool
+{
+    $lookupName = normalize_partner_lookup_name($partnerName);
+    $lookupPartnerIdKpx = trim($partnerIdKpx);
+    $lookupPartnerId = trim($partnerId);
+
+    foreach (load_partner_json_rows() as $partner) {
+        $jsonName = normalize_partner_lookup_name((string)($partner['tg_partner_name'] ?? ''));
+        $jsonPartnerIdKpx = trim((string)($partner['partner_id_kpx'] ?? ''));
+        $jsonPartnerId = trim((string)($partner['partner_id'] ?? ''));
+
+        if ($lookupName !== '' && $jsonName === $lookupName) return true;
+        if ($lookupPartnerIdKpx !== '' && $jsonPartnerIdKpx === $lookupPartnerIdKpx) return true;
+        if ($lookupPartnerId !== '' && $jsonPartnerId === $lookupPartnerId) return true;
+    }
+
+    return false;
+}
+
+function find_active_partner_by_name_with_json_fallback(string $partnerName): ?array
+{
+    $lookupName = normalize_partner_lookup_name($partnerName);
+    if ($lookupName === '') return null;
+
+    $partner = find_partner_by_column('tg_partner_name', $lookupName, true);
+    return $partner ?? find_partner_in_json_by_tg_partner_name($lookupName);
+}
+
+function get_partner_display_name(array $partner): string
+{
+    return trim((string)($partner['tg_partner_name'] ?? ($partner['partner_name'] ?? '')));
+}
+
+function partner_names_match(string $excelPartnerName, array $ownerPartner): bool
+{
+    $ownerPartnerName = get_partner_display_name($ownerPartner);
+    if (trim($excelPartnerName) === '' || $ownerPartnerName === '') return true;
+    return normalize_partner_lookup_name($excelPartnerName) === normalize_partner_lookup_name($ownerPartnerName);
+}
+
+function partner_name_change_issue_payload(array $normalized, int $rowNumber, string $lookupColumn, string $lookupValue, array $ownerPartner, string $excelPartnerIdKpx, string $excelPartnerId): array
+{
+    return [
+        'row' => $rowNumber,
+        'type' => 'partner_name_change',
+        'label' => 'Partner Name Change',
+        'value' => $lookupValue,
+        'lookup_column' => $lookupColumn,
+        'source_type' => $normalized['source_type'] ?? '',
+        'partner_id_kpx' => $excelPartnerIdKpx,
+        'partner_id' => $excelPartnerId,
+        'partner_name' => $normalized['partner_name'] ?? '',
+        'owner_partner_id' => $ownerPartner['partner_id'] ?? '',
+        'owner_partner_id_kpx' => $ownerPartner['partner_id_kpx'] ?? '',
+        'owner_partner_name' => get_partner_display_name($ownerPartner),
+        'owner_status' => $ownerPartner['status'] ?? '',
+        'branch_outlet' => $normalized['branch_outlet'] ?? '',
+    ];
+}
+
+function partner_issue_payload(array $normalized, int $rowNumber, string $lookupColumn, string $lookupValue, string $excelPartnerIdKpx, string $excelPartnerId): array
+{
+    $ownerPartner = find_partner_by_column($lookupColumn, $lookupValue, false);
+    $hasInactiveOrNonActivePartner = is_array($ownerPartner);
+    $issueLabel = $hasInactiveOrNonActivePartner ? 'Existing Partner ID' : 'New Partner';
+
+    return [
+        'row' => $rowNumber,
+        'type' => 'new_partner',
+        'label' => $issueLabel,
+        'value' => $lookupValue,
+        'lookup_column' => $lookupColumn,
+        'source_type' => $normalized['source_type'] ?? '',
+        'partner_id_kpx' => $excelPartnerIdKpx,
+        'partner_id' => $excelPartnerId,
+        'partner_name' => $normalized['partner_name'] ?? '',
+        'owner_partner_id' => $ownerPartner['partner_id'] ?? '',
+        'owner_partner_id_kpx' => $ownerPartner['partner_id_kpx'] ?? '',
+        'owner_partner_name' => get_partner_display_name($ownerPartner),
+        'owner_status' => $ownerPartner['status'] ?? '',
+        'branch_outlet' => $normalized['branch_outlet'] ?? '',
+    ];
 }
 
 function normalize_date_for_lookup($value): string
@@ -476,6 +612,7 @@ function validate_file_payload(array $file, array $branchIds): array
         $isKp7AllowedBranchOutlet = $sourceType === 'KP7' && in_array($branchOutlet, $kp7AllowedBranchOutlets, true);
         $partnerIdKpx = trim((string)($normalized['partner_id_kpx'] ?? ''));
         $partnerId = trim((string)($normalized['partner_id'] ?? ''));
+        $partnerName = trim((string)($normalized['partner_name'] ?? ''));
 
         if (!$isKp7AllowedBranchOutlet && $branchId === '') {
             $issues[] = [
@@ -496,42 +633,40 @@ function validate_file_payload(array $file, array $branchIds): array
         }
 
         if ($partnerIdKpx !== '') {
-            if (!partner_exists_by_column('partner_id_kpx', $partnerIdKpx)) {
-                $issues[] = [
-                    'row' => $index + 1,
-                    'type' => 'new_partner',
-                    'label' => 'New Partner',
-                    'value' => $partnerIdKpx,
-                    'partner_id_kpx' => $partnerIdKpx,
-                    'partner_id' => $partnerId,
-                    'partner_name' => $normalized['partner_name'] ?? '',
-                    'branch_outlet' => $normalized['branch_outlet'] ?? '',
-                ];
+            $activePartner = find_partner_by_column('partner_id_kpx', $partnerIdKpx, true);
+            if (!is_array($activePartner)) {
+                $issues[] = partner_issue_payload($normalized, $index + 1, 'partner_id_kpx', $partnerIdKpx, $partnerIdKpx, $partnerId);
+            } elseif (!partner_exists_in_json_for_excel_row($partnerName, $partnerIdKpx, $partnerId) && !partner_names_match($partnerName, $activePartner)) {
+                $issues[] = partner_name_change_issue_payload($normalized, $index + 1, 'partner_id_kpx', $partnerIdKpx, $activePartner, $partnerIdKpx, $partnerId);
             }
         } elseif ($partnerId !== '') {
-            if (!partner_exists_by_column('partner_id', $partnerId)) {
+            $activePartner = find_partner_by_column('partner_id', $partnerId, true);
+            if (!is_array($activePartner)) {
+                $issues[] = partner_issue_payload($normalized, $index + 1, 'partner_id', $partnerId, '', $partnerId);
+            } elseif (!partner_exists_in_json_for_excel_row($partnerName, $partnerIdKpx, $partnerId) && !partner_names_match($partnerName, $activePartner)) {
+                $issues[] = partner_name_change_issue_payload($normalized, $index + 1, 'partner_id', $partnerId, $activePartner, '', $partnerId);
+            }
+        } else {
+            $partnerByName = find_active_partner_by_name_with_json_fallback($partnerName);
+            if (is_array($partnerByName)) {
+                $normalized['partner_id'] = $partnerByName['partner_id'] ?? null;
+                $normalized['partner_id_kpx'] = $partnerByName['partner_id_kpx'] ?? null;
+                $partnerId = trim((string)($normalized['partner_id'] ?? ''));
+                $partnerIdKpx = trim((string)($normalized['partner_id_kpx'] ?? ''));
+            } elseif ($partnerName !== '') {
+                $issues[] = partner_issue_payload($normalized, $index + 1, 'tg_partner_name', $partnerName, '', '');
+            } else {
                 $issues[] = [
                     'row' => $index + 1,
-                    'type' => 'new_partner',
-                    'label' => 'New Partner',
-                    'value' => $partnerId,
+                    'type' => 'no_partner_id',
+                    'label' => 'No Partner ID',
+                    'value' => '',
                     'partner_id_kpx' => '',
-                    'partner_id' => $partnerId,
+                    'partner_id' => '',
                     'partner_name' => $normalized['partner_name'] ?? '',
                     'branch_outlet' => $normalized['branch_outlet'] ?? '',
                 ];
             }
-        } else {
-            $issues[] = [
-                'row' => $index + 1,
-                'type' => 'no_partner_id',
-                'label' => 'No Partner ID',
-                'value' => '',
-                'partner_id_kpx' => '',
-                'partner_id' => '',
-                'partner_name' => $normalized['partner_name'] ?? '',
-                'branch_outlet' => $normalized['branch_outlet'] ?? '',
-            ];
         }
 
         $overrideMatches = get_override_matches($normalized);
@@ -808,12 +943,13 @@ function h($value): string
             padding: 0;
         }
         .issues-modal-table-wrap { max-height: 380px; overflow: auto; border: 1px solid #dee2e6; }
-        .issues-modal-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .issues-modal-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .issues-modal-table th,
         .issues-modal-table td { border-right: 1px solid #dee2e6; border-bottom: 1px solid #dee2e6; padding: 7px 9px; text-align: left; }
         .issues-modal-table th { position: sticky; background: #fff; color: #343a40; font-weight: 800; z-index: 2; }
         .issues-modal-table thead tr:first-child th { top: 0; z-index: 3; text-align: center; }
-        .issues-modal-table thead tr:nth-child(2) th { top: 34px; }
+        .issues-modal-table thead tr:nth-child(2) th { top: 34px; z-index: 3; }
+        .issues-modal-table thead tr:nth-child(3) th { top: 68px; z-index: 3; }
         .issues-modal-table td { color: #343a40; }
         .issues-modal-popup { width: min(96vw, 720px) !important; }
         .override-modal-popup { width: min(98vw, 1280px) !important; }
@@ -1172,13 +1308,30 @@ function h($value): string
             const type = issue && issue.type ? issue.type : '';
             if (type === 'no_branch_id') return 'Missing Branch ID';
             if (type === 'new_branch_id') return 'New Branch ID';
-            if (type === 'new_partner') return 'New Partner';
+            if (type === 'new_partner') return issue && issue.label ? issue.label : 'New Partner';
+            if (type === 'partner_name_change') return issue && issue.label ? issue.label : 'Partner Name Change';
             if (type === 'no_partner_id') return 'No Partner ID';
             return issue && issue.label ? issue.label : 'Issue';
         }
 
         function isPartnerIssue(issue) {
-            return issue && (issue.type === 'new_partner' || issue.type === 'no_partner_id');
+            return issue && (issue.type === 'new_partner' || issue.type === 'partner_name_change' || issue.type === 'no_partner_id');
+        }
+
+        function getPartnerIssueId(issue, owner) {
+            const sourceType = String(issue && issue.source_type ? issue.source_type : '').trim().toUpperCase();
+            const lookupColumn = String(issue && issue.lookup_column ? issue.lookup_column : '').trim();
+
+            if (owner) {
+                if (sourceType === 'KP7' || lookupColumn === 'partner_id') return String(issue.owner_partner_id || '').trim();
+                if (sourceType === 'KPX' || lookupColumn === 'partner_id_kpx') return String(issue.owner_partner_id_kpx || '').trim();
+                return String(issue.owner_partner_id_kpx || issue.owner_partner_id || '').trim();
+            }
+
+            if (lookupColumn === 'tg_partner_name') return String(issue.partner_id_kpx || issue.partner_id || '').trim();
+            if (sourceType === 'KP7' || lookupColumn === 'partner_id') return String(issue.partner_id || issue.value || '').trim();
+            if (sourceType === 'KPX' || lookupColumn === 'partner_id_kpx') return String(issue.partner_id_kpx || issue.value || '').trim();
+            return String(issue.partner_id_kpx || issue.partner_id || issue.value || '').trim();
         }
 
         function buildBranchIssuesTable(issues) {
@@ -1206,17 +1359,24 @@ function h($value): string
             if (!issues.length) return '';
 
             const rows = issues.map(function(issue) {
+                const excelPartnerId = getPartnerIssueId(issue, false);
+                const ownerPartnerId = getPartnerIssueId(issue, true);
                 return '<tr>'
-                    + '<td>' + escapeHtml(issue.row) + '</td>'
+                    + '<td>' + escapeHtml(ownerPartnerId) + '</td>'
+                    + '<td>' + escapeHtml(issue.owner_partner_name || '') + '</td>'
+                    + '<td>' + escapeHtml(excelPartnerId) + '</td>'
                     + '<td>' + escapeHtml(issue.partner_name || '') + '</td>'
                     + '<td>' + escapeHtml(getIssueText(issue)) + '</td>'
-                    + '<td>' + escapeHtml(formatIssueValue(issue)) + '</td>'
                     + '</tr>';
             }).join('');
 
             return '<div class="issues-modal-table-wrap" style="margin-top:14px;">'
                 + '<table class="issues-modal-table">'
-                + '<thead><tr><th colspan="4"><center>Partner Issues - ' + issues.length + ' Data row(s) found</center></th></tr><tr><th>Excel Row</th><th>Partner Name</th><th>Issue</th><th>Value</th></tr></thead>'
+                + '<thead>'
+                + '<tr><th colspan="5"><center>Partner Issues - ' + issues.length + ' Data row(s) found</center></th></tr>'
+                + '<tr><th colspan="2">OWNER</th><th colspan="2">FROM EXCEL</th><th rowspan="2">Issue</th></tr>'
+                + '<tr><th>Partner ID</th><th>Partner Name</th><th>Partner ID</th><th>Partner Name</th></tr>'
+                + '</thead>'
                 + '<tbody>' + rows + '</tbody>'
                 + '</table>'
                 + '</div>';
@@ -1617,15 +1777,23 @@ function h($value): string
                 doc.autoTable({
                     startY: y,
                     head: [
-                        [{ content: 'Partner Issues - ' + partnerIssues.length + ' Data row(s) found', colSpan: 4, styles: { halign: 'center' } }],
-                        ['Excel Row', 'Partner Name', 'Issue', 'Value']
+                        [{ content: 'Partner Issues - ' + partnerIssues.length + ' Data row(s) found', colSpan: 5, styles: { halign: 'center' } }],
+                        [
+                            { content: 'OWNER', colSpan: 2, styles: { halign: 'center' } },
+                            { content: 'FROM EXCEL', colSpan: 2, styles: { halign: 'center' } },
+                            { content: 'Issue', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } }
+                        ],
+                        ['Partner ID', 'Partner Name', 'Partner ID', 'Partner Name']
                     ],
                     body: partnerIssues.map(function(issue) {
+                        const excelPartnerId = getPartnerIssueId(issue, false);
+                        const ownerPartnerId = getPartnerIssueId(issue, true);
                         return [
-                            String(issue.row || ''),
+                            ownerPartnerId,
+                            String(issue.owner_partner_name || ''),
+                            excelPartnerId,
                             String(issue.partner_name || ''),
-                            getIssueText(issue),
-                            formatIssueValue(issue)
+                            getIssueText(issue)
                         ];
                     }),
                     theme: 'grid',
@@ -1637,7 +1805,8 @@ function h($value): string
                         0: { cellWidth: 'auto' },
                         1: { cellWidth: 'auto' },
                         2: { cellWidth: 'auto' },
-                        3: { cellWidth: 'auto' }
+                        3: { cellWidth: 'auto' },
+                        4: { cellWidth: 'auto' }
                     }
                 });
             }
@@ -1726,15 +1895,23 @@ function h($value): string
                     doc.autoTable({
                         startY: y,
                         head: [
-                            [{ content: 'Partner Issues - ' + partnerIssues.length + ' Data row(s) found', colSpan: 4, styles: { halign: 'center' } }],
-                            ['Excel Row', 'Partner Name', 'Issue', 'Value']
+                            [{ content: 'Partner Issues - ' + partnerIssues.length + ' Data row(s) found', colSpan: 5, styles: { halign: 'center' } }],
+                            [
+                                { content: 'OWNER', colSpan: 2, styles: { halign: 'center' } },
+                                { content: 'FROM EXCEL', colSpan: 2, styles: { halign: 'center' } },
+                                { content: 'Issue', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } }
+                            ],
+                            ['Partner ID', 'Partner Name', 'Partner ID', 'Partner Name']
                         ],
                         body: partnerIssues.map(function(issue) {
+                            const excelPartnerId = getPartnerIssueId(issue, false);
+                            const ownerPartnerId = getPartnerIssueId(issue, true);
                             return [
-                                String(issue.row || ''),
+                                ownerPartnerId,
+                                String(issue.owner_partner_name || ''),
+                                excelPartnerId,
                                 String(issue.partner_name || ''),
-                                getIssueText(issue),
-                                formatIssueValue(issue)
+                                getIssueText(issue)
                             ];
                         }),
                         theme: 'grid',
@@ -1746,7 +1923,8 @@ function h($value): string
                             0: { cellWidth: 'auto' },
                             1: { cellWidth: 'auto' },
                             2: { cellWidth: 'auto' },
-                            3: { cellWidth: 'auto' }
+                            3: { cellWidth: 'auto' },
+                            4: { cellWidth: 'auto' }
                         }
                     });
                     y = doc.lastAutoTable.finalY + 18;
